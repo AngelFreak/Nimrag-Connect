@@ -12,6 +12,11 @@ data class RememberedWatch(
     val name: String,
     val model: String,
     val unsupportedReason: String?,
+    /**
+     * True when this app created the Bluetooth bond. False when the watch was already bonded
+     * (by Garmin Connect, say): forgetting it here must not unpair it for the other app.
+     */
+    val ownBond: Boolean = true,
 )
 
 /**
@@ -65,16 +70,19 @@ class EngineSettings(context: Context) {
                 name = prefs.getString(WATCH_NAME, "").orEmpty(),
                 model = prefs.getString(WATCH_MODEL, "").orEmpty(),
                 unsupportedReason = prefs.getString(WATCH_UNSUPPORTED, null),
+                ownBond = prefs.getBoolean(WATCH_OWN_BOND, true),
             )
         }
         set(value) {
             val edit = prefs.edit()
             if (value == null) {
                 edit.remove(WATCH_ADDRESS).remove(WATCH_NAME).remove(WATCH_MODEL).remove(WATCH_UNSUPPORTED)
+                    .remove(WATCH_OWN_BOND)
             } else {
                 edit.putString(WATCH_ADDRESS, value.address)
                     .putString(WATCH_NAME, value.name)
                     .putString(WATCH_MODEL, value.model)
+                    .putBoolean(WATCH_OWN_BOND, value.ownBond)
                 if (value.unsupportedReason == null) {
                     edit.remove(WATCH_UNSUPPORTED)
                 } else {
@@ -143,6 +151,7 @@ class EngineSettings(context: Context) {
         const val WATCH_NAME = "watch_name"
         const val WATCH_MODEL = "watch_model"
         const val WATCH_UNSUPPORTED = "watch_unsupported"
+        const val WATCH_OWN_BOND = "watch_own_bond"
         const val FIRST_CONNECT = "first_connect"
         const val FIRST_CONNECT_TRIES = "first_connect_tries"
         const val LAST_CONNECTED = "last_connected_at"

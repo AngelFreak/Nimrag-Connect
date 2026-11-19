@@ -19,6 +19,13 @@ data class AppState(
     val settings: Settings = Settings(),
     /** Newest first, at most 500 lines. Never contains the watch's unit id. */
     val log: List<LogLine> = emptyList(),
+    /** Why the last pairing attempt failed, shown on the Watch screen; cleared by the next scan or pairing. */
+    val pairingError: String? = null,
+    /**
+     * Garmin Connect is installed. Only one app can hold the watch's protocol session, so the
+     * Watch screen explains how to keep it out of the way.
+     */
+    val garminConnectInstalled: Boolean = false,
 )
 
 /** Runtime permissions the engine needs; the UI asks for the missing ones. */

@@ -85,12 +85,22 @@ class WatchLink(private val hub: Hub, private val scanner: BleScanner) {
     /** The bond with the remembered watch is gone: no reconnecting until forget + pair. */
     private var bondLost = false
 
+    /** The "Garmin Connect may hold the watch" hint was logged since the last good link. */
+    private var otherAppHinted = false
+
     /** The current connection carries `first_connect`; it is charged on `HandshakeDone`. */
     private var connectionHasFirst = false
     private val backoff = Backoff()
     private var pairing: Pairing? = null
 
-    private data class Pairing(val address: String, val name: String, val model: String, val reason: String?)
+    /** [bondedBefore]: the phone already had a bond (Garmin Connect's, say) that we reuse and must not remove. */
+    private data class Pairing(
+        val address: String,
+        val name: String,
+        val model: String,
+        val reason: String?,
+        val bondedBefore: Boolean = false,
+    )
 
     private val writes = WriteQueue(::sendOne)
 
@@ -160,7 +170,11 @@ class WatchLink(private val hub: Hub, private val scanner: BleScanner) {
         scanner.stop()
         pairing = Pairing(address, name, model, unsupportedReason)
         bondLost = false
-        hub.update { it.copy(watch = WatchState.Pairing(address, name)) }
+        otherAppHinted = false
+        hub.update { it.copy(watch = WatchState.Pairing(address, name), pairingError = null) }
+        if (hub.garminConnectInstalled()) {
+            log.warn("Garmin Connect is installed. If it is running it holds the watch, and Nimrag cannot talk to it at the same time")
+        }
         // Started now, while the UI is in the foreground; the service keeps the process alive.
         running = true
         WatchService.start(ctx)
@@ -187,7 +201,12 @@ class WatchLink(private val hub: Hub, private val scanner: BleScanner) {
         try {
             val device = adapter()?.getRemoteDevice(address) ?: return failPairing("Bluetooth is not available")
             when (device.bondState) {
-                BluetoothDevice.BOND_BONDED -> completeBond()
+                BluetoothDevice.BOND_BONDED -> {
+                    // Usually Garmin Connect's bond. Reusing it works; removing it would unpair the other app.
+                    pairing = pairing?.copy(bondedBefore = true)
+                    log.info("The phone is already paired with this watch at the Bluetooth level; reusing that pairing")
+                    completeBond()
+                }
                 BluetoothDevice.BOND_BONDING -> log.info("Waiting for the pairing dialog")
                 else -> {
                     // createBond(transport) is public API from 37 only.
@@ -216,7 +235,11 @@ class WatchLink(private val hub: Hub, private val scanner: BleScanner) {
         handler.removeCallbacks(reconnect)
         teardown()
         if (watch != null) {
-            removeBond(watch.address)
+            if (watch.ownBond) {
+                removeBond(watch.address)
+            } else {
+                log.info("Kept the Bluetooth pairing: another app made it")
+            }
             hub.companion.disassociate(watch.address)
         }
         backoff.reset()
@@ -317,7 +340,7 @@ class WatchLink(private val hub: Hub, private val scanner: BleScanner) {
         val pending = pairing ?: return
         pairing = null
         handler.removeCallbacks(pairTimeout)
-        settings.watch = RememberedWatch(pending.address, pending.name, pending.model, pending.reason)
+        settings.watch = RememberedWatch(pending.address, pending.name, pending.model, pending.reason, ownBond = !pending.bondedBefore)
         settings.firstConnect = true
         settings.firstConnectTries = 0
         bondLost = false
@@ -337,10 +360,11 @@ class WatchLink(private val hub: Hub, private val scanner: BleScanner) {
         log.error(reason)
         if (pending != null) {
             // Leave nothing half-made behind: a bond or an association for a watch we do not keep.
-            removeBondIfPresent(pending.address)
+            // A bond that existed before is another app's, so it stays.
+            if (!pending.bondedBefore) removeBondIfPresent(pending.address)
             if (settings.watch == null) hub.companion.disassociate(pending.address)
         }
-        hub.update { it.copy(watch = WatchState.NotPaired) }
+        hub.update { it.copy(watch = WatchState.NotPaired, pairingError = reason) }
         if (settings.watch == null) {
             running = false
             WatchService.stop(ctx)
@@ -715,6 +739,7 @@ class WatchLink(private val hub: Hub, private val scanner: BleScanner) {
 
     private fun onHandshakeDone(event: Event.HandshakeDone) {
         ready = true
+        otherAppHinted = false
         if (connectionHasFirst && settings.firstConnect) {
             val budget = LinkRules.afterHandshake(settings.firstConnectTries)
             settings.firstConnectTries = budget.tries
@@ -777,6 +802,7 @@ class WatchLink(private val hub: Hub, private val scanner: BleScanner) {
             if (inUse != null) {
                 forcedNotifyId = null
                 channelRetries = 0
+                hintOtherApp()
             }
             scheduleReconnect(backoff.next())
         }
@@ -792,8 +818,16 @@ class WatchLink(private val hub: Hub, private val scanner: BleScanner) {
 
     private fun linkFailed(reason: String) {
         log.warn(reason)
+        hintOtherApp()
         teardown()
         scheduleReconnect(backoff.next())
+    }
+
+    /** A link that will not come up while Garmin Connect is installed is most likely its doing. */
+    private fun hintOtherApp() {
+        if (otherAppHinted || !hub.garminConnectInstalled()) return
+        otherAppHinted = true
+        log.warn("Garmin Connect probably holds the watch. Force-stop it (Watch tab, Garmin Connect card) and Nimrag will reconnect")
     }
 
     /** Drop the client and the GATT object; the next connection starts from scratch. */

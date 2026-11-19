@@ -1,5 +1,10 @@
 package dev.nimrag.app.ui.sync
 
+import android.content.Intent
+import android.os.Build
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -16,10 +21,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -32,6 +39,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -68,6 +76,8 @@ fun SyncScreen(
 ) {
     var logExpanded by rememberSaveable { mutableStateOf(false) }
     val log = state.log
+    val context = LocalContext.current
+    val shareTitle = stringResource(R.string.log_share)
 
     LazyColumn(
         modifier = modifier,
@@ -95,7 +105,18 @@ fun SyncScreen(
 
         // The log: header and lines are separate lazy items that are shaped to read as one card.
         item(key = "log-header") {
-            LogHeader(count = log.size, expanded = logExpanded, onToggle = { logExpanded = !logExpanded })
+            LogHeader(
+                count = log.size,
+                expanded = logExpanded,
+                onToggle = { logExpanded = !logExpanded },
+                onShare = {
+                    val send = Intent(Intent.ACTION_SEND)
+                        .setType("text/plain")
+                        .putExtra(Intent.EXTRA_SUBJECT, "Nimrag Connect log")
+                        .putExtra(Intent.EXTRA_TEXT, logReport(log, appVersion(context)))
+                    context.startActivity(Intent.createChooser(send, shareTitle))
+                },
+            )
         }
         if (logExpanded) {
             if (log.isEmpty()) {
@@ -331,7 +352,13 @@ private fun StoredFileRow(file: StoredFile) {
 // ---------------------------------------------------------------- log
 
 @Composable
-internal fun LogHeader(count: Int, expanded: Boolean, onToggle: () -> Unit, modifier: Modifier = Modifier) {
+internal fun LogHeader(
+    count: Int,
+    expanded: Boolean,
+    onToggle: () -> Unit,
+    modifier: Modifier = Modifier,
+    onShare: (() -> Unit)? = null,
+) {
     val shape = if (expanded) {
         RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp)
     } else {
@@ -353,12 +380,40 @@ internal fun LogHeader(count: Int, expanded: Boolean, onToggle: () -> Unit, modi
             style = MaterialTheme.typography.titleMedium,
             modifier = Modifier.weight(1f),
         )
+        if (onShare != null && count > 0) {
+            IconButton(onClick = onShare) {
+                Icon(Icons.Filled.Share, contentDescription = stringResource(R.string.log_share))
+            }
+        }
         Icon(
             if (expanded) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
             contentDescription = stateText,
         )
     }
 }
+
+/**
+ * The log as plain text, oldest first, for sharing. The log never holds the unit id or the
+ * token, so it is safe to send as it is.
+ */
+internal fun logReport(log: List<LogLine>, version: String): String = buildString {
+    append("Nimrag Connect ").append(version)
+    append(", Android ").append(Build.VERSION.RELEASE).append(" (API ").append(Build.VERSION.SDK_INT).append(")")
+    append(", ").append(Build.MANUFACTURER).append(' ').append(Build.MODEL).append('\n')
+    log.asReversed().forEach { line ->
+        val level = when (line.level) {
+            LogLine.Level.Info -> "I"
+            LogLine.Level.Warning -> "W"
+            LogLine.Level.Error -> "E"
+        }
+        append(ReportTime.format(Instant.ofEpochMilli(line.atMs).atZone(ZoneId.systemDefault()))).append(' ').append(level).append("  ").append(line.text).append('\n')
+    }
+}
+
+private val ReportTime: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
+
+private fun appVersion(context: android.content.Context): String =
+    runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull() ?: "?"
 
 @Composable
 private fun LogContainer(last: Boolean, content: @Composable () -> Unit) {

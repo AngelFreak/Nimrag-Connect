@@ -121,6 +121,19 @@ fun WatchScreen(
         if (permissions.bluetooth && !permissions.bluetoothEnabled) {
             BluetoothOffCard(onEnable = { enableBluetoothLauncher.launch(Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE)) })
         }
+        val watchReady = (state.watch as? WatchState.Paired)?.link == LinkState.Ready
+        if (state.garminConnectInstalled && !watchReady) {
+            GarminConnectCard(
+                onOpenAppInfo = {
+                    context.startActivity(
+                        Intent(
+                            Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                            Uri.fromParts("package", GARMIN_CONNECT_PACKAGE, null),
+                        ),
+                    )
+                },
+            )
+        }
 
         when (val watch = state.watch) {
             WatchState.NotPaired -> NotPairedSection(
@@ -184,6 +197,39 @@ internal fun BluetoothOffCard(onEnable: () -> Unit, modifier: Modifier = Modifie
     }
 }
 
+private const val GARMIN_CONNECT_PACKAGE = "com.garmin.android.apps.connectmobile"
+
+/** Garmin Connect holds the watch's session whenever it runs; only one app can talk to the watch. */
+@Composable
+internal fun GarminConnectCard(onOpenAppInfo: () -> Unit, modifier: Modifier = Modifier) {
+    MessageCard(
+        icon = Icons.Filled.Info,
+        title = stringResource(R.string.garmin_connect_title),
+        containerColor = MaterialTheme.status.warnContainer,
+        contentColor = MaterialTheme.status.onWarnContainer,
+        modifier = modifier,
+        actions = { Button(onClick = onOpenAppInfo) { Text(stringResource(R.string.garmin_connect_open)) } },
+    ) {
+        Text(stringResource(R.string.garmin_connect_body), style = MaterialTheme.typography.bodyMedium)
+        Text(stringResource(R.string.garmin_connect_test), style = MaterialTheme.typography.bodyMedium)
+        Text(stringResource(R.string.garmin_connect_switch), style = MaterialTheme.typography.bodySmall)
+    }
+}
+
+@Composable
+internal fun PairingFailedCard(reason: String, modifier: Modifier = Modifier) {
+    MessageCard(
+        icon = Icons.Filled.Warning,
+        title = stringResource(R.string.pairing_failed_title),
+        containerColor = MaterialTheme.colorScheme.errorContainer,
+        contentColor = MaterialTheme.colorScheme.onErrorContainer,
+        modifier = modifier,
+    ) {
+        Text(reason, style = MaterialTheme.typography.bodyMedium)
+        Text(stringResource(R.string.pairing_failed_hint), style = MaterialTheme.typography.bodySmall)
+    }
+}
+
 // ---------------------------------------------------------------- not paired
 
 @Composable
@@ -194,6 +240,8 @@ private fun NotPairedSection(state: AppState, canScan: Boolean, controller: Watc
 
     // Never leave a scan running when this section goes away (tab change, pairing started).
     DisposableEffect(controller) { onDispose { controller.stopScan() } }
+
+    state.pairingError?.let { PairingFailedCard(it) }
 
     NotPairedContent(
         scanning = scan.scanning,

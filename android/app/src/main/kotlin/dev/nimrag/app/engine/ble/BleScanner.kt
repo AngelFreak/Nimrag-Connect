@@ -65,7 +65,7 @@ class BleScanner(private val hub: Hub) {
             return
         }
         callback = cb
-        hub.update { it.copy(scan = ScanState(scanning = true, found = emptyList())) }
+        hub.update { it.copy(scan = ScanState(scanning = true, found = emptyList()), pairingError = null) }
         hub.handler.postDelayed(timeout, SCAN_MS)
         hub.log.info("Scanning for Garmin devices")
     }

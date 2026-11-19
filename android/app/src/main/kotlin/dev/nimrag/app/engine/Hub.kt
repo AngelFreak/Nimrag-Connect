@@ -67,9 +67,22 @@ class Hub(val app: Application) {
             notifications = hasNotificationPermission(),
             bluetoothEnabled = bluetoothEnabled(),
         )
-        update { it.copy(permissions = permissions) }
+        val garminConnect = garminConnectInstalled()
+        update { it.copy(permissions = permissions, garminConnectInstalled = garminConnect) }
+    }
+
+    /** Needs the `<queries>` entry in the manifest to see the package. */
+    fun garminConnectInstalled(): Boolean = try {
+        app.packageManager.getPackageInfo(GARMIN_CONNECT_PACKAGE, 0)
+        true
+    } catch (_: PackageManager.NameNotFoundException) {
+        false
     }
 
     private fun granted(permission: String) =
         app.checkSelfPermission(permission) == PackageManager.PERMISSION_GRANTED
+
+    companion object {
+        const val GARMIN_CONNECT_PACKAGE = "com.garmin.android.apps.connectmobile"
+    }
 }

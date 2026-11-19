@@ -34,6 +34,11 @@
         (the tailnet encrypts the link itself). The upload carries a bearer token, so use
         https or a tailnet address whenever the server is reachable from anywhere else.
     -->
+    <!-- Seeing Garmin Connect lets the Watch screen explain that only one app can talk to the watch. -->
+    <queries>
+        <package android:name="com.garmin.android.apps.connectmobile" />
+    </queries>
+
     <application
         android:name=".NimragApplication"
         android:allowBackup="false"

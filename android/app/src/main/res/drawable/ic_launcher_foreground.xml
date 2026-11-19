@@ -1,23 +1,48 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- A wristwatch outline with an "N" in the case. Kept inside the 66 dp safe zone. -->
+<!--
+    The project logo (docs/assets/logo.svg): a sync ring with an arrowhead around a heart-rate
+    line. The group maps the logo's centre (60,60) to the icon's centre and scales it into the
+    66 dp safe zone.
+-->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <!-- Straps -->
-    <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M46,22L62,22L64,34L44,34Z M44,74L64,74L62,86L46,86Z" />
-    <!-- Case ring -->
-    <path
-        android:fillColor="#FFFFFF"
-        android:fillType="evenOdd"
-        android:pathData="M46,32H62A10,10 0 0 1 72,42V66A10,10 0 0 1 62,76H46A10,10 0 0 1 36,66V42A10,10 0 0 1 46,32Z M47,37A6,6 0 0 0 41,43V65A6,6 0 0 0 47,71H61A6,6 0 0 0 67,65V43A6,6 0 0 0 61,37Z" />
-    <!-- The N -->
-    <path
-        android:pathData="M48,63V45L60,63V45"
-        android:strokeColor="#FFFFFF"
-        android:strokeWidth="3.5"
-        android:strokeLineJoin="miter" />
+    <group
+        android:pivotX="60"
+        android:pivotY="60"
+        android:scaleX="0.68"
+        android:scaleY="0.68"
+        android:translateX="-6"
+        android:translateY="-6">
+        <path
+            android:pathData="M87.58,36.86 A36,36 0 1 1 53.75,24.55"
+            android:strokeWidth="7"
+            android:strokeLineCap="round">
+            <aapt:attr name="android:strokeColor">
+                <gradient
+                    android:type="linear"
+                    android:startX="20"
+                    android:startY="20"
+                    android:endX="100"
+                    android:endY="100"
+                    android:startColor="#7DBBFF"
+                    android:endColor="#4FD1B5" />
+            </aapt:attr>
+        </path>
+        <path
+            android:fillColor="#7DBBFF"
+            android:strokeColor="#7DBBFF"
+            android:strokeWidth="2"
+            android:strokeLineJoin="round"
+            android:pathData="M65.2,23.0 L52.0,16.6 L55.3,32.2 Z" />
+        <path
+            android:strokeColor="#FF6B6B"
+            android:strokeWidth="5.5"
+            android:strokeLineCap="round"
+            android:strokeLineJoin="round"
+            android:pathData="M33,62 H45 L51.5,47 L60,77 L67.5,53 L72.5,62 H87" />
+    </group>
 </vector>

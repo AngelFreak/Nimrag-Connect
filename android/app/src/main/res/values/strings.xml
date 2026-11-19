@@ -44,6 +44,13 @@
     <string name="scan_found_title">Watches nearby</string>
     <string name="scan_none_found">No watch found. Check that it is in pairing mode and close by, then scan again.</string>
     <string name="cannot_sync_yet">Can\'t sync yet: %1$s</string>
+    <string name="garmin_connect_title">Garmin Connect is on this phone</string>
+    <string name="garmin_connect_body">Only one app can talk to the watch at a time. While Garmin Connect runs, it holds the watch and Nimrag cannot pair or sync.</string>
+    <string name="garmin_connect_test">To try Nimrag and keep Garmin Connect: open its app info, tap Force stop, then pair here. Nimrag reuses the phone\'s existing Bluetooth pairing and leaves it in place. Opening Garmin Connect again takes the watch back.</string>
+    <string name="garmin_connect_switch">To switch for good: remove the watch in Garmin Connect (Devices), forget it in the phone\'s Bluetooth settings, then pair it here.</string>
+    <string name="garmin_connect_open">Open Garmin Connect app info</string>
+    <string name="pairing_failed_title">Pairing did not finish</string>
+    <string name="pairing_failed_hint">The Sync tab\'s log has the details. Share log sends it.</string>
     <string name="pair_confirm_title">Pair with %1$s?</string>
     <string name="pair_confirm_body">The phone and the watch will each ask you to confirm. Accept both.</string>
     <string name="pair_confirm">Pair</string>
@@ -115,6 +122,7 @@
     <string name="log_title">Log (%1$d)</string>
     <string name="log_expand">Show log</string>
     <string name="log_collapse">Hide log</string>
+    <string name="log_share">Share log</string>
     <string name="log_empty">Nothing logged yet.</string>
 
     <!-- Settings -->
