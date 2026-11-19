@@ -1,0 +1,9 @@
+[workspace]
+resolver = "2"
+members = ["core", "tools/decode"]
+
+[workspace.package]
+edition = "2021"
+rust-version = "1.80"
+license = "LicenseRef-nimrag-pending"
+publish = false

@@ -1,0 +1,165 @@
+// Recovered from Garmin Connect 5.31 (11761) com.garmin.proto.generated.GDIInReachChatEvents by tools/proto-recover. Field names/numbers are SEEN (from generated constants); types marked "// inferred" where the type could not be read directly.
+// Types, labels, oneofs and enums are read from the FileDescriptorProto embedded in the class; numbers are cross-checked against *_FIELD_NUMBER constants.
+// Original descriptor file name: GDIInReachChatEvents.proto
+
+syntax = "proto2";
+
+package GDI.Proto.InReachChatEvents;
+
+import "gdi_data_types.proto";
+import "gdi_generic_item_transfer.proto";
+
+option java_package = "com.garmin.proto.generated";
+option java_outer_classname = "GDIInReachChatEvents";
+option optimize_for = LITE_RUNTIME;
+
+extend .GDI.Proto.GenericItemTransfer.DataTypeConfig {
+  optional DataTypeConfigExt config_ext = 106;
+}
+extend .GDI.Proto.GenericItemTransfer.DataTypeStatus {
+  optional DataTypeStatusExt status_ext = 106;
+}
+extend .GDI.Proto.GenericItemTransfer.GenericItemReference {
+  optional GenericItemReferenceExt item_ref_ext = 106;
+}
+extend .GDI.Proto.GenericItemTransfer.GenericItem {
+  optional GenericItemExt item_ext = 106;
+}
+
+message InReachChatEventsService {
+  optional CapabilitiesRequest capabilities_request = 1;
+  optional CapabilitiesResponse capabilities_response = 2;
+  optional SyncRequest sync_request = 3;
+  optional SyncResponse sync_response = 4;
+  optional SubscribeRequest subscribe_request = 5;
+  optional SubscribeResponse subscribe_response = 6;
+  optional ChatEventsUpdatedNotification chat_events_updated_notification = 7;
+}
+
+message Capabilities {
+  repeated ChatEvent.Type chat_event_types = 1;
+}
+
+message UserIdentifier {
+  optional .GDI.Proto.DataTypes.UUID user_id = 1;
+  optional string address = 2;
+}
+
+message LiveTrackData {
+  optional .GDI.Proto.DataTypes.UUID session_uuid = 1;
+  optional string session_name = 2;
+  optional uint64 session_start_time = 3;
+  optional uint64 session_end_time = 4;
+  optional .GDI.Proto.DataTypes.UUID customer_uuid = 5;
+}
+
+message ChatEvent {
+  optional .GDI.Proto.DataTypes.UUID uuid = 1;
+  optional UserIdentifier sender = 2;
+  optional UserIdentifier recipient = 3;
+  optional ChatEvent.Type type = 4;
+  optional bool should_notify = 5;
+  optional uint64 received_time = 6;
+  optional uint64 read_time = 7;
+  optional uint64 updated_time = 8;
+  optional LiveTrackData livetrack_data = 9;
+
+  enum Type {
+    UNKNOWN_TYPE = 0;
+    LIVETRACK = 1;
+    TRUSTED_CONTACT_ADDED = 2;
+    TRUSTED_CONTACT_REMOVED = 3;
+  }
+}
+
+message CapabilitiesRequest {
+  optional Capabilities capabilities = 1;
+}
+
+message CapabilitiesResponse {
+  optional Capabilities capabilities = 1;
+}
+
+message SyncRequestInfo {
+  optional uint32 protocol_version = 1 [default = 1];
+  optional .GDI.Proto.DataTypes.UUID app_uuid = 2;
+  optional SyncRequestInfo.SyncType sync_type = 3 [default = INCREMENTAL];
+  optional SyncRequestInfo.SyncDataType sync_data_type = 4;
+
+  enum SyncType {
+    UNKNOWN_SYNC_TYPE = 0;
+    FULL = 1;
+    INCREMENTAL = 2;
+  }
+
+  enum SyncDataType {
+    UNKNOWN_SYNC_DATA_TYPE = 0;
+    ALL = 1;
+    LIVETRACK = 2;
+    TRUSTED_CONTACT_ADDED = 3;
+    TRUSTED_CONTACT_REMOVED = 4;
+  }
+}
+
+message SyncRequest {
+  optional SyncRequestInfo request_info = 1;
+}
+
+message SyncResponse {
+  required SyncResponse.Status status = 1;
+
+  enum Status {
+    UNKNOWN = 0;
+    OK = 1;
+    GENERIC_ERROR = 2;
+    BUSY = 3;
+    UNSUPPORTED_PROTOCOL_VERSION = 4;
+    UNSUPPORTED_DATA_TYPE = 5;
+    MISSING_INFO = 6;
+    UP_TO_DATE = 7;
+  }
+}
+
+message SubscribeRequest {
+  optional bool want_chat_events_updated = 1 [default = false];
+}
+
+message SubscribeResponse {
+  required SubscribeResponse.Status status = 1;
+
+  enum Status {
+    UNKNOWN_STATUS = 0;
+    OK = 1;
+    GENERIC_ERROR = 2;
+  }
+}
+
+message ChatEventsUpdatedNotification {
+  optional uint64 updated_time = 1;
+}
+
+message DataTypeConfigExt {
+  optional SyncRequestInfo request_info = 1;
+  optional uint64 updated_time = 2;
+  optional uint32 max_item_count = 3;
+}
+
+message DataTypeStatusExt {
+  optional DataTypeStatusExt.Status status = 1;
+
+  enum Status {
+    UNKNOWN_STATUS = 0;
+    UNSUPPORTED_PROTOCOL_VERSION = 1;
+    UNSUPPORTED_DATA_TYPE = 2;
+    UP_TO_DATE = 3;
+  }
+}
+
+message GenericItemReferenceExt {
+  optional .GDI.Proto.DataTypes.UUID uuid = 1;
+  optional uint64 updated_time = 2;
+}
+
+message GenericItemExt {
+  optional ChatEvent chat_event = 1;
+}

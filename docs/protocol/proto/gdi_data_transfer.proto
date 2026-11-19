@@ -1,0 +1,122 @@
+// Recovered from Garmin Connect 5.31 (11761) com.garmin.proto.generated.GDIDataTransferProto by tools/proto-recover. Field names/numbers are SEEN (from generated constants); types marked "// inferred" where the type could not be read directly.
+// Types, labels, oneofs and enums are read from the FileDescriptorProto embedded in the class; numbers are cross-checked against *_FIELD_NUMBER constants.
+// Original descriptor file name: GDIDataTransfer.proto
+
+syntax = "proto2";
+
+package GDI.Proto.DataTransfer;
+
+import "gdi_core.proto";
+import "gdi_data_types.proto";
+
+option java_package = "com.garmin.proto.generated";
+option java_outer_classname = "GDIDataTransferProto";
+option optimize_for = LITE_RUNTIME;
+
+message DataTransferService {
+  optional DataDownloadRequest data_download_request = 1;
+  optional DataDownloadResponse data_download_response = 2;
+  optional InitiateDataUploadRequest initiate_data_upload_request = 3;
+  optional InitiateDataUploadResponse initiate_data_upload_response = 4;
+  optional DataUploadRequest data_upload_request = 5;
+  optional DataUploadResponse data_upload_response = 6;
+  optional DataUploadCanceledNotification data_upload_canceled_notification = 7;
+  optional FileAccessItemRequest file_access_item_request = 8;
+  optional FileAccessItemResponse file_access_item_response = 9;
+}
+
+message CapabilitiesRequest {
+  optional uint32 service_version = 1;
+  extend .GDI.Proto.Core.FeatureCapabilitiesRequest {
+    optional CapabilitiesRequest data_xfer_request = 14;
+  }
+}
+
+message CapabilitiesResponse {
+  extend .GDI.Proto.Core.FeatureCapabilitiesResponse {
+    optional CapabilitiesResponse data_xfer_response = 14;
+  }
+}
+
+message DataDownloadRequest {
+  required uint32 id = 1;
+  required uint32 offset = 2;
+  optional uint32 max_chunk_size = 3 [default = 4096];
+}
+
+message DataDownloadResponse {
+  required DataDownloadResponse.Status status = 1;
+  required uint32 id = 2;
+  required uint32 offset = 3;
+  optional bytes payload = 4;
+
+  enum Status {
+    UNKNOWN = 0;
+    SUCCESS = 1;
+    INVALID_ID = 2;
+    INVALID_OFFSET = 3;
+  }
+}
+
+message InitiateDataUploadRequest {
+  required uint32 id = 1;
+}
+
+message InitiateDataUploadResponse {
+  required uint32 id = 1;
+  required InitiateDataUploadResponse.Status status = 2;
+
+  enum Status {
+    UNKNOWN = 0;
+    OK = 1;
+    INVALID_ID = 2;
+  }
+}
+
+message DataUploadRequest {
+  required uint32 id = 1;
+  required uint32 offset = 2;
+  required bytes payload = 3;
+}
+
+message DataUploadResponse {
+  required uint32 id = 1;
+  required DataUploadResponse.Status status = 2;
+
+  enum Status {
+    UNKNOWN = 0;
+    SUCCESS = 1;
+    INVALID_ID = 2;
+    INVALID_OFFSET = 3;
+    SIZE_MISMATCH = 4;
+    ABORT = 5;
+  }
+}
+
+message DataUploadCanceledNotification {
+  required uint32 id = 1;
+}
+
+message FileAccessItemRequest {
+  optional uint32 data_xfer_id = 1;
+  optional FileAccessItemRequest.Latency expected_latency = 2 [default = STANDARD];
+
+  enum Latency {
+    STANDARD = 0;
+    SOON = 1;
+    IMMEDIATE = 2;
+    DURING_ACTIVITY = 3;
+  }
+}
+
+message FileAccessItemResponse {
+  optional FileAccessItemResponse.Status status = 1;
+  optional uint32 data_xfer_id = 2;
+  optional .GDI.Proto.DataTypes.UUID file_access_item_uid = 3;
+
+  enum Status {
+    UNKNOWN = 0;
+    OK = 1;
+    INVALID_ID = 2;
+  }
+}

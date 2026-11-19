@@ -1,0 +1,143 @@
+// Recovered from Garmin Connect 5.31 (11761) com.garmin.proto.generated.GDICalendarProto by tools/proto-recover. Field names/numbers are SEEN (from generated constants); types marked "// inferred" where the type could not be read directly.
+// Types, labels, oneofs and enums are read from the FileDescriptorProto embedded in the class; numbers are cross-checked against *_FIELD_NUMBER constants.
+// Original descriptor file name: GDICalendar.proto
+
+syntax = "proto2";
+
+package GDI.Proto.Calendar;
+
+import "gdi_core.proto";
+import "gdi_data_types.proto";
+
+option java_package = "com.garmin.proto.generated";
+option java_outer_classname = "GDICalendarProto";
+option optimize_for = LITE_RUNTIME;
+
+message CalendarService {
+  optional CalendarEventsRequest calendar_events_request = 1;
+  optional CalendarEventsResponse calendar_events_response = 2;
+  optional CalendarRequest calendar_request = 3;
+  optional CalendarResponse calendar_response = 4;
+}
+
+message CalendarEventsRequest {
+  optional uint64 start_date = 1;
+  optional uint64 end_date = 2;
+  optional bool include_organizer = 3 [default = false];
+  optional bool include_title = 4 [default = true];
+  optional bool include_location = 5 [default = true];
+  optional bool include_description = 6 [default = false];
+  optional bool include_start_date = 7 [default = true];
+  optional bool include_end_date = 8 [default = false];
+  optional bool include_all_day = 9 [default = false];
+  optional uint32 max_organizer_length = 10 [default = 0];
+  optional uint32 max_title_length = 11 [default = 0];
+  optional uint32 max_location_length = 12 [default = 0];
+  optional uint32 max_description_length = 13 [default = 0];
+  optional uint32 max_events = 14 [default = 100];
+}
+
+message CalendarEventsResponse {
+  optional CalendarEventsResponse.ResponseStatus status = 1;
+  repeated CalendarEvent events = 2;
+
+  enum ResponseStatus {
+    UNKNOWN_RESPONSE_STATUS = 0;
+    OK = 1;
+    INVALID_DATE_RANGE = 2;
+  }
+}
+
+message CalendarEvent {
+  optional string organizer = 1;
+  optional string title = 2;
+  optional string location = 3;
+  optional string description = 4;
+  optional uint64 start_date = 5;
+  optional uint64 end_date = 6;
+  optional bool all_day = 7;
+  repeated uint32 reminder_time_in_secs = 8;
+}
+
+message CapabilitiesRequest {
+  optional uint32 calendar_features_version = 1;
+  extend .GDI.Proto.Core.FeatureCapabilitiesRequest {
+    optional CapabilitiesRequest expanded_calendar_request = 39;
+  }
+}
+
+message CapabilitiesResponse {
+  optional uint32 calendar_features_version = 1;
+  extend .GDI.Proto.Core.FeatureCapabilitiesResponse {
+    optional CapabilitiesResponse expanded_calendar_response = 39;
+  }
+}
+
+message CalendarRequest {
+  optional uint64 start_date = 1;
+  optional uint64 end_date = 2;
+  optional bool include_title = 3;
+  optional bool include_location = 4;
+  optional bool include_description = 5;
+  optional bool include_attendees = 6;
+  optional uint32 max_events = 7;
+  optional uint32 max_calendars = 8;
+  optional uint32 max_attendees = 9;
+  optional uint32 max_title_length = 10;
+  optional uint32 max_location_length = 11;
+  optional uint32 max_description_length = 12;
+  repeated bytes cal_hashes = 13;
+  repeated bytes event_hashes = 14;
+}
+
+message CalendarResponse {
+  optional CalendarResponse.ResponseStatus status = 1;
+  optional .GDI.Proto.DataTypes.DataTransferItem xfer_data = 2;
+
+  enum ResponseStatus {
+    UNKNOWN_RESPONSE_STATUS = 0;
+    OK = 1;
+    INVALID_DATE_RANGE = 2;
+    PERMISSION_REQUIRED = 3;
+  }
+}
+
+message CalendarFile {
+  repeated bytes deleted_cal_hashes = 1;
+  repeated bytes deleted_event_hashes = 2;
+  repeated Calendar calendars = 3;
+  repeated Event events = 4;
+}
+
+message Calendar {
+  optional bytes hash = 1;
+  optional string name = 2;
+  optional string calendar_id = 3;
+  optional uint32 color = 4;
+}
+
+message Event {
+  optional bytes hash = 1;
+  optional string calendar_id = 2;
+  optional uint64 start_date = 3;
+  optional uint64 end_date = 4;
+  optional bool all_day = 5;
+  optional string title = 6;
+  optional string location = 7;
+  optional string description = 8;
+  optional float pos_lat = 9;
+  optional float pos_lon = 10;
+  repeated Attendee attendees = 11;
+}
+
+message Attendee {
+  optional string name = 1;
+  optional Attendee.AttendeeStatus status = 2;
+
+  enum AttendeeStatus {
+    ACCEPTED = 0;
+    DECLINED = 1;
+    TENTATIVE = 2;
+    PENDING = 3;
+  }
+}

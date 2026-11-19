@@ -1,0 +1,104 @@
+// Recovered from Garmin Connect 5.31 (11761) com.garmin.proto.generated.WifiSetup by tools/proto-recover. Field names/numbers are SEEN (from generated constants); types marked "// inferred" where the type could not be read directly.
+// Types, labels, oneofs and enums are read from the FileDescriptorProto embedded in the class; numbers are cross-checked against *_FIELD_NUMBER constants.
+// Original descriptor file name: wifiSetupGDI.proto
+
+syntax = "proto2";
+
+package GDI.fitness;
+
+option java_package = "com.garmin.proto.generated";
+option java_outer_classname = "WifiSetup";
+option optimize_for = LITE_RUNTIME;
+
+enum SecurityType {
+  OPEN = 0;
+  WEP = 1;
+  WPA = 2;
+  WPA2 = 3;
+  WPA3 = 4;
+}
+
+enum StatusType {
+  Unknown = 0;
+  ConnectionSuccess = 1;
+  InvalidCredentials = 2;
+  NotFound = 3;
+  NoDHCP = 4;
+  NoInternet = 5;
+  CaptivePortal = 6;
+}
+
+enum GcsLocationType {
+  PRODUCTION = 0;
+  CHINA = 1;
+  TEST = 2;
+  STAGE = 3;
+}
+
+enum ApType {
+  AP_TYPE_UNKNOWN = 0;
+  AP_TYPE_DEVICE_TO_DEVICE = 1;
+  AP_TYPE_INTERNET = 2;
+}
+
+enum WifiBand {
+  WIFI_BAND_5_GHZ = 0;
+  WIFI_BAND_2P4_GHZ = 1;
+}
+
+enum ServerCredentialType {
+  NONE = 0;
+  CONNECT_OAUTH1 = 1;
+}
+
+message OAuthCredentials {
+  required string consumer_key = 1;
+  required string consumer_secret = 2;
+  required string oauth_token = 3;
+  required string oauth_secret = 4;
+}
+
+message ScannedAccessPoint {
+  required string ssid = 1;
+  required SecurityType security_type = 2;
+  required bytes mac_address = 3;
+  optional int32 signal_strength = 4;
+}
+
+message StoredAccessPoint {
+  required string ssid = 1;
+  required SecurityType security_type = 2;
+  optional bool favorite = 3;
+  optional uint32 timestamp = 4;
+  optional bytes password = 5;
+  optional bytes mac_address = 6;
+  required int32 password_len = 7;
+  required bool password_is_hex = 8;
+  optional StatusType status_type = 9;
+  optional int32 signal_strength = 10;
+  optional bool is_current_network = 11;
+  optional ApType ap_type = 12;
+  optional uint32 channel = 13;
+  optional WifiBand band_enabled = 14;
+}
+
+message Limits {
+  optional int32 max_access_points = 1;
+  optional int32 max_favorites = 2;
+  repeated SecurityType allowed_security_types = 3;
+}
+
+message WifiSetupAgent {
+  optional OAuthCredentials credentials = 1;
+  repeated StoredAccessPoint stored_aps = 2;
+  optional Limits limits = 3;
+  optional GcsLocationType gcs_location = 4;
+}
+
+message WifiSetupDevice {
+  repeated ScannedAccessPoint scanned_aps = 1;
+  repeated StoredAccessPoint stored_aps = 2;
+  optional Limits limits = 3;
+  optional bool needs_credentials = 4;
+  repeated ServerCredentialType credentials_types = 5;
+}

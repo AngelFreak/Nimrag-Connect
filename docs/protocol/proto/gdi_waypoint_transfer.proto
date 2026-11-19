@@ -1,0 +1,35 @@
+// Recovered from Garmin Connect 5.31 (11761) com.garmin.proto.generated.GDIWaypointTransferProto by tools/proto-recover. Field names/numbers are SEEN (from generated constants); types marked "// inferred" where the type could not be read directly.
+// Types, labels, oneofs and enums are read from the FileDescriptorProto embedded in the class; numbers are cross-checked against *_FIELD_NUMBER constants.
+// Original descriptor file name: GDIWaypointTransfer.proto
+
+syntax = "proto2";
+
+package GDI.Proto.WaypointTransfer;
+
+import "gdi_data_types.proto";
+
+option java_package = "com.garmin.proto.generated";
+option java_outer_classname = "GDIWaypointTransferProto";
+option optimize_for = LITE_RUNTIME;
+
+message WaypointTransferService {
+  optional WaypointRequest waypoint_request = 1;
+  optional WaypointResponse waypoint_response = 2;
+}
+
+message WaypointRequest {
+  required .GDI.Proto.DataTypes.ScPoint location = 1;
+  optional string name = 2;
+  optional .GDI.Proto.DataTypes.CoordinateSystem coordinate_system = 3;
+}
+
+message WaypointResponse {
+  required WaypointResponse.ResponseStatus status = 1;
+
+  enum ResponseStatus {
+    UNKNOWN_RESPONSE_STATUS = 0;
+    OK = 1;
+    ALREADY_EXISTS = 2;
+    ERROR = 3;
+  }
+}

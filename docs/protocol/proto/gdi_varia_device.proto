@@ -1,0 +1,168 @@
+// Recovered from Garmin Connect 5.31 (11761) com.garmin.proto.generated.GDIVariaDevice by tools/proto-recover. Field names/numbers are SEEN (from generated constants); types marked "// inferred" where the type could not be read directly.
+// Types, labels, oneofs and enums are read from the FileDescriptorProto embedded in the class; numbers are cross-checked against *_FIELD_NUMBER constants.
+// Original descriptor file name: GDIVariaDevice.proto
+
+syntax = "proto2";
+
+package GDI.Proto.VariaDevice;
+
+import "gdi_core.proto";
+import "gdi_event_sharing.proto";
+
+option java_package = "com.garmin.proto.generated";
+option java_outer_classname = "GDIVariaDevice";
+option optimize_for = LITE_RUNTIME;
+
+enum Status {
+  STATUS_UNKNOWN = 0;
+  STATUS_REJECTED = 1;
+  STATUS_ACCEPTED = 2;
+  STATUS_BUSY = 3;
+}
+
+enum Mode {
+  MODE_UNKNOWN = 0;
+  MODE_ACTIVE = 1;
+  MODE_RADAR_DEMO = 2;
+  MODE_PAIRING = 3;
+  MODE_HIBERNATION = 4;
+}
+
+message Service {
+  optional ConfigurationRequest configure_request = 1;
+  optional ConfigurationResponse configure_response = 2;
+  optional ConfigurationNotification configure_notification = 3;
+  optional ModeRequest mode_request = 4;
+  optional ModeResponse mode_response = 5;
+  optional ModeNotification mode_notification = 6;
+  optional DeviceStatusRequest status_request = 7;
+  optional DeviceStatusResponse status_response = 8;
+  optional DeviceStatusNotification status_notification = 9;
+  optional VaultUploadEnableRequest vault_upload_enable_request = 10;
+  optional VaultUploadEnableResponse vault_upload_enable_response = 11;
+  optional VaultUploadEnableNotification vault_upload_enable_notification = 12;
+}
+
+message CapabilitiesRequest {
+  extend .GDI.Proto.Core.FeatureCapabilitiesRequest {
+    optional CapabilitiesRequest features_request = 38;
+  }
+}
+
+message Capabilities {
+  optional bool incident_detection_supported = 1;
+  optional bool orientation_supported = 2;
+  optional bool power_source_supported = 3;
+  optional bool moisture_detection_supported = 4;
+  repeated Mode supported_modes = 5 [packed = true];
+}
+
+message CapabilitiesResponse {
+  optional Capabilities capabilities = 1;
+  extend .GDI.Proto.Core.FeatureCapabilitiesResponse {
+    optional CapabilitiesResponse features_response = 38;
+  }
+}
+
+message Configuration {
+  optional Configuration.SKU sku = 1;
+  optional Configuration.Orientation orientation = 2;
+  optional bool incident_detection_enable = 3;
+
+  enum Orientation {
+    ORIENTATION_UNKNOWN = 0;
+    ORIENTATION_DYNAMIC = 1;
+    ORIENTATION_STANDARD = 2;
+    ORIENTATION_INVERTED = 3;
+  }
+
+  enum SKU {
+    SKU_UNKNOWN = 0;
+    SKU_WW = 1;
+    SKU_UK_FRANCE = 2;
+    SKU_STVZO = 3;
+    SKU_APAC = 4;
+    SKU_NA = 5;
+  }
+}
+
+message ConfigurationRequest {
+  optional Configuration config = 1;
+}
+
+message ConfigurationResponse {
+  optional Status status = 1;
+  optional Configuration config = 2;
+}
+
+message ConfigurationNotification {
+  optional Configuration config = 1;
+}
+
+message ModeRequest {
+  optional Mode mode = 1;
+}
+
+message ModeResponse {
+  optional Status status = 1;
+  optional Mode mode = 2;
+}
+
+message ModeNotification {
+  optional Mode mode = 1;
+}
+
+message DeviceStatus {
+  optional bool incident_detected = 1;
+  optional bool incorrect_orientation = 2;
+  optional bool reverse_charging = 3;
+}
+
+message DeviceFaults {
+  optional bool high_cpu_temperature_fault = 1;
+  optional bool low_cpu_temperature_fault = 2;
+  optional bool remote_cpu_temperature_fault = 3;
+  optional bool high_battery_temperature_fault = 4;
+  optional bool low_battery_temperature_fault = 5;
+  optional bool charging_fault = 6;
+  optional bool moisture_detected_fault = 7;
+  optional bool charging_temperature_fault = 8;
+  optional bool high_led_temperature_fault = 9;
+  optional bool low_led_temperature_fault = 10;
+  optional bool main_led_failure_fault = 11;
+  optional bool battery_shutdown_fault = 12;
+  optional bool battery_empty_fault = 13;
+  optional bool radar_power_fault = 14;
+  optional bool radar_health_fault = 15;
+  optional bool radar_health_timeout_fault = 16;
+  optional bool critical_led_temperature_fault = 17;
+}
+
+message DeviceStatusRequest {
+}
+
+message DeviceStatusResponse {
+  optional DeviceStatus status = 1;
+  optional DeviceFaults faults = 2;
+}
+
+message DeviceStatusNotification {
+  optional DeviceStatus status = 1;
+  optional DeviceFaults faults = 2;
+  extend .GDI.Proto.EventSharing.AlertNotification {
+    optional DeviceStatusNotification data = 1020;
+  }
+}
+
+message VaultUploadEnableRequest {
+  optional bool enable = 1;
+}
+
+message VaultUploadEnableResponse {
+  optional Status status = 1;
+  optional bool enable = 2;
+}
+
+message VaultUploadEnableNotification {
+  optional bool enable = 1;
+}

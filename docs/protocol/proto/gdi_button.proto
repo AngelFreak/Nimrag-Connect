@@ -1,0 +1,108 @@
+// Recovered from Garmin Connect 5.31 (11761) com.garmin.proto.generated.GDIButton by tools/proto-recover. Field names/numbers are SEEN (from generated constants); types marked "// inferred" where the type could not be read directly.
+// Types, labels, oneofs and enums are read from the FileDescriptorProto embedded in the class; numbers are cross-checked against *_FIELD_NUMBER constants.
+// Original descriptor file name: GDIButton.proto
+
+syntax = "proto2";
+
+package GDI.Proto.Button;
+
+import "gdi_core.proto";
+import "gdi_event_sharing.proto";
+
+option java_package = "com.garmin.proto.generated";
+option java_outer_classname = "GDIButton";
+option optimize_for = LITE_RUNTIME;
+
+enum ButtonType {
+  BUTTON_TYPE_UNKNOWN = 0;
+  BUTTON_TYPE_OK = 1;
+  BUTTON_TYPE_PAIR = 2;
+  BUTTON_TYPE_TRAINER_HANDLEBAR_LEFT = 3;
+  BUTTON_TYPE_TRAINER_HANDLEBAR_RIGHT = 4;
+  BUTTON_TYPE_TRAINER_SHIFT_DOWN = 5;
+  BUTTON_TYPE_TRAINER_SHIFT_UP = 6;
+  BUTTON_TYPE_TRAINER_SHIFT_BOTH = 7;
+}
+
+enum ButtonMode {
+  BUTTON_MODE_UNKNOWN = 0;
+  BUTTON_MODE_DISCRETE = 1;
+  BUTTON_MODE_RAW = 2;
+}
+
+message Service {
+  optional ConfigurationRequest config_request = 1;
+  optional ConfigurationResponse config_response = 2;
+  optional ConfigurationNotification config_notification = 3;
+}
+
+message CapabilitiesRequest {
+  extend .GDI.Proto.Core.FeatureCapabilitiesRequest {
+    optional CapabilitiesRequest features_request = 34;
+  }
+}
+
+message CapabilitiesResponse {
+  optional RemoteCapabilities capabilities = 1;
+  extend .GDI.Proto.Core.FeatureCapabilitiesResponse {
+    optional CapabilitiesResponse features_response = 34;
+  }
+}
+
+message RemoteCapabilities {
+  optional uint32 service_version = 1;
+  repeated ButtonConfig button_config = 2;
+}
+
+message ButtonConfig {
+  optional ButtonType button_id = 1;
+  optional bool enable_short_press = 2;
+  optional bool enable_hold_press = 3;
+  optional bool enable_long_hold_press = 4;
+  optional uint32 hold_duration_ms = 5;
+  optional uint32 long_hold_duration_ms = 6;
+  optional ButtonMode mode = 7;
+  optional bool enable_double_press = 8;
+}
+
+message ConfigurationSettings {
+  repeated ButtonConfig buttons = 1;
+}
+
+message ConfigurationRequest {
+  optional ConfigurationSettings config = 1;
+}
+
+message ConfigurationResponse {
+  optional ConfigurationResponse.ConfigurationStatus status = 1;
+  optional ConfigurationSettings config = 2;
+
+  enum ConfigurationStatus {
+    UNKNOWN = 0;
+    ACCEPTED = 1;
+    REJECTED = 2;
+  }
+}
+
+message ConfigurationNotification {
+  optional ConfigurationSettings config = 1;
+}
+
+message EventNotification {
+  optional ButtonType button_id = 1;
+  optional EventNotification.Action action = 2;
+  optional uint32 timestamp_ms = 3;
+  extend .GDI.Proto.EventSharing.AlertNotification {
+    optional EventNotification data = 1021;
+  }
+
+  enum Action {
+    UNKNOWN = 0;
+    SHORT_PRESS = 1;
+    HOLD_PRESS = 2;
+    LONG_HOLD_PRESS = 3;
+    PRESS = 4;
+    RELEASE = 5;
+    DOUBLE_PRESS = 6;
+  }
+}

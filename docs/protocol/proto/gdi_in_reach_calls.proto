@@ -1,0 +1,160 @@
+// Recovered from Garmin Connect 5.31 (11761) com.garmin.proto.generated.GDIInReachCalls by tools/proto-recover. Field names/numbers are SEEN (from generated constants); types marked "// inferred" where the type could not be read directly.
+// Types, labels, oneofs and enums are read from the FileDescriptorProto embedded in the class; numbers are cross-checked against *_FIELD_NUMBER constants.
+// Original descriptor file name: GDIInReachCalls.proto
+
+syntax = "proto2";
+
+package GDI.Proto.InReachCalls;
+
+import "gdi_data_types.proto";
+import "gdi_generic_item_transfer.proto";
+
+option java_package = "com.garmin.proto.generated";
+option java_outer_classname = "GDIInReachCalls";
+option optimize_for = LITE_RUNTIME;
+
+extend .GDI.Proto.GenericItemTransfer.DataTypeConfig {
+  optional DataTypeConfigExt config_ext = 105;
+}
+extend .GDI.Proto.GenericItemTransfer.DataTypeStatus {
+  optional DataTypeStatusExt status_ext = 105;
+}
+extend .GDI.Proto.GenericItemTransfer.GenericItemReference {
+  optional GenericItemReferenceExt item_ref_ext = 105;
+}
+extend .GDI.Proto.GenericItemTransfer.GenericItem {
+  optional GenericItemExt item_ext = 105;
+}
+
+message InReachCallsService {
+  optional SyncRequest sync_request = 1;
+  optional SyncResponse sync_response = 2;
+  optional SubscribeRequest subscribe_request = 3;
+  optional SubscribeResponse subscribe_response = 4;
+  optional DeleteCallRequest delete_call_request = 5;
+  optional DeleteCallResponse delete_call_response = 6;
+  optional CallUpdatedNotification call_updated_notification = 7;
+}
+
+message Call {
+  optional string sip_call_id = 1;
+  optional Call.Source source = 2;
+  optional Call.Category category = 3;
+  optional string sip_address = 4;
+  optional string phone_number = 5;
+  optional string from_device_id = 6;
+  optional string to_device_id = 7;
+  optional uint64 call_time = 8;
+  optional uint64 updated_time = 9;
+  optional uint32 duration = 10;
+  optional Call.State state = 11;
+
+  enum Source {
+    UNKNOWN_SOURCE = 0;
+    LOCAL = 1;
+    WEB = 2;
+  }
+
+  enum Category {
+    UNKNOWN_CATEGORY = 0;
+    INCOMING = 1;
+    OUTGOING = 2;
+  }
+
+  enum State {
+    UNKNOWN_STATE = 0;
+    CANCELLED = 1;
+    REJECTED = 2;
+    COMPLETED = 3;
+    MISSED = 4;
+    ERROR = 5;
+  }
+}
+
+message SyncRequestInfo {
+  optional uint32 protocol_version = 1 [default = 1];
+  optional .GDI.Proto.DataTypes.UUID app_uuid = 2;
+  optional SyncRequestInfo.SyncType sync_type = 3 [default = INCREMENTAL];
+
+  enum SyncType {
+    UNKNOWN = 0;
+    FULL = 1;
+    INCREMENTAL = 2;
+  }
+}
+
+message SyncRequest {
+  optional SyncRequestInfo request_info = 1;
+}
+
+message SyncResponse {
+  required SyncResponse.Status status = 1;
+
+  enum Status {
+    UNKNOWN = 0;
+    OK = 1;
+    GENERIC_ERROR = 2;
+    BUSY = 3;
+    UNSUPPORTED_PROTOCOL_VERSION = 4;
+    MISSING_INFO = 5;
+    UP_TO_DATE = 6;
+  }
+}
+
+message DeleteCallRequest {
+  optional string sip_call_id = 1;
+}
+
+message DeleteCallResponse {
+  required DeleteCallResponse.Status status = 1;
+
+  enum Status {
+    UNKNOWN = 0;
+    OK = 1;
+    GENERIC_ERROR = 2;
+    CALL_NOT_FOUND = 3;
+  }
+}
+
+message SubscribeRequest {
+  optional bool want_call_updated = 1 [default = false];
+}
+
+message SubscribeResponse {
+  required SubscribeResponse.Status status = 1;
+
+  enum Status {
+    UNKNOWN_STATUS = 0;
+    OK = 1;
+    GENERIC_ERROR = 2;
+  }
+}
+
+message CallUpdatedNotification {
+  optional uint64 updated_time = 1;
+}
+
+message DataTypeConfigExt {
+  optional SyncRequestInfo request_info = 1;
+  optional uint64 updated_time = 2;
+  optional uint32 max_item_count = 3;
+}
+
+message DataTypeStatusExt {
+  optional DataTypeStatusExt.Status status = 1;
+
+  enum Status {
+    UNKNOWN_STATUS = 0;
+    UNSUPPORTED_PROTOCOL_VERSION = 1;
+    UP_TO_DATE = 2;
+  }
+}
+
+message GenericItemReferenceExt {
+  optional string sip_call_id = 1;
+  optional uint64 updated_time = 2;
+}
+
+message GenericItemExt {
+  optional Call call = 1;
+}

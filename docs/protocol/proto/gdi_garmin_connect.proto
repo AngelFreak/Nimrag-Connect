@@ -1,0 +1,82 @@
+// Recovered from Garmin Connect 5.31 (11761) com.garmin.proto.generated.GDIGarminConnect by tools/proto-recover. Field names/numbers are SEEN (from generated constants); types marked "// inferred" where the type could not be read directly.
+// Types, labels, oneofs and enums are read from the FileDescriptorProto embedded in the class; numbers are cross-checked against *_FIELD_NUMBER constants.
+// Original descriptor file name: GDIGarminConnect.proto
+
+syntax = "proto2";
+
+package GDI.Proto.GarminConnect;
+
+import "gdi_core.proto";
+
+option java_package = "com.garmin.proto.generated";
+option java_outer_classname = "GDIGarminConnect";
+option optimize_for = LITE_RUNTIME;
+
+extend .GDI.Proto.Core.FeatureCapabilitiesRequest {
+  optional ClientFeatureCapabilities request_garmin_connect_capabilites = 11;
+}
+extend .GDI.Proto.Core.FeatureCapabilitiesResponse {
+  optional ServerFeatureCapabilities response_garmin_connect_capabilites = 11;
+}
+
+enum Priority {
+  STANDARD = 0;
+  USER_INITIATED = 1;
+}
+
+message ClientFeatureCapabilities {
+  optional uint32 version = 1;
+  optional bool wellness_threshold_met_support = 2;
+}
+
+message ServerFeatureCapabilities {
+  optional bool wellness_support = 2;
+  optional bool lifestyle_logging_support = 3;
+}
+
+message Service {
+  optional CheckDownloadQueueRequest check_download_queue_request = 1;
+  optional CheckDownloadQueueResponse check_download_queue_response = 2;
+  optional CutWellnessFilesRequest cut_wellness_files_request = 3;
+  optional CutWellnessFilesResponse cut_wellness_files_response = 4;
+  optional WellnessThresholdMetNotification wellness_threshold_met_notification = 5;
+  optional ContactsUpdateRequestNotification contacts_update_request_notification = 6;
+  optional LifestyleLoggingUpdateRequestNotification lifestyle_logging_update_request_notification = 7;
+}
+
+message CheckDownloadQueueRequest {
+  optional Priority priority = 1 [default = STANDARD];
+  optional bool force_beta_software_update_check = 2;
+}
+
+message CheckDownloadQueueResponse {
+  optional CheckDownloadQueueResponse.Status status = 1;
+
+  enum Status {
+    SUCCESS = 0;
+    FAIL_NO_CONNECTIVITY = 1;
+  }
+}
+
+message CutWellnessFilesRequest {
+  optional Priority priority = 1 [default = STANDARD];
+}
+
+message CutWellnessFilesResponse {
+  optional CutWellnessFilesResponse.Status status = 1;
+
+  enum Status {
+    SUCCESS = 0;
+    IGNORED = 1;
+    NOT_SUPPORTED = 2;
+  }
+}
+
+message WellnessThresholdMetNotification {
+}
+
+message ContactsUpdateRequestNotification {
+}
+
+message LifestyleLoggingUpdateRequestNotification {
+}

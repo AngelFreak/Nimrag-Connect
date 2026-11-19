@@ -1,0 +1,39 @@
+// Recovered from Garmin Connect 5.31 (11761) com.garmin.proto.generated.GDIFindMyWatch by tools/proto-recover. Field names/numbers are SEEN (from generated constants); types marked "// inferred" where the type could not be read directly.
+// Types, labels, oneofs and enums are read from the FileDescriptorProto embedded in the class; numbers are cross-checked against *_FIELD_NUMBER constants.
+// Original descriptor file name: GDIFindMyWatch.proto
+
+syntax = "proto2";
+
+package GDI.Proto.FindMyWatch;
+
+option java_package = "com.garmin.proto.generated";
+option java_outer_classname = "GDIFindMyWatch";
+option optimize_for = LITE_RUNTIME;
+
+enum ResponseStatus {
+  UNKNOWN_RESPONSE_STATUS = 0;
+  OK = 100;
+  ERROR = 200;
+}
+
+message FindMyWatchRequest {
+  optional int32 timeout = 1 [default = 60];
+}
+
+message FindMyWatchResponse {
+  optional ResponseStatus status = 1;
+}
+
+message FindMyWatchCancelRequest {
+}
+
+message FindMyWatchCancelResponse {
+  optional ResponseStatus status = 1;
+}
+
+message FindMyWatchService {
+  optional FindMyWatchRequest find_request = 1;
+  optional FindMyWatchResponse find_response = 2;
+  optional FindMyWatchCancelRequest cancel_request = 3;
+  optional FindMyWatchResponse cancel_response = 4;
+}

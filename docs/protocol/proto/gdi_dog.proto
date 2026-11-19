@@ -1,0 +1,350 @@
+// Recovered from Garmin Connect 5.31 (11761) com.garmin.proto.generated.GDIDog by tools/proto-recover. Field names/numbers are SEEN (from generated constants); types marked "// inferred" where the type could not be read directly.
+// Types, labels, oneofs and enums are read from the FileDescriptorProto embedded in the class; numbers are cross-checked against *_FIELD_NUMBER constants.
+// Original descriptor file name: GDIDog.proto
+
+syntax = "proto2";
+
+package GDI.Proto.Dog;
+
+import "gdi_core.proto";
+import "gdi_data_types.proto";
+
+option java_package = "com.garmin.proto.generated";
+option java_outer_classname = "GDIDog";
+option optimize_for = LITE_RUNTIME;
+
+enum Color {
+  TRACK_COLOR_NOT_SET = 0;
+  BLACK = 1;
+  DARK_RED = 2;
+  DARK_GREEN = 3;
+  DARK_YELLOW = 4;
+  DARK_BLUE = 5;
+  DARK_MAGENTA = 6;
+  DARK_CYAN = 7;
+  LITE_GRAY = 8;
+  DARK_GRAY = 9;
+  RED = 10;
+  GREEN = 11;
+  ALPHA_YELLOW = 12;
+  BLUE = 13;
+  MAGENTA = 14;
+  CYAN = 15;
+  WHITE = 16;
+  LITE_BLUE = 17;
+}
+
+enum AssetType {
+  ASSET_TYPE_NOT_SET = 0;
+  DOG = 1;
+  HANDHELD = 2;
+}
+
+enum SyncStartStatus {
+  SYNC_STATE_NOT_SET = 0;
+  READY_TO_START = 1;
+  FAILED_ANOTHER_SYNC_IN_PROGRESS = 2;
+}
+
+enum SyncCompleteStatus {
+  SYNC_COMPLETE_NOT_SET = 0;
+  FAILED = 1;
+  SUCCESS = 2;
+}
+
+enum AssetStatus {
+  ASSET_STATUS_NOT_SET = 0;
+  ASSET_STATUS_SITTING = 1;
+  ASSET_STATUS_MOVING = 2;
+  ASSET_STATUS_POINTED = 3;
+  ASSET_STATUS_TREED = 4;
+  ASSET_STATUS_UNKNOWN = 5;
+  ASSET_STATUS_HANDHELD = 6;
+}
+
+enum BatteryStatus {
+  BATTERY_STATUS_NOT_SET = 0;
+  BATTERY_STATUS_ZERO_BARS = 1;
+  BATTERY_STATUS_ONE_BAR = 2;
+  BATTERY_STATUS_TWO_BARS = 3;
+  BATTERY_STATUS_THREE_BARS = 4;
+  BATTERY_STATUS_FOUR_BARS = 5;
+}
+
+enum CommStatus {
+  COMM_STATUS_NOT_SET = 0;
+  COMM_STATUS_ZERO_BARS = 1;
+  COMM_STATUS_ONE_BAR = 2;
+  COMM_STATUS_TWO_BARS = 3;
+  COMM_STATUS_THREE_BARS = 4;
+  COMM_STATUS_FOUR_BARS = 5;
+  COMM_STATUS_FIVE_BARS = 6;
+}
+
+enum GpsStatus {
+  GPS_STATUS_NOT_SET = 0;
+  GPS_STATUS_ZERO_BARS = 1;
+  GPS_STATUS_ONE_BAR = 2;
+  GPS_STATUS_TWO_BARS = 3;
+  GPS_STATUS_THREE_BARS = 4;
+}
+
+enum AlertIcon {
+  ALERT_ICON_NOT_SET = 0;
+  ALERT_ICON_DOG = 1;
+  ALERT_ICON_CONTACT = 2;
+  ALERT_ICON_ON_POINT = 3;
+  ALERT_ICON_TREED = 4;
+}
+
+enum WaypointType {
+  WAYPOINT_TYPE_NOT_SET = 0;
+  WAYPOINT_TYPE_TRUCK = 1;
+}
+
+enum EventType {
+  EVENT_TYPE_NOT_SET = 0;
+  EVENT_TYPE_ASSET_LOCATION_UPDATES = 1;
+  EVENT_TYPE_ASSET_ALERTS = 2;
+  EVENT_TYPE_WAYPOINTS = 3;
+}
+
+message SetCompanionRequest {
+  optional uint32 new_esn = 1;
+}
+
+message SetCompanionResponse {
+  optional bool success = 1;
+}
+
+message GetCompanionRequest {
+}
+
+message GetCompanionResponse {
+  optional uint32 companion_esn = 1;
+  optional bool is_connected = 2;
+}
+
+message Asset {
+  optional uint32 sort_index = 1;
+  optional fixed32 sort_index_timestamp = 2;
+  optional Color color = 3;
+  optional fixed32 color_timestamp = 4;
+  optional bool active = 5;
+  optional fixed32 active_timestamp = 6;
+  optional .GDI.Proto.DataTypes.UUID group_id = 7;
+  optional fixed32 group_id_timestamp = 8;
+  optional string control_code = 9;
+  optional string track_code = 10;
+  optional uint32 channel = 11;
+  optional uint32 window = 12;
+  optional fixed32 tracking_info_timestamp = 13;
+  optional string name = 14;
+  optional fixed32 name_timestamp = 15;
+  optional fixed32 esn = 16;
+  optional fixed32 esn_timestamp = 17;
+  optional uint32 device_capabilities = 18;
+  optional fixed32 device_capabilities_timestamp = 19;
+  optional uint32 asset_index = 20;
+  optional AssetType asset_type = 21;
+  optional fixed32 asset_index_timestamp = 22;
+  optional uint32 previous_esn = 128;
+  optional fixed32 previous_esn_timestamp = 129;
+  optional bool solo_deletion = 130;
+}
+
+message Group {
+  optional .GDI.Proto.DataTypes.UUID id = 1;
+  optional uint32 order_idx = 2;
+  optional uint32 order_idx_timestamp = 3;
+  optional string name = 4;
+  optional fixed32 name_timestamp = 5;
+  optional bool deleted = 6;
+  optional fixed32 deleted_timestamp = 7;
+}
+
+message AssetAddedIndex {
+  optional fixed32 esn = 1;
+  optional uint32 asset_index = 2;
+}
+
+message StartSyncRequest {
+  optional bool needs_full_sync = 1;
+  optional uint32 locale = 2;
+}
+
+message StartSyncResponse {
+  optional SyncStartStatus start_status = 1;
+  optional bool send_full_list = 2;
+}
+
+message SyncCompleteRequest {
+  optional SyncCompleteStatus status = 1;
+}
+
+message SyncCompleteResponse {
+  optional SyncCompleteStatus status = 1;
+}
+
+message GroupListRequest {
+  repeated Group groups = 1;
+  optional bool more_to_send = 2;
+}
+
+message GroupListResponse {
+}
+
+message AssetListRequest {
+  repeated Asset assets = 1;
+  optional bool more_to_send = 2;
+}
+
+message AssetListResponse {
+  repeated AssetAddedIndex added_assets = 1;
+}
+
+message RealtimeAssetChangeRequest {
+  optional Asset asset = 1;
+}
+
+message RealtimeAssetChangeResponse {
+  optional AssetAddedIndex added_asset = 1;
+}
+
+message RealtimeGroupChangeRequest {
+  optional Group group = 1;
+}
+
+message RealtimeGroupChangeResponse {
+}
+
+message AskToStartSyncNotification {
+}
+
+message AssetLocation {
+  optional uint32 asset_index = 1;
+  optional uint32 timestamp = 2;
+  optional .GDI.Proto.DataTypes.ScPoint posn = 3;
+  optional uint32 direction_deg = 4;
+  optional float speed_mps = 5;
+  optional AssetStatus status = 6;
+  optional BatteryStatus battery = 7;
+  optional CommStatus comms = 8;
+  optional GpsStatus gps = 9;
+  optional uint32 bpm = 10;
+  optional uint32 bark_level = 11;
+}
+
+message SendAllAssetLocationsRequest {
+}
+
+message SendAllAssetLocationsResponse {
+  repeated AssetLocation locations = 1;
+}
+
+message AssetLocationsUpdate {
+  repeated AssetLocation locations = 1;
+}
+
+message Alert {
+  optional AlertIcon icon = 1;
+  optional string text = 2;
+  optional uint32 asset_index = 3;
+  optional bool is_emergency = 4;
+}
+
+message AlertRequest {
+  optional Alert alert = 1;
+}
+
+message AlertResponse {
+}
+
+message Waypoint {
+  optional uint32 id = 1;
+  optional bool deleted = 2;
+  optional WaypointType type = 3;
+  optional string name = 4;
+  optional uint32 timestamp = 5;
+  optional .GDI.Proto.DataTypes.ScPoint posn = 6;
+}
+
+message GetWaypointsRequest {
+}
+
+message GetWaypointsResponse {
+  repeated Waypoint waypoints = 1;
+}
+
+message WaypointUpdatedRequest {
+  optional Waypoint waypoint = 1;
+}
+
+message WaypointUpdatedResponse {
+}
+
+message EventSubscriptionRequest {
+  repeated EventType subscribe = 1;
+  repeated EventType unsubscribe = 2;
+}
+
+message EventSubscriptionResponse {
+  repeated EventType new_subscribed = 1;
+  repeated EventType already_subscribed = 2;
+  repeated EventType unsupported = 3;
+  repeated EventType unsubscribed = 4;
+}
+
+message DogService {
+  oneof dog_message {
+    SetCompanionRequest set_companion_request = 1;
+    SetCompanionResponse set_companion_response = 2;
+    GetCompanionRequest get_companion_request = 3;
+    GetCompanionResponse get_companion_response = 4;
+    StartSyncRequest start_sync_request = 5;
+    StartSyncResponse start_sync_response = 6;
+    SyncCompleteRequest sync_complete_request = 7;
+    SyncCompleteResponse sync_complete_response = 8;
+    GroupListRequest group_list_request = 9;
+    GroupListResponse group_list_response = 10;
+    AssetListRequest asset_list_request = 11;
+    AssetListResponse asset_list_response = 12;
+    RealtimeAssetChangeRequest realtime_asset_change_request = 13;
+    RealtimeAssetChangeResponse realtime_asset_change_response = 14;
+    RealtimeGroupChangeRequest realtime_group_change_request = 15;
+    RealtimeGroupChangeResponse realtime_group_change_response = 16;
+    AskToStartSyncNotification ask_to_start_sync_notification = 17;
+    EventSubscriptionRequest event_subscription_request = 18;
+    EventSubscriptionResponse event_subscription_response = 19;
+    SendAllAssetLocationsRequest send_all_asset_locations_request = 20;
+    SendAllAssetLocationsResponse send_all_asset_locations_response = 21;
+    AssetLocationsUpdate asset_locations_update = 22;
+    AlertRequest alert_request = 23;
+    AlertResponse alert_response = 24;
+    GetWaypointsRequest get_waypoints_request = 25;
+    GetWaypointsResponse get_waypoints_response = 26;
+    WaypointUpdatedRequest waypoint_updated_request = 27;
+    WaypointUpdatedResponse waypoint_updated_response = 28;
+  }
+}
+
+message CapabilitiesRequest {
+  optional bool supports_asset_sync = 1;
+  optional bool supports_group_sync = 2;
+  optional bool is_dog_display_only = 3;
+  extend .GDI.Proto.Core.FeatureCapabilitiesRequest {
+    optional CapabilitiesRequest dog_request = 24;
+  }
+}
+
+message CapabilitiesResponse {
+  optional bool supports_companion_pairing = 1;
+  optional bool supports_asset_sync = 2;
+  optional bool supports_group_sync = 3;
+  optional uint32 max_asset_count = 4;
+  optional uint32 max_group_count = 5;
+  optional bool supports_dog_display = 6;
+  extend .GDI.Proto.Core.FeatureCapabilitiesResponse {
+    optional CapabilitiesResponse dog_response = 24;
+  }
+}

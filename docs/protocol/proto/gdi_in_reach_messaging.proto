@@ -1,0 +1,1323 @@
+// Recovered from Garmin Connect 5.31 (11761) com.garmin.proto.generated.GDIInReachMessaging by tools/proto-recover. Field names/numbers are SEEN (from generated constants); types marked "// inferred" where the type could not be read directly.
+// Types, labels, oneofs and enums are read from the FileDescriptorProto embedded in the class; numbers are cross-checked against *_FIELD_NUMBER constants.
+// Original descriptor file name: GDIInReachMessaging.proto
+
+syntax = "proto2";
+
+package GDI.Proto.InReachMessaging;
+
+import "gdi_data_types.proto";
+import "gdi_generic_item_transfer.proto";
+
+option java_package = "com.garmin.proto.generated";
+option java_outer_classname = "GDIInReachMessaging";
+option optimize_for = LITE_RUNTIME;
+
+extend .GDI.Proto.GenericItemTransfer.DataTypeConfig {
+  optional DataTypeConfigExt config_ext = 100;
+}
+extend .GDI.Proto.GenericItemTransfer.DataTypeStatus {
+  optional DataTypeStatusExt status_ext = 100;
+}
+extend .GDI.Proto.GenericItemTransfer.GenericItemReference {
+  optional GenericItemReferenceExt reference_ext = 100;
+}
+extend .GDI.Proto.GenericItemTransfer.GenericItem {
+  optional GenericItemExt item_ext = 100;
+}
+
+enum ProtocolType {
+  UNKNOWN_PROTOCOL_TYPE = 0;
+  PINPOINT = 1;
+  ENTERPRISE_UNLOCKED = 2;
+}
+
+enum TransportType {
+  UNKNOWN_TRANSPORT_TYPE = 0;
+  TRANSPORT_SBD = 1;
+  TRANSPORT_IMT = 2;
+  TRANSPORT_NTN = 3;
+  TRANSPORT_LTE = 4;
+  TRANSPORT_PHONE = 5;
+  TRANSPORT_WIFI = 6;
+}
+
+enum ActivationStatus {
+  UNKNOWN_STATUS = 0;
+  INACTIVE = 1;
+  ACTIVE = 2;
+  ACTIVE_BYPASSED = 3;
+  SUSPENDED = 4;
+  ACTIVE_SOS_ONLY = 5;
+}
+
+enum ActivationStep {
+  ACTIVATION_STEP_UNKNOWN = 0;
+  ACTIVATION_STEP_NONE = 1;
+  ACTIVATION_STEP_STARTING = 2;
+  ACTIVATION_STEP_SENDING = 3;
+  ACTIVATION_STEP_WAITING = 4;
+  ACTIVATION_STEP_ACKING_PROFILE = 5;
+}
+
+enum ActivationType {
+  UNKNOWN_ACTIVATION_TYPE = 0;
+  NORMAL_ACTIVATION = 1;
+  TEST_ACTIVATION = 2;
+}
+
+enum ActivationMethod {
+  ACTIVATION_METHOD_UNKNOWN = 0;
+  ACTIVATION_METHOD_USER_INITIATED = 1;
+  ACTIVATION_METHOD_BACKGROUND = 2;
+}
+
+enum MailboxCheckStatus {
+  CHECKING = 1;
+  NOT_CHECKING = 2;
+}
+
+enum SpecialAddress {
+  MAPSHARE = 1;
+  FACEBOOK = 2;
+  TWITTER = 4;
+  INSTAGRAM = 8;
+}
+
+enum ExclusiveAddress {
+  UNKNOWN = 0;
+  SERVER = 1;
+}
+
+enum MessageStatus {
+  UNREAD = 1;
+  NOT_SENT = 2;
+  CANCELED = 4;
+}
+
+enum TextMessageType {
+  CASUAL = 1;
+  EMERGENCY = 2;
+  CASUAL_MAPSHARE_SUFFIX = 3;
+  CASUAL_REFERENCE_POINT = 4;
+}
+
+enum IrisEnvironment {
+  DEV = 1;
+  TEST = 2;
+  PROD = 3;
+}
+
+enum IrisStatus {
+  UNKNOWN_IRIS_STATUS = 0;
+  OK = 1;
+  TOKEN_MISSING = 2;
+  TOKEN_EXPIRED = 3;
+}
+
+enum ITOAuthStatus {
+  IT_OAUTH_STATUS_UNKNOWN = 0;
+  IT_OAUTH_STATUS_OK = 1;
+  IT_OAUTH_STATUS_TOKEN_MISSING = 2;
+  IT_OAUTH_STATUS_TOKEN_EXPIRED = 3;
+}
+
+enum PlanChangeStep {
+  PLAN_CHANGE_STEP_UNKNOWN = 0;
+  PLAN_CHANGE_STEP_NONE = 1;
+  PLAN_CHANGE_STEP_SENDING = 2;
+  PLAN_CHANGE_STEP_WAITING = 3;
+  PLAN_CHANGE_STEP_FINISHED = 4;
+}
+
+enum PlanChangeResult {
+  PLAN_CHANGE_RESULT_UNKNOWN = 0;
+  PLAN_CHANGE_RESULT_SUCCESS = 1;
+  PLAN_CHANGE_RESULT_ABORTED = 2;
+  PLAN_CHANGE_RESULT_TIMEOUT = 3;
+  PLAN_CHANGE_RESULT_GENERIC_ERROR = 4;
+  PLAN_CHANGE_RESULT_REQUEST_ALREADY_HANDLED = 5;
+  PLAN_CHANGE_RESULT_REPORTED_STATE_MISMATCH = 6;
+  PLAN_CHANGE_RESULT_REPORTED_TIME_STALE = 7;
+  PLAN_CHANGE_RESULT_REQUEST_DENIAL = 8;
+  PLAN_CHANGE_RESULT_BILLING_FAILURE = 9;
+  PLAN_CHANGE_RESULT_PRICE_INVALID = 10;
+}
+
+message InReachMessagingService {
+  optional CapabilitiesRequest capabilities_request = 1;
+  optional CapabilitiesResponse capabilities_response = 2;
+  optional MessagingStatusRequest messaging_status_request = 3;
+  optional MessagingStatusResponse messaging_status_response = 4;
+  optional MailboxCheckRequest mailbox_check_request = 5;
+  optional MailboxCheckResponse mailbox_check_response = 6;
+  optional MessageSizeRequest message_size_request = 7;
+  optional MessageSizeResponse message_size_response = 8;
+  optional SendMessageRequest send_message_request = 9;
+  optional SendMessageResponse send_message_response = 10;
+  optional DeleteMessageRequest delete_message_request = 11;
+  optional DeleteMessageResponse delete_message_response = 12;
+  optional SendEmergencyMessageRequest send_emergency_message_request = 13;
+  optional SendEmergencyMessageResponse send_emergency_message_response = 14;
+  optional CancelEmergencyMessagingRequest cancel_emergency_messaging_request = 15;
+  optional CancelEmergencyMessagingResponse cancel_emergency_messaging_response = 16;
+  optional MessagingSubscribeRequest messaging_subscribe_request = 17;
+  optional MessagingSubscribeResponse messaging_subscribe_response = 18;
+  optional MailboxCheckStatusNotification mailbox_check_status_notification = 19;
+  optional MessageStatusNotification message_status_notification = 20;
+  optional MessageReceivedNotification message_received_notification = 21;
+  optional EmergencyMessagingStatusNotification emergency_messaging_status_notification = 22;
+  optional ActivationStatusNotification activation_status_notification = 23;
+  optional StartMessageSyncRequest start_message_sync_request = 24;
+  optional StartMessageSyncResponse start_message_sync_response = 25;
+  optional IrisTokenRequest iris_token_request = 26;
+  optional IrisTokenResponse iris_token_response = 27;
+  optional IrisProviderNotification iris_provider_notification = 28;
+  optional AttachmentDownloadRequest attachment_download_request = 29;
+  optional AttachmentDownloadResponse attachment_download_response = 30;
+  optional CancelAttachmentTransferRequest cancel_attachment_transfer_request = 31;
+  optional CancelAttachmentTransferResponse cancel_attachment_transfer_response = 32;
+  optional AttachmentTransferStatusRequest attachment_transfer_status_request = 33;
+  optional AttachmentTransferStatusResponse attachment_transfer_status_response = 34;
+  optional AttachmentTransferNotification attachment_transfer_notification = 35;
+  optional AttachmentFileSyncRequest attachment_file_sync_request = 36;
+  optional AttachmentFileSyncResponse attachment_file_sync_response = 37;
+  optional GenerateAttachmentFileRequest generate_attachment_file_request = 38;
+  optional GenerateAttachmentFileResponse generate_attachment_file_response = 39;
+  optional ActivationStartRequest activation_start_request = 40;
+  optional ActivationStartResponse activation_start_response = 41;
+  optional ActivationStopRequest activation_stop_request = 42;
+  optional ActivationStopResponse activation_stop_response = 43;
+  optional ActivationStepRequest activation_step_request = 44;
+  optional ActivationStepResponse activation_step_response = 45;
+  optional ActivationStepNotification activation_step_notification = 46;
+  optional ResendMessageRequest resend_message_request = 47;
+  optional ResendMessageResponse resend_message_response = 48;
+  optional ResendEmergencyMessageRequest resend_emergency_message_request = 49;
+  optional ResendEmergencyMessageResponse resend_emergency_message_response = 50;
+  optional PlanInfoRequest plan_info_request = 51;
+  optional PlanInfoResponse plan_info_response = 52;
+  optional PlanInfoNotification plan_info_notification = 53;
+  optional DeleteAllRequest delete_all_request = 54;
+  optional DeleteAllResponse delete_all_response = 55;
+  optional DeleteAllStatusRequest delete_all_status_request = 56;
+  optional DeleteAllStatusResponse delete_all_status_response = 57;
+  optional DeleteAllNotification delete_all_notification = 58;
+  optional PlaceCallRequest place_call_request = 59;
+  optional PlaceCallResponse place_call_response = 60;
+  optional MessagingStatusNotification messaging_status_notification = 61;
+  optional PlanChangeStartRequest plan_change_start_request = 62;
+  optional PlanChangeStartResponse plan_change_start_response = 63;
+  optional PlanChangeCancelRequest plan_change_cancel_request = 64;
+  optional PlanChangeCancelResponse plan_change_cancel_response = 65;
+  optional PlanChangeStepRequest plan_change_step_request = 66;
+  optional PlanChangeStepResponse plan_change_step_response = 67;
+  optional PlanChangeNotification plan_change_notification = 68;
+  optional PlanPriceInfoRequest plan_price_info_request = 69;
+  optional PlanPriceInfoResponse plan_price_info_response = 70;
+  optional PlanPriceInfoNotification plan_price_info_notification = 71;
+  optional ProUpgradeablePlanIdNotification pro_upgradeable_plan_id_notification = 72;
+}
+
+message Capabilities {
+  optional uint32 inreach_capabilities = 1;
+  optional uint32 messaging_capabilities = 2;
+  optional uint32 address_capabilities = 3;
+  optional uint32 special_address_capabilities = 4;
+  optional uint32 max_casual_mesg_size = 5;
+  optional uint32 max_emergency_mesg_size = 6;
+  optional uint32 max_binary_mesg_size = 7;
+  optional uint32 min_iris_support_version = 8;
+  optional uint32 max_iris_support_version = 9;
+  optional uint32 addresses_size_allowance = 10 [default = 0];
+  optional uint32 exclusive_address_capabilities = 11 [default = 0];
+  repeated Capabilities.AttachmentSupport text_mesg_attach_support = 12;
+  optional uint32 max_casual_addresses_size = 13;
+  repeated Capabilities.CallingCapability calling_capabilities = 14;
+  optional uint32 iris_service_capabilities = 15 [default = 1];
+  repeated ActivationMethod supported_activation_methods = 16;
+  optional Capabilities.GarminLocateSupport garmin_locate_support = 17;
+
+  enum InReachCapability {
+    TRACKING = 1;
+    CONTACT_SYNC = 2;
+    WEATHER = 4;
+    CONFIGURATION = 8;
+    CALLS = 16;
+    CHAT_EVENTS = 32;
+  }
+
+  enum MessagingCapability {
+    CASUAL = 1;
+    EMERGENCY = 2;
+    GENERIC_BINARY = 4;
+    CASUAL_MAPSHARE_SUFFIX = 8;
+    CASUAL_REFERENCE_POINT = 16;
+    BIDIRECTIONAL_SYNC = 32;
+    PROVIDES_IRIS_SERVICE = 64;
+    USES_IRIS_SERVICE = 128;
+    GROUP_MESSAGING = 256;
+    MEDIA_MESSAGING = 512;
+    ACTIVATION = 1024;
+    RESEND = 2048;
+    PLAN_INFO = 4096;
+    RICH_OTA = 8192;
+    MEDIA_LONG_TEXT_SYNC = 16384;
+    DELETE_ALL = 32768;
+    ATTACHMENT_SATELLITE_DOWNLOAD = 65536;
+    MESSAGE_OWNERSHIP = 131072;
+    PLAN_CHANGE = 262144;
+  }
+
+  enum MessageAddressCapability {
+    SMS = 1;
+    EMAIL = 2;
+    INREACH = 4;
+    IMEI = 8;
+  }
+
+  enum CallingCapability {
+    UNKNOWN_CALLING_CAPABILITY = 0;
+    PLACE_CALL = 1;
+  }
+
+  enum IrisServiceCapability {
+    SUPPORTS_HERMES_TOKEN = 1;
+    SUPPORTS_IT_OAUTH_TOKEN = 2;
+  }
+
+  message AttachmentSupport {
+    required Message.Attachment.Type type = 1;
+    repeated Message.Attachment.Format formats = 2;
+    optional uint32 max_size = 3;
+    optional uint32 address = 4 [default = 0];
+    optional uint32 special_address = 5 [default = 0];
+    optional uint32 exclusive_address = 6 [default = 0];
+    optional bool emergency_address = 7 [default = false];
+  }
+
+  message GarminLocateSupport {
+    repeated Capabilities.GarminLocateSupport.GarminLocateCapability capabilities = 1;
+    optional Capabilities.GarminLocateSupport.BackgroundLocationUpdateSupport background_location_update_support = 2;
+
+    enum GarminLocateCapability {
+      UNKNOWN = 0;
+      BACKGROUND_LOCATION_UPDATES = 1;
+    }
+
+    message BackgroundLocationUpdateSupport {
+      optional Capabilities.GarminLocateSupport.BackgroundLocationUpdateSupport.SettingInstructions setting_instructions = 1;
+
+      enum SettingInstructions {
+        UNKNOWN = 0;
+        NONE = 1;
+        WEARABLE = 2;
+      }
+    }
+  }
+}
+
+message CapabilitiesRequest {
+  optional Capabilities capabilities = 1;
+}
+
+message CapabilitiesResponse {
+  optional Capabilities capabilities = 1;
+}
+
+message IrisTokenRequest {
+  optional string phone_number = 1;
+  optional .GDI.Proto.DataTypes.UUID instance_id = 2;
+}
+
+message IrisTokenResponse {
+  required IrisTokenResponse.Status status = 1;
+  optional IrisEnvironment environment = 2;
+  optional .GDI.Proto.DataTypes.UUID instance_id = 3;
+  optional string bearer_token = 4;
+  optional fixed32 bearer_token_expiration = 5;
+  optional string refresh_token = 6;
+  optional string phone_number = 7;
+
+  enum Status {
+    OK = 1;
+    GENERIC_ERROR = 2;
+    SERVICE_UNAVAILABLE = 3;
+    SERVICE_ERROR = 4;
+    NOT_SIGNED_INTO_SSO = 5;
+    DEVICE_ACCOUNT_MISMATCH = 6;
+    NO_INTERNET_GENERIC = 7;
+  }
+}
+
+message MessagingStatusRequest {
+  optional string friendly_name = 1;
+  optional .GDI.Proto.DataTypes.UUID hermes_instance_id = 2;
+  optional .GDI.Proto.DataTypes.UUID iris_instance_id = 3;
+  optional string inreach_imei = 4;
+  optional uint64 unit_id = 5;
+  optional string phone_number = 6;
+  optional .GDI.Proto.DataTypes.Locale locale = 7;
+}
+
+message MessagingStatusResponse {
+  required MessagingStatusResponse.Status messaging_status = 1;
+  optional MailboxCheckStatus mailbox_check_status = 2;
+  optional fixed32 last_mailbox_check = 3;
+  optional EmergencyMessagingSession emergency_session = 4;
+  optional string inreach_imei = 5;
+  optional ActivationStatus activation_status = 6;
+  optional .GDI.Proto.DataTypes.UUID customer_uuid = 7;
+  optional string inreach_address = 8;
+  optional ProtocolType protocol = 9;
+  optional bool protocol_encryption_enabled = 10;
+  optional string phone_number = 11;
+  optional .GDI.Proto.DataTypes.UUID hermes_instance_id = 12;
+  optional .GDI.Proto.DataTypes.UUID iris_instance_id = 13;
+  optional IrisEnvironment iris_environment = 14;
+  optional IrisStatus iris_status = 15;
+  repeated TransportType transports = 16;
+  optional string friendly_name = 17;
+  optional uint64 unit_id = 18;
+  repeated TransportType disabledTransports = 19;
+  optional uint32 inreach_library_version = 20;
+  optional MessagingStatusResponse.InReachProductVersion inreach_product_version = 21;
+  optional ITOAuthStatus it_oauth_status = 22;
+  optional uint32 plan_change_transaction_id = 23;
+  optional PlanChangeStep plan_change_step = 24;
+  repeated PlanPriceFetchTime plan_price_fetch_times = 25;
+  optional uint32 pro_upgradeable_plan_id = 26;
+
+  enum Status {
+    OK = 1;
+    NOT_IMPLEMENTED = 2;
+    HARDWARE_FAILURE = 4;
+  }
+
+  message InReachProductVersion {
+    required uint32 major = 1;
+    required uint32 minor = 2;
+    required uint32 subminor = 3;
+  }
+}
+
+message MailboxCheckRequest {
+}
+
+message MailboxCheckResponse {
+  required MailboxCheckResponse.Status status = 1;
+
+  enum Status {
+    UNKNOWN_STATUS = 0;
+    OK = 1;
+    GENERIC_ERROR = 2;
+    UNSUPPORTED_BY_PLAN = 3;
+  }
+}
+
+message MessageSizeRequest {
+  required TextMessageType type = 1;
+  repeated string addresses = 2;
+  optional uint32 special_addresses = 3;
+  optional string text = 4;
+  repeated uint32 unresolved_addresses = 5;
+  optional TextMessageData.GroupType group_type = 6;
+  optional ExclusiveAddress exclusive_address = 7;
+  optional Message.Attachment attachment = 8;
+}
+
+message MessageSizeResponse {
+  required MessageSizeResponse.Status status = 1;
+  optional uint32 max_size = 2;
+  optional uint32 size = 3;
+  optional uint32 max_attachment_size = 4;
+  optional uint32 max_addresses_size = 5;
+  optional uint32 addresses_size = 6;
+
+  enum Status {
+    UNKNOWN_STATUS = 0;
+    OK = 1;
+    GENERIC_ERROR = 2;
+    MESG_TYPE_UNAVAILABLE = 3;
+    BAD_MESG_TYPE = 4;
+    INVALID_ADDRESS = 5;
+    INVALID_SPECIAL_ADDRESS = 6;
+    INVALID_UNRESOLVED_ADDRESS = 7;
+    INVALID_GROUP_TYPE = 8;
+    UNSUPPORTED_GROUP_ADDRESSES = 9;
+    GROUP_TOO_LARGE = 10;
+    INVALID_EXCLUSIVE_ADDRESS = 11;
+    EXCLUSIVE_ADDRESS_VIOLATION = 12;
+    INVALID_ATTACHMENT_TYPE = 13;
+    INVALID_ATTACHMENT_FORMAT = 14;
+    INVALID_ATTACHMENT_QUALITY = 15;
+    ATTACHMENT_MISSING_INFO = 16;
+    ATTACHMENT_TOO_LARGE = 17;
+    ATTACHMENT_INCOMPATIBLE_WITH_ADDRESS = 18;
+  }
+}
+
+message BinaryMessageData {
+  required BinaryMessageData.BinaryMessageType type = 1;
+  optional bytes binary_data = 2;
+  optional fixed32 create_time = 3;
+  optional fixed32 modified_time = 4;
+  optional fixed32 received_time = 5;
+
+  enum BinaryMessageType {
+    GENERIC = 1;
+  }
+}
+
+message TextMessageData {
+  optional TextMessageType type = 1;
+  optional .GDI.Proto.DataTypes.UUID emergency_session_uuid = 2;
+  repeated string addresses = 3;
+  optional uint32 special_addresses = 4;
+  optional string text = 5;
+  optional fixed32 create_time = 6;
+  optional .GDI.Proto.DataTypes.GPSFixType gps_fix = 7;
+  optional .GDI.Proto.DataTypes.ScPoint location = 8;
+  optional float altitude = 9;
+  optional float course = 10;
+  optional float speed = 11;
+  optional fixed32 modified_time = 12;
+  optional bool supply_location = 13;
+  repeated uint32 unresolved_addresses = 14;
+  optional fixed32 received_time = 15;
+  optional TextMessageData.GroupType group_type = 16;
+  optional string sender_address = 17;
+  optional uint32 unresolved_sender_address = 18;
+  optional ExclusiveAddress exclusive_address = 19;
+  optional Message.Attachment attachment = 20;
+  repeated TextMessageData.ExtraText extra_text = 21;
+  optional uint32 group_index = 22;
+  optional uint32 fragment_index = 23;
+
+  enum GroupType {
+    POST = 1;
+    GROUP = 2;
+  }
+
+  message ExtraText {
+    required TextMessageData.ExtraText.Type type = 1;
+    optional string text = 2;
+
+    enum Type {
+      UNKNOWN_EXTRA_TEXT = 0;
+      VOICE_TRANSCRIPTION = 1;
+    }
+  }
+}
+
+message Message {
+  required .GDI.Proto.DataTypes.UUID uuid = 1;
+  optional bool received = 2;
+  optional uint32 status = 3;
+  optional TextMessageData text_mesg = 4;
+  optional BinaryMessageData binary_mesg = 5;
+  optional uint32 preset_mesg_id = 6;
+  optional uint64 mtmsn = 7;
+  optional uint32 mediums = 8;
+  optional bool encrypted = 9;
+  optional bool is_ota_uuid = 10;
+  optional uint64 unit_id = 11;
+
+  enum TransmissionMedium {
+    SATELLITE = 1;
+    INTERNET = 2;
+  }
+
+  message Attachment {
+    required Message.Attachment.Type type = 1;
+    optional .GDI.Proto.DataTypes.UUID uuid = 2;
+    repeated Message.Attachment.File files = 3;
+
+    enum Type {
+      UNKNOWN_ATTACHMENT = 0;
+      PICTURE = 1;
+      VOICE = 2;
+    }
+
+    enum Format {
+      UNKNOWN_FORMAT = 0;
+      AVIF = 1;
+      OPUS = 2;
+    }
+
+    enum Quality {
+      UNKNOWN_QUALITY = 0;
+      SATELLITE_PREVIEW = 1;
+      SATELLITE_STANDARD = 2;
+      INTERNET_STANDARD = 3;
+      WEARABLE_STANDARD = 4;
+    }
+
+    message File {
+      required Message.Attachment.Format format = 1;
+      required Message.Attachment.Quality quality = 2;
+      optional .GDI.Proto.DataTypes.UUID uuid = 3;
+      optional uint32 size = 4;
+    }
+  }
+}
+
+message SendMessageRequest {
+  required Message message = 1;
+}
+
+message SendMessageResponse {
+  required SendMessageResponse.Status status = 1;
+  optional .GDI.Proto.DataTypes.UUID uuid = 2;
+
+  enum Status {
+    UNKNOWN_STATUS = 0;
+    OK = 1;
+    GENERIC_ERROR = 2;
+    BAD_MESG_UUID = 3;
+    DUPE_MESG_UUID = 4;
+    MESG_TYPE_UNAVAILABLE = 5;
+    BAD_MESG_TYPE = 6;
+    MULTIPLE_MESG_TYPES = 7;
+    MESG_TOO_LARGE = 8;
+    NO_RECIPIENT = 9;
+    NO_TEXT = 10;
+    INVALID_ADDRESS = 11;
+    INVALID_SPECIAL_ADDRESS = 12;
+    INVALID_UNRESOLVED_ADDRESS = 13;
+    INVALID_PRESET_ID = 14;
+    NOT_ACTIVATED = 15;
+    WRONG_MESSAGE_REQUEST = 16;
+    REF_POINT_REQUIRES_LOCATION = 17;
+    INVALID_GROUP_TYPE = 18;
+    UNSUPPORTED_GROUP_ADDRESSES = 19;
+    GROUP_TOO_SMALL = 20;
+    GROUP_TOO_LARGE = 21;
+    INVALID_EXCLUSIVE_ADDRESS = 22;
+    EXCLUSIVE_ADDRESS_VIOLATION = 23;
+    INVALID_ATTACHMENT_TYPE = 24;
+    INVALID_ATTACHMENT_FORMAT = 25;
+    INVALID_ATTACHMENT_QUALITY = 26;
+    ATTACHMENT_MISSING_INFO = 27;
+    ATTACHMENT_TOO_LARGE = 28;
+    ATTACHMENT_INCOMPATIBLE_WITH_ADDRESS = 29;
+    INVALID_EXTRA_TEXT = 30;
+    ATTACHMENT_QUEUE_IS_FULL = 31;
+    ADDRESSES_TOO_LARGE = 32;
+    BUDGET_UUID_FIELD_CONFLICT = 33;
+    INVALID_GROUP_INDEX = 34;
+    INVALID_FRAGMENT_INDEX = 35;
+    UNSUPPORTED_BY_PLAN = 36;
+  }
+}
+
+message ResendMessageRequest {
+  required .GDI.Proto.DataTypes.UUID uuid = 1;
+}
+
+message ResendMessageResponse {
+  required ResendMessageResponse.Status status = 1;
+  optional .GDI.Proto.DataTypes.UUID uuid = 2;
+
+  enum Status {
+    UNKNOWN_STATUS = 0;
+    OK = 1;
+    GENERIC_ERROR = 2;
+    BAD_MESG_UUID = 3;
+    NOT_ACTIVATED = 4;
+    WRONG_MESSAGE_REQUEST = 5;
+    ATTACHMENT_QUEUE_IS_FULL = 6;
+    ALREADY_SENDING = 7;
+    ALREADY_SENT = 8;
+    CANNOT_SEND_MT_MESSAGE = 9;
+    MESSAGE_NOT_FOUND = 10;
+    ATTACHMENT_NOT_FOUND = 11;
+    UNSUPPORTED_BY_PLAN = 12;
+  }
+}
+
+message DeleteMessageRequest {
+  required .GDI.Proto.DataTypes.UUID uuid = 1;
+}
+
+message DeleteMessageResponse {
+  required DeleteMessageResponse.Status status = 1;
+
+  enum Status {
+    OK = 1;
+    GENERIC_ERROR = 2;
+    MESG_UUID_NOT_FOUND = 3;
+  }
+}
+
+message AttachmentDownloadRequest {
+  optional .GDI.Proto.DataTypes.UUID uuid = 1;
+}
+
+message AttachmentDownloadResponse {
+  required AttachmentDownloadResponse.Status status = 1;
+
+  enum Status {
+    UNKNOWN_STATUS = 0;
+    OK = 1;
+    ALREADY_PRESENT = 2;
+    GENERIC_ERROR = 3;
+    NOT_FOUND = 4;
+    UNSUPPORTED_BY_PLAN = 5;
+  }
+}
+
+message CancelAttachmentTransferRequest {
+  required AttachmentTransfer.Direction direction = 1;
+  optional uint32 transfer_id = 2;
+  optional .GDI.Proto.DataTypes.UUID uuid = 3;
+}
+
+message CancelAttachmentTransferResponse {
+  required CancelAttachmentTransferResponse.Status status = 1;
+
+  enum Status {
+    UNKNOWN_STATUS = 0;
+    OK = 1;
+    GENERIC_ERROR = 2;
+    INVALID_DIRECTION = 3;
+    MISSING_ID = 4;
+    ALREADY_COMPLETE = 5;
+    NOT_FOUND = 6;
+  }
+}
+
+message AttachmentTransferStatusRequest {
+}
+
+message AttachmentTransferStatusResponse {
+  required AttachmentTransferStatusResponse.Status status = 1;
+  repeated AttachmentTransfer transfers = 2;
+
+  enum Status {
+    UNKNOWN_STATUS = 0;
+    OK = 1;
+    GENERIC_ERROR = 2;
+  }
+}
+
+message ActivationStartRequest {
+  optional ActivationType activation_type = 1;
+  optional ActivationMethod activation_method = 2 [default = ACTIVATION_METHOD_USER_INITIATED];
+}
+
+message ActivationStartResponse {
+  required ActivationStartResponse.Status status = 1;
+  optional ActivationMethod activation_method = 2;
+
+  enum Status {
+    UNKNOWN_STATUS = 0;
+    OK = 1;
+    GENERIC_ERROR = 2;
+    UNSUPPORTED_ACTIVATION_METHOD = 3;
+  }
+}
+
+message ActivationStopRequest {
+}
+
+message ActivationStopResponse {
+  required ActivationStopResponse.Status status = 1;
+
+  enum Status {
+    UNKNOWN_STATUS = 0;
+    OK = 1;
+    GENERIC_ERROR = 2;
+  }
+}
+
+message ActivationStepRequest {
+}
+
+message ActivationStepResponse {
+  optional ActivationStep step = 1;
+  optional ActivationType type = 2;
+  optional ActivationMethod method = 3;
+}
+
+message PlanChangeStartRequest {
+  optional uint32 plan_id = 1;
+  optional uint32 days = 2;
+  optional string amount = 3;
+  optional string currency_code = 4;
+  optional fixed32 updated_price_time = 5;
+}
+
+message PlanChangeStartResponse {
+  required PlanChangeStartResponse.Status status = 1;
+  optional uint32 transaction_id = 2;
+  optional PlanPriceInfo updated_price_info = 3;
+
+  enum Status {
+    UNKNOWN_STATUS = 0;
+    OK = 1;
+    GENERIC_ERROR = 2;
+    MISSING_FIELDS = 3;
+    UNKNOWN_PLAN_ID = 4;
+    INVALID_DURATION = 5;
+    PRICE_STALE = 6;
+  }
+}
+
+message PlanChangeCancelRequest {
+}
+
+message PlanChangeCancelResponse {
+  required PlanChangeCancelResponse.Status status = 1;
+
+  enum Status {
+    UNKNOWN_STATUS = 0;
+    OK = 1;
+    GENERIC_ERROR = 2;
+    REQUEST_ALREADY_SENT = 3;
+    NO_ACTIVE_REQUEST = 4;
+  }
+}
+
+message PlanChangeStepRequest {
+}
+
+message PlanChangeStepResponse {
+  required PlanChangeStepResponse.Status status = 1;
+  optional uint32 transaction_id = 2;
+  optional PlanChangeStep step = 3;
+  optional PlanChangeResult result = 4;
+  optional uint32 plan_id = 5;
+  optional uint32 days = 6;
+
+  enum Status {
+    UNKNOWN = 0;
+    OK = 1;
+    GENERIC_ERROR = 2;
+    NONE = 3;
+  }
+}
+
+message PlanChangeNotification {
+  optional uint32 transaction_id = 1;
+  optional PlanChangeStep step = 2;
+  optional PlanChangeResult result = 3;
+  optional uint32 new_plan_id = 4;
+  optional fixed32 next_plan_change_time = 5;
+  optional uint32 next_plan_id = 6;
+}
+
+message PlanPriceFetchTime {
+  optional uint32 plan_id = 1;
+  optional fixed32 last_fetched_time = 2;
+}
+
+message PlanPriceInfo {
+  optional uint32 plan_id = 1;
+  optional string amount = 2;
+  optional string currency_code = 3;
+  optional fixed32 last_fetched_time = 4;
+}
+
+message PlanPriceInfoRequest {
+  repeated uint32 plan_id = 1;
+}
+
+message PlanPriceInfoResponse {
+  required PlanPriceInfoResponse.Status status = 1;
+  repeated PlanPriceInfo price_info = 2;
+
+  enum Status {
+    UNKNOWN_STATUS = 0;
+    OK = 1;
+    GENERIC_ERROR = 2;
+    PRICES_NOT_AVAILABLE = 3;
+  }
+}
+
+message PlanPriceInfoNotification {
+  optional PlanPriceInfo price_info = 1;
+}
+
+message ProUpgradeablePlanIdNotification {
+  optional uint32 plan_id = 1;
+}
+
+message SarContact {
+  optional string address = 1;
+}
+
+message EmergencyMessagingSession {
+  required EmergencyMessagingSession.SessionStatus status = 1;
+  optional .GDI.Proto.DataTypes.UUID session_uuid = 2;
+  repeated SarContact sar_contacts = 3;
+
+  enum SessionStatus {
+    NOT_AVAILABLE = 1;
+    OFF = 2;
+    DECLARED = 3;
+    CONFIRMED = 4;
+    ATTEMPTING_TO_CANCEL = 5;
+    CANCELED = 6;
+  }
+}
+
+message SendEmergencyMessageRequest {
+  optional .GDI.Proto.DataTypes.UUID uuid = 1;
+  optional TextMessageData text_mesg = 2;
+  optional string app_info = 3;
+  optional bool declare = 4;
+}
+
+message SendEmergencyMessageResponse {
+  required SendEmergencyMessageResponse.Status status = 1;
+  optional .GDI.Proto.DataTypes.UUID uuid = 2;
+
+  enum Status {
+    UNKNOWN_STATUS = 0;
+    OK = 1;
+    GENERIC_ERROR = 2;
+    NOT_AVAILABLE = 3;
+    ALREADY_IN_EMERGENCY = 4;
+    BAD_MESG_UUID = 5;
+    DUPE_MESG_UUID = 6;
+    MESG_TOO_LARGE = 7;
+    EMERGENCY_NOT_STARTED = 8;
+    NO_TEXT = 9;
+    AMBIGUOUS_REQUEST = 10;
+    MESG_TYPE_UNAVAILABLE = 11;
+    BAD_MESG_TYPE = 12;
+    WRONG_MESSAGE_REQUEST = 13;
+    INVALID_ATTACHMENT_TYPE = 14;
+    INVALID_ATTACHMENT_FORMAT = 15;
+    INVALID_ATTACHMENT_QUALITY = 16;
+    ATTACHMENT_MISSING_INFO = 17;
+    ATTACHMENT_TOO_LARGE = 18;
+    ATTACHMENT_INCOMPATIBLE = 19;
+    INVALID_EXTRA_TEXT = 20;
+    ATTACHMENT_QUEUE_IS_FULL = 21;
+    BUDGET_UUID_FIELD_CONFLICT = 22;
+    INVALID_GROUP_INDEX = 23;
+    INVALID_FRAGMENT_INDEX = 24;
+  }
+}
+
+message ResendEmergencyMessageRequest {
+  required .GDI.Proto.DataTypes.UUID uuid = 1;
+  optional string app_info = 2;
+  optional bool declare = 3;
+}
+
+message ResendEmergencyMessageResponse {
+  required ResendEmergencyMessageResponse.Status status = 1;
+  optional .GDI.Proto.DataTypes.UUID uuid = 2;
+
+  enum Status {
+    UNKNOWN_STATUS = 0;
+    OK = 1;
+    GENERIC_ERROR = 2;
+    BAD_MESG_UUID = 4;
+    NOT_AVAILABLE = 5;
+    ALREADY_IN_EMERGENCY = 6;
+    EMERGENCY_NOT_STARTED = 7;
+    AMBIGUOUS_REQUEST = 8;
+    ATTACHMENT_QUEUE_IS_FULL = 9;
+    WRONG_MESSAGE_REQUEST = 10;
+    ALREADY_SENDING = 11;
+    ALREADY_SENT = 12;
+    CANNOT_SEND_MT_MESSAGE = 13;
+    MESSAGE_NOT_FOUND = 14;
+    ATTACHMENT_NOT_FOUND = 15;
+  }
+}
+
+message CancelEmergencyMessagingRequest {
+  required .GDI.Proto.DataTypes.UUID session_uuid = 1;
+}
+
+message CancelEmergencyMessagingResponse {
+  required CancelEmergencyMessagingResponse.Status status = 1;
+
+  enum Status {
+    OK = 1;
+    GENERIC_ERROR = 2;
+    SESSION_MISMATCH = 3;
+  }
+}
+
+message PlanInfo {
+  optional fixed32 time = 1;
+  optional fixed32 plan_change_time = 2;
+  optional uint32 plan_id = 3;
+  optional string plan_name = 4;
+  optional .GDI.Proto.DataTypes.UUID customer_uuid = 5;
+  optional uint32 billing_day_of_month = 6;
+  optional bool byte_based = 7;
+  optional uint32 tracking_interval_sec_free = 8;
+  optional uint32 text_message_limit = 9;
+  optional uint32 preset_limit = 10;
+  optional uint32 track_point_limit = 11;
+  optional uint32 media_limit = 12;
+  optional bool unreliable_emergency_service = 13;
+}
+
+message DataUsage {
+  optional fixed32 time = 1;
+  optional uint32 bytes_used = 2;
+  optional uint32 text_messages_used = 3;
+  optional uint32 presets_used = 4;
+  optional uint32 track_points_used = 5;
+  optional uint32 media_messages_used = 6;
+}
+
+message PlanInfoRequest {
+  required bool include_data_usage = 1;
+}
+
+message PlanInfoResponse {
+  required PlanInfoResponse.Status status = 1;
+  optional PlanInfo plan_info = 2;
+  optional PlanInfo plan_change_info = 3;
+  optional DataUsage data_usage = 4;
+
+  enum Status {
+    UNKNOWN = 0;
+    OK = 1;
+    GENERIC_ERROR = 2;
+  }
+}
+
+message PlanInfoNotification {
+  optional PlanInfo plan_info = 1;
+  optional PlanInfo plan_change_info = 2;
+  optional DataUsage data_usage = 3;
+}
+
+message DeleteAllRequest {
+  optional .GDI.Proto.DataTypes.UUID uuid = 1;
+  optional uint32 types = 2;
+  optional DeleteAllRequest.Reason reason = 3;
+  optional string phone_number = 4;
+  optional .GDI.Proto.DataTypes.UUID customer_uuid = 5;
+  optional string inreach_address = 6;
+
+  enum Type {
+    NONE = 0;
+    MESSAGES = 1;
+    CONTACTS = 2;
+    PRESETS = 4;
+    QUICKTEXTS = 8;
+    HERMES_TOKEN = 16;
+    IRIS_TOKEN = 32;
+    CALLS = 64;
+    CHAT_EVENTS = 128;
+  }
+
+  enum Reason {
+    UNKNOWN_REASON = 0;
+    HERMES_ACCOUNT_MISMATCH = 1;
+    GARMIN_SSO_ACCOUNT_MISMATCH = 2;
+  }
+}
+
+message DeleteAllResponse {
+  optional .GDI.Proto.DataTypes.UUID uuid = 1;
+  optional DeleteAllResponse.Status status = 2;
+  optional uint32 types = 3;
+
+  enum Status {
+    UNKNOWN = 0;
+    OK = 1;
+    GENERIC_ERROR = 2;
+    MISSING_TYPES = 3;
+    SOS_IN_PROGRESS = 4;
+    SYNC_IN_PROGRESS = 5;
+  }
+}
+
+message DeleteAllStatusRequest {
+  optional .GDI.Proto.DataTypes.UUID uuid = 1;
+}
+
+message DeleteAllStatusResponse {
+  optional .GDI.Proto.DataTypes.UUID uuid = 1;
+  optional DeleteAllStatusResponse.Status status = 2;
+  optional uint32 succeeded_types = 3;
+  optional uint32 failed_types = 4;
+
+  enum Status {
+    UNKNOWN = 0;
+    GENERIC_ERROR = 1;
+    INVALID_UUID = 2;
+    IN_PROGRESS = 3;
+    COMPLETE = 4;
+  }
+}
+
+message AttachmentTransfer {
+  optional AttachmentTransfer.Direction direction = 1;
+  optional uint32 transfer_id = 2;
+  optional .GDI.Proto.DataTypes.UUID uuid = 3;
+  optional AttachmentTransfer.Status status = 4;
+  optional uint32 total_size = 5;
+  optional uint32 bytes_transferred = 6;
+  optional uint32 percent_transferred = 7;
+  optional fixed32 start_time = 8;
+  optional fixed32 status_time = 9;
+
+  enum Direction {
+    UNKNOWN_DIRECTION = 0;
+    DOWNLOAD = 1;
+    UPLOAD = 2;
+  }
+
+  enum Status {
+    UNKNOWN_STATUS = 0;
+    ACTIVE = 1;
+    CANCELED = 2;
+    FAILED = 3;
+    COMPLETE = 4;
+    REQUEST_QUEUED = 5;
+    REQUEST_SENT = 6;
+    CANCEL_QUEUED = 7;
+    CANCEL_SENT = 8;
+  }
+}
+
+message ResolvedAddressCode {
+  required uint32 address_code = 1;
+  repeated string addresses = 2;
+}
+
+message MessagingSubscribeRequest {
+  optional bool want_mailbox_check_status = 1 [default = false];
+  optional bool want_message_status = 2 [default = false];
+  optional bool want_message_received = 3 [default = false];
+  optional bool want_emergency_message_status = 4 [default = false];
+  optional bool want_activation_status = 5 [default = false];
+  optional bool want_attachment_transfer = 6 [default = false];
+  optional bool want_activation_step = 7 [default = false];
+  optional bool want_plan_info = 8 [default = false];
+  optional bool want_delete_all = 9 [default = false];
+  optional bool want_messaging_status = 10 [default = false];
+  optional bool want_plan_change = 11 [default = false];
+  optional bool want_plan_price_info = 12 [default = false];
+}
+
+message MessagingSubscribeResponse {
+  required MessagingSubscribeResponse.Status status = 1;
+
+  enum Status {
+    OK = 1;
+    GENERIC_ERROR = 2;
+  }
+}
+
+message MailboxCheckStatusNotification {
+  optional MailboxCheckStatus status = 1;
+  optional fixed32 last_mailbox_check = 2;
+}
+
+message MessageStatusNotification {
+  required .GDI.Proto.DataTypes.UUID uuid = 1;
+  required uint32 status = 2;
+  optional .GDI.Proto.DataTypes.GPSFixType gps_fix = 3;
+  optional .GDI.Proto.DataTypes.ScPoint location = 4;
+  optional float altitude = 5;
+  optional float course = 6;
+  optional float speed = 7;
+  optional uint32 mediums = 8;
+  optional fixed32 modified_time = 9;
+  repeated ResolvedAddressCode resolved_address_codes = 10;
+  optional bool encrypted = 11;
+  optional Message.Attachment attachment = 12;
+  optional uint64 unit_id = 13;
+}
+
+message MessageReceivedNotification {
+  required Message mesg = 1;
+}
+
+message AttachmentTransferNotification {
+  repeated AttachmentTransfer transfers = 1;
+}
+
+message EmergencyMessagingStatusNotification {
+  required EmergencyMessagingSession session = 1;
+}
+
+message ActivationStatusNotification {
+  optional ActivationStatus activation_status = 1;
+  optional .GDI.Proto.DataTypes.UUID customer_uuid = 2;
+  optional string inreach_address = 3;
+}
+
+message ActivationStepNotification {
+  optional ActivationStep step = 1;
+  optional ActivationType type = 2;
+  optional ActivationMethod method = 3;
+}
+
+message IrisProviderNotification {
+  optional IrisProviderNotification.ServiceStatus service_status = 1;
+  optional bool iris_token_available = 2;
+  optional uint32 queued_device_mesg_count = 3;
+  optional string phone_number = 4;
+
+  enum ServiceStatus {
+    AVAILABLE = 1;
+    UNAVAILABLE = 2;
+    SERVICE_ERROR = 3;
+    NO_INTERNET_GENERIC = 4;
+  }
+}
+
+message DeleteAllNotification {
+  optional .GDI.Proto.DataTypes.UUID uuid = 1;
+  optional DeleteAllNotification.Status status = 2;
+  optional uint32 succeeded_types = 3;
+  optional uint32 failed_types = 4;
+
+  enum Status {
+    UNKNOWN = 0;
+    IN_PROGRESS = 1;
+    COMPLETE = 2;
+  }
+}
+
+message MessagingStatusNotification {
+  optional string friendly_name = 1;
+  optional .GDI.Proto.DataTypes.UUID hermes_instance_id = 2;
+  optional .GDI.Proto.DataTypes.UUID iris_instance_id = 3;
+  optional uint64 unit_id = 4;
+  optional string inreach_imei = 5;
+  repeated TransportType disabledTransports = 6;
+  optional string phone_number = 7;
+  optional .GDI.Proto.DataTypes.Locale locale = 8;
+}
+
+message PlaceCallRequest {
+  optional string phone_number = 1;
+  optional string name = 2;
+}
+
+message PlaceCallResponse {
+  required PlaceCallResponse.Status status = 1;
+
+  enum Status {
+    UNKNOWN_STATUS = 0;
+    OK = 1;
+    GENERIC_ERROR = 2;
+    NO_INTERNET = 3;
+    NO_MIC_PERMISSIONS = 4;
+  }
+}
+
+message StartMessageSyncRequest {
+  optional .GDI.Proto.DataTypes.UUID app_uuid = 1;
+}
+
+message StartMessageSyncResponse {
+  required StartMessageSyncResponse.Status status = 1;
+
+  enum Status {
+    OK = 1;
+    UP_TO_DATE = 2;
+    GENERIC_ERROR = 3;
+    UNAVAILABLE = 4;
+    BUSY = 5;
+  }
+}
+
+message AttachmentFileSyncRequest {
+  optional .GDI.Proto.DataTypes.UUID file_uuid = 1;
+}
+
+message AttachmentFileSyncResponse {
+  required AttachmentFileSyncResponse.Status status = 1;
+
+  enum Status {
+    UNKNOWN_STATUS = 0;
+    OK = 1;
+    GENERIC_ERROR = 2;
+    NOT_FOUND = 3;
+  }
+}
+
+message GenerateAttachmentFileRequest {
+  optional Message.Attachment.Type attachment_type = 1;
+  optional .GDI.Proto.DataTypes.UUID attachment_uuid = 2;
+  optional Message.Attachment.Format attachment_format = 3;
+  optional Message.Attachment.Quality attachment_quality = 4;
+}
+
+message GenerateAttachmentFileResponse {
+  required GenerateAttachmentFileResponse.Status status = 1;
+  optional .GDI.Proto.DataTypes.UUID file_uuid = 2;
+  optional uint32 file_size = 3;
+
+  enum Status {
+    UNKNOWN_STATUS = 0;
+    OK = 1;
+    GENERIC_ERROR = 2;
+    NOT_FOUND = 3;
+    MISSING_ATTACHMENT_UUID = 4;
+    INVALID_ATTACHMENT_TYPE = 5;
+    INVALID_ATTACHMENT_FORMAT = 6;
+    INVALID_ATTACHMENT_QUALITY = 7;
+    NO_SUITABLE_SOURCE = 8;
+  }
+}
+
+message MessageRequestDetail {
+  optional .GDI.Proto.DataTypes.UUID uuid = 1;
+  optional bool metadata_only = 2 [default = false];
+}
+
+message MessageMetadata {
+  optional .GDI.Proto.DataTypes.UUID uuid = 1;
+  optional bool received = 2;
+  optional uint32 status = 3;
+  optional bool has_location = 4;
+  optional fixed32 modified_time = 5;
+  optional TextMessageType text_type = 6;
+  optional BinaryMessageData.BinaryMessageType binary_type = 7;
+  optional uint64 mtmsn = 8;
+  optional uint32 mediums = 9;
+  optional bool encrypted = 10;
+  optional Message.Attachment attachment = 11;
+  optional bool is_ota_uuid = 12;
+  optional uint64 unit_id = 13;
+}
+
+message MessageDateRangeQuery {
+  optional uint32 messaging_capabilities = 1;
+  optional fixed32 date_begin = 2;
+  optional fixed32 date_end = 3;
+  optional uint32 mesg_limit = 4;
+  optional MessageDateRangeQuery.QueryType query_type = 5 [default = ALL_MESSAGES];
+
+  enum QueryType {
+    ALL_MESSAGES = 1;
+    READ_STATUS_UPDATED = 2;
+  }
+}
+
+message DataTypeConfigExt {
+  optional MessageDateRangeQuery mesg_date_range = 1;
+}
+
+message DataTypeStatusExt {
+  optional uint32 mesg_max_request_count = 1;
+  optional uint32 mesg_metadata_max_request_count = 2;
+}
+
+message GenericItemReferenceExt {
+  optional MessageRequestDetail request_detail = 1;
+  optional MessageMetadata mesg_metadata = 2;
+}
+
+message GenericItemExt {
+  optional Message mesg = 1;
+  optional MessageMetadata mesg_metadata = 2;
+}

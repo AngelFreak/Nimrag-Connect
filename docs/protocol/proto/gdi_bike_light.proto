@@ -1,0 +1,161 @@
+// Recovered from Garmin Connect 5.31 (11761) com.garmin.proto.generated.GDIBikeLight by tools/proto-recover. Field names/numbers are SEEN (from generated constants); types marked "// inferred" where the type could not be read directly.
+// Types, labels, oneofs and enums are read from the FileDescriptorProto embedded in the class; numbers are cross-checked against *_FIELD_NUMBER constants.
+// Original descriptor file name: GDIBikeLight.proto
+
+syntax = "proto2";
+
+package GDI.Proto.BikeLight;
+
+import "gdi_core.proto";
+
+option java_package = "com.garmin.proto.generated";
+option java_outer_classname = "GDIBikeLight";
+option optimize_for = LITE_RUNTIME;
+
+enum Mode {
+  MODE_UNKNOWN = 0;
+  MODE_CUSTOM_1 = 1;
+  MODE_CUSTOM_2 = 2;
+  MODE_CUSTOM_3 = 3;
+  MODE_CUSTOM_4 = 4;
+  MODE_CUSTOM_5 = 5;
+  MODE_OVERDRIVE = 100;
+  MODE_SOLID_HIGH = 101;
+  MODE_SOLID_MEDIUM = 102;
+  MODE_SOLID_LOW = 103;
+  MODE_NIGHT_FLASH = 104;
+  MODE_DAY_FLASH = 105;
+  MODE_OFF = 106;
+}
+
+enum Status {
+  STATUS_UNKNOWN = 0;
+  STATUS_REJECTED = 1;
+  STATUS_ACCEPTED = 2;
+  STATUS_BUSY = 3;
+}
+
+message Service {
+  optional ConfigureCustomModeRequest config_custom_mode_request = 1;
+  optional ConfigureCustomModeResponse config_custom_mode_response = 2;
+  optional ConfigureCustomModeNotification config_custom_mode_notification = 3;
+  optional ConfigureRotationRequest config_rotation_request = 4;
+  optional ConfigureRotationResponse config_rotation_response = 5;
+  optional ConfigureRotationNotification config_rotation_notification = 6;
+  optional ChangeModeRequest change_mode_request = 7;
+  optional ChangeModeResponse change_mode_response = 8;
+  optional ChangeModeNotification change_mode_notification = 9;
+  optional ConfigureSettingsRequest config_settings_request = 10;
+  optional ConfigureSettingsResponse config_settings_response = 11;
+  optional ConfigureSettingsNotification config_settings_notification = 12;
+}
+
+message CapabilitiesRequest {
+  extend .GDI.Proto.Core.FeatureCapabilitiesRequest {
+    optional CapabilitiesRequest features_request = 33;
+  }
+}
+
+message BikeLightCapabilities {
+  repeated Mode supported_modes = 1;
+  optional bool target_indication_support = 2;
+  optional bool brake_detection_support = 3;
+  optional bool auto_beam_adjust_support = 4;
+  optional uint32 max_rotation_length = 5;
+  optional uint32 max_custom_steps = 6;
+  optional uint32 num_leds = 7;
+  optional bool sleep_light_support = 8;
+}
+
+message CapabilitiesResponse {
+  optional BikeLightCapabilities bike_light_capabilities = 1;
+  extend .GDI.Proto.Core.FeatureCapabilitiesResponse {
+    optional CapabilitiesResponse features_response = 33;
+  }
+}
+
+message CustomModeLedStep {
+  optional uint32 brightness = 1;
+}
+
+message CustomModeStep {
+  optional uint32 duration_ms = 1;
+  repeated CustomModeLedStep led_steps = 2;
+}
+
+message CustomMode {
+  optional Mode mode = 1;
+  optional string name = 2;
+  repeated CustomModeStep steps = 3;
+}
+
+message ConfigureCustomModeRequest {
+  repeated CustomMode custom_modes = 1;
+}
+
+message ConfigureCustomModeResponse {
+  optional Status status = 1;
+  repeated CustomMode custom_modes = 2;
+}
+
+message ConfigureCustomModeNotification {
+  repeated CustomMode custom_modes = 1;
+}
+
+message ConfigureRotationRequest {
+  repeated Mode rotation = 1;
+}
+
+message ConfigureRotationResponse {
+  optional Status status = 1;
+  repeated Mode rotation = 2;
+}
+
+message ConfigureRotationNotification {
+  repeated Mode rotation = 1;
+}
+
+message ChangeModeRequest {
+  optional Mode mode = 1;
+  optional bool sleep_light = 2;
+}
+
+message ChangeModeResponse {
+  optional Status status = 1;
+  optional Mode mode = 2;
+}
+
+message ChangeModeNotification {
+  optional Mode mode = 1;
+}
+
+message AutoBeamAdjustSettings {
+  optional bool enabled = 1;
+  optional uint32 max_speed_kph = 2;
+}
+
+message ConfigureSettings {
+  optional bool target_indication = 1;
+  optional ConfigureSettings.BrakeDetection brake_detection = 2;
+  optional AutoBeamAdjustSettings auto_beam_adjust = 3;
+
+  enum BrakeDetection {
+    BRAKE_DETECTION_UNKNOWN = 0;
+    BRAKE_DETECTION_OFF = 1;
+    BRAKE_DETECTION_SOLID = 2;
+    BRAKE_DETECTION_FLASH = 3;
+  }
+}
+
+message ConfigureSettingsRequest {
+  optional ConfigureSettings settings = 1;
+}
+
+message ConfigureSettingsResponse {
+  optional Status status = 1;
+  optional ConfigureSettings settings = 2;
+}
+
+message ConfigureSettingsNotification {
+  optional ConfigureSettings settings = 1;
+}

@@ -1,0 +1,102 @@
+// Recovered from Garmin Connect 5.31 (11761) com.garmin.proto.generated.GDIKidDevice by tools/proto-recover. Field names/numbers are SEEN (from generated constants); types marked "// inferred" where the type could not be read directly.
+// Types, labels, oneofs and enums are read from the FileDescriptorProto embedded in the class; numbers are cross-checked against *_FIELD_NUMBER constants.
+// Original descriptor file name: GDIKidDevice.proto
+
+syntax = "proto2";
+
+package GDI.Proto.KidDevice;
+
+import "gdi_credentials.proto";
+
+option java_package = "com.garmin.proto.generated";
+option java_outer_classname = "GDIKidDevice";
+option optimize_for = LITE_RUNTIME;
+
+enum GCSLocation {
+  PRODUCTION = 0;
+  CHINA = 1;
+  TEST = 2;
+  STAGE = 3;
+}
+
+enum InitialSetupItem {
+  CONTACTS = 0;
+  GEOFENCES = 1;
+  PRESET_TEXT_MESSAGES = 2;
+  CHORES = 3;
+  LEADERBOARD = 4;
+}
+
+message KidDeviceService {
+  optional ITOAuthCredentialsRequest it_oauth_request = 1;
+  optional ITOAuthCredentialsResponse it_oauth_response = 2;
+  optional KidCredentialsRequest kid_credentials_request = 5;
+  optional KidCredentialsResponse kid_credentials_response = 6;
+  optional UserTimerDetailsNotification user_timer_details = 16;
+  optional InitialSetupItemsCompletedNotification initial_setup_items_completed_notification = 17;
+  optional InitialSetupItemsBeginNotification initial_setup_items_begin_notification = 18;
+}
+
+message OAuth2Credentials {
+  required string access_token = 1;
+  required string token_type = 2;
+  required string refresh_token = 3;
+  required uint32 expires_in = 4;
+  required string scope = 5;
+  required string refresh_token_expires_in = 6;
+  required string customer_id = 7;
+}
+
+message ITOAuthCredentialsRequest {
+}
+
+message KidCredentialsResponse {
+}
+
+message UserTimerDetailsNotification {
+  optional uint32 current_timestamp = 1;
+  optional uint32 timer_duration_seconds = 2;
+  optional UserTimerDetailsNotification.TimerAction timer_action = 3;
+  optional UserTimerDetailsNotification.TimerType timer_type = 4;
+
+  enum TimerType {
+    TOOTHBRUSH = 0;
+    PRACTICE = 1;
+    SCREENTIME = 2;
+    EATING = 3;
+    PENCIL = 4;
+    TOYTRAIN = 5;
+    GENERIC = 6;
+  }
+
+  enum TimerAction {
+    STARTED = 0;
+    STOPPED = 1;
+    PAUSED = 2;
+    RESUMED = 3;
+    RESET = 4;
+    CANCELED = 5;
+  }
+}
+
+message InitialSetupItemsCompletedNotification {
+  repeated InitialSetupItem successful_items = 1;
+  repeated InitialSetupItem failed_items = 2;
+  repeated InitialSetupItem unsupported_items = 3;
+}
+
+message ITOAuthCredentialsResponse {
+  optional OAuth2Credentials credentials = 1;
+  optional GCSLocation gcs_location = 2;
+}
+
+message KidCredentialsRequest {
+  optional OAuth2Credentials it_oauth_2_credentials = 1;
+  optional GCSLocation gcs_location = 2;
+  optional .GDI.Proto.Credentials.DIOAuth2Credentials di_oauth_2_credentials = 4;
+  optional .GDI.Proto.Credentials.SIPCredentials sip_credentials = 5;
+}
+
+message InitialSetupItemsBeginNotification {
+  repeated InitialSetupItem items_to_request = 1;
+}

@@ -1,0 +1,161 @@
+// Recovered from Garmin Connect 5.31 (11761) com.garmin.proto.generated.GDIXcelStrength by tools/proto-recover. Field names/numbers are SEEN (from generated constants); types marked "// inferred" where the type could not be read directly.
+// Types, labels, oneofs and enums are read from the FileDescriptorProto embedded in the class; numbers are cross-checked against *_FIELD_NUMBER constants.
+// Original descriptor file name: GDIXcelStrength.proto
+
+syntax = "proto2";
+
+package GDI.Proto.XcelStrength;
+
+import "gdi_event_sharing.proto";
+
+option java_package = "com.garmin.proto.generated";
+option java_outer_classname = "GDIXcelStrength";
+option optimize_for = LITE_RUNTIME;
+
+enum SetType {
+  SET_TYPE_UNKNOWN = 0;
+  Rest = 1;
+  Active = 2;
+}
+
+message Service {
+  optional StateChangeRequest state_change_request = 1;
+  optional StateChangeResponse state_change_response = 2;
+  optional SetStateChangeRequest set_state_change_request = 3;
+  optional SetStateChangeResponse set_state_change_response = 4;
+  optional SetConfigurationRequest set_configuration_request = 5;
+  optional SetConfigurationResponse set_configuration_response = 6;
+  optional SettingsChangeRequest settings_change_request = 7;
+  optional SettingsChangeResponse settings_change_response = 8;
+  optional SetTimeSyncMacRequest set_time_sync_mac_request = 9;
+  optional SetTimeSyncMacResponse set_time_sync_mac_response = 10;
+  optional FavoriteExercisesRequest favorite_exercises_request = 11;
+  optional FavoriteExercisesResponse favorite_exercises_response = 12;
+}
+
+message StateChangeRequest {
+  optional StateChangeRequest.StateChange change = 1;
+
+  enum StateChange {
+    STATE_CHANGE_UNKNOWN = 0;
+    INITIAL_START = 1;
+    PAUSE = 2;
+    RESUME = 3;
+    RESET = 4;
+  }
+}
+
+message StateChangeResponse {
+  optional StateChangeResponse.FailureReason failure = 1;
+
+  enum FailureReason {
+    FAILURE_REASON_UNKNOWN = 0;
+    CONTROL_TAKEN = 1;
+  }
+}
+
+message StateNotification {
+  optional StateNotification.State state = 1;
+
+  enum State {
+    STATE_UNKNOWN = 0;
+    OFF = 1;
+    STOPPED = 2;
+    ON = 3;
+  }
+}
+
+message SettingsChangeRequest {
+  optional bool auto_set = 1;
+}
+
+message SettingsChangeResponse {
+}
+
+message SetStateChangeRequest {
+  optional SetType type = 1;
+}
+
+message SetStateChangeResponse {
+}
+
+message AutoSetEventNotification {
+  optional SetType type = 1;
+}
+
+message MetricsNotification {
+  optional uint32 rep_number = 1;
+  optional uint32 mean_vel_m_per_s_x100 = 2;
+  optional uint32 peak_vel_m_per_s_x100 = 3;
+  optional uint32 mean_propul_vel_m_per_s_x100 = 4;
+  optional uint32 duration_second_x100 = 5;
+  optional uint32 rom_cm_x100 = 6;
+  optional float peak_power_watt = 7;
+  optional float mean_power_watt = 8;
+  repeated int32 bar_path_points = 9;
+  optional uint32 ecc_mean_vel_m_per_s_x100 = 10;
+  optional uint32 ecc_peak_vel_m_per_s_x100 = 11;
+  optional uint32 ecc_duration_second_x100 = 12;
+  optional uint32 ecc_rom_cm_x100 = 13;
+}
+
+message XcelStrengthEventNotification {
+  optional AutoSetEventNotification auto_set_notification = 1;
+  optional StateNotification state_notification = 2;
+  optional MetricsNotification metrics_notification = 3;
+  optional ToneNotification tone_notification = 4;
+  optional ReferenceBarometerStatusNotification ref_baro_status_notification = 5;
+  extend .GDI.Proto.EventSharing.AlertNotification {
+    optional XcelStrengthEventNotification xcel_strength_event = 1023;
+  }
+}
+
+message SetConfigurationRequest {
+  optional uint32 set_index = 1;
+  optional float weight_kg = 2;
+  optional uint32 exercise_category = 3;
+  optional uint32 exercise_subcategory = 4;
+}
+
+message SetConfigurationResponse {
+}
+
+message ToneNotification {
+  optional ToneNotification.Type type = 1;
+  optional uint32 priority = 2;
+
+  enum Type {
+    UNKNOWN = 0;
+    TIMER_COUNT_DOWN = 1;
+    TARGET_HIT = 2;
+    TARGET_MISS = 3;
+    LAP = 4;
+    TIMER_COUNT_UP_START = 5;
+    SENSOR_DISCONNECT = 6;
+    SENSOR_CONNECT = 7;
+    LOW_BATTERY = 8;
+  }
+}
+
+message SetTimeSyncMacRequest {
+  optional bytes time_sync_mac = 1;
+}
+
+message SetTimeSyncMacResponse {
+}
+
+message ReferenceBarometerStatusNotification {
+  optional bool is_available = 1;
+}
+
+message Exercise {
+  optional uint32 category = 1;
+  optional uint32 subcategory = 2;
+}
+
+message FavoriteExercisesRequest {
+  repeated Exercise list = 1;
+}
+
+message FavoriteExercisesResponse {
+}

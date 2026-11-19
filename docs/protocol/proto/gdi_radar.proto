@@ -1,0 +1,120 @@
+// Recovered from Garmin Connect 5.31 (11761) com.garmin.proto.generated.GDIRadarProto by tools/proto-recover. Field names/numbers are SEEN (from generated constants); types marked "// inferred" where the type could not be read directly.
+// Types, labels, oneofs and enums are read from the FileDescriptorProto embedded in the class; numbers are cross-checked against *_FIELD_NUMBER constants.
+// Original descriptor file name: GDIRadar.proto
+
+syntax = "proto2";
+
+package GDI.Proto.Radar;
+
+import "gdi_event_sharing.proto";
+
+option java_package = "com.garmin.proto.generated";
+option java_outer_classname = "GDIRadarProto";
+option optimize_for = LITE_RUNTIME;
+
+enum LightLevel {
+  DAY = 0;
+  VERY_HIGH = 1;
+  HIGH = 2;
+  MED = 3;
+  LOW = 4;
+  DARK = 5;
+}
+
+message Service {
+  optional GetSettingsRequest settings_request = 1;
+  optional GetSettingsResponse settings_response = 2;
+  optional ChangeSettingsRequest change_settings_request = 3;
+  optional ChangeSettingsResponse change_settings_response = 4;
+  optional TestModeRequest test_mode_request = 5;
+  optional TestModeResponse test_mode_response = 6;
+  optional RestoreDefaultsRequest restore_defaults_request = 7;
+  optional RestoreDefaultsResponse restore_defaults_response = 8;
+}
+
+message LimpModeControl {
+  optional bool force_enable = 1;
+  optional float speed_threshold = 2;
+}
+
+message AlertSettings {
+  optional AlertSettings.Sensitivity sensitivity = 1;
+  optional bool enable_rear_lights = 2;
+  optional bool enable_audio_alerts = 3;
+
+  enum Sensitivity {
+    OFF = 0;
+    LOW = 1;
+    NORMAL = 2;
+    HIGH = 3;
+  }
+}
+
+message Settings {
+  optional AlertSettings blind_spot_alerts = 1;
+  optional AlertSettings rear_alerts = 2;
+  optional bool demo_mode_active = 3;
+  optional LimpModeControl limp_mode_control = 4;
+  optional bool light_level_updates_enabled = 5;
+}
+
+message GetSettingsRequest {
+}
+
+message GetSettingsResponse {
+  optional Settings settings = 1;
+  optional LightLevel light_level = 2;
+}
+
+message ChangeSettingsRequest {
+  optional Settings settings = 1;
+}
+
+message ChangeSettingsResponse {
+  optional ChangeSettingsResponse.ChangeSettingsStatus status = 1;
+
+  enum ChangeSettingsStatus {
+    SUCCESS = 0;
+    UNKNOWN_ERROR = 1;
+  }
+}
+
+message SettingsChangeDetails {
+  optional Settings settings = 1;
+  optional LightLevel light_level = 2;
+  extend .GDI.Proto.EventSharing.AlertNotification {
+    optional SettingsChangeDetails details = 1011;
+  }
+}
+
+message TestModeRequest {
+  optional TestModeRequest.TestModeState state = 2;
+
+  enum TestModeState {
+    OFF = 0;
+    LEFT_LIGHTS = 1;
+    REAR_LIGHTS = 2;
+    RIGHT_LIGHTS = 3;
+  }
+}
+
+message TestModeResponse {
+  optional TestModeResponse.TestModeStatus status = 1;
+
+  enum TestModeStatus {
+    SUCCESS = 0;
+    UNKNOWN_ERROR = 1;
+  }
+}
+
+message RestoreDefaultsRequest {
+}
+
+message RestoreDefaultsResponse {
+  optional RestoreDefaultsResponse.RestoreDefaultsStatus status = 1;
+
+  enum RestoreDefaultsStatus {
+    SUCCESS = 0;
+    UNKNOWN_ERROR = 1;
+  }
+}

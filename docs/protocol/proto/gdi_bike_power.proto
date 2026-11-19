@@ -1,0 +1,140 @@
+// Recovered from Garmin Connect 5.31 (11761) com.garmin.proto.generated.GDIBikePower by tools/proto-recover. Field names/numbers are SEEN (from generated constants); types marked "// inferred" where the type could not be read directly.
+// Types, labels, oneofs and enums are read from the FileDescriptorProto embedded in the class; numbers are cross-checked against *_FIELD_NUMBER constants.
+// Original descriptor file name: GDIBikePower.proto
+
+syntax = "proto2";
+
+package GDI.Proto.BikePower;
+
+import "gdi_core.proto";
+import "gdi_event_sharing.proto";
+
+option java_package = "com.garmin.proto.generated";
+option java_outer_classname = "GDIBikePower";
+option optimize_for = LITE_RUNTIME;
+
+message Service {
+  optional ConfigurationRequest config_request = 1;
+  optional ConfigurationResponse config_response = 2;
+  optional ConfigurationNotification config_notification = 3;
+  optional CalibrationRequest calibration_request = 4;
+  optional CalibrationResponse calibration_response = 5;
+  optional PedalIQNotification pedal_iq_notification = 6;
+  optional StatusNotification status_notification = 7;
+}
+
+message CapabilitiesRequest {
+  extend .GDI.Proto.Core.FeatureCapabilitiesRequest {
+    optional CapabilitiesRequest features_request = 26;
+  }
+}
+
+message BikePowerCapabilities {
+  optional bool is_pedal_iq_notification_supported = 1;
+}
+
+message CapabilitiesResponse {
+  optional BikePowerCapabilities bike_power_capabilities = 1;
+  extend .GDI.Proto.Core.FeatureCapabilitiesResponse {
+    optional CapabilitiesResponse features_response = 26;
+  }
+}
+
+message ConfigurationFields {
+  optional uint32 crank_length = 1;
+  optional uint32 transition_time_offset = 2;
+  optional uint32 peak_power_phase_range = 3;
+  optional uint32 left_torque_scale = 4;
+  optional uint32 right_torque_scale = 5;
+  optional bool auto_zero_enabled = 6;
+  optional uint32 paired_pedal_id = 7;
+  optional ConfigurationFields.InstallAngleStatus install_angle_status = 8;
+
+  enum InstallAngleStatus {
+    NOT_SET = 0;
+    RIGHT_SET = 1;
+    LEFT_SET = 2;
+    BOTH_SET = 3;
+  }
+}
+
+message ConfigurationRequest {
+  optional ConfigurationFields config = 1;
+}
+
+message ConfigurationResponse {
+  optional ConfigurationResponse.ConfigurationStatus status = 1;
+  optional ConfigurationFields config = 2;
+
+  enum ConfigurationStatus {
+    ACCEPTED = 0;
+    REJECTED = 1;
+  }
+}
+
+message ConfigurationNotification {
+  optional ConfigurationFields config = 1;
+}
+
+message StatusNotification {
+  optional StatusNotification.P2PConnectionStatus p2p_connected = 1;
+
+  enum P2PConnectionStatus {
+    NOT_CONNECTED = 0;
+    CONNECTED = 1;
+  }
+}
+
+message CalibrationRequest {
+}
+
+message CalibrationResponse {
+  optional uint32 status = 1;
+}
+
+message PedalIQNotification {
+  optional PedalIQNotification.DetectedChange detected_change = 1;
+
+  enum DetectedChange {
+    Temperature = 0;
+    CalibrationTime = 1;
+    CorrectedTorque = 2;
+    InstallAngle = 3;
+  }
+}
+
+message PedalData {
+  optional sint32 pco_1_2_mm = 1;
+  optional uint32 power_phase_start_1024_brads = 2;
+  optional uint32 power_phase_end_1024_brads = 3;
+  optional uint32 power_phase_peak_start_1024_brads = 4;
+  optional uint32 power_phase_peak_end_1024_brads = 5;
+  optional uint32 te_percent = 6;
+  optional uint32 ps_percent = 7;
+}
+
+message MeasurementNotification {
+  optional uint32 event_timestamp_1_2048_s = 1;
+  optional uint32 crank_angle_1024_brads = 2;
+  optional sint32 cumulative_work_1_4_j = 3;
+  optional uint32 cycle_period_1_2048_s = 4;
+  optional bool coasting_flag = 5;
+  optional uint32 power_1_2_w = 6;
+  optional uint32 balance_percent = 7;
+  optional PedalData left_pedal_data = 8;
+  optional PedalData right_pedal_data = 9;
+  optional MeasurementNotification.RiderPosition rider_position = 10;
+  optional sint32 coasting_torque_1_32_Nm = 11;
+  optional uint32 cadence_1_8_rpm = 12;
+  optional sint32 torque_1_32_Nm = 13;
+  extend .GDI.Proto.EventSharing.AlertNotification {
+    optional MeasurementNotification data = 1017;
+  }
+
+  enum RiderPosition {
+    SEATED = 0;
+    TRANSITION_TO_SEATED = 1;
+    STANDING = 2;
+    TRANSITION_TO_STANDING = 3;
+  }
+}

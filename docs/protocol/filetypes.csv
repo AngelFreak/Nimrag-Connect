@@ -1,0 +1,15 @@
+data_type,sub_type,fit_file_type,contents,requested_in_normal_sync,evidence
+0,0,(none),"Directory, always file index 0: a 16-byte header then 16-byte entries",yes (always first),seen: C8648a ~line 440-490 (skips 16-byte header; parses 16-byte entries)
+8,255,(none),"GarminDevice.xml, fixed file index 0xFFFD (65533)",no (read on demand),seen: FileManagerCompat.GARMIN_DEVICE_XML_FILE_INDEX = 65533; type pair from GB FileType
+128,4,activity (4),"Recorded activities: sessions, laps, records, sets",yes (must-have),seen: FIT file enum j6h ACTIVITY(4); 5031 fallback list in C8648a includes (128,4)
+128,15,monitoring_a (15),Older all-day monitoring format,unknown for Instinct 2 (capture 5031),seen: j6h MONITORING_A(15)
+128,28,monitoring_daily (28),Daily monitoring summary,unknown for Instinct 2 (capture 5031),inferred: GB FileType MONITOR_DAILY; FIT SDK file enum
+128,32,monitoring_b (32),"All-day monitoring: heart rate, steps, floors, intensity, calories, stress, energy, respiration, SpO2",yes (must-have),seen: j6h MONITORING_B(32)
+128,36,(Garmin) ,"Listed with activity as the app's default when the watch does not answer 5031",inferred (fallback only),seen: C8648a fallback list (128,36 'FIT_TYPE_36')
+128,41,(Garmin) changelog,Device change log,unknown for Instinct 2,inferred: GB FileType CHANGELOG
+128,44,(Garmin) metrics,"Metrics file: VO2 max, training load, recovery time and similar (must-have)",yes if advertised (must-have),inferred: GB FileType METRICS; FIT 'file' enum value not anchored in the app's enum (names garbled by de-obfuscation)
+128,49,sleep (49),"Sleep: stages, score, overnight values (must-have)",yes if advertised (must-have),seen: j6h SLEEP_DATA(49)
+128,52,user_behavior_log (52),Usage log,unknown for Instinct 2,seen: j6h USER_BEHAVIOR_LOG(52)
+128,68,(Garmin) hrv_status,"Overnight HRV and HRV status (must-have, if the Instinct 2 supports it)",unknown: depends on firmware; capture 5031,inferred: GB FileType HRV_STATUS
+128,57,(Garmin) sports backup,Sport profile backup,unknown for Instinct 2,inferred: GB FileType SPORTS_BACKUP
+255,244-248,(none),"Error reports, logs, KPI ('IQErrorReports', 'ErrorShutdownReports', 'ULFLogs', 'KPI')",no (not FIT; app sync filters FIT sub-types),inferred: GB FileType; app passes FIT sub-type filter (a7d / DeviceManager.getSupportedFitSubTypes)

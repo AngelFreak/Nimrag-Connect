@@ -1,0 +1,216 @@
+// Recovered from Garmin Connect 5.31 (11761) com.garmin.proto.generated.GDIXeroChronographProto by tools/proto-recover. Field names/numbers are SEEN (from generated constants); types marked "// inferred" where the type could not be read directly.
+// Types, labels, oneofs and enums are read from the FileDescriptorProto embedded in the class; numbers are cross-checked against *_FIELD_NUMBER constants.
+// Original descriptor file name: GDIXeroChronograph.proto
+
+syntax = "proto2";
+
+package GDI.Proto.XeroChronograph;
+
+import "gdi_event_sharing.proto";
+
+option java_package = "com.garmin.proto.generated";
+option java_outer_classname = "GDIXeroChronographProto";
+option optimize_for = LITE_RUNTIME;
+
+enum ResponseStatus {
+  SUCCESS = 0;
+  SYNCING = 1;
+  FAILURE = 2;
+  DEVICE_NEEDS_FILE = 3;
+}
+
+enum ProjectileType {
+  ARROW = 0;
+  RIFLE = 1;
+  PISTOL = 2;
+  SHOTGUN = 3;
+  AIR_RIFLE = 4;
+  OTHER = 5;
+}
+
+enum EventAlertType {
+  SESSION_STARTED = 0;
+  SESSION_ENDED = 1;
+  SHOT_DELETED = 2;
+  SHOT_EXCLUDED = 3;
+  SHOT_DETECTED = 4;
+  RADAR_TIMEOUT = 5;
+}
+
+message Service {
+  optional StartSessionRequest start_session_request = 1;
+  optional StartSessionResponse start_session_response = 2;
+  optional DeleteShotRequest delete_shot_request = 3;
+  optional DeleteShotResponse delete_shot_response = 4;
+  optional StopSessionRequest end_session_request = 5;
+  optional StopSessionResponse end_session_response = 6;
+  optional ExcludeShotRequest exclude_shot_request = 7;
+  optional ExcludeShotResponse exclude_shot_response = 8;
+  optional ShotListRequest shot_list_request = 9;
+  optional ShotListResponse shot_list_response = 10;
+  optional SessionInfoRequest session_info_request = 11;
+  optional SessionInfoResponse session_info_response = 12;
+  optional TitleChangeRequest title_change_request = 13;
+  optional TitleChangeResponse title_change_response = 14;
+  optional RecentSessionsRequest recent_sessions_request = 15;
+  optional RecentSessionsResponse recent_sessions_response = 16;
+  optional RearmRadarRequest rearm_radar_request = 17;
+  optional RearmRadarResponse rearm_radar_response = 18;
+  optional DeviceIdentificationRequest device_identification_request = 19;
+  optional DeviceIdentificationResponse device_identification_response = 20;
+  optional LastShotRequest last_shot_request = 21;
+  optional LastShotResponse last_shot_response = 22;
+  optional RadarStatusRequest radar_status_request = 23;
+  optional RadarStatusResponse radar_status_response = 24;
+}
+
+message ShotMessage {
+  optional uint32 shot_timestamp = 1;
+  optional float shot_velocity = 2;
+  optional ShotMessage.ShotStatus status = 3;
+  optional uint32 shot_num = 4;
+
+  enum ShotStatus {
+    NORMAL = 0;
+    EXCLUDED = 1;
+    DELETED = 2;
+  }
+}
+
+message SessionInfoMessage {
+  optional float min_shot_speed = 1;
+  optional float max_shot_speed = 2;
+  optional float avg_shot_speed = 3;
+  optional uint32 shot_count = 4;
+  optional float grain_weight = 5;
+  optional bool session_active = 6;
+  optional float standard_deviation = 7;
+  optional float average_pf = 8;
+  optional float average_ke = 9;
+  optional bytes sessionUUID = 10;
+  optional ProjectileType projectile_type = 11;
+  optional string session_title = 12;
+  optional bool radar_armed = 13;
+}
+
+message StartSessionRequest {
+  optional ProjectileType projectile_type = 1;
+  optional StartSessionRequest.VelocityRange velocity_range = 2;
+  optional bytes sessionUUID = 3;
+  optional string session_title = 4;
+  optional float grain_weight = 5;
+
+  enum VelocityRange {
+    LOW_RANGE = 0;
+    MID_RANGE = 1;
+    HIGH_RANGE = 2;
+  }
+}
+
+message StartSessionResponse {
+  optional ResponseStatus status = 1;
+  optional bytes sessionUUID = 2;
+}
+
+message StopSessionRequest {
+  optional bool discard_session = 1;
+}
+
+message StopSessionResponse {
+  optional ResponseStatus status = 1;
+}
+
+message DeleteShotRequest {
+  repeated uint32 shot_nums_to_delete = 1;
+  optional bytes sessionUUID = 2;
+}
+
+message DeleteShotResponse {
+  optional ResponseStatus status = 1;
+}
+
+message ExcludeShotRequest {
+  repeated uint32 shot_nums_to_exclude = 1;
+  optional bytes sessionUUID = 2;
+}
+
+message ExcludeShotResponse {
+  optional ResponseStatus status = 1;
+}
+
+message ShotListRequest {
+}
+
+message ShotListResponse {
+  repeated ShotMessage shot_list = 1;
+  optional ResponseStatus status = 2;
+}
+
+message SessionInfoRequest {
+}
+
+message SessionInfoResponse {
+  optional SessionInfoMessage session_info = 1;
+  optional ResponseStatus status = 2;
+}
+
+message TitleChangeRequest {
+  optional string title = 1;
+}
+
+message TitleChangeResponse {
+  optional ResponseStatus status = 1;
+}
+
+message RecentSessionsRequest {
+  optional uint32 session_request_count = 1;
+  optional uint32 start_timestamp_s = 2;
+  optional uint32 end_timestamp_s = 3;
+}
+
+message RecentSessionsResponse {
+  optional ResponseStatus status = 1;
+  repeated SessionInfoMessage recent_sessions = 2;
+}
+
+message RearmRadarRequest {
+}
+
+message RearmRadarResponse {
+  optional ResponseStatus status = 1;
+}
+
+message DeviceIdentificationRequest {
+  optional uint32 id_value = 1;
+}
+
+message DeviceIdentificationResponse {
+  optional ResponseStatus status = 1;
+}
+
+message LastShotRequest {
+}
+
+message LastShotResponse {
+  optional ShotMessage last_shot = 1;
+  optional ResponseStatus status = 2;
+}
+
+message RadarStatusRequest {
+}
+
+message RadarStatusResponse {
+  optional bool radar_active = 1;
+  optional ResponseStatus status = 2;
+}
+
+message AlertDetails {
+  optional EventAlertType alert_type = 1;
+  optional ShotMessage shot_message = 2;
+  optional SessionInfoMessage session_info = 3;
+  repeated ShotMessage shot_list = 4;
+  optional float battery_level = 5;
+  extend .GDI.Proto.EventSharing.AlertNotification {
+    optional AlertDetails details = 1008;
+  }
+}

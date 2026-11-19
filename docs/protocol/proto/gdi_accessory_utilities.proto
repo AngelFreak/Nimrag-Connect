@@ -1,0 +1,83 @@
+// Recovered from Garmin Connect 5.31 (11761) com.garmin.proto.generated.GDIAccessoryUtilities by tools/proto-recover. Field names/numbers are SEEN (from generated constants); types marked "// inferred" where the type could not be read directly.
+// Types, labels, oneofs and enums are read from the FileDescriptorProto embedded in the class; numbers are cross-checked against *_FIELD_NUMBER constants.
+// Original descriptor file name: GDIAccessoryUtilities.proto
+
+syntax = "proto2";
+
+package GDI.Proto.AccessoryUtilities;
+
+import "gdi_core.proto";
+import "gdi_data_types.proto";
+import "gdi_event_sharing.proto";
+
+option java_package = "com.garmin.proto.generated";
+option java_outer_classname = "GDIAccessoryUtilities";
+option optimize_for = LITE_RUNTIME;
+
+message Service {
+  optional ErrorNotification error_notification = 1;
+  optional ActivityStartRequest activity_start_request = 2;
+  optional ActivityStartResponse activity_start_response = 3;
+}
+
+message ActivityStateNotification {
+  optional uint32 current_sport = 1;
+  optional uint32 current_sub_sport = 2;
+  optional ActivityStateNotification.ActivityState activity_state = 3;
+  extend .GDI.Proto.EventSharing.AlertNotification {
+    optional ActivityStateNotification data = 1015;
+  }
+
+  enum ActivityState {
+    ACTIVITY_STARTED = 0;
+    ACTIVITY_STOPPED = 1;
+    ACTIVITY_RESUMED = 2;
+    ACTIVITY_SAVED = 3;
+    ACTIVITY_DISCARDED = 4;
+  }
+}
+
+message ErrorNotification {
+  optional ErrorNotification.ErrorLevel error_level = 1;
+  optional uint32 component_index = 2;
+  optional uint32 error_code = 3;
+  optional uint32 error_data = 4;
+
+  enum ErrorLevel {
+    INFO = 0;
+    WARNING = 1;
+    CRITICAL = 2;
+  }
+}
+
+message CapabilitiesRequest {
+  extend .GDI.Proto.Core.FeatureCapabilitiesRequest {
+    optional CapabilitiesRequest features_request = 27;
+  }
+}
+
+message AccessoryUtilitiesCapabilities {
+  repeated uint32 channel_ids = 1;
+  optional bool is_activity_start_request_supported = 2;
+}
+
+message CapabilitiesResponse {
+  optional AccessoryUtilitiesCapabilities accessory_utilities_capabilities = 1;
+  extend .GDI.Proto.Core.FeatureCapabilitiesResponse {
+    optional CapabilitiesResponse features_response = 27;
+  }
+}
+
+message ActivityStartRequest {
+}
+
+message ActivityStartResponse {
+  required ActivityStartResponse.ResponseStatus status = 1;
+  optional .GDI.Proto.DataTypes.UUID uuid = 2;
+
+  enum ResponseStatus {
+    UNKNOWN = 0;
+    ERROR = 1;
+    SUCCESS = 2;
+  }
+}

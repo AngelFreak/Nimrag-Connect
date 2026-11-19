@@ -1,0 +1,90 @@
+// Recovered from Garmin Connect 5.31 (11761) com.garmin.proto.generated.GDIAntiTheftAlarmProto by tools/proto-recover. Field names/numbers are SEEN (from generated constants); types marked "// inferred" where the type could not be read directly.
+// Types, labels, oneofs and enums are read from the FileDescriptorProto embedded in the class; numbers are cross-checked against *_FIELD_NUMBER constants.
+// Original descriptor file name: GDIAntiTheftAlarm.proto
+
+syntax = "proto2";
+
+package GDI.Proto.AntiTheftAlarm;
+
+option java_package = "com.garmin.proto.generated";
+option java_outer_classname = "GDIAntiTheftAlarmProto";
+option optimize_for = LITE_RUNTIME;
+
+message AntiTheftAlarmService {
+  optional SettingChangeRequest setting_change_request = 1;
+  optional SettingChangeResponse setting_change_response = 11;
+  optional TriggerRequest trigger_request = 2;
+  optional TriggerResponse trigger_response = 3;
+  optional DisableRequest disable_request = 4;
+  optional DisableResponse disable_response = 5;
+  optional MovementAlertNotification movement_alert_notification = 6;
+  optional ResetPINRequest reset_pin_request = 7;
+  optional ResetPINResponse reset_pin_response = 8;
+  optional SettingRequest setting_request = 9;
+  optional SettingResponse setting_response = 10;
+}
+
+message SettingChangeRequest {
+  optional bool is_enabled = 1;
+}
+
+message SettingChangeResponse {
+  required SettingChangeResponse.Response response = 1;
+
+  enum Response {
+    ERROR = 0;
+    SUCCESS = 1;
+    ERROR_MODE_ALREADY_SET = 2;
+  }
+}
+
+message TriggerRequest {
+}
+
+message TriggerResponse {
+  required TriggerResponse.Response response = 1;
+
+  enum Response {
+    ERROR = 0;
+    SUCCESS = 1;
+    ERROR_ALREADY_IN_PROGRESS = 2;
+  }
+}
+
+message DisableRequest {
+}
+
+message DisableResponse {
+  required DisableResponse.Response response = 1;
+
+  enum Response {
+    ERROR = 0;
+    SUCCESS = 1;
+    ERROR_ALREADY_CANCELLED = 2;
+  }
+}
+
+message MovementAlertNotification {
+}
+
+message ResetPINRequest {
+  optional uint32 pin = 1;
+}
+
+message ResetPINResponse {
+  required ResetPINResponse.Response response = 1;
+
+  enum Response {
+    ERROR = 0;
+    SUCCESS = 1;
+  }
+}
+
+message SettingRequest {
+}
+
+message SettingResponse {
+  optional uint32 pin = 1;
+  optional bool is_enabled = 2;
+  optional bool is_triggered = 3;
+}

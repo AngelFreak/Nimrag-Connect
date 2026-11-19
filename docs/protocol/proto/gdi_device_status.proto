@@ -1,0 +1,142 @@
+// Recovered from Garmin Connect 5.31 (11761) com.garmin.proto.generated.GDIDeviceStatus by tools/proto-recover. Field names/numbers are SEEN (from generated constants); types marked "// inferred" where the type could not be read directly.
+// Types, labels, oneofs and enums are read from the FileDescriptorProto embedded in the class; numbers are cross-checked against *_FIELD_NUMBER constants.
+// Original descriptor file name: GDIDeviceStatus.proto
+
+syntax = "proto2";
+
+package GDI.Proto.DeviceStatus;
+
+import "gdi_core.proto";
+
+option java_package = "com.garmin.proto.generated";
+option java_outer_classname = "GDIDeviceStatus";
+option optimize_for = LITE_RUNTIME;
+
+enum RemoteDeviceBatteryStatusBatteryStatus {
+  UNKNOWN_STATUS = 0;
+  NORMAL = 1;
+  LOW = 2;
+  CRITICAL = 3;
+  CHARGING = 4;
+  FULLY_CHARGED = 5;
+  ERROR = 6;
+  LOW_PULSE_OX = 7;
+}
+
+enum PasscodeResponseStatus {
+  PASSCODE_STATUS_ERROR = 0;
+  PASSCODE_STATUS_OK = 1;
+  PASSCODE_STATUS_NFC_DEVICE = 2;
+}
+
+message DeviceStatusService {
+  optional RemoteDeviceBatteryStatusChangedNotification remote_device_battery_status_changed_notification = 1;
+  optional RemoteDeviceBatteryStatusRequest remote_device_battery_status_request = 2;
+  optional RemoteDeviceBatteryStatusResponse remote_device_battery_status_response = 3;
+  optional GetCurrentActivityStatusRequest activity_status_request = 4;
+  optional GetCurrentActivityStatusResponse activity_status_response = 5;
+  optional GetInitialSetupStatusRequest initial_setup_status_request = 6;
+  optional GetInitialSetupStatusResponse initial_setup_status_response = 7;
+  optional DevicePasscodeInvalidAttemptNotification device_passcode_invalid_attempt_notification = 8;
+  optional DeviceUnlockedNotification device_unlocked_notification = 9;
+  optional SetDevicePasscodeRequest set_device_passcode_request = 10;
+  optional SetDevicePasscodeResponse set_device_passcode_response = 11;
+  optional AppInitiatedPasscodeSetNotification app_initiated_passcode_set_notification = 12;
+  optional ResetPasscodeRequest reset_passcode_request = 13;
+  optional ResetPasscodeResponse reset_passcode_response = 14;
+  optional RegionRequiresPasscodeNotification region_requires_passcode_notification = 15;
+}
+
+message CapabilitiesRequest {
+  extend .GDI.Proto.Core.FeatureCapabilitiesRequest {
+    optional CapabilitiesRequest device_status_request = 19;
+  }
+}
+
+message CapabilitiesResponse {
+  optional bool initial_setup_status_support = 1;
+  extend .GDI.Proto.Core.FeatureCapabilitiesResponse {
+    optional CapabilitiesResponse device_status_response = 19;
+  }
+}
+
+message RemoteDeviceBatteryStatusChangedNotification {
+  optional RemoteDeviceBatteryStatusBatteryStatus status = 1;
+}
+
+message RemoteDeviceBatteryStatusRequest {
+}
+
+message RemoteDeviceBatteryStatusResponse {
+  required RemoteDeviceBatteryStatusResponse.ResponseStatus status = 1;
+  optional uint32 current_battery_level = 2;
+  optional RemoteDeviceBatteryStatusBatteryStatus battery_status = 3;
+  optional uint32 estimated_hours_remaining = 4;
+
+  enum ResponseStatus {
+    UNKNOWN_RESPONSE_STATUS = 0;
+    OK = 1;
+    NO_REMOTE_DEVICE = 2;
+  }
+}
+
+message GetCurrentActivityStatusRequest {
+}
+
+message GetCurrentActivityStatusResponse {
+  optional GetCurrentActivityStatusResponse.ActivityStatus activity_status = 1;
+
+  enum ActivityStatus {
+    OFF = 0;
+    STOPPED = 1;
+    PAUSED = 2;
+    ON = 3;
+  }
+}
+
+message GetInitialSetupStatusRequest {
+}
+
+message GetInitialSetupStatusResponse {
+  optional GetInitialSetupStatusResponse.InitialSetupStatus initial_setup_status = 1 [default = IN_INITIAL_SETUP];
+
+  enum InitialSetupStatus {
+    IN_INITIAL_SETUP = 0;
+    SETUP_COMPLETE = 1;
+    IN_SETUP_APPLYING_BACKUP = 2;
+  }
+}
+
+message DevicePasscodeInvalidAttemptNotification {
+  optional uint32 attempts_remaining = 1;
+}
+
+message DeviceUnlockedNotification {
+}
+
+message SetDevicePasscodeRequest {
+  required string passcode = 1;
+}
+
+message SetDevicePasscodeResponse {
+  optional PasscodeResponseStatus response_status = 1;
+}
+
+message AppInitiatedPasscodeSetNotification {
+  optional AppInitiatedPasscodeSetNotification.Source source = 1;
+
+  enum Source {
+    GARMIN_PAY = 0;
+    DEVICE_SETTINGS = 1;
+  }
+}
+
+message ResetPasscodeRequest {
+}
+
+message ResetPasscodeResponse {
+  optional PasscodeResponseStatus response_status = 1;
+}
+
+message RegionRequiresPasscodeNotification {
+}

@@ -1,0 +1,95 @@
+// Recovered from Garmin Connect 5.31 (11761) com.garmin.proto.generated.GDIDive by tools/proto-recover. Field names/numbers are SEEN (from generated constants); types marked "// inferred" where the type could not be read directly.
+// Types, labels, oneofs and enums are read from the FileDescriptorProto embedded in the class; numbers are cross-checked against *_FIELD_NUMBER constants.
+// Original descriptor file name: GDIDive.proto
+
+syntax = "proto2";
+
+package GDI.Proto.Dive;
+
+import "gdi_event_sharing.proto";
+
+option java_package = "com.garmin.proto.generated";
+option java_outer_classname = "GDIDive";
+option optimize_for = LITE_RUNTIME;
+
+message DiveActivityListRequest {
+}
+
+message DiveActivity {
+  optional uint32 identifier = 1;
+  optional uint32 sport = 2;
+  optional uint32 sub_sport = 3;
+  optional uint32 dive_time_utc = 4;
+  optional uint32 dive_time_seconds = 5;
+  optional uint32 max_depth_mm = 6;
+}
+
+message DiveActivityListResponse {
+  optional DiveActivityListResponse.Status status = 1;
+  repeated DiveActivity activities = 2;
+
+  enum Status {
+    UNKNOWN = 0;
+    OK = 1;
+    FAILED = 2;
+  }
+}
+
+message ReleaseDivesForUploadRequest {
+  repeated uint32 activity_identifiers = 1;
+}
+
+message ReleaseDivesForUploadResponse {
+  optional ReleaseDivesForUploadResponse.Status status = 1;
+
+  enum Status {
+    UNKNOWN = 0;
+    OK = 1;
+    FAILED = 2;
+  }
+}
+
+message DiveService {
+  optional DiveActivityListRequest dive_activity_list_request = 1;
+  optional DiveActivityListResponse dive_activity_list_response = 2;
+  optional ReleaseDivesForUploadRequest release_dives_for_upload_request = 3;
+  optional ReleaseDivesForUploadResponse release_dives_for_upload_response = 4;
+}
+
+message DiveReadinessResults {
+  optional fixed32 timestamp_utc = 1 [default = 4294967295];
+  optional uint32 score = 2 [default = 255];
+  optional uint32 feedback_phrase = 3 [default = 0];
+  optional uint32 classification = 4 [default = 0];
+  optional uint32 classification_factor_sleep = 5 [default = 0];
+  optional uint32 classification_factor_sleep_history = 6 [default = 0];
+  optional uint32 classification_factor_body_battery = 7 [default = 0];
+  optional uint32 classification_factor_training = 8 [default = 0];
+  optional uint32 classification_factor_recovery_time = 9 [default = 0];
+  optional uint32 classification_factor_dive_history = 10 [default = 0];
+  optional uint32 classification_factor_jetlag = 11 [default = 0];
+  optional bool dcs_warning = 12 [default = false];
+  optional bool no_sleep_data = 13 [default = true];
+  optional bool no_recent_dive_history = 14 [default = true];
+  optional bool classification_blocked = 15 [default = false];
+  optional bool residual_tissue_load = 16 [default = false];
+  optional bool recent_gauge_dive = 17 [default = false];
+  optional uint32 classification_factor_recent_dive = 18 [default = 0];
+  optional uint32 sleep_score = 101 [default = 255];
+  optional uint32 sleep_quality = 102 [default = 0];
+  optional uint32 sleep_history_quality = 103 [default = 0];
+  optional uint32 body_battery = 104 [default = 255];
+  optional uint32 training_status = 105 [default = 0];
+  optional uint32 recovery_time_min = 106 [default = 0];
+  optional uint32 jetlag_severity = 107 [default = 0];
+  optional uint32 cns = 108 [default = 0];
+  optional uint32 otus = 109 [default = 0];
+  optional uint32 last_dive_timestamp_utc = 110 [default = 4294967295];
+}
+
+message DiveReadinessChangedNotification {
+  optional DiveReadinessResults dive_readiness_results = 1;
+  extend .GDI.Proto.EventSharing.AlertNotification {
+    optional DiveReadinessChangedNotification dive_readiness_changed = 1010;
+  }
+}

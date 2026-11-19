@@ -1,0 +1,155 @@
+// Recovered from Garmin Connect 5.31 (11761) com.garmin.proto.generated.GDIGenericItemTransferProto by tools/proto-recover. Field names/numbers are SEEN (from generated constants); types marked "// inferred" where the type could not be read directly.
+// Types, labels, oneofs and enums are read from the FileDescriptorProto embedded in the class; numbers are cross-checked against *_FIELD_NUMBER constants.
+// Original descriptor file name: GDIGenericItemTransfer.proto
+
+syntax = "proto2";
+
+package GDI.Proto.GenericItemTransfer;
+
+import "gdi_data_types.proto";
+
+option java_package = "com.garmin.proto.generated";
+option java_outer_classname = "GDIGenericItemTransferProto";
+option optimize_for = LITE_RUNTIME;
+
+enum SessionEndReason {
+  COMPLETE = 1;
+  ERROR = 2;
+  TIMEOUT = 3;
+  USER_CANCEL = 4;
+  SHUTDOWN = 5;
+  RESTART = 6;
+  APP_RESTRICTION = 7;
+  APP_CLOSE = 8;
+}
+
+message GenericItemTransferService {
+  optional ArbitraryItemRequest arbitrary_item_request = 1;
+  optional ArbitraryItemResponse arbitrary_item_response = 2;
+  optional ItemListRequest item_list_request = 3;
+  optional ItemListResponse item_list_response = 4;
+  optional ItemRequest item_data_request = 5;
+  optional ItemResponse item_data_response = 6;
+  optional CancelSessionRequest cancel_session_request = 9;
+  optional CancelSessionResponse cancel_session_response = 10;
+  optional SessionCompletedNotification session_completed_notification = 11;
+}
+
+message DataTypeConfig {
+  extensions 100 to max;
+}
+
+message DataTypeStatus {
+  extensions 100 to max;
+}
+
+message GenericItem {
+  optional uint32 data_transfer_id = 1;
+  optional uint32 data_transfer_size = 2;
+  extensions 100 to max;
+}
+
+message GenericItemReference {
+  optional .GDI.Proto.DataTypes.UUID uuid = 1;
+  extensions 100 to max;
+}
+
+message ArbitraryItemRequest {
+  optional DataTypeConfig config = 1;
+  optional uint32 item_request_count = 2;
+}
+
+message ArbitraryItemResponse {
+  required ArbitraryItemResponse.Status status = 1;
+  optional DataTypeStatus data_type_status = 2;
+  optional uint32 session_id = 3;
+  optional uint32 max_request_count = 4 [default = 1];
+
+  enum Status {
+    SUCCESS = 1;
+    ABORT = 2;
+    ERROR = 3;
+    UNSUPPORTED_DATA_TYPE = 4;
+    UNSUPPORTED_REQUEST_TYPE = 5;
+    DATA_TYPE_IS_BUSY = 6;
+    SYSTEM_IS_BUSY = 7;
+    TRANSFER_LIMIT = 8;
+  }
+}
+
+message ItemListRequest {
+  optional uint32 session_id = 1;
+  optional DataTypeConfig config = 2;
+  optional uint32 list_offset = 3;
+  optional uint32 max_item_ref_count = 4;
+}
+
+message ItemListResponse {
+  required ItemListResponse.Status status = 1;
+  optional DataTypeStatus data_type_status = 2;
+  optional uint32 session_id = 3;
+  repeated GenericItemReference items = 4;
+  optional uint32 max_request_count = 5 [default = 1];
+  optional uint32 next_list_offset = 6;
+
+  enum Status {
+    SUCCESS = 1;
+    NO_ITEMS = 2;
+    ABORT = 3;
+    ERROR = 4;
+    INVALID_SESSION_ID = 5;
+    INVALID_LIST_OFFSET = 6;
+    WRONG_SESSION_TYPE = 7;
+    UNSUPPORTED_DATA_TYPE = 8;
+    UNSUPPORTED_REQUEST_TYPE = 9;
+    DATA_TYPE_IS_BUSY = 10;
+    SYSTEM_IS_BUSY = 11;
+    TRANSFER_LIMIT = 12;
+  }
+}
+
+message ItemRequest {
+  optional uint32 session_id = 1;
+  repeated GenericItemReference items = 6;
+}
+
+message ItemResponse {
+  required ItemResponse.Status status = 1;
+  optional DataTypeStatus data_type_status = 2;
+  optional uint32 session_id = 3;
+  repeated GenericItem items = 4;
+  repeated GenericItemReference invalid_items = 5;
+  optional uint32 max_request_count = 6;
+
+  enum Status {
+    SUCCESS = 1;
+    INVALID_ITEM = 2;
+    ABORT = 3;
+    ERROR = 4;
+    INVALID_SESSION_ID = 5;
+    UNSUPPORTED_REQUEST_TYPE = 6;
+    REQUEST_TOO_LARGE = 7;
+  }
+}
+
+message SessionCompletedNotification {
+  required uint32 session_id = 1;
+  required SessionEndReason reason = 2;
+  optional DataTypeStatus data_type_status = 3;
+}
+
+message CancelSessionRequest {
+  required uint32 session_id = 1;
+  optional SessionEndReason reason = 2;
+  optional DataTypeStatus data_type_status = 3;
+}
+
+message CancelSessionResponse {
+  required CancelSessionResponse.Status status = 1;
+
+  enum Status {
+    SUCCESS = 1;
+    ERROR = 2;
+    INVALID_SESSION_ID = 3;
+  }
+}

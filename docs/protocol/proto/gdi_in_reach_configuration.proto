@@ -1,0 +1,56 @@
+// Recovered from Garmin Connect 5.31 (11761) com.garmin.proto.generated.GDIInReachConfiguration by tools/proto-recover. Field names/numbers are SEEN (from generated constants); types marked "// inferred" where the type could not be read directly.
+// Types, labels, oneofs and enums are read from the FileDescriptorProto embedded in the class; numbers are cross-checked against *_FIELD_NUMBER constants.
+// Original descriptor file name: GDIInReachConfiguration.proto
+
+syntax = "proto2";
+
+package GDI.Proto.InReachConfiguration;
+
+import "gdi_data_types.proto";
+
+option java_package = "com.garmin.proto.generated";
+option java_outer_classname = "GDIInReachConfiguration";
+option optimize_for = LITE_RUNTIME;
+
+enum ConfigureStatus {
+  ERROR_UNKNOWN = 1;
+  ERROR_INVALID_UUID = 2;
+  DOWNLOADING = 3;
+  PARSING = 4;
+  PARSE_ERROR = 5;
+  OBJECT_ERROR = 6;
+  SUCCESS = 7;
+}
+
+message Service {
+  optional ConfigureRequest configure_request = 1;
+  optional ConfigureResponse configure_response = 2;
+  optional StatusRequest status_request = 3;
+  optional StatusResponse status_response = 4;
+}
+
+message ConfigureRequest {
+  optional .GDI.Proto.DataTypes.UUID uuid = 1;
+  optional .GDI.Proto.DataTypes.DataTransferItem configuration_file = 2;
+}
+
+message ConfigureResponse {
+  optional ConfigureResponse.Status status = 1;
+
+  enum Status {
+    ERROR_UNKNOWN = 1;
+    ERROR_INVALID_UUID = 2;
+    ERROR_INVALID_CONFIG = 3;
+    ERROR_CURRENTLY_PROCESSING = 4;
+    ERROR_SAME_UUID = 5;
+    OK = 6;
+  }
+}
+
+message StatusRequest {
+  optional .GDI.Proto.DataTypes.UUID uuid = 1;
+}
+
+message StatusResponse {
+  optional ConfigureStatus status = 1;
+}

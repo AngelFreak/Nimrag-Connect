@@ -1,0 +1,49 @@
+// Recovered from Garmin Connect 5.31 (11761) com.garmin.proto.generated.GDIBluetoothClassic by tools/proto-recover. Field names/numbers are SEEN (from generated constants); types marked "// inferred" where the type could not be read directly.
+// Types, labels, oneofs and enums are read from the FileDescriptorProto embedded in the class; numbers are cross-checked against *_FIELD_NUMBER constants.
+// Original descriptor file name: GDIBluetoothClassic.proto
+
+syntax = "proto2";
+
+package GDI.Proto.BluetoothClassic;
+
+import "gdi_event_sharing.proto";
+
+option java_package = "com.garmin.proto.generated";
+option java_outer_classname = "GDIBluetoothClassic";
+option optimize_for = LITE_RUNTIME;
+
+message ProfileConnection {
+  optional ProfileConnection.Profile profile = 1;
+  optional ProfileConnection.State state = 2;
+
+  enum Profile {
+    HFP = 0;
+    A2DP_SINK = 1;
+    SPP = 2;
+  }
+
+  enum State {
+    CONNECTED = 0;
+    DISCONNECTED = 1;
+  }
+}
+
+message Handsfree {
+  optional Handsfree.State state = 1;
+
+  enum State {
+    HFP_VOICE_RECOGNITION_STARTING = 0;
+    HFP_VOICE_RECOGNITION_STARTED = 1;
+    HFP_VOICE_RECOGNITION_STOPPED = 2;
+    HFP_VOICE_RECOGNITION_FAILED_TO_START = 3;
+  }
+}
+
+message StateChange {
+  optional bytes connection_identifier = 1;
+  optional ProfileConnection connection = 2;
+  optional Handsfree handsfree = 3;
+  extend .GDI.Proto.EventSharing.AlertNotification {
+    optional StateChange state_change = 1005;
+  }
+}

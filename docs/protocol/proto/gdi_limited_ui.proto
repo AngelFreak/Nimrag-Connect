@@ -1,0 +1,129 @@
+// Recovered from Garmin Connect 5.31 (11761) com.garmin.proto.generated.GDILimitedUi by tools/proto-recover. Field names/numbers are SEEN (from generated constants); types marked "// inferred" where the type could not be read directly.
+// Types, labels, oneofs and enums are read from the FileDescriptorProto embedded in the class; numbers are cross-checked against *_FIELD_NUMBER constants.
+// Original descriptor file name: GDILimitedUi.proto
+
+syntax = "proto2";
+
+package GDI.Proto.LimitedUi;
+
+import "gdi_core.proto";
+
+option java_package = "com.garmin.proto.generated";
+option java_outer_classname = "GDILimitedUi";
+option optimize_for = LITE_RUNTIME;
+
+enum AlertType {
+  INVALID = 0;
+  STEP_GOAL = 1;
+  INTENSITY_MINUTES_GOAL = 2;
+  FLOORS_GOAL = 3;
+  PUSHES_GOAL = 4;
+  MOVE = 5;
+  STRESS = 6;
+  ABNORMAL_HIGH_HR = 7;
+  ABNORMAL_LOW_HR = 8;
+  JET_LAG = 9;
+  SOFTWARE_UPDATED = 10;
+  CHARGE_BATTERY = 11;
+  SLEEP_SCORE_READY = 12;
+  FITNESS_AGE_CHANGE = 13;
+  VO2_MAX_CHANGE = 14;
+  BROADCAST_HR = 15;
+  BEDTIME_APPROACHING = 16;
+}
+
+message CapabilitiesRequest {
+  extend .GDI.Proto.Core.FeatureCapabilitiesRequest {
+    optional CapabilitiesRequest limited_ui_request = 37;
+  }
+}
+
+message CapabilitiesResponse {
+  repeated AlertType supported_alerts = 1;
+  extend .GDI.Proto.Core.FeatureCapabilitiesResponse {
+    optional CapabilitiesResponse limited_ui_response = 37;
+  }
+}
+
+message AlertNotification {
+  optional AlertType type = 1;
+  optional uint32 data = 2;
+  optional AlertNotification.GoalData goal_data = 3;
+
+  message GoalData {
+    optional uint32 goal = 1;
+    optional uint32 multiple = 2;
+    optional uint32 day_streak = 3;
+  }
+}
+
+message LogPermissionRequest {
+}
+
+message LogPermissionResponse {
+  optional bool is_allowed = 1;
+}
+
+message EndSleepRequest {
+}
+
+message EndSleepResponse {
+  optional EndSleepResponse.SleepStatus response = 1;
+
+  enum SleepStatus {
+    INVALID_STATUS = 0;
+    SUCCESS = 1;
+    FAILURE_NOT_SLEEPING = 2;
+    FAILURE_OTHER = 3;
+  }
+}
+
+message Service {
+  optional AlertNotification alert_notification = 1;
+  optional LogPermissionRequest log_permission_request = 2;
+  optional LogPermissionResponse log_permission_response = 3;
+  optional EndSleepRequest end_sleep_request = 4;
+  optional EndSleepResponse end_sleep_response = 5;
+  optional FavoriteSportsNotification favorite_sports_notification = 6;
+  optional FavoriteSportsRequest favorite_sports_request = 7;
+  optional FavoriteSportsResponse favorite_sports_response = 8;
+  optional DistanceCalibrationRequest distance_calibration_request = 9 [deprecated = true];
+  optional DistanceCalibrationResponse distance_calibration_response = 10 [deprecated = true];
+  optional DistanceCalibrationCancelNotification distance_calibration_notification = 11 [deprecated = true];
+  optional DistanceCalibrationNotification distance_calibration_notification_v2 = 12;
+  optional DistanceCalibrationCancelNotification distance_calibration_cancel_notification = 13;
+}
+
+message FavoriteSportsNotification {
+  repeated FitSport favorite_sports = 1;
+}
+
+message FavoriteSportsRequest {
+}
+
+message FavoriteSportsResponse {
+  repeated FitSport favorite_sports = 1;
+}
+
+message FitSport {
+  required uint32 fit_sport = 1;
+  required uint32 fit_sub_sport = 2;
+}
+
+message DistanceCalibrationRequest {
+  optional uint32 initial_distance_m = 1;
+}
+
+message DistanceCalibrationResponse {
+  optional uint32 final_distance_m = 1;
+}
+
+message DistanceCalibrationNotification {
+  required uint32 id = 1;
+  optional bool is_initial_calibration = 2;
+  required uint32 distance_m = 3;
+  optional FitSport activity_type = 4;
+}
+
+message DistanceCalibrationCancelNotification {
+}

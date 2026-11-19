@@ -1,0 +1,70 @@
+// Recovered from Garmin Connect 5.31 (11761) com.garmin.proto.generated.GDIInstantInput by tools/proto-recover. Field names/numbers are SEEN (from generated constants); types marked "// inferred" where the type could not be read directly.
+// Types, labels, oneofs and enums are read from the FileDescriptorProto embedded in the class; numbers are cross-checked against *_FIELD_NUMBER constants.
+// Original descriptor file name: GDIInstantInput.proto
+
+syntax = "proto2";
+
+package GDI.Proto.InstantInput;
+
+option java_package = "com.garmin.proto.generated";
+option java_outer_classname = "GDIInstantInput";
+option optimize_for = LITE_RUNTIME;
+
+enum CommandResult {
+  UNKNOWN = 0;
+  SUCCESS = 1;
+  FAILURE = 2;
+}
+
+message InstantInputService {
+  optional InstantInputMessage input_content = 1;
+  optional InstantInputStartRequest start_request = 2;
+  optional InstantInputStartResponse start_response = 3;
+  optional InstantInputEndRequest end_request = 4;
+  optional InstantInputEndResponse end_response = 5;
+  optional InstantInputRestartRequest restart_request = 6;
+  optional InstantInputSyncRequest sync_request = 7;
+}
+
+message InstantInputMessage {
+  optional string content = 1;
+  optional uint32 content_size = 2;
+}
+
+message InstantInputStartRequest {
+  optional uint32 code_page = 1;
+  optional uint32 max_size = 2;
+  optional string content = 3;
+  optional uint32 content_size = 4;
+  optional InstantInputStartRequest.Command command = 5;
+
+  enum Command {
+    UNKNOWN = 0;
+    RENAME = 1;
+    POI_SEARCH = 2;
+  }
+}
+
+message InstantInputRestartRequest {
+}
+
+message InstantInputSyncRequest {
+}
+
+message InstantInputStartResponse {
+  optional CommandResult result = 1;
+}
+
+message InstantInputEndRequest {
+  optional InstantInputEndRequest.Command command = 1;
+
+  enum Command {
+    UNKNOWN = 0;
+    CANCEL = 1;
+    CONFIRM = 2;
+  }
+}
+
+message InstantInputEndResponse {
+  optional CommandResult result = 1;
+}

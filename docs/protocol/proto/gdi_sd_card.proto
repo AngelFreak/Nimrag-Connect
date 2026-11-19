@@ -1,0 +1,84 @@
+// Recovered from Garmin Connect 5.31 (11761) com.garmin.proto.generated.GDISDCard by tools/proto-recover. Field names/numbers are SEEN (from generated constants); types marked "// inferred" where the type could not be read directly.
+// Types, labels, oneofs and enums are read from the FileDescriptorProto embedded in the class; numbers are cross-checked against *_FIELD_NUMBER constants.
+// Original descriptor file name: GDISDCard.proto
+
+syntax = "proto2";
+
+package GDI.Proto.SDCard;
+
+import "gdi_core.proto";
+
+option java_package = "com.garmin.proto.generated";
+option java_outer_classname = "GDISDCard";
+option optimize_for = LITE_RUNTIME;
+
+message Service {
+  optional SDCardFormatRequest sd_format_request = 1;
+  optional SDCardFormatResponse sd_format_response = 2;
+  optional SDCardFormatNotification sd_format_notification = 3;
+  optional SDCardErrorNotification sd_error_notification = 4;
+  optional SDCardTimeRemainingRequest sd_time_remaining_request = 5;
+  optional SDCardTimeRemainingResponse sd_time_remaining_response = 6;
+  optional SDCardTimeRemainingNotification sd_time_remaining_notification = 7;
+}
+
+message SDCardFormatRequest {
+}
+
+message SDCardFormatStatus {
+  optional SDCardFormatStatus.FormatStatus status = 1;
+
+  enum FormatStatus {
+    UNKNOWN = 0;
+    FORMAT_FAIL = 1;
+    FORMAT_SUCCESS = 2;
+  }
+}
+
+message SDCardFormatResponse {
+  optional SDCardFormatStatus status = 1;
+}
+
+message SDCardFormatNotification {
+  optional SDCardFormatStatus status = 1;
+}
+
+message SDCardErrorNotification {
+  optional SDCardErrorNotification.Error error = 1;
+
+  enum Error {
+    UNKNOWN = 0;
+    NONE = 1;
+    NO_CARD = 2;
+    BAD_FORMAT = 3;
+    FULL = 4;
+    SPACE_LOW = 5;
+    SPEED = 6;
+    SIZE = 7;
+    UNDER_PERF = 8;
+    NOT_USABLE = 9;
+  }
+}
+
+message SDCardTimeRemainingRequest {
+}
+
+message SDCardTimeRemainingStatus {
+  optional SDCardTimeRemainingStatus.TimeRemainingStatus status = 1;
+
+  enum TimeRemainingStatus {
+    UNKNOWN = 0;
+    AVAILABLE = 1;
+    UNAVAILABLE = 2;
+  }
+}
+
+message SDCardTimeRemainingResponse {
+  optional SDCardTimeRemainingStatus status = 1;
+  optional uint32 time_remaining_minutes = 2;
+}
+
+message SDCardTimeRemainingNotification {
+  optional SDCardTimeRemainingStatus status = 1;
+  optional uint32 time_remaining_minutes = 2;
+}

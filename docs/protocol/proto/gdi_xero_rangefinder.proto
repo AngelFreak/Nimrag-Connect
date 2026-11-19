@@ -1,0 +1,31 @@
+// Recovered from Garmin Connect 5.31 (11761) com.garmin.proto.generated.GDIXeroRangefinder by tools/proto-recover. Field names/numbers are SEEN (from generated constants); types marked "// inferred" where the type could not be read directly.
+// Types, labels, oneofs and enums are read from the FileDescriptorProto embedded in the class; numbers are cross-checked against *_FIELD_NUMBER constants.
+// Original descriptor file name: GDIXeroRangefinder.proto
+
+syntax = "proto2";
+
+package GDI.Proto.XeroRangefinder;
+
+import "gdi_event_sharing.proto";
+
+option java_package = "com.garmin.proto.generated";
+option java_outer_classname = "GDIXeroRangefinder";
+option optimize_for = LITE_RUNTIME;
+
+message Service {
+}
+
+message MeasurementNotification {
+  optional float measured_distance_m = 1;
+  optional float heading_deg = 2;
+  optional float inclination_deg = 3;
+  optional float temperature_c = 4;
+  optional float pressure_mb = 5;
+  optional float humidity_percent = 6;
+  optional float wind_speed_1_mps = 7;
+  optional float wind_speed_2_mps = 8;
+  optional float wind_direction_deg = 9;
+  extend .GDI.Proto.EventSharing.AlertNotification {
+    optional MeasurementNotification measurement = 1026;
+  }
+}

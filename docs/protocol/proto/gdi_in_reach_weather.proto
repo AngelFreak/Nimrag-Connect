@@ -1,0 +1,371 @@
+// Recovered from Garmin Connect 5.31 (11761) com.garmin.proto.generated.GDIInReachWeather by tools/proto-recover. Field names/numbers are SEEN (from generated constants); types marked "// inferred" where the type could not be read directly.
+// Types, labels, oneofs and enums are read from the FileDescriptorProto embedded in the class; numbers are cross-checked against *_FIELD_NUMBER constants.
+// Original descriptor file name: GDIInReachWeather.proto
+
+syntax = "proto2";
+
+package GDI.Proto.InReachWeather;
+
+import "gdi_data_types.proto";
+import "gdi_generic_item_transfer.proto";
+
+option java_package = "com.garmin.proto.generated";
+option java_outer_classname = "GDIInReachWeather";
+option optimize_for = LITE_RUNTIME;
+
+extend .GDI.Proto.GenericItemTransfer.DataTypeConfig {
+  optional DataTypeConfigExt config_ext = 103;
+}
+extend .GDI.Proto.GenericItemTransfer.DataTypeStatus {
+  optional DataTypeStatusExt status_ext = 103;
+}
+extend .GDI.Proto.GenericItemTransfer.GenericItemReference {
+  optional GenericItemReferenceExt item_ref_ext = 103;
+}
+
+enum ForecastDayOfWeek {
+  FORECAST_DAY_OF_WEEK_INVALID = 0;
+  FORECAST_DAY_OF_WEEK_SUNDAY = 1;
+  FORECAST_DAY_OF_WEEK_MONDAY = 2;
+  FORECAST_DAY_OF_WEEK_TUESDAY = 3;
+  FORECAST_DAY_OF_WEEK_WEDNESDAY = 4;
+  FORECAST_DAY_OF_WEEK_THURSDAY = 5;
+  FORECAST_DAY_OF_WEEK_FRIDAY = 6;
+  FORECAST_DAY_OF_WEEK_SATURDAY = 7;
+}
+
+enum WeatherIcon {
+  WEATHER_ICON_INVALID = 0;
+  WEATHER_ICON_CLEAR_DAY = 1;
+  WEATHER_ICON_CLEAR_NIGHT = 2;
+  WEATHER_ICON_CLOUDY = 3;
+  WEATHER_ICON_PARTLY_CLOUDY_DAY = 4;
+  WEATHER_ICON_PARTLY_CLOUDY_NIGHT = 5;
+  WEATHER_ICON_FOG = 6;
+  WEATHER_ICON_RAIN = 7;
+  WEATHER_ICON_SNOW = 8;
+  WEATHER_ICON_SLEET = 9;
+  WEATHER_ICON_HAIL = 10;
+  WEATHER_ICON_THUNDERSTORM = 11;
+  WEATHER_ICON_WINDY = 12;
+  WEATHER_ICON_TORNADO = 13;
+  WEATHER_ICON_MOSTLY_CLOUDY = 14;
+  WEATHER_ICON_WINTRY_MIX = 15;
+  WEATHER_ICON_HAZY = 16;
+  WEATHER_ICON_SCATTERED_SHOWERS = 17;
+  WEATHER_ICON_SCATTERED_THUNDERSTORMS = 18;
+  WEATHER_ICON_UNKNOWN_PRECIPITATION = 19;
+  WEATHER_ICON_LIGHT_RAIN = 20;
+  WEATHER_ICON_HEAVY_RAIN = 21;
+  WEATHER_ICON_LIGHT_SNOW = 22;
+  WEATHER_ICON_HEAVY_SNOW = 23;
+  WEATHER_ICON_LIGHT_RAIN_SNOW = 24;
+  WEATHER_ICON_HEAVY_RAIN_SNOW = 25;
+  WEATHER_ICON_RAIN_SNOW = 26;
+  WEATHER_ICON_PARTLY_CLEAR = 27;
+  WEATHER_ICON_MOSTLY_CLEAR = 28;
+  WEATHER_ICON_LIGHT_SHOWERS = 29;
+  WEATHER_ICON_SHOWERS = 30;
+  WEATHER_ICON_HEAVY_SHOWERS = 31;
+  WEATHER_ICON_CHANCE_OF_SHOWERS = 32;
+  WEATHER_ICON_CHANCE_OF_THUNDERSTORMS = 33;
+  WEATHER_ICON_MIST = 34;
+  WEATHER_ICON_DUST = 35;
+  WEATHER_ICON_DRIZZLE = 36;
+  WEATHER_ICON_SMOKE = 37;
+  WEATHER_ICON_ICE = 38;
+  WEATHER_ICON_SAND = 39;
+  WEATHER_ICON_SQUALL = 40;
+  WEATHER_ICON_SANDSTORM = 41;
+  WEATHER_ICON_VOLCANIC_ASH = 42;
+  WEATHER_ICON_HAZE = 43;
+  WEATHER_ICON_FAIR = 44;
+  WEATHER_ICON_HURRICANE = 45;
+  WEATHER_ICON_TROPICAL_STORM = 46;
+  WEATHER_ICON_CHANCE_OF_SNOW = 47;
+  WEATHER_ICON_CHANCE_OF_RAIN_SNOW = 48;
+  WEATHER_ICON_CLOUDY_CHANCE_OF_RAIN = 49;
+  WEATHER_ICON_CLOUDY_CHANCE_OF_SNOW = 50;
+  WEATHER_ICON_CLOUDY_CHANCE_OF_RAIN_SNOW = 51;
+  WEATHER_ICON_FLURRIES = 52;
+  WEATHER_ICON_FREEZING_RAIN = 53;
+  WEATHER_ICON_ICE_SNOW = 54;
+  WEATHER_ICON_THIN_CLOUDS = 55;
+}
+
+enum Precipitation {
+  PRECIPITATION_UNKNOWN = 0;
+  PRECIPITATION_NONE = 1;
+  PRECIPITATION_RAIN = 2;
+  PRECIPITATION_SNOW = 3;
+  PRECIPITATION_SLEET = 4;
+}
+
+enum ForecastAirQuality {
+  FORECAST_AIR_QUALITY_INVALID = 0;
+  FORECAST_AIR_QUALITY_GOOD = 1;
+  FORECAST_AIR_QUALITY_MODERATE = 2;
+  FORECAST_AIR_QUALITY_UNHEALTHY_SENSITIVE = 3;
+  FORECAST_AIR_QUALITY_UNHEALTHY = 4;
+  FORECAST_AIR_QUALITY_VERY_UNHEALTHY = 5;
+  FORECAST_AIR_QUALITY_HAZARDOUS = 6;
+}
+
+message InReachWeatherService {
+  optional CapabilitiesRequest capabilities_request = 1;
+  optional CapabilitiesResponse capabilities_response = 2;
+  optional RequestForecastRequest request_forecast_request = 3;
+  optional RequestForecastResponse request_forecast_response = 4;
+  optional SyncRequest sync_request = 5;
+  optional SyncResponse sync_response = 6;
+  optional SubscribeRequest subscribe_request = 7;
+  optional SubscribeResponse subscribe_response = 8;
+  optional LocationModifiedNotification location_modified_notification = 9;
+  optional ForecastStatusNotification forecast_status_notification = 10;
+}
+
+message Capabilities {
+  optional uint32 max_protocol_version = 1 [default = 1];
+  repeated Forecast.Type forecast_types = 2;
+  repeated Forecast.Provider forecast_providers = 3;
+  optional uint32 max_location_count = 4;
+  repeated Forecast.Type sync_forecast_types = 5;
+}
+
+message Location {
+  optional .GDI.Proto.DataTypes.UUID uuid = 1;
+  optional bool deleted = 2 [default = false];
+  optional fixed32 modified_time = 3;
+  optional .GDI.Proto.DataTypes.ScPoint point = 4;
+  optional string name = 5;
+}
+
+message Forecast {
+  required .GDI.Proto.DataTypes.UUID uuid = 1;
+  optional .GDI.Proto.DataTypes.UUID location_uuid = 2;
+  optional .GDI.Proto.DataTypes.ScPoint point = 3;
+  optional Forecast.Type type = 4;
+  optional Forecast.Provider provider = 5;
+  optional Forecast.Status status = 6;
+  optional Forecast.RequestError request_error = 7;
+  optional bool read = 8;
+  optional fixed32 modified_time = 9;
+  optional fixed32 issued_time = 10;
+  optional fixed32 end_time = 11;
+  optional sint32 zone_offset1_minutes = 12;
+  optional fixed32 zone_offset2_start_time = 13;
+  optional sint32 zone_offset2_minutes = 14;
+  optional fixed32 created_time = 15;
+
+  enum Type {
+    FORECAST_TYPE_INVALID = 0;
+    INREACH_BASIC = 1;
+    INREACH_PREMIUM = 2;
+    INREACH_MARINE = 3;
+    WBL_LAND = 4;
+  }
+
+  enum Provider {
+    FORECAST_PROVIDER_UNKNOWN = 0;
+    DARK_SKY = 1;
+    OCENS = 2;
+    METEOBLUE = 3;
+  }
+
+  enum Status {
+    FORECAST_STATUS_UNKNOWN = 0;
+    REQUEST_ERROR = 1;
+    WAITING_FOR_GPS = 2;
+    QUEUED = 3;
+    WAITING_FOR_REPLY = 4;
+    RECEIVED = 5;
+  }
+
+  enum RequestError {
+    FORECAST_REQUEST_ERROR_UNKNOWN = 0;
+    GENERIC_REQUEST_ERROR = 1;
+    REQUEST_NOT_SENT = 2;
+    RESPONSE_TIMEOUT = 3;
+    NO_COVERAGE = 4;
+    DECODE_ERROR = 5;
+    SERVER_CONNECTION_FAILED = 6;
+    SERVER_ERROR = 7;
+    SERVER_RETRIES_EXCEEDED = 8;
+  }
+}
+
+message ForecastDaySummary {
+  required fixed32 start_time = 1;
+  optional WeatherIcon icon = 2;
+  optional float high_temp_c = 3;
+  optional float low_temp_c = 4;
+  optional Precipitation precip_type = 5;
+  optional uint32 precip_chance_percent = 6;
+  optional uint32 precip_amount_mm = 7;
+  optional uint32 snowfall_amount_mm = 8;
+  optional ForecastDayOfWeek day_of_week = 9;
+  optional fixed32 sunrise_time = 10;
+  optional fixed32 sunset_time = 11;
+}
+
+message LandForecastDetail {
+  required fixed32 detail_time = 1;
+  optional WeatherIcon icon = 2;
+  optional float temperature_c = 3;
+  optional float feels_like_temp_c = 4;
+  optional float pressure_millibar = 5;
+  optional float wind_speed_mps = 6;
+  optional float gust_speed_mps = 7;
+  optional uint32 wind_bearing_degrees = 8;
+  optional uint32 humidity_percent = 9;
+  optional uint32 cloud_cover_percent = 10;
+  optional Precipitation precip_type = 11;
+  optional uint32 precip_chance_percent = 12;
+  optional uint32 precip_amount_mm = 13;
+  optional uint32 snowfall_amount_mm = 14;
+  optional float uv_index = 15;
+  optional float dew_point_c = 16;
+  optional ForecastAirQuality air_quality = 17;
+  optional float visibility_meters = 18;
+  optional bool is_night = 19;
+  optional float cloud_ceiling_height_m = 20;
+}
+
+message MarineForecastDetail {
+  required fixed32 detail_time = 1;
+  optional float visibility_meters = 2;
+  optional float wind_speed_mps = 3;
+  optional float gust_speed_mps = 4;
+  optional uint32 wind_bearing_degrees = 5;
+  optional uint32 current_bearing_degrees = 6;
+  optional float current_speed_mps = 7;
+  optional uint32 wave_bearing_degrees = 8;
+  optional float wave_height_meters = 9;
+  optional uint32 wave_period_seconds = 10;
+}
+
+message CapabilitiesRequest {
+  optional Capabilities capabilities = 1;
+}
+
+message CapabilitiesResponse {
+  optional Capabilities capabilities = 1;
+}
+
+message RequestForecastRequest {
+  optional Location location = 1;
+  repeated Forecast.Type forecast_types = 2;
+}
+
+message RequestForecastResponse {
+  required RequestForecastResponse.Status status = 1;
+  repeated Forecast forecasts = 2;
+
+  enum Status {
+    UNKNOWN_STATUS = 0;
+    OK = 1;
+    GENERIC_ERROR = 2;
+    NOT_IMPLEMENTED = 3;
+    NOT_ACTIVATED = 4;
+    DELETED_LOCATION = 5;
+    UNSUPPORTED_FORECAST_TYPE = 6;
+    EXCLUSIVE_FORECAST_TYPES = 7;
+    LOCATION_LIMIT_REACHED = 8;
+    DUPLICATE_FORECAST_TYPE = 9;
+    LAND_FORECAST_TYPE_REQUIRED = 10;
+    FAILED_TO_GET_GPS_POSITION = 11;
+    LOCATION_FIELDS_MISSING = 12;
+    FAILED_TO_CREATE_LOCATION = 13;
+    COORDINATES_MISSING = 14;
+    UNSUPPORTED_BY_PLAN = 15;
+  }
+}
+
+message SyncRequestInfo {
+  optional uint32 protocol_version = 1 [default = 1];
+  optional .GDI.Proto.DataTypes.UUID app_uuid = 2;
+  optional SyncRequestInfo.SyncType sync_type = 3 [default = INCREMENTAL];
+
+  enum SyncType {
+    FULL = 1;
+    INCREMENTAL = 2;
+  }
+}
+
+message SyncRequest {
+  optional SyncRequestInfo request_info = 1;
+  optional fixed32 modified_time = 2;
+}
+
+message SyncResponse {
+  required SyncResponse.Status status = 1;
+
+  enum Status {
+    UNKNOWN_STATUS = 0;
+    OK = 1;
+    UP_TO_DATE = 2;
+    GENERIC_ERROR = 3;
+    BUSY = 4;
+    UNSUPPORTED_PROTOCOL_VERSION = 5;
+    MISSING_INFO = 6;
+  }
+}
+
+message SubscribeRequest {
+  optional bool want_location_modified = 1 [default = false];
+  optional bool want_forecast_status = 2 [default = false];
+}
+
+message SubscribeResponse {
+  required SubscribeResponse.Status status = 1;
+
+  enum Status {
+    UNKNOWN_STATUS = 0;
+    OK = 1;
+    GENERIC_ERROR = 2;
+  }
+}
+
+message LocationModifiedNotification {
+  optional Location location = 1;
+}
+
+message ForecastStatusNotification {
+  repeated Forecast forecasts = 1;
+}
+
+message LocationsAndForecastsQuery {
+  optional fixed32 modified_after = 1;
+}
+
+message ForecastDetailQuery {
+  optional .GDI.Proto.DataTypes.UUID forecast_uuid = 1;
+  optional fixed32 detail_time_begin = 2;
+  optional fixed32 detail_time_end = 3;
+}
+
+message DataTypeConfigExt {
+  optional SyncRequestInfo request_info = 1;
+  optional LocationsAndForecastsQuery locs_and_forecasts_query = 2;
+  optional ForecastDetailQuery forecast_detail_query = 3;
+}
+
+message DataTypeStatusExt {
+  optional DataTypeStatusExt.Status status = 1;
+
+  enum Status {
+    UNKNOWN_STATUS = 0;
+    UNSUPPORTED_PROTOCOL_VERSION = 1;
+    UNSUPPORTED_QUERY = 2;
+    MISSING_INFO = 3;
+    FORECAST_NOT_FOUND = 4;
+  }
+}
+
+message GenericItemReferenceExt {
+  optional Location location = 1;
+  optional Forecast forecast = 2;
+  optional ForecastDaySummary day_summary = 3;
+  optional LandForecastDetail land_detail = 4;
+  optional MarineForecastDetail marine_detail = 5;
+}

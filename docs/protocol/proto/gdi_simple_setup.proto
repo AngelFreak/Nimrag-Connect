@@ -1,0 +1,66 @@
+// Recovered from Garmin Connect 5.31 (11761) com.garmin.proto.generated.GDISimpleSetup by tools/proto-recover. Field names/numbers are SEEN (from generated constants); types marked "// inferred" where the type could not be read directly.
+// Types, labels, oneofs and enums are read from the FileDescriptorProto embedded in the class; numbers are cross-checked against *_FIELD_NUMBER constants.
+// Original descriptor file name: GDISimpleSetup.proto
+
+syntax = "proto2";
+
+package GDI.Proto.SimpleSetup;
+
+option java_package = "com.garmin.proto.generated";
+option java_outer_classname = "GDISimpleSetup";
+option optimize_for = LITE_RUNTIME;
+
+enum FeatureType {
+  ACTIVITY_PROFILE_MIGRATION = 1;
+  SENSOR_PRE_PAIR = 2;
+  POPULAR_PROFILES = 3;
+  ALTERNATE_MODE = 4;
+}
+
+enum SensorType {
+  HEART_RATE = 1;
+  POWER = 2;
+  CADENCE = 3;
+}
+
+enum AlternateMode {
+  NONE = 0;
+  GYM = 1;
+}
+
+message SimpleSetupService {
+  optional SupportedFeaturesListRequest supported_feature_list_request = 1;
+  optional SupportedFeaturesListResponse supported_feature_list_response = 2;
+  optional SelectedRestoreListNotification selected_restore_list_notification = 3;
+  optional SelectedSensorListNotification selected_sensor_list_notification = 4;
+  optional AlternateModeRequest alternate_mode_request = 5;
+  optional AlternateModeResponse alternate_mode_response = 6;
+}
+
+message SupportedFeaturesListRequest {
+}
+
+message SupportedFeaturesListResponse {
+  repeated Feature feature = 1;
+}
+
+message SelectedRestoreListNotification {
+  repeated FeatureType feature_type = 1;
+}
+
+message SelectedSensorListNotification {
+  repeated SensorType sensor_type = 1;
+}
+
+message AlternateModeRequest {
+  optional AlternateMode requested_mode = 1;
+}
+
+message AlternateModeResponse {
+  optional AlternateMode current_mode = 1;
+}
+
+message Feature {
+  required FeatureType feature_type = 1;
+  repeated int32 compatibility_id = 2;
+}

@@ -1,0 +1,10 @@
+# Reverse-engineering inputs and outputs (Garmin APKs, decompiled code, captures with personal data)
+/private/
+# Tool state
+/.claude-flow/
+/.swarm/
+# Rust
+target/
+# Node
+node_modules/
+dist/

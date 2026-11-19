@@ -1,0 +1,257 @@
+// Recovered from Garmin Connect 5.31 (11761) com.garmin.proto.generated.GDIRemoteDeviceManagement by tools/proto-recover. Field names/numbers are SEEN (from generated constants); types marked "// inferred" where the type could not be read directly.
+// Types, labels, oneofs and enums are read from the FileDescriptorProto embedded in the class; numbers are cross-checked against *_FIELD_NUMBER constants.
+// Original descriptor file name: GDIRemoteDeviceManagement.proto
+
+syntax = "proto2";
+
+package GDI.Proto.RemoteDeviceManagement;
+
+import "gdi_core.proto";
+
+option java_package = "com.garmin.proto.generated";
+option java_outer_classname = "GDIRemoteDeviceManagement";
+option optimize_for = LITE_RUNTIME;
+
+enum SensorType {
+  NOT_SUPPORTED = 0;
+  ALL = 1;
+  HEART_RATE = 2;
+  XCEL_STRENGTH_SENSOR = 3;
+  XCEL_STRENGTH_CRADLE = 4;
+}
+
+message Service {
+  optional PairedListRequest paired_list_request = 1;
+  optional PairedListResponse paired_list_response = 2;
+  optional RemovePairedDeviceRequest remove_paired_device_request = 3;
+  optional RemovePairedDeviceResponse remove_paired_device_response = 4;
+  optional StartPairingRequest start_pairing_request = 5;
+  optional StartPairingResponse start_pairing_response = 6;
+  optional CancelPairingRequest cancel_pairing_request = 7;
+  optional CancelPairingResponse cancel_pairing_response = 8;
+  optional PairingCommandNotification pairing_command_notification = 9;
+  optional PairingStatusNotification remote_device_status_notification = 10;
+  optional PairingCompleteNotification pairing_complete_notification = 11;
+  optional StartScanRequest start_scan_request = 12;
+  optional StartScanResponse start_scan_response = 13;
+  optional ScanResultsNotification scan_results_notification = 14;
+  optional AccessoryConnectionNotification accessory_connection_notification = 15;
+  optional StopScanRequest stop_scan_request = 16;
+  optional StopScanResponse stop_scan_response = 17;
+  optional SetEnablePairedDeviceRequest set_enable_paired_device_request = 18;
+  optional SetEnablePairedDeviceResponse set_enable_paired_device_response = 19;
+  optional AccessoryStatusRequest accessory_status_request = 20;
+  optional AccessoryStatusResponse accessory_status_response = 21;
+}
+
+message MacAddress {
+  optional bytes mac_address = 1;
+  optional MacAddress.AddressType address_type = 2;
+
+  enum AddressType {
+    UNKNOWN = 0;
+    PUBLIC = 1;
+    RANDOM_STATIC = 2;
+    PRIVATE_RESOLVABLE = 3;
+    PRIVATE_NON_RESOLVABLE = 4;
+  }
+}
+
+message Device {
+  optional string device_name = 1;
+  optional MacAddress mac_address = 2;
+  optional SensorType sensor_type = 3;
+  optional Device.SensorStatus status = 4;
+  optional uint32 battery_percent = 5;
+  optional string sw_version = 6;
+  optional string serial_number = 7;
+  optional string model_number = 8;
+  optional string manufacturer = 9;
+
+  enum SensorStatus {
+    UNKNOWN = 0;
+    SEARCHING = 1;
+    NO_CONNECTIONS = 2;
+    NOT_CONNECTABLE = 3;
+    REQUIRES_REPAIRING = 4;
+    DISABLED = 5;
+    DISCONNECTED = 6;
+    CONNECTED = 7;
+  }
+}
+
+message PairedListRequest {
+}
+
+message PairedListResponse {
+  repeated Device devices = 1;
+}
+
+message StartPairingRequest {
+  optional MacAddress mac_address = 1;
+}
+
+message StartPairingResponse {
+  optional StartPairingResponse.Result result = 1;
+
+  enum Result {
+    FAIL_OTHER = 0;
+    SUCCESS = 1;
+    FAIL_INVALID_PARAMETER = 2;
+    FAIL_TOO_MANY_PAIRED_DEVICES = 3;
+  }
+}
+
+message PairingCommandNotification {
+  optional PairingCommandNotification.CommandType command = 1;
+  optional PairingCommandNotification.ConnectionType connection_type = 2;
+
+  enum CommandType {
+    NOT_SUPPORTED = 0;
+    ACCEPT_PRIVACY = 1;
+    RETRY_CONNECTION = 2;
+    CONFIRM_CONNECTION_TYPE = 3;
+  }
+
+  enum ConnectionType {
+    UNKNOWN = 0;
+    OPEN = 1;
+    SECURE = 2;
+  }
+}
+
+message PairingStatusNotification {
+  optional PairingStatusNotification.NotificationType type = 1;
+  optional Device device = 2;
+
+  enum NotificationType {
+    UNKNOWN = 0;
+    CONNECTION_FAILED = 1;
+    CONFIRM_CONNECTION_TYPE = 2;
+    CONNECTION_NOT_PRIVATE = 3;
+    PAIRING_MODE_REQUIRED = 4;
+  }
+}
+
+message CancelPairingRequest {
+}
+
+message CancelPairingResponse {
+  optional CancelPairingResponse.Result result = 1;
+
+  enum Result {
+    FAIL = 0;
+    SUCCESS = 1;
+  }
+}
+
+message PairingCompleteNotification {
+  optional PairingCompleteNotification.PairingResult result = 1;
+
+  enum PairingResult {
+    FAIL_OTHER = 0;
+    SUCCESS = 1;
+    FAIL_NO_SPACE = 2;
+    FAIL_DUPLICATE = 3;
+    FAIL_NOT_CONNECTABLE = 4;
+  }
+}
+
+message RemovePairedDeviceRequest {
+  optional MacAddress mac_address = 1;
+}
+
+message RemovePairedDeviceResponse {
+  required RemovePairedDeviceResponse.Result result = 1;
+
+  enum Result {
+    FAIL = 0;
+    SUCCESS = 1;
+  }
+}
+
+message StartScanRequest {
+  optional SensorType sensor_type = 1;
+}
+
+message StartScanResponse {
+  optional StartScanResponse.Result result = 1;
+
+  enum Result {
+    FAIL = 0;
+    SUCCESS = 1;
+  }
+}
+
+message StopScanRequest {
+}
+
+message StopScanResponse {
+  optional StopScanResponse.Result result = 1;
+
+  enum Result {
+    FAIL = 0;
+    SUCCESS = 1;
+  }
+}
+
+message ScanResultsNotification {
+  repeated Device devices = 1;
+}
+
+message SetEnablePairedDeviceRequest {
+  optional bool enabled = 1;
+  optional MacAddress mac_address = 2;
+  optional uint32 unit_id = 3;
+}
+
+message SetEnablePairedDeviceResponse {
+  optional SetEnablePairedDeviceResponse.Result result = 1;
+
+  enum Result {
+    FAIL = 0;
+    SUCCESS = 1;
+  }
+}
+
+message AccessoryConnectionNotification {
+  optional AccessoryConnectionNotification.Result result = 1;
+  optional Device device = 2;
+
+  enum Result {
+    FAIL_OTHER = 0;
+    CONNECTED = 1;
+    FAIL_KEYS_MISSING = 2;
+    DISCONNECTED = 3;
+  }
+}
+
+message AccessoryStatusRequest {
+  optional MacAddress mac_address = 1;
+}
+
+message AccessoryStatusResponse {
+  optional AccessoryStatusResponse.Result result = 1;
+  optional Device device = 2;
+
+  enum Result {
+    FAIL = 0;
+    SUCCESS = 1;
+  }
+}
+
+message CapabilitiesRequest {
+  optional bool set_enable_requests_supported = 1;
+  extend .GDI.Proto.Core.FeatureCapabilitiesRequest {
+    optional CapabilitiesRequest features_request = 31;
+  }
+}
+
+message CapabilitiesResponse {
+  repeated SensorType supported_sensors = 1;
+  optional uint32 max_supported_paired_devices = 2;
+  optional bool read_only_accessory_status = 3;
+  extend .GDI.Proto.Core.FeatureCapabilitiesResponse {
+    optional CapabilitiesResponse features_response = 31;
+  }
+}

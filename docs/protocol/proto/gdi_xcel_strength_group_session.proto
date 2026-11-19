@@ -1,0 +1,229 @@
+// Recovered from Garmin Connect 5.31 (11761) com.garmin.proto.generated.GDIXcelStrengthGroupSession by tools/proto-recover. Field names/numbers are SEEN (from generated constants); types marked "// inferred" where the type could not be read directly.
+// Types, labels, oneofs and enums are read from the FileDescriptorProto embedded in the class; numbers are cross-checked against *_FIELD_NUMBER constants.
+// Original descriptor file name: GDIXcelStrengthGroupSession.proto
+
+syntax = "proto2";
+
+package GDI.Proto.XcelStrengthGroupSession;
+
+option java_package = "com.garmin.proto.generated";
+option java_outer_classname = "GDIXcelStrengthGroupSession";
+option optimize_for = LITE_RUNTIME;
+
+enum StationEditor {
+  STATION_EDITOR_UNKNOWN = 0;
+  STATION_EDITOR_CLIPBOARD = 1;
+  STATION_EDITOR_DISPLAY = 2;
+}
+
+enum StationEditLockAction {
+  STATION_EDIT_LOCK_UNKNOWN = 0;
+  STATION_EDIT_LOCK_ACQUIRE = 1;
+  STATION_EDIT_LOCK_RELEASE = 2;
+}
+
+enum StationEditLockFailureReason {
+  STATION_EDIT_LOCK_FAILURE_UNKNOWN = 0;
+  STATION_EDIT_LOCK_FAILURE_LOCKED_BY_OTHER = 1;
+  STATION_EDIT_LOCK_FAILURE_NOT_LOCK_OWNER = 2;
+  STATION_EDIT_LOCK_FAILURE_INVALID_ACTION = 3;
+}
+
+message Service {
+  optional StateChangeRequest state_change_request = 1;
+  optional StateChangeResponse state_change_response = 2;
+  optional StationSettingRequest station_setting_request = 3;
+  optional StationSettingResponse station_setting_response = 4;
+  optional StationSettingNotification station_setting_notification = 5;
+  optional GroupListRequest group_list_request = 6;
+  optional GroupListResponse group_list_response = 7;
+  optional MetricsNotification metrics_notification = 8;
+  optional SetStartNotification set_start_notification = 9;
+  optional SetEndNotification set_end_notification = 10;
+  optional DisplayStateNotification display_state_notification = 11;
+  optional StationSettingEditLockRequest station_setting_edit_lock_request = 12;
+  optional StationSettingEditLockResponse station_setting_edit_lock_response = 13;
+  optional StationSettingEditLockNotification station_setting_edit_lock_notification = 14;
+}
+
+message StateChangeRequest {
+  optional StateChangeRequest.StateChange change = 1;
+  optional uint32 session_id = 2;
+
+  enum StateChange {
+    UNKNOWN = 0;
+    SETUP = 1;
+    INITIAL_START = 2;
+    PAUSE = 3;
+    RESUME = 4;
+    END = 5;
+  }
+}
+
+message StateChangeResponse {
+  optional StateChangeResponse.FailureReason failure = 1;
+
+  enum FailureReason {
+    UNKNOWN = 0;
+    NO_CHANGE = 1;
+    INVALID = 2;
+  }
+}
+
+message DisplayStateNotification {
+  optional DisplayStateNotification.DisplayState state = 1;
+  optional uint32 session_id = 2;
+
+  enum DisplayState {
+    UNKNOWN = 0;
+    IDLE = 1;
+    SETUP = 2;
+    READY = 3;
+    ACTIVE = 4;
+    PAUSED = 5;
+    ENDING = 6;
+    AWAITING_ASSIGNMENT = 7;
+  }
+}
+
+message VelocityRange {
+  optional float min_m_per_s = 1;
+  optional float max_m_per_s = 2;
+}
+
+message VbtTarget {
+  optional VbtTarget.VbtZone mean_velocity_zone = 1;
+  optional uint32 mean_velocity_loss_percentage = 2;
+  optional VelocityRange mean_velocity_range = 3;
+  optional uint32 peak_velocity_loss_percentage = 4;
+  optional VelocityRange peak_velocity_range = 5;
+  optional uint32 mean_power_loss_percentage = 6;
+
+  enum VbtZone {
+    UNKNOWN = 0;
+    MAX_STRENGTH = 1;
+    ACCELERATIVE_STRENGTH = 2;
+    STRENGTH_SEPED = 3;
+    SPEED_STRENGTH = 4;
+    STRARTING_STRENGTH = 5;
+  }
+}
+
+message RepRange {
+  optional uint32 min = 1;
+  optional uint32 max = 2;
+}
+
+message StationSettings {
+  optional uint32 exercise_category = 1;
+  optional uint32 exercise_subcategory = 2;
+  optional VbtTarget vbt_target = 3;
+  optional RepRange rep_target = 4;
+  optional uint32 duration_s = 5;
+  optional uint32 load_target = 6;
+  optional bool unlock_mode = 7;
+  optional float working_weight_kg = 8;
+  optional string station_name = 9;
+}
+
+message StationSettingRequest {
+  optional StationSettings settings = 1;
+}
+
+message StationSettingResponse {
+  optional bool success = 1;
+  optional StationSettings settings = 2;
+}
+
+message StationSettingNotification {
+  optional StationSettings settings = 1;
+}
+
+message StationSettingEditLockRequest {
+  optional uint32 session_id = 1;
+  optional StationEditLockAction action = 2;
+  optional uint32 request_id = 3;
+}
+
+message StationSettingEditLockResponse {
+  optional StationEditLockFailureReason failure = 1;
+  optional uint32 request_id = 2;
+  optional StationEditor owner = 3;
+}
+
+message StationSettingEditLockNotification {
+  optional uint32 session_id = 1;
+  optional StationEditLockAction action = 2;
+  optional StationEditor owner = 3;
+}
+
+message OneRepMaxData {
+  optional uint32 exercise_category = 1;
+  optional uint32 exercise_subcategory = 2;
+  optional float weight_in_kg = 3;
+}
+
+message AthleteData {
+  optional uint32 id = 1;
+  optional string name = 2;
+  repeated OneRepMaxData one_rep_max_datas = 3;
+}
+
+message GroupData {
+  optional uint32 id = 1;
+  optional string name = 2;
+  repeated AthleteData athletes = 3;
+}
+
+message GroupListRequest {
+  repeated GroupData groups = 1;
+}
+
+message GroupListResponse {
+  optional bool success = 1;
+}
+
+message SetStartNotification {
+  optional uint32 group_id = 1;
+  optional uint32 athlete_id = 2;
+  optional uint32 set_number = 3;
+  optional float working_weight_kg = 4;
+}
+
+message SetEndNotification {
+  optional uint32 group_id = 1;
+  optional uint32 athlete_id = 2;
+  optional uint32 set_number = 3;
+  optional uint32 total_reps = 4;
+  optional float working_weight_kg = 5;
+}
+
+message MetricsNotification {
+  optional uint32 group_id = 1;
+  optional uint32 athlete_id = 2;
+  optional uint32 set_number = 3;
+  optional uint32 rep_number = 4;
+  optional uint32 mean_vel_m_per_s_x100 = 5;
+  optional uint32 peak_vel_m_per_s_x100 = 6;
+  optional uint32 mean_propul_vel_m_per_s_x100 = 7;
+  optional uint32 duration_second_x100 = 8;
+  optional uint32 rom_cm_x100 = 9;
+  optional float peak_power_watt = 10;
+  optional float mean_power_watt = 11;
+  repeated int32 bar_path_points = 12;
+  optional uint32 ecc_mean_vel_m_per_s_x100 = 13;
+  optional uint32 ecc_peak_vel_m_per_s_x100 = 14;
+  optional uint32 ecc_duration_second_x100 = 15;
+  optional uint32 ecc_rom_cm_x100 = 16;
+  optional uint32 avg_mean_vel_m_per_s_x100 = 17;
+  optional uint32 avg_peak_vel_m_per_s_x100 = 18;
+  optional uint32 avg_mean_propul_vel_m_per_s_x100 = 19;
+  optional uint32 avg_duration_second_x100 = 20;
+  optional uint32 avg_rom_cm_x100 = 21;
+  optional float avg_peak_power_watt = 22;
+  optional float avg_mean_power_watt = 23;
+  optional uint32 avg_ecc_mean_vel_m_per_s_x100 = 24;
+  optional uint32 avg_ecc_peak_vel_m_per_s_x100 = 25;
+  optional uint32 avg_ecc_duration_second_x100 = 26;
+  optional uint32 avg_ecc_rom_cm_x100 = 27;
+}

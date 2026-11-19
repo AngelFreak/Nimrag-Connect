@@ -1,0 +1,151 @@
+// Recovered from Garmin Connect 5.31 (11761) com.garmin.proto.generated.GDISwitcherProto by tools/proto-recover. Field names/numbers are SEEN (from generated constants); types marked "// inferred" where the type could not be read directly.
+// Types, labels, oneofs and enums are read from the FileDescriptorProto embedded in the class; numbers are cross-checked against *_FIELD_NUMBER constants.
+// Original descriptor file name: GDISwitcher.proto
+
+syntax = "proto2";
+
+package GDI.Proto.Switcher;
+
+import "gdi_event_sharing.proto";
+
+option java_package = "com.garmin.proto.generated";
+option java_outer_classname = "GDISwitcherProto";
+option optimize_for = LITE_RUNTIME;
+
+message Switcher {
+  optional SwitcherStatusRequest status_request = 1;
+  optional SwitcherStatusResponse status_response = 2;
+  optional SwitcherSettingsChangeRequest status_change_request = 3;
+  optional SwitcherSettingsChangeResponse status_change_response = 4;
+  optional RestoreDefaultsRequest restore_defaults_request = 5;
+  optional RestoreDefaultsResponse restore_defaults_response = 6;
+}
+
+message SwitcherStatusRequest {
+}
+
+message SwitcherStatusResponse {
+  optional SwitcherSettings switcher_settings = 1;
+  optional SwitcherState switcher_state = 2;
+}
+
+message RestoreDefaultsRequest {
+}
+
+message RestoreDefaultsResponse {
+  optional RestoreDefaultsResponse.RestoreDefaultsStatus status = 1;
+
+  enum RestoreDefaultsStatus {
+    SUCCESS = 0;
+    UNKNOWN_ERROR = 1;
+  }
+}
+
+message SwitcherSettingsChangeRequest {
+  optional SwitcherSettings switcher_settings = 1;
+  optional SwitcherState switcher_state = 2;
+}
+
+message SwitcherSettingsChangeResponse {
+  optional SwitcherSettingsChangeResponse.SettingsChangeStatus status = 1;
+
+  enum SettingsChangeStatus {
+    SUCCESS = 0;
+    UNKNOWN_ERROR = 1;
+  }
+}
+
+message SwitcherStatusChangeDetails {
+  optional SwitcherSettings switcher_settings = 1;
+  optional SwitcherState switcher_state = 2;
+  extend .GDI.Proto.EventSharing.AlertNotification {
+    optional SwitcherStatusChangeDetails switcher_details = 1000;
+  }
+}
+
+message SwitcherSettings {
+  repeated SwitchSettings switch_settings = 1;
+  repeated SwitchSettings custom_settings = 2;
+  repeated InputSettings input_settings = 3;
+  optional bool auto_off = 4;
+  optional string name = 5;
+}
+
+message SwitcherState {
+  optional float battery_voltage = 1;
+  optional bool low_voltage_shutdown = 2;
+  optional bool overloaded = 3;
+  optional float temperature = 4;
+  optional uint32 pending_update_version = 5;
+  repeated SwitchState switch_states = 6;
+}
+
+message SwitchState {
+  optional uint32 switch_id = 1;
+  optional float amperage_level = 2;
+  optional bool custom = 3;
+  optional bool enabled = 4;
+  optional bool overloaded = 5;
+}
+
+message SwitchSettings {
+  optional uint32 switch_id = 1;
+  optional uint32 brightness = 2;
+  optional SwitchSettings.SwitchMode mode = 3;
+  optional uint32 on_period = 4;
+  optional uint32 off_period = 5;
+  optional string name = 100;
+  optional uint32 color = 101;
+  optional uint32 icon = 102;
+
+  enum SwitchMode {
+    TOGGLE = 0;
+    MOMENTARY = 1;
+    STROBE = 2;
+  }
+
+  enum Icon {
+    NONE = 0;
+    HEADLIGHT = 1;
+    ADDT_BATTERY = 2;
+    AIR_COMPRESSOR = 3;
+    CB_RADIO = 4;
+    DFF_LOCKS = 5;
+    FAN = 6;
+    FLASHING_LIGHTS = 7;
+    FOG_LIGHT = 8;
+    FRIDGE = 9;
+    GAUGES = 10;
+    HEADLIGHT_R = 11;
+    HEATED_SEATS = 12;
+    HEATERS = 13;
+    INTERIOR_LIGHT = 14;
+    LIGHT_BAR = 15;
+    SOLAR_PANEL = 16;
+    SPEAKERS = 17;
+    STROBE_LIGHT = 18;
+    UNDERCARRIAGE = 19;
+    USB_CHARGER = 20;
+    WIFI = 21;
+    WINCHES = 22;
+  }
+}
+
+message InputSettings {
+  optional uint32 input_id = 1;
+  optional string name = 2;
+  optional bool enabled = 3;
+  repeated InputAction rising_actions = 4;
+  repeated InputAction falling_actions = 5;
+}
+
+message InputAction {
+  optional uint32 switch_id = 1;
+  optional InputAction.ActionType action_type = 2;
+
+  enum ActionType {
+    SWITCH_ON = 0;
+    SWITCH_OFF = 1;
+    DISABLED = 2;
+  }
+}

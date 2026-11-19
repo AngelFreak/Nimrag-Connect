@@ -1,0 +1,160 @@
+// Recovered from Garmin Connect 5.31 (11761) com.garmin.proto.generated.GDIWifiSetupUnified by tools/proto-recover. Field names/numbers are SEEN (from generated constants); types marked "// inferred" where the type could not be read directly.
+// Types, labels, oneofs and enums are read from the FileDescriptorProto embedded in the class; numbers are cross-checked against *_FIELD_NUMBER constants.
+// Original descriptor file name: GDIWifiSetupUnified.proto
+
+syntax = "proto2";
+
+package GDI.Proto.WifiSetupUnified;
+
+import "gdi_core.proto";
+import "wifi_setup_gdi.proto";
+
+option java_package = "com.garmin.proto.generated";
+option java_outer_classname = "GDIWifiSetupUnified";
+option optimize_for = LITE_RUNTIME;
+
+enum WifiMode {
+  WIFI_MODE_UNKNOWN = 0;
+  WIFI_MODE_STA = 1;
+  WIFI_MODE_AP = 2;
+}
+
+message WifiSetupUnifiedService {
+  optional ScanWifiNetworksRequest scan_wifi_networks_request = 1;
+  optional ScanWifiNetworksResponse scan_wifi_networks_response = 2;
+  optional ScanCompleteNotification access_point_scan_complete_notification = 3;
+  optional ConnectToWifiNetworkRequest connect_to_wifi_network_request = 4;
+  optional ConnectToWifiNetworkResponse connect_to_wifi_network_response = 5;
+  optional ConnectToWifiNetworkNotification connect_to_wifi_network_notification = 6;
+  optional SaveWifiNetworkRequest save_wifi_network_request = 7;
+  optional SaveWifiNetworkResponse save_wifi_network_response = 8;
+  optional RemoveWifiNetworkRequest remove_wifi_network_request = 9;
+  optional RemoveWifiNetworkResponse remove_wifi_network_response = 10;
+  optional GetStoredWifiNetworksRequest stored_wifi_networks_request = 11;
+  optional GetStoredWifiNetworksResponse stored_wifi_networks_response = 12;
+  optional MobileCarrierInfoRequest mobile_carrier_info_request = 13;
+  optional MobileCarrierInfoResponse mobile_carrier_info_response = 14;
+  optional SwitchToApModeRequest switch_to_ap_request = 15;
+  optional SwitchToApModeResponse switch_to_ap_response = 16;
+  optional DeviceAPCredentialsRequest get_network_credentials_request = 17;
+  optional DeviceAPCredentialsResponse get_network_credentials_response = 18;
+}
+
+message CapabilitiesRequest {
+  optional Capabilities capabilities = 1;
+  extend .GDI.Proto.Core.FeatureCapabilitiesRequest {
+    optional CapabilitiesRequest features_request = 42;
+  }
+}
+
+message Capabilities {
+  repeated WifiMode supported_wifi_modes = 1;
+}
+
+message CapabilitiesResponse {
+  optional Capabilities capabilities = 1;
+  extend .GDI.Proto.Core.FeatureCapabilitiesResponse {
+    optional CapabilitiesResponse features_response = 42;
+  }
+}
+
+message PasswordGeneration {
+  optional PasswordGeneration.PasswordGenerationStrategy strategy = 1;
+  optional string password_seed = 2;
+
+  enum PasswordGenerationStrategy {
+    PASSWORD_GENERATION_STRATEGY_UNKNOWN = 0;
+    PASSWORD_GENERATION_STRATEGY_USE_EXISTING = 1;
+    PASSWORD_GENERATION_STRATEGY_SEND_EXPLICIT = 2;
+    PASSWORD_GENERATION_STRATEGY_USE_SPECIFIED_SEED = 3;
+  }
+}
+
+message SwitchToApModeRequest {
+  optional PasswordGeneration password_generation = 1;
+  optional .GDI.fitness.WifiBand preferred_band = 2;
+  optional uint32 channel = 3;
+}
+
+message SwitchToApModeResponse {
+  optional bool success = 1;
+  optional .GDI.fitness.StoredAccessPoint device_access_point = 2;
+}
+
+message DeviceAPCredentialsRequest {
+}
+
+message DeviceAPCredentialsResponse {
+  optional .GDI.fitness.StoredAccessPoint device_access_point = 1;
+}
+
+message ConnectToWifiNetworkRequest {
+  optional .GDI.fitness.StoredAccessPoint ap = 1;
+}
+
+message ConnectToWifiNetworkResponse {
+  optional .GDI.fitness.StatusType status = 1;
+}
+
+message ConnectToWifiNetworkNotification {
+  optional string ssid = 1;
+  optional .GDI.fitness.StatusType status = 2;
+}
+
+message ScanWifiNetworksRequest {
+  optional .GDI.fitness.WifiBand band = 1;
+}
+
+message ScanWifiNetworksResponse {
+  optional bool ack = 1;
+}
+
+message ScanCompleteNotification {
+  optional ScanCompleteNotification.Status status = 1;
+  repeated .GDI.fitness.ScannedAccessPoint scanned_aps = 2;
+
+  enum Status {
+    STATUS_UNKNOWN = 0;
+    STATUS_SUCCESS = 1;
+    STATUS_FAILED = 2;
+  }
+}
+
+message GetScannedWifiNetworksRequest {
+}
+
+message GetScannedWifiNetworksResponse {
+  repeated .GDI.fitness.ScannedAccessPoint scanned_aps = 1;
+}
+
+message SaveWifiNetworkRequest {
+  optional .GDI.fitness.StoredAccessPoint ap = 1;
+}
+
+message SaveWifiNetworkResponse {
+  optional bool success = 1;
+}
+
+message RemoveWifiNetworkRequest {
+  optional string ssid = 1;
+}
+
+message RemoveWifiNetworkResponse {
+  optional bool success = 1;
+}
+
+message GetStoredWifiNetworksRequest {
+}
+
+message GetStoredWifiNetworksResponse {
+  optional .GDI.fitness.Limits limits = 1;
+  repeated .GDI.fitness.StoredAccessPoint stored_aps = 2;
+}
+
+message MobileCarrierInfoRequest {
+}
+
+message MobileCarrierInfoResponse {
+  repeated string mobile_country_code = 1;
+  repeated string iso_country_code = 2;
+}

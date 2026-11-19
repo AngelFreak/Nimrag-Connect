@@ -1,0 +1,116 @@
+// Recovered from Garmin Connect 5.31 (11761) com.garmin.proto.generated.GDIConnectIQAppSettingsProto by tools/proto-recover. Field names/numbers are SEEN (from generated constants); types marked "// inferred" where the type could not be read directly.
+// Types, labels, oneofs and enums are read from the FileDescriptorProto embedded in the class; numbers are cross-checked against *_FIELD_NUMBER constants.
+// Original descriptor file name: GDIConnectIQAppSettings.proto
+
+syntax = "proto2";
+
+package GDI.Proto.ConnectIQAppSettings;
+
+option java_package = "com.garmin.proto.generated";
+option java_outer_classname = "GDIConnectIQAppSettingsProto";
+option optimize_for = LITE_RUNTIME;
+
+message ConnectIQAppSettingsService {
+  optional GetAppSettingsRequest get_app_settings_request = 1;
+  optional GetAppSettingsResponse get_app_settings_response = 2;
+  optional SaveAppSettingsRequest save_app_settings_request = 3;
+  optional SaveAppSettingsResponse save_app_settings_response = 4;
+  optional SendAppSettingsRequest send_app_settings_request = 5;
+  optional SendAppSettingsResponse send_app_settings_response = 6;
+  optional OpenAppSettingsRequest open_app_settings_request = 7;
+  optional OpenAppSettingsResponse open_app_settings_response = 8;
+  optional VerifyAppSettingsRequest verify_app_settings_request = 9;
+  optional VerifyAppSettingsResponse verify_app_settings_response = 10;
+  optional VerifiedAppSettingsNotification verified_app_settings_notification = 11;
+}
+
+message GetAppSettingsRequest {
+  required bytes app_identifier = 1;
+}
+
+message GetAppSettingsResponse {
+  required bytes app_identifier = 1;
+  optional GetAppSettingsResponse.Response response = 2;
+
+  enum Response {
+    UNKNOWN_RESPONSE = 0;
+    SUCCESS = 1;
+    APP_NOT_INSTALLED = 2;
+  }
+}
+
+message SendAppSettingsRequest {
+  required bytes app_identifier = 1;
+  optional bytes settings_values = 2;
+}
+
+message SendAppSettingsResponse {
+  optional SendAppSettingsResponse.Response response = 1;
+
+  enum Response {
+    UNKNOWN_RESPONSE = 0;
+    SUCCESS = 1;
+  }
+}
+
+message SaveAppSettingsRequest {
+  required bytes app_identifier = 1;
+  optional bytes settings_values = 2;
+}
+
+message SaveAppSettingsResponse {
+  required bytes app_identifier = 1;
+  optional SaveAppSettingsResponse.Response response = 2;
+
+  enum Response {
+    UNKNOWN_RESPONSE = 0;
+    SUCCESS = 1;
+    FAILED_TO_SAVE = 2;
+  }
+}
+
+message OpenAppSettingsRequest {
+  required bytes store_uuid = 1;
+}
+
+message OpenAppSettingsResponse {
+  required bytes app_identifier = 1;
+  required OpenAppSettingsResponse.ResponseStatus status = 2;
+
+  enum ResponseStatus {
+    UNKNOWN_RESPONSE = 0;
+    SUCCESS = 1;
+  }
+}
+
+message VerifyAppSettingsRequest {
+  required bytes store_uuid = 1;
+  required bytes key = 2;
+  optional bytes value = 3;
+}
+
+message VerifyAppSettingsResponse {
+  required bytes store_uuid = 1;
+  optional VerifyAppSettingsResponse.ResponseStatus status = 2;
+
+  enum ResponseStatus {
+    UNKNOWN = 0;
+    OK = 1;
+    APP_NOT_INSTALLED = 2;
+    APP_CANNOT_RUN = 3;
+  }
+}
+
+message VerifiedAppSettingsNotification {
+  required bytes store_uuid = 1;
+  optional bytes key = 2;
+  optional VerifiedAppSettingsNotification.Result result = 3;
+  optional bytes error = 4;
+
+  enum Result {
+    VERIFIED = 0;
+    UNKNOWN_ERROR = 1;
+    APP_ERROR = 2;
+    VERIFICIATION_FAILED = 3;
+  }
+}

@@ -1,0 +1,155 @@
+// Recovered from Garmin Connect 5.31 (11761) com.garmin.proto.generated.GDILTEProto by tools/proto-recover. Field names/numbers are SEEN (from generated constants); types marked "// inferred" where the type could not be read directly.
+// Types, labels, oneofs and enums are read from the FileDescriptorProto embedded in the class; numbers are cross-checked against *_FIELD_NUMBER constants.
+// Original descriptor file name: GDILTE.proto
+
+syntax = "proto2";
+
+package GDI.Proto.LTE;
+
+import "gdi_data_types.proto";
+
+option java_package = "com.garmin.proto.generated";
+option java_outer_classname = "GDILTEProto";
+option optimize_for = LITE_RUNTIME;
+
+enum LTEServiceProvider {
+  VERIZON = 1;
+  OTHER = 2;
+}
+
+enum LTEModemStatus {
+  UNKNOWN = 0;
+  ON = 1;
+  OFF = 2;
+}
+
+message LTEService {
+  optional LTEDeviceInfoRequest lte_device_info_request = 1;
+  optional LTEDeviceInfoResponse lte_device_info_response = 2;
+  optional LTEDeviceStatusRequest lte_device_status_request = 3;
+  optional LTEDeviceStatusResponse lte_device_status_response = 4;
+  optional LTEServiceActivationNotification lte_service_activation_notification = 5;
+  optional LTEPhoneInfoRequest phone_info_request = 6;
+  optional LTEPhoneInfoResponse phone_info_response = 7;
+  optional LTESubscriptionInfoNotification lte_subscription_info_notification = 8;
+  optional LTESubscriptionInfoRequest lte_subscription_info_request = 9;
+  optional LTESubscriptionInfoResponse lte_subscription_info_response = 10;
+  optional AssistancePlusGeofencingNotification ap_geofencing_notification = 11;
+  optional AssistancePlusValidationNotification ap_validation_notification = 12;
+}
+
+message LTEDeviceInfo {
+  required string imei = 1;
+  required string iccid = 2;
+}
+
+message LTEDeviceInfoRequest {
+}
+
+message LTEDeviceInfoResponse {
+  required LTEDeviceInfoResponse.ResponseStatus response_status = 1;
+  optional LTEDeviceInfo lte_device_info = 2;
+  optional LTEModemStatus modem_status = 3;
+
+  enum ResponseStatus {
+    UNKNOWN = 0;
+    OK = 1;
+    NOT_AN_LTE_DEVICE = 2;
+    ERROR = 3;
+  }
+}
+
+message LTEDeviceStatusRequest {
+  optional uint32 timeout = 1;
+}
+
+message LTEDeviceStatusResponse {
+  required LTEDeviceStatusResponse.ResponseStatus response_status = 1;
+  optional LTEDeviceInfo lte_device_info = 2;
+  optional LTEModemStatus modem_status = 3;
+
+  enum ResponseStatus {
+    UNKNOWN = 0;
+    LTE_ACTIVE = 1;
+    LTE_INACTIVE = 2;
+    NOT_AN_LTE_DEVICE = 3;
+    TIMEOUT = 4;
+    TRY_AGAIN = 5;
+    ERROR = 6;
+  }
+}
+
+message LTEServiceActivationNotification {
+  optional LTEServiceProvider service_provider = 1;
+  optional LTEServiceActivationNotification.ActivationStatus status = 2;
+
+  enum ActivationStatus {
+    STARTED = 0;
+    CANCELLED = 1;
+    SUCCESS = 2;
+  }
+}
+
+message LTEPhoneInfo {
+  optional LTEServiceProvider service_provider = 1;
+}
+
+message LTEPhoneInfoRequest {
+}
+
+message LTEPhoneInfoResponse {
+  required LTEPhoneInfoResponse.ResponseStatus status = 1;
+  optional LTEPhoneInfo phone_info = 2;
+
+  enum ResponseStatus {
+    UNKNOWN = 0;
+    OK = 1;
+    ERROR = 2;
+  }
+}
+
+message LTESubscriptionInfoRequest {
+}
+
+message LTESubscriptionInfoResponse {
+  required LTESubscriptionInfoResponse.ResponseStatus status = 1;
+  optional LTESubscriptionInfo info = 2;
+
+  enum ResponseStatus {
+    UNKNOWN = 0;
+    OK = 1;
+    TIMEOUT = 2;
+    DEVICE_NOT_SUPPORTED = 3;
+  }
+}
+
+message LTESubscriptionInfoNotification {
+  optional LTESubscriptionInfo info = 1;
+}
+
+message LTESubscriptionInfo {
+  optional uint32 device_id = 1;
+  optional bool is_subscribed = 2;
+  optional int64 account_expiration_unix_timestamp = 3;
+  optional LTESubscriptionInfo.SubscriptionStatus subscription_status = 4;
+
+  enum SubscriptionStatus {
+    ACTIVE = 0;
+    INACTIVE = 1;
+    PENDING = 2;
+  }
+}
+
+message AssistancePlusGeofencingNotification {
+  optional MobileCountry country = 1;
+  optional bool assistance_plus_covered = 2;
+}
+
+message AssistancePlusValidationNotification {
+  optional .GDI.Proto.DataTypes.ScPoint location = 1;
+}
+
+message MobileCountry {
+  optional int32 code = 1;
+  optional string name = 2;
+}

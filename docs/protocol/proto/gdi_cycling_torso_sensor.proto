@@ -1,0 +1,37 @@
+// Recovered from Garmin Connect 5.31 (11761) com.garmin.proto.generated.GDICyclingTorsoSensor by tools/proto-recover. Field names/numbers are SEEN (from generated constants); types marked "// inferred" where the type could not be read directly.
+// Types, labels, oneofs and enums are read from the FileDescriptorProto embedded in the class; numbers are cross-checked against *_FIELD_NUMBER constants.
+// Original descriptor file name: GDICyclingTorsoSensor.proto
+
+syntax = "proto2";
+
+package GDI.Proto.CyclingTorsoSensor;
+
+import "gdi_event_sharing.proto";
+
+option java_package = "com.garmin.proto.generated";
+option java_outer_classname = "GDICyclingTorsoSensor";
+option optimize_for = LITE_RUNTIME;
+
+message Service {
+}
+
+message PitchRoll {
+  optional uint32 ts_s = 1;
+  optional float pitch = 2;
+  optional float roll = 3;
+  optional float ahrs_residual = 4;
+}
+
+message Standing {
+  optional uint32 ts_s = 1;
+  optional float vertical_oscillation = 2;
+}
+
+message MeasurementNotification {
+  optional uint32 ts_c = 1;
+  optional PitchRoll pitch_roll = 2;
+  optional Standing standing = 3;
+  extend .GDI.Proto.EventSharing.AlertNotification {
+    optional MeasurementNotification data = 1022;
+  }
+}

@@ -1,0 +1,426 @@
+// Recovered from Garmin Connect 5.31 (11761) com.garmin.proto.generated.GDIXcelSprint by tools/proto-recover. Field names/numbers are SEEN (from generated constants); types marked "// inferred" where the type could not be read directly.
+// Types, labels, oneofs and enums are read from the FileDescriptorProto embedded in the class; numbers are cross-checked against *_FIELD_NUMBER constants.
+// Original descriptor file name: GDIXcelSprint.proto
+
+syntax = "proto2";
+
+package GDI.Proto.XcelSprint;
+
+import "gdi_event_sharing.proto";
+
+option java_package = "com.garmin.proto.generated";
+option java_outer_classname = "GDIXcelSprint";
+option optimize_for = LITE_RUNTIME;
+
+enum StartType {
+  MARK_SET_RANDOM_GO = 0;
+  MARK_SET_GO = 1;
+  READY = 2;
+}
+
+enum DistanceUnit {
+  METERS = 0;
+  YARDS = 1;
+}
+
+message XcelSprintService {
+  optional StartPreviewRequest start_preview_request = 1;
+  optional StartPreviewResponse start_preview_response = 2;
+  optional SensorColorOptionsRequest sensor_color_options_request = 3;
+  optional SensorColorOptionsResponse sensor_color_options_response = 4;
+  optional SprintSettingsRequest sprint_settings_request = 5;
+  optional SprintSettingsResponse sprint_settings_response = 6;
+  optional SensorSettingsRequest sensor_settings_request = 7;
+  optional SensorSettingsResponse sensor_settings_response = 8;
+  optional SettingsNotification settings_notification = 9;
+  optional LastSprintDataRequest last_sprint_data_request = 10;
+  optional LastSprintDataResponse last_sprint_data_response = 11;
+  optional CommandRequest command_request = 12;
+  optional CommandResponse command_response = 13;
+  optional SetSessionTypeRequest set_session_type_request = 14;
+  optional SetSessionTypeResponse set_session_type_response = 22;
+  optional LaneReservationRequest lane_reservation_request = 15;
+  optional LaneReservationResponse lane_reservation_response = 23;
+  optional SprintStartRequest sprint_start_request = 16;
+  optional SprintStartResponse sprint_start_response = 24;
+  optional UwbTimeSyncRequest uwb_time_sync_request = 17;
+  optional UwbTimeSyncResponse uwb_time_sync_response = 18;
+  optional InsStartRequest ins_start_request = 19;
+  optional InsStartResponse ins_start_response = 20;
+  optional CountdownRequest countdown_request = 21;
+  optional CountdownResponse countdown_response = 25;
+  optional MeasureStartRequest measure_start_request = 26;
+  optional MeasureStartResponse measure_start_response = 27;
+  optional StartConsentCheckNotification start_consent_check_notification = 28;
+  optional RegisterClipboardSensorRequest register_clipboard_sensor_request = 29;
+  optional RegisterClipboardSensorResponse register_clipboard_sensor_response = 30;
+  optional LaneControlRequest lane_control_request = 31;
+  optional LaneControlResponse lane_control_response = 32;
+  optional IdentifySensorRequest identify_sensor_request = 33;
+  optional IdentifySensorResponse identify_sensor_response = 34;
+  optional DisconnectNotification disconnect_notification = 35;
+}
+
+message SprintSettings {
+  optional StartType start_type = 1;
+  optional SprintSettings.EndType end_type = 2;
+  optional uint32 end_time_s = 3;
+  optional uint32 end_distance_select = 4;
+  optional DistanceUnit end_distance_select_unit = 5;
+  optional uint32 end_distance_custom = 6;
+  optional DistanceUnit end_distance_custom_unit = 7;
+  optional SprintSettings.StepType step_type = 8;
+  optional uint32 equipment = 9;
+
+  enum EndType {
+    TIME = 0;
+    DISTANCE_SELECT = 1;
+    DISTANCE_CUSTOM = 2;
+  }
+
+  enum StepType {
+    SPRINT = 0;
+    HURDLES = 1;
+    JUMP_APPROACH = 2;
+  }
+
+  enum EquipmentType {
+    BLOCK = 1;
+    PARACHUTE = 2;
+    SLED = 4;
+    WEIGHTED_VEST = 8;
+    WICKET = 16;
+    LADDER = 32;
+  }
+}
+
+message SensorSettings {
+  optional fixed32 color = 1;
+  optional fixed32 pwm_color = 2;
+}
+
+message SensorColorOptionsRequest {
+}
+
+message SensorColorOptionsResponse {
+  repeated fixed32 color_list = 1;
+}
+
+message StartPreviewRequest {
+  optional StartType start_type = 1;
+}
+
+message StartPreviewResponse {
+  required StartPreviewResponse.ResponseStatus status = 1;
+
+  enum ResponseStatus {
+    ERROR = 0;
+    SUCCESS = 1;
+  }
+}
+
+message SprintSettingsRequest {
+  optional SprintSettings sprint_settings = 1;
+}
+
+message SprintSettingsResponse {
+  optional SprintSettings sprint_settings = 1;
+}
+
+message SensorSettingsRequest {
+  optional SensorSettings sensor_settings = 1;
+}
+
+message SensorSettingsResponse {
+  optional SensorSettings sensor_settings = 1;
+}
+
+message SettingsNotification {
+  optional SprintSettings sprint_settings = 1;
+  optional SensorSettings sensor_settings = 2;
+}
+
+message StartConsentCheckNotification {
+}
+
+message HighFrequencyData {
+  repeated uint32 distance = 1 [packed = true];
+  repeated uint32 speed = 2 [packed = true];
+}
+
+message StepData {
+  repeated uint32 distance = 1 [packed = true];
+  repeated uint32 step_length = 6 [packed = true];
+  repeated uint32 speed = 2 [packed = true];
+  repeated sint32 acceleration = 3 [packed = true];
+  repeated uint32 ground_contact_time = 4 [packed = true];
+  repeated uint32 step_frequency_step = 5 [packed = true];
+  repeated StepData.Side side = 7 [packed = true];
+
+  enum Side {
+    RIGHT = 0;
+    LEFT = 1;
+  }
+}
+
+message DataFieldData {
+  optional uint32 distance_100m = 1;
+  optional uint32 avg_speed_1000m_s = 2;
+  optional uint32 time_ms = 3;
+  optional uint32 steps_count = 4;
+  optional uint32 ground_contact_time_10ms = 5;
+  optional uint32 step_length_10mm = 6;
+  optional uint32 max_speed_1000m_s = 7;
+  optional uint32 avg_step_frequency_128rpm = 8;
+  optional uint32 max_step_frequency_128rpm = 9;
+  optional uint32 distance_to_max_speed_100m = 10;
+  optional uint32 gct_percent_100pct = 11;
+  optional sint32 max_acceleration_100m_s2 = 12;
+  optional uint32 sprint_count = 13;
+  optional uint32 steps_to_max_speed_count = 14;
+  optional uint32 reaction_time_10ms = 15;
+}
+
+message SplitData {
+  repeated uint32 time_ms = 1 [packed = true];
+  repeated uint32 distance_100m = 2 [packed = true];
+  repeated uint32 max_speed_1000m_s = 3 [packed = true];
+  repeated sint32 max_acceleration_100m_s2 = 4 [packed = true];
+  repeated uint32 ground_contact_time_10ms = 5 [packed = true];
+  repeated uint32 avg_step_frequency_128rpm = 6 [packed = true];
+  repeated uint32 step_length_10mm = 7 [packed = true];
+}
+
+message LastSprintDataRequest {
+  optional uint32 data_request_type = 1;
+  optional uint32 step_data_request_type = 2;
+
+  enum DataRequestType {
+    HIGH_FREQ_CHART = 1;
+    STEP_CHART = 2;
+    DATA_FIELD = 4;
+    SPLIT_DATA = 8;
+  }
+
+  enum StepDataRequestType {
+    SPEED = 1;
+    ACCELERATION = 2;
+    GROUND_CONTACT_TIME = 4;
+    STEP_FREQUENCY = 8;
+    STEP_LENGTH = 16;
+    SIDE = 32;
+  }
+}
+
+message LastSprintDataResponse {
+  optional DistanceUnit distance_unit = 1;
+  optional HighFrequencyData high_freq_data = 2;
+  optional StepData step_data = 3;
+  optional DataFieldData data_field_data = 4;
+  optional SplitData split_data = 5;
+}
+
+message CommandRequest {
+  optional CommandRequest.Command command = 1;
+
+  enum Command {
+    UNKNOWN = 0;
+    RESERVE_LANE = 1;
+    UNRESERVE_LANE = 2;
+    START_MEASURE = 3;
+    STOP_MEASURE = 4;
+    START_SPRINT = 5;
+    STOP_SPRINT = 6;
+    DELETE_LAST_REP = 7;
+  }
+}
+
+message CommandResponse {
+  optional CommandResponse.FailureReason reason = 1;
+
+  enum FailureReason {
+    UNKNOWN = 0;
+    INVALID_COMMAND = 1;
+    INVALID_STATE = 2;
+    INVALID_ARGUMENT = 3;
+  }
+}
+
+message StateChangeDetails {
+  optional StateChangeDetails.State state = 1;
+  optional StateChangeDetails.Source source = 2;
+  optional StateChangeDetails.Reason reason = 3;
+  optional StateChangeDetails.SessionType session_type = 4;
+  optional bool has_data = 5;
+  optional bool is_watch_connected = 6;
+  optional uint32 sequence_number = 7;
+  optional uint32 sensor_handle = 8;
+
+  enum State {
+    UNKNOWN_STATE = 0;
+    ASSOCIATION = 1;
+    RELEASED = 2;
+    RESERVING = 3;
+    RESERVED = 4;
+    START_POSITION = 5;
+    COUNTDOWN = 6;
+    ACTIVE = 7;
+    PROCESSING = 8;
+    MEASURE = 9;
+  }
+
+  enum Source {
+    UNKNOWN_SOURCE = 0;
+    BASE = 1;
+    SENSOR = 2;
+    LIVE_SESSION = 3;
+    CLIPBOARD = 4;
+  }
+
+  enum Reason {
+    UNKNOWN_REASON = 0;
+    LANES_FULL = 1;
+    UWB_ERROR = 2;
+    CONNECTION_LOST = 3;
+    OUT_OF_RANGE = 4;
+    NO_SPACE_ON_SENSOR = 5;
+    INCOMPATIBLE_SOFTWARE = 6;
+    BASE_RESTRICTED = 7;
+    CONNECTION_TIMED_OUT = 8;
+    SENSOR_SATURATION = 9;
+    IMPROPER_SENSOR_PLACEMENT = 10;
+    NO_KEY = 11;
+    BLE_CONNECTIONS_EXHAUSTED = 12;
+  }
+
+  enum SessionType {
+    UNKNOWN_SESSION = 0;
+    OWNER = 1;
+    GUEST = 2;
+    COACH = 3;
+  }
+}
+
+message ActivityStateNotification {
+  optional StateChangeDetails state_change_details = 1;
+  extend .GDI.Proto.EventSharing.AlertNotification {
+    optional ActivityStateNotification data = 1025;
+  }
+}
+
+message SetSessionTypeRequest {
+  optional StateChangeDetails.SessionType session_type = 1;
+}
+
+message SetSessionTypeResponse {
+}
+
+message LaneReservationRequest {
+  optional LaneReservationRequest.Result result = 1;
+
+  enum Result {
+    UNKNOWN = 0;
+    SUCCESS = 1;
+    LANES_FULL = 2;
+  }
+}
+
+message LaneReservationResponse {
+}
+
+message SprintStartRequest {
+}
+
+message SprintStartResponse {
+}
+
+message UwbTimeSyncRequest {
+  optional fixed32 ssid = 1;
+}
+
+message UwbTimeSyncResponse {
+  optional UwbTimeSyncResponse.Result result = 1;
+
+  enum Result {
+    UNKNOWN = 0;
+    SUCCESS = 1;
+    FAILURE = 2;
+  }
+}
+
+message InsStartRequest {
+  optional fixed32 prng_seed = 1;
+  optional uint32 initial_timestamp_32khz = 2;
+  optional uint32 nominal_period_32khz = 3;
+  optional uint32 crc_iv = 4;
+  optional uint32 sensor_number = 5;
+  optional uint32 sensor_count = 6;
+  optional uint32 channel = 7;
+}
+
+message InsStartResponse {
+  optional InsStartResponse.Result result = 1;
+
+  enum Result {
+    UNKNOWN = 0;
+    SUCCESS = 1;
+    UWB_FAILURE = 2;
+    IMU_FAILURE = 3;
+  }
+}
+
+message CountdownRequest {
+  optional uint32 timestamp_32khz = 1;
+}
+
+message CountdownResponse {
+}
+
+message MeasureStartRequest {
+}
+
+message MeasureStartResponse {
+  optional fixed32 ssid = 1;
+}
+
+message DisconnectNotification {
+}
+
+message RegisterClipboardSensorRequest {
+  repeated bytes sensors_public_keys = 1;
+}
+
+message RegisterClipboardSensorResponse {
+  repeated uint32 sensor_handles = 1 [packed = true];
+}
+
+message LaneControlRequest {
+  repeated uint32 reserve_sensors = 1 [packed = false];
+  repeated uint32 release_sensors = 2 [packed = false];
+}
+
+message LaneControlResponse {
+}
+
+message IdentifySensorRequest {
+  optional uint32 sensor_handle = 1;
+}
+
+message IdentifySensorResponse {
+  optional IdentifySensorResponse.ErrorCode error = 1;
+
+  enum ErrorCode {
+    UNKNOWN = 0;
+    SUCCESS = 1;
+    SENSOR_NOT_CONNECTED = 2;
+  }
+}
+
+message SensorStateNotification {
+  repeated uint32 invisible_sensors = 1 [packed = true];
+  repeated uint32 visible_sensors = 2 [packed = true];
+  repeated uint32 sensors_in_lane = 3 [packed = false];
+  extend .GDI.Proto.EventSharing.AlertNotification {
+    optional SensorStateNotification sensor_state_event = 1027;
+  }
+}

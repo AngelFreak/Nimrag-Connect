@@ -1,0 +1,27 @@
+// Recovered from Garmin Connect 5.31 (11761) com.garmin.proto.generated.GDICompanionRangefinder by tools/proto-recover. Field names/numbers are SEEN (from generated constants); types marked "// inferred" where the type could not be read directly.
+// Types, labels, oneofs and enums are read from the FileDescriptorProto embedded in the class; numbers are cross-checked against *_FIELD_NUMBER constants.
+// Original descriptor file name: GDICompanionRangefinder.proto
+
+syntax = "proto2";
+
+package GDI.Proto.CompanionRangefinder;
+
+import "gdi_event_sharing.proto";
+
+option java_package = "com.garmin.proto.generated";
+option java_outer_classname = "GDICompanionRangefinder";
+option optimize_for = LITE_RUNTIME;
+
+message CompanionRangefinderService {
+}
+
+message RangefinderMeasurementNotification {
+  optional float measured_distance = 1;
+  optional bool flag_locked = 2;
+  optional float plays_like_distance = 3;
+  optional float flat_distance = 4;
+  optional float device_pitch = 5;
+  extend .GDI.Proto.EventSharing.AlertNotification {
+    optional RangefinderMeasurementNotification rangefinder_measurement = 1007;
+  }
+}

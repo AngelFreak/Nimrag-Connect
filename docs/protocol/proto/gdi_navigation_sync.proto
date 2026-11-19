@@ -1,0 +1,91 @@
+// Recovered from Garmin Connect 5.31 (11761) com.garmin.proto.generated.GDINavigationSyncProto by tools/proto-recover. Field names/numbers are SEEN (from generated constants); types marked "// inferred" where the type could not be read directly.
+// Types, labels, oneofs and enums are read from the FileDescriptorProto embedded in the class; numbers are cross-checked against *_FIELD_NUMBER constants.
+// Original descriptor file name: GDINavigationSync.proto
+
+syntax = "proto2";
+
+package GDI.Proto.NavigationSync;
+
+import "gdi_event_sharing.proto";
+import "gdi_data_types.proto";
+
+option java_package = "com.garmin.proto.generated";
+option java_outer_classname = "GDINavigationSyncProto";
+option optimize_for = LITE_RUNTIME;
+
+enum NavType {
+  POSITION = 0;
+  SAVED_WAYPOINT = 1;
+  SAVED_LINE = 2;
+  TRACBACK = 3;
+}
+
+enum NavResponseStatus {
+  NEED_ITEM = 0;
+  CALCULATING = 1;
+  FAILED = 2;
+}
+
+message Service {
+  optional StartNavigationRequest start_request = 1;
+  optional StartNavigationResponse start_response = 2;
+  optional StopNavigationRequest stop_request = 3;
+  optional StopNavigationResponse stop_response = 4;
+}
+
+message StartNavigationRequest {
+  optional NavigationItem navigation_item = 1;
+}
+
+message StartNavigationResponse {
+  optional NavResponseStatus nav_response_status = 1;
+}
+
+message StopNavigationRequest {
+}
+
+message StopNavigationResponse {
+  optional bool nav_stopped = 1;
+}
+
+message NavigationDetails {
+  optional State state = 1;
+  extend .GDI.Proto.EventSharing.AlertNotification {
+    optional NavigationDetails navigation_details = 1002;
+  }
+}
+
+message State {
+  optional State.StateType state = 1;
+  optional uint32 next_nav_index = 2;
+  optional uint32 distance_to_dest = 3;
+  optional uint32 time_to_dest = 4;
+  optional uint32 bearing = 5;
+  optional float moving_avg = 6;
+  optional float speed = 7;
+  optional uint32 moving_time = 8;
+  optional bool off_course = 9;
+  optional float off_course_dist = 10;
+  optional uint32 heading = 11;
+
+  enum StateType {
+    START_NAV = 0;
+    STOP_NAV = 1;
+    CALCULATING = 2;
+    FAILED = 3;
+    DEVICE_BUSY = 4;
+    GPS_OFF = 5;
+    GPS_NO_FIX = 6;
+    CALC_TRUNCATED = 7;
+    CALC_OVERFLOW = 8;
+    CALC_CANCELED = 9;
+    INV_START = 10;
+    INV_END = 11;
+  }
+}
+
+message NavigationItem {
+  optional NavType navigation_type = 1;
+  optional .GDI.Proto.DataTypes.ScPoint position = 2;
+  extensions 1000 to max;
+}

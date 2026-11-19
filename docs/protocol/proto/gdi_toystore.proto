@@ -1,0 +1,74 @@
+// Recovered from Garmin Connect 5.31 (11761) com.garmin.proto.generated.ToystoreProto by tools/proto-recover. Field names/numbers are SEEN (from generated constants); types marked "// inferred" where the type could not be read directly.
+// Types, labels, oneofs and enums are read from the FileDescriptorProto embedded in the class; numbers are cross-checked against *_FIELD_NUMBER constants.
+// Original descriptor file name: GDIToystore.proto
+
+syntax = "proto2";
+
+package GDI.Proto.Toystore;
+
+import "gdi_core.proto";
+import "gdi_connect_iq_http.proto";
+
+option java_package = "com.garmin.proto.generated";
+option java_outer_classname = "ToystoreProto";
+option optimize_for = LITE_RUNTIME;
+
+message ToystoreService {
+  optional ConnectIQRunCodeRequest run_code_request = 1;
+  optional ConnectIQRunCodeResponse run_code_response = 2;
+  optional .GDI.Proto.ConnectIQHTTP.ConnectIQOAuthRequest connect_iq_oauth_request = 3;
+  optional .GDI.Proto.ConnectIQHTTP.ConnectIQOAuthResponse connect_iq_oauth_response = 4;
+  optional .GDI.Proto.ConnectIQHTTP.ConnectIQOAuthCompleteRequest connect_iq_oauth_complete_request = 5;
+  optional .GDI.Proto.ConnectIQHTTP.ConnectIQOAuthCompleteResponse connect_iq_oauth_complete_response = 6;
+  optional ConnectIQPurchaseRequest purchase_request = 7;
+  optional ConnectIQPurchaseResponse purchase_response = 8;
+}
+
+message ConnectIQRunCodeRequest {
+  optional bytes app_uuid = 1;
+  optional ConnectIQRunCodeRequest.RunType run_type = 2;
+
+  enum RunType {
+    AUTHENTICATION = 0;
+  }
+}
+
+message ConnectIQRunCodeResponse {
+  optional ConnectIQRunCodeResponse.ResponseStatus status = 1;
+
+  enum ResponseStatus {
+    OK = 0;
+    UNKNOWN_ERROR = 1;
+    APP_NOT_INSTALLED = 2;
+    NOT_ENOUGH_MEMORY = 3;
+  }
+}
+
+message ConnectIQPurchaseRequest {
+  required bytes manifest_uuid = 1;
+  required bytes store_uuid = 2;
+  optional string app_name = 3;
+  optional string promo_code = 4;
+}
+
+message ConnectIQPurchaseResponse {
+  optional ConnectIQPurchaseResponse.Status status = 1;
+
+  enum Status {
+    OK = 0;
+    NOT_HANDLED = 1;
+  }
+}
+
+message CapabilitiesRequest {
+  extend .GDI.Proto.Core.FeatureCapabilitiesRequest {
+    optional CapabilitiesRequest toy_store_request = 21;
+  }
+}
+
+message CapabilitiesResponse {
+  optional bool app_purchase_support = 1;
+  extend .GDI.Proto.Core.FeatureCapabilitiesResponse {
+    optional CapabilitiesResponse toy_store_response = 21;
+  }
+}

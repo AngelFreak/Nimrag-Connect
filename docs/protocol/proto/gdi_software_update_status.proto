@@ -1,0 +1,115 @@
+// Recovered from Garmin Connect 5.31 (11761) com.garmin.proto.generated.GDISoftwareUpdateStatus by tools/proto-recover. Field names/numbers are SEEN (from generated constants); types marked "// inferred" where the type could not be read directly.
+// Types, labels, oneofs and enums are read from the FileDescriptorProto embedded in the class; numbers are cross-checked against *_FIELD_NUMBER constants.
+// Original descriptor file name: GDISoftwareUpdateStatus.proto
+
+syntax = "proto2";
+
+package GDI.Proto.SoftwareUpdateStatus;
+
+import "gdi_event_sharing.proto";
+
+option java_package = "com.garmin.proto.generated";
+option java_outer_classname = "GDISoftwareUpdateStatus";
+option optimize_for = LITE_RUNTIME;
+
+message Service {
+  optional CheckForUpdatesRequest check_for_updates_request = 1;
+  optional CheckForUpdatesResponse check_for_updates_response = 2;
+  optional DownloadUpdatesRequest download_updates_request = 3;
+  optional DownloadUpdatesResponse download_updates_response = 4;
+  optional DownloadProgressNotification download_progress_notification = 5;
+  optional DownloadReadyNotification download_ready_notification = 6;
+  optional ApplyUpdatesRequest apply_updates_request = 7;
+  optional ApplyUpdatesResponse apply_updates_response = 8;
+  optional UpdateStatusRequest update_status_request = 9;
+  optional UpdateStatusResponse update_status_response = 10;
+  optional UpdateCompletedNotification update_completed_notification = 11;
+  optional AcknowledgeCompletedNotification acknowledge_completed_notification = 12;
+  optional AutoUpdateConfigRequest auto_update_config_request = 13;
+  optional AutoUpdateConfigResponse auto_update_config_response = 14;
+}
+
+message CheckForUpdatesRequest {
+}
+
+message CheckForUpdatesResponse {
+  optional CheckForUpdatesResponse.Status status = 1;
+
+  enum Status {
+    UNKNOWN = 0;
+    CHECKING = 1;
+    UPDATES_FOUND = 2;
+    UPDATES_NOT_FOUND = 3;
+  }
+}
+
+message DownloadUpdatesRequest {
+}
+
+message DownloadUpdatesResponse {
+  optional bool download_started = 1;
+}
+
+message DownloadProgressNotification {
+  optional uint32 percent_completed = 1;
+  extend .GDI.Proto.EventSharing.AlertNotification {
+    optional DownloadProgressNotification data = 1028;
+  }
+}
+
+message DownloadReadyNotification {
+  optional uint32 update_count = 1;
+  optional uint32 estimated_install_time_s = 2;
+  extend .GDI.Proto.EventSharing.AlertNotification {
+    optional DownloadReadyNotification data = 1029;
+  }
+}
+
+message ApplyUpdatesRequest {
+}
+
+message ApplyUpdatesResponse {
+  optional bool applying_updates = 1;
+}
+
+message UpdateStatusRequest {
+}
+
+message UpdateStatusResponse {
+  optional UpdateStatusResponse.Status status = 1;
+  optional bool updates_pending_on_disk = 2;
+  optional uint32 current_bundle_version = 3;
+
+  enum Status {
+    UNKNOWN = 0;
+    IDLE = 1;
+    CHECKING = 2;
+    DOWNLOADING = 3;
+    DOWNLOAD_COMPLETE = 4;
+    APPLYING = 5;
+  }
+}
+
+message UpdateCompletedNotification {
+  optional uint32 previous_version = 1;
+  optional uint32 new_version = 2;
+  optional uint32 updated_part_numbers = 3;
+  extend .GDI.Proto.EventSharing.AlertNotification {
+    optional UpdateCompletedNotification data = 1030;
+  }
+}
+
+message AcknowledgeCompletedNotification {
+}
+
+message AutoUpdateConfigMessage {
+  optional bool enabled = 1;
+}
+
+message AutoUpdateConfigRequest {
+  optional AutoUpdateConfigMessage msg = 1;
+}
+
+message AutoUpdateConfigResponse {
+  optional AutoUpdateConfigMessage msg = 1;
+}

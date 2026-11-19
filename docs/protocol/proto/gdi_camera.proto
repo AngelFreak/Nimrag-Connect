@@ -1,0 +1,227 @@
+// Recovered from Garmin Connect 5.31 (11761) com.garmin.proto.generated.GDICamera by tools/proto-recover. Field names/numbers are SEEN (from generated constants); types marked "// inferred" where the type could not be read directly.
+// Types, labels, oneofs and enums are read from the FileDescriptorProto embedded in the class; numbers are cross-checked against *_FIELD_NUMBER constants.
+// Original descriptor file name: GDICamera.proto
+
+syntax = "proto2";
+
+package GDI.Proto.Camera;
+
+import "gdi_core.proto";
+
+option java_package = "com.garmin.proto.generated";
+option java_outer_classname = "GDICamera";
+option optimize_for = LITE_RUNTIME;
+
+enum ResolutionFramerate {
+  RESOLUTION_FRAMERATE_UNKNOWN = 0;
+  RESOLUTION_FRAMERATE_720P_30FPS = 1;
+  RESOLUTION_FRAMERATE_720P_30FPS_HDR = 2;
+  RESOLUTION_FRAMERATE_1080P_30FPS = 3;
+  RESOLUTION_FRAMERATE_1080P_30FPS_HDR = 4;
+  RESOLUTION_FRAMERATE_1080P_45FPS_HDR = 5;
+  RESOLUTION_FRAMERATE_1080P_60FPS = 6;
+  RESOLUTION_FRAMERATE_1080P_120FPS = 7;
+  RESOLUTION_FRAMERATE_1440P_30FPS = 8;
+  RESOLUTION_FRAMERATE_1440P_30FPS_HDR = 9;
+  RESOLUTION_FRAMERATE_4K_30FPS = 10;
+  RESOLUTION_FRAMERATE_4K_30FPS_HDR = 11;
+}
+
+enum Source {
+  SOURCE_UNKNOWN = 0;
+  SOURCE_BUTTON_PRESS = 1;
+  SOURCE_DISPLAY = 2;
+  SOURCE_INCIDENT = 3;
+  SOURCE_RADAR = 4;
+  SOURCE_SYNC = 5;
+  SOURCE_INCIDENT_SYNC = 6;
+  SOURCE_ASR = 7;
+}
+
+message Service {
+  optional ConfigurationRequest config_request = 1;
+  optional ConfigurationResponse config_response = 2;
+  optional ConfigurationNotification config_notification = 3;
+  optional CaptureRequest capture_request = 4;
+  optional CaptureResponse capture_response = 5;
+  optional CaptureNotification capture_notification = 6;
+  optional SnapshotRequest snapshot_request = 7;
+  optional SnapshotResponse snapshot_response = 8;
+  optional SnapshotNotification snapshot_notification = 9;
+}
+
+message CapabilitiesRequest {
+  extend .GDI.Proto.Core.FeatureCapabilitiesRequest {
+    optional CapabilitiesRequest features_request = 30;
+  }
+}
+
+message Capabilities {
+  repeated ResolutionFramerate supported_resolutions = 1;
+}
+
+message CapabilitiesResponse {
+  optional Capabilities capabilities = 1;
+  extend .GDI.Proto.Core.FeatureCapabilitiesResponse {
+    optional CapabilitiesResponse features_response = 30;
+  }
+}
+
+message Configuration {
+  optional bool audio_recording_enabled = 1;
+  optional bool noise_suppression_enabled = 2;
+  optional Configuration.Eis eis_mode = 3;
+  optional bool speed_overlay_enabled = 4;
+  optional Configuration.SpeedFormat speed_format = 5;
+  optional bool location_overlay_enabled = 6;
+  optional bool datetime_overlay_enabled = 7;
+  optional Configuration.DateFormat date_format = 8;
+  optional Configuration.TimeFormat time_format = 9;
+  optional ResolutionFramerate resolution_framerate = 10;
+  optional bool promptly_delete = 11;
+  optional Configuration.Orientation orientation = 12;
+  optional Configuration.RecordingMode recording_mode = 13;
+  optional bool radar_overlay_enabled = 14;
+  optional bool hard_brake_event_video_save_enabled = 15;
+  optional bool rearview_mirror_enabled = 16;
+  optional bool close_pass_video_save_enabled = 17;
+  optional Configuration.RadarReportingMode radar_reporting_mode = 18;
+
+  enum SpeedFormat {
+    SPEED_FORMAT_UNKNOWN = 0;
+    SPEED_FORMAT_KILOMETERS = 1;
+    SPEED_FORMAT_MILES = 2;
+  }
+
+  enum DateFormat {
+    DATE_FORMAT_UNKNOWN = 0;
+    DATE_FORMAT_MMDDYYYY = 1;
+    DATE_FORMAT_DDMMYYYY = 2;
+    DATE_FORMAT_YYYYMMDD = 3;
+  }
+
+  enum TimeFormat {
+    TIME_FORMAT_UNKNOWN = 0;
+    TIME_FORMAT_24_HOUR = 1;
+    TIME_FORMAT_12_HOUR = 2;
+    TIME_FORMAT_UTC = 3;
+  }
+
+  enum RecordingMode {
+    RECORDING_MODE_UNKNOWN = 0;
+    RECORDING_MODE_DISABLED = 1;
+    RECORDING_MODE_ENABLED = 2;
+    RECORDING_MODE_RADAR_ACTIVATED = 3;
+  }
+
+  enum Orientation {
+    ORIENTATION_UNKNOWN = 0;
+    ORIENTATION_ROTATE_0 = 1;
+    ORIENTATION_ROTATE_0_HORZ_FLIP = 2;
+    ORIENTATION_ROTATE_90 = 3;
+    ORIENTATION_ROTATE_90_VERT_FLIP = 4;
+    ORIENTATION_ROTATE_180 = 5;
+    ORIENTATION_ROTATE_180_HORZ_FLIP = 6;
+    ORIENTATION_ROTATE_270 = 7;
+    ORIENTATION_ROTATE_270_VERT_FLIP = 8;
+  }
+
+  enum Eis {
+    EIS_UNKNOWN = 0;
+    EIS_OFF = 1;
+    EIS_NORMAL = 2;
+    EIS_SUPER = 3;
+  }
+
+  enum RadarReportingMode {
+    RADAR_REPORTING_MODE_UNKNOWN = 0;
+    RADAR_REPORTING_MODE_ALL = 1;
+    RADAR_REPORTING_MODE_PBL_ONLY = 2;
+  }
+}
+
+message ConfigurationRequest {
+  optional Configuration config = 1;
+}
+
+message ConfigurationResponse {
+  optional ConfigurationResponse.ConfigurationStatus status = 1;
+  optional Configuration config = 2;
+
+  enum ConfigurationStatus {
+    CONFIGURATION_STATUS_UNKNOWN = 0;
+    CONFIGURATION_STATUS_REJECTED = 1;
+    CONFIGURATION_STATUS_ACCEPTED = 2;
+  }
+}
+
+message ConfigurationNotification {
+  optional Configuration config = 1;
+  optional ConfigurationNotification.ReasonForChange configuration_change_reason = 2;
+
+  enum ReasonForChange {
+    REASON_FOR_CHANGE_UNKNOWN = 0;
+    REASON_FOR_CHANGE_GARMIN_DISPLAY = 1;
+    REASON_FOR_CHANGE_MOBILE_APP = 2;
+    REASON_FOR_CHANGE_OVERTEMP = 3;
+    REASON_FOR_CHANGE_SYSTEM_ERROR = 4;
+    REASON_FOR_CHANGE_SYSTEM_OTHER = 5;
+  }
+}
+
+message CaptureStatus {
+  optional bool saving_status = 1;
+  optional Source save_source = 2;
+  optional CaptureStatus.CaptureError error_status = 3;
+
+  enum CaptureError {
+    CAPTURE_ERROR_UNKNOWN = 0;
+    CAPTURE_ERROR_SD_ERROR = 1;
+    CAPTURE_ERROR_CAMERA_BUSY = 2;
+    CAPTURE_ERROR_BAD_STATE = 3;
+  }
+}
+
+message CaptureRequest {
+  optional CaptureRequest.CaptureControl recording = 1;
+  optional Source save_source = 2;
+
+  enum CaptureControl {
+    CAPTURE_CONTROL_UNKNOWN = 0;
+    CAPTURE_CONTROL_STOP = 1;
+    CAPTURE_CONTROL_START = 2;
+  }
+}
+
+message CaptureResponse {
+  optional CaptureStatus capture_status = 1;
+}
+
+message CaptureNotification {
+  optional CaptureStatus capture_status = 1;
+}
+
+message SnapshotStatus {
+  optional bool snapshot_status = 1;
+  optional Source snapshot_source = 2;
+  optional SnapshotStatus.SnapshotError error_status = 3;
+
+  enum SnapshotError {
+    SNAPSHOT_ERROR_UNKNOWN = 0;
+    SNAPSHOT_ERROR_SD_ERROR = 1;
+    SNAPSHOT_ERROR_CAMERA_BUSY = 2;
+    SNAPSHOT_ERROR_BAD_STATE = 3;
+  }
+}
+
+message SnapshotRequest {
+  optional Source snapshot_source = 1;
+}
+
+message SnapshotResponse {
+  optional SnapshotStatus snapshot_status = 1;
+}
+
+message SnapshotNotification {
+  optional SnapshotStatus snapshot_status = 1;
+}

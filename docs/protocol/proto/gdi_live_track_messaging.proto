@@ -1,0 +1,86 @@
+// Recovered from Garmin Connect 5.31 (11761) com.garmin.proto.generated.GDILiveTrackMessagingProto by tools/proto-recover. Field names/numbers are SEEN (from generated constants); types marked "// inferred" where the type could not be read directly.
+// Types, labels, oneofs and enums are read from the FileDescriptorProto embedded in the class; numbers are cross-checked against *_FIELD_NUMBER constants.
+// Original descriptor file name: GDILiveTrackMessaging.proto
+
+syntax = "proto2";
+
+package GDI.Proto.LiveTrackMessaging;
+
+option java_package = "com.garmin.proto.generated";
+option java_outer_classname = "GDILiveTrackMessagingProto";
+option optimize_for = LITE_RUNTIME;
+
+message LiveTrackMessagingService {
+  optional SendLiveTrackMessageRequest send_live_track_message_request = 1;
+  optional SendLiveTrackMessageResponse send_live_track_message_response = 2;
+  optional GetLiveTrackMessagesRequest get_live_track_messages_request = 3;
+  optional GetLiveTrackMessagesResponse get_live_track_messages_response = 4;
+}
+
+message SendLiveTrackMessageRequest {
+  repeated string recipient_session_ids = 1;
+  required LiveTrackMessageBody live_track_message_body = 2;
+}
+
+message SendLiveTrackMessageResponse {
+  optional SendLiveTrackMessageResponse.SendLiveTrackMessageStatus send_live_track_message_status = 1;
+  repeated SendLiveTrackMessageError send_live_track_message_errors = 2;
+
+  enum SendLiveTrackMessageStatus {
+    OK = 0;
+    UNKNOWN_ERROR = 1;
+    NETWORK_FAILURE = 2;
+    TIMEOUT = 3;
+    SERVER_ERROR = 4;
+    INVALID_SERVER_RESPONSE = 5;
+    NOT_LIVE_TRACKING = 6;
+    EMPTY_SESSION_IDS = 7;
+  }
+}
+
+message SendLiveTrackMessageError {
+  repeated string session_ids = 1;
+  required SendLiveTrackMessageError.LiveTrackMessageErrorType live_track_message_error_type = 2;
+  optional string error_message_text = 3;
+
+  enum LiveTrackMessageErrorType {
+    UNKNOWN_ERROR = 0;
+    SENDER_SESSION_INVALID = 1;
+    SENDER_SESSION_ENDED = 2;
+    RECIPIENT_SESSION_INVALID = 3;
+    RECIPIENT_SESSION_ENDED = 4;
+  }
+}
+
+message GetLiveTrackMessagesRequest {
+  optional uint64 last_received_tracker_message_seq = 1 [default = 0];
+}
+
+message GetLiveTrackMessagesResponse {
+  required GetLiveTrackMessagesResponse.GetLiveTrackMessagesStatus get_live_track_messages_status = 1;
+  repeated LiveTrackMessage live_track_messages = 2;
+  optional uint32 call_interval = 3;
+
+  enum GetLiveTrackMessagesStatus {
+    OK = 0;
+    UNKNOWN_ERROR = 1;
+    NETWORK_FAILURE = 2;
+    TIMEOUT = 3;
+    SERVER_ERROR = 4;
+    INVALID_SERVER_RESPONSE = 5;
+    NOT_LIVE_TRACKING = 6;
+  }
+}
+
+message LiveTrackMessage {
+  required string sender_session_id = 1;
+  required string sender_display_name = 2;
+  required uint64 tracker_message_seq = 3;
+  required LiveTrackMessageBody live_track_message_body = 4;
+}
+
+message LiveTrackMessageBody {
+  required uint64 message_id = 1;
+  required string message_text = 2;
+  required uint64 timestamp = 3;
+}

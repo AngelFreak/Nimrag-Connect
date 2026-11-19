@@ -1,0 +1,29 @@
+// Recovered from Garmin Connect 5.31 (11761) com.garmin.proto.generated.GDIStandbyControl by tools/proto-recover. Field names/numbers are SEEN (from generated constants); types marked "// inferred" where the type could not be read directly.
+// Types, labels, oneofs and enums are read from the FileDescriptorProto embedded in the class; numbers are cross-checked against *_FIELD_NUMBER constants.
+// Original descriptor file name: GDIStandbyControl.proto
+
+syntax = "proto2";
+
+package GDI.Proto.StandbyControl;
+
+option java_package = "com.garmin.proto.generated";
+option java_outer_classname = "GDIStandbyControl";
+option optimize_for = LITE_RUNTIME;
+
+message Service {
+  optional EnablePairingRequest enable_pairing_request = 1;
+  optional EnablePairingResponse enable_pairing_response = 2;
+}
+
+message EnablePairingRequest {
+}
+
+message EnablePairingResponse {
+  optional EnablePairingResponse.Status status = 1;
+
+  enum Status {
+    STATUS_UNKNOWN = 0;
+    STATUS_ACCEPTED = 1;
+    STATUS_BUSY = 2;
+  }
+}

@@ -1,0 +1,15 @@
+[package]
+name = "nimrag-decode"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+description = "Decode Garmin watch link captures (Android HCI snoop logs) with nimrag-core"
+
+[[bin]]
+name = "nimrag-decode"
+path = "src/main.rs"
+
+[dependencies]
+nimrag-core = { path = "../../core" }

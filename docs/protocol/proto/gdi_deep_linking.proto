@@ -1,0 +1,31 @@
+// Recovered from Garmin Connect 5.31 (11761) com.garmin.proto.generated.GDIDeepLinkingProto by tools/proto-recover. Field names/numbers are SEEN (from generated constants); types marked "// inferred" where the type could not be read directly.
+// Types, labels, oneofs and enums are read from the FileDescriptorProto embedded in the class; numbers are cross-checked against *_FIELD_NUMBER constants.
+// Original descriptor file name: GDIDeepLinking.proto
+
+syntax = "proto2";
+
+package GDI.Proto.DeepLinking;
+
+option java_package = "com.garmin.proto.generated";
+option java_outer_classname = "GDIDeepLinkingProto";
+option optimize_for = LITE_RUNTIME;
+
+message DeepLinkingService {
+  optional OpenDeepLinkingRequest deep_linking_request = 1;
+  optional OpenDeepLinkingResponse deep_linking_response = 2;
+}
+
+message OpenDeepLinkingRequest {
+  repeated string schemas = 1;
+}
+
+message OpenDeepLinkingResponse {
+  optional OpenDeepLinkingResponse.ResponseStatus status = 1;
+  optional int32 used_schema_index = 2;
+
+  enum ResponseStatus {
+    OK = 1;
+    UNHANDLED = 2;
+    UNKNOWN_ERROR = 3;
+  }
+}

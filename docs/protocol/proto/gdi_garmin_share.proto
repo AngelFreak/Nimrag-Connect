@@ -1,0 +1,117 @@
+// Recovered from Garmin Connect 5.31 (11761) com.garmin.proto.generated.GDIGarminShare by tools/proto-recover. Field names/numbers are SEEN (from generated constants); types marked "// inferred" where the type could not be read directly.
+// Types, labels, oneofs and enums are read from the FileDescriptorProto embedded in the class; numbers are cross-checked against *_FIELD_NUMBER constants.
+// Original descriptor file name: GDIGarminShare.proto
+
+syntax = "proto2";
+
+package GDI.Proto.GarminShare;
+
+import "gdi_data_types.proto";
+
+option java_package = "com.garmin.proto.generated";
+option java_outer_classname = "GDIGarminShare";
+option optimize_for = LITE_RUNTIME;
+
+message Service {
+  optional ConsentLinkRequest consent_link_request = 1;
+  optional ConsentLinkResponse consent_link_response = 2;
+  optional SupportedReceiveTypesRequest supported_receive_types_request = 3;
+  optional SupportedReceiveTypesResponse supported_receive_types_response = 4;
+  optional ShareItemsRequest share_items_request = 5;
+  optional ShareItemsResponse share_items_response = 6;
+  optional TransferStartNotification transfer_start_notification = 7;
+  optional ItemsStatusUpdateRequest items_status_update_request = 8;
+  optional ItemsStatusUpdateResponse items_status_update_response = 9;
+}
+
+message ConsentLinkRequest {
+  optional .GDI.Proto.DataTypes.UUID connection_id = 1;
+}
+
+message ConsentLinkResponse {
+  optional ConsentLinkResponse.Status status = 1;
+
+  enum Status {
+    ACCEPTED = 1;
+    UNKNOWN_CONNECTION_ID = 2;
+  }
+}
+
+message ShareType {
+  optional string identifier = 1;
+  repeated string supported_receive_formats = 2;
+}
+
+message SupportedReceiveTypesRequest {
+  repeated ShareType share_types = 1;
+}
+
+message SupportedReceiveTypesResponse {
+  repeated ShareType share_types = 1;
+}
+
+message ShareItem {
+  optional .GDI.Proto.DataTypes.UUID uid = 1;
+  optional ShareType share_type = 2;
+  optional string plain_text_name = 3;
+  optional string encoded_data_format = 4;
+  optional bytes compatibility_data = 5;
+}
+
+message ShareItemsRequest {
+  repeated ShareItem share_items = 1;
+  optional uint32 incompatible_items_count = 2;
+}
+
+message ShareItemResponse {
+  optional .GDI.Proto.DataTypes.UUID share_item = 1;
+  optional ShareItemResponse.DeclinedReason reason = 2;
+
+  enum DeclinedReason {
+    USER_DECLINED = 1;
+    INCOMPATABLE = 2;
+    OUT_OF_SPACE = 3;
+    RECEIVED_DISABLED = 4;
+    WAIT_FOR_TRANSFER_STATUS = 5;
+  }
+}
+
+message ShareItemsResponse {
+  repeated ShareItemResponse denied_items = 1;
+}
+
+message TransferStartNotification {
+  repeated .GDI.Proto.DataTypes.UUID share_items = 1;
+  optional .GDI.Proto.DataTypes.UUID batch_id = 2;
+}
+
+message ItemsStatusUpdateRequest {
+  repeated ItemStatusUpdateRequest item_status_update = 1;
+}
+
+message ItemStatusUpdateRequest {
+  optional .GDI.Proto.DataTypes.UUID uid = 1;
+  optional ItemStatusUpdateRequest.Status status = 2;
+
+  enum Status {
+    ACCEPTED = 1;
+    FAILED_REJECTED = 2;
+    FAILED_RETRYABLE = 3;
+    FAILED_NO_SPACE = 4;
+    FAILED_INVALID = 5;
+  }
+}
+
+message ItemsStatusUpdateResponse {
+  repeated ItemStatusUpdateResponse item_status_update = 1;
+}
+
+message ItemStatusUpdateResponse {
+  optional .GDI.Proto.DataTypes.UUID uid = 1;
+  optional ItemStatusUpdateResponse.Status status = 2;
+
+  enum Status {
+    ACCEPTED = 1;
+    INTERNAL_ERROR = 2;
+  }
+}

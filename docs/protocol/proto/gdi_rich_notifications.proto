@@ -1,0 +1,240 @@
+// Recovered from Garmin Connect 5.31 (11761) com.garmin.proto.generated.GDIRichNotifications by tools/proto-recover. Field names/numbers are SEEN (from generated constants); types marked "// inferred" where the type could not be read directly.
+// Types, labels, oneofs and enums are read from the FileDescriptorProto embedded in the class; numbers are cross-checked against *_FIELD_NUMBER constants.
+// Original descriptor file name: GDIRichNotifications.proto
+
+syntax = "proto2";
+
+package GDI.Proto.RichNotifications;
+
+import "gdi_core.proto";
+import "gdi_data_types.proto";
+import "gdi_rich_notification_encryption_management.proto";
+
+option java_package = "com.garmin.proto.generated";
+option java_outer_classname = "GDIRichNotifications";
+option optimize_for = LITE_RUNTIME;
+
+enum MediaType {
+  MEDIA_TYPE_UNKNOWN = 0;
+  MEDIA_TYPE_PNG = 1;
+  MEDIA_TYPE_JPEG = 2;
+  MEDIA_TYPE_GIF = 3;
+  MEDIA_TYPE_MP3 = 4;
+}
+
+message Service {
+  optional SubscribeRequest subscribe_request = 1;
+  optional SubscribeResponse subscribe_response = 2;
+  optional EncryptedDataRequest encrypted_data_request = 3;
+  optional EncryptedDataResponse encrypted_data_response = 4;
+  optional ErrorNotification error_notification = 5;
+}
+
+message EncryptedDataRequest {
+  optional string session_id = 1;
+  optional bytes encrypted_data = 2;
+  optional .GDI.Proto.DataTypes.DataTransferItem encrypted_xfer_data = 3;
+  optional bytes unencrypted_data = 4;
+}
+
+message EncryptedDataResponse {
+  optional EncryptedDataResponse.Status status = 1;
+
+  enum Status {
+    STATUS_UNKNOWN = 0;
+    STATUS_SUCCESS = 1;
+    STATUS_ERROR = 2;
+  }
+}
+
+message ErrorNotification {
+  optional ErrorNotification.Status status = 1;
+
+  enum Status {
+    STATUS_UNKNOWN = 0;
+    STATUS_EU_TIMEOUT_NOTIFICATIONS_DISABLED = 1;
+  }
+}
+
+message CapabilitiesRequest {
+  optional uint32 service_version = 1;
+  optional bool supports_encrypted_data = 2;
+  extend .GDI.Proto.Core.FeatureCapabilitiesRequest {
+    optional CapabilitiesRequest features_request = 40;
+  }
+}
+
+message CapabilitiesResponse {
+  optional NotificationConfiguration configuration = 1;
+  optional uint32 service_version = 2;
+  optional bool supports_image_caching = 3;
+  optional bool supports_context_images = 4;
+  extend .GDI.Proto.Core.FeatureCapabilitiesResponse {
+    optional CapabilitiesResponse features_response = 40;
+  }
+}
+
+message SubscribeRequest {
+  optional bool enabled = 1;
+}
+
+message SubscribeResponse {
+  optional SubscribeResponse.Status status = 1;
+
+  enum Status {
+    STATUS_UNKNOWN = 0;
+    STATUS_SUCCESS = 1;
+    STATUS_ERROR = 2;
+  }
+}
+
+message ActionInfo {
+  optional ActionInfo.ActionType type = 1;
+  optional string id = 2;
+  optional string display_text = 3;
+
+  enum ActionType {
+    ACTION_TYPE_UNKNOWN = 0;
+    ACTION_TYPE_DISMISS = 1;
+    ACTION_TYPE_TEXT_REPLY = 2;
+    ACTION_TYPE_NO_INPUT = 3;
+  }
+}
+
+message NotificationId {
+  optional string id = 1;
+  optional string app_id = 2;
+}
+
+message AttachmentItem {
+  optional uint32 offset = 1;
+  optional uint32 size = 2;
+  optional bytes data = 3;
+  optional MediaType media_type = 4;
+  optional uint32 text_offset = 5;
+  optional string attachment_id = 6;
+}
+
+message AlertingContext {
+  optional bool should_alert = 1;
+  optional bool is_suppressed_by_focus = 2;
+  optional bool notification_can_alert = 3;
+  optional bool should_ignore_silent_mode = 4;
+}
+
+message IOSDiagnostics {
+  optional AlertingContext alerting_context = 1;
+  optional IOSDiagnostics.Urgency urgency = 2;
+
+  enum Urgency {
+    URGENCY_UNKNOWN = 0;
+    URGENCY_CRITICAL = 1;
+    URGENCY_PRIORITY = 2;
+    URGENCY_TIME_SENSITIVE = 3;
+  }
+}
+
+message NotificationData {
+  optional string app_display_name = 1;
+  optional string title = 2;
+  optional string subtitle = 3;
+  optional string body = 4;
+  optional string thread_identifier = 5;
+  optional uint32 delivery_date = 6;
+  optional uint32 display_date = 7;
+  optional NotificationData.DisplayType display_type = 8;
+  repeated ActionInfo actions = 9;
+  repeated AttachmentItem media_attachments = 10;
+  optional AttachmentItem app_icon = 11;
+  optional AttachmentItem contact_icon = 12;
+  optional NotificationData.Kind kind = 13;
+  repeated AttachmentItem embedded_images = 14;
+  optional uint32 expected_media_attachment_count = 15;
+  optional IOSDiagnostics ios_diagnostics = 16;
+
+  enum DisplayType {
+    DISPLAY_TYPE_UNKNOWN = 0;
+    DISPLAY_TYPE_NORMAL = 1;
+    DISPLAY_TYPE_SILENT = 2;
+  }
+
+  enum Kind {
+    KIND_UNKNOWN = 0;
+    KIND_INCOMING_CALL = 1;
+    KIND_MISSED_CALL = 2;
+    KIND_VOICEMAIL = 3;
+    KIND_ALARM = 4;
+    KIND_NOTIFICATION = 5;
+    KIND_TIMER = 6;
+    KIND_LIVE_ACTIVITY = 7;
+  }
+}
+
+message NotificationPayloadService {
+  optional DataEventNotificationRequest data_event_notification_request = 1;
+  optional DataEventNotificationResponse data_event_notification_response = 2;
+  optional ActionRequest action_request = 3;
+  optional ActionResponse action_response = 4;
+  optional RemoveAllNotificationsRequest remove_all_notifications_request = 5;
+  optional RemoveAllNotificationsResponse remove_all_notifications_response = 6;
+}
+
+message DataEventNotificationRequest {
+  optional DataEventNotificationRequest.EventType event_type = 1;
+  optional NotificationId notification_id = 2;
+  optional NotificationData notification_data = 3;
+
+  enum EventType {
+    EVENT_TYPE_UNKNOWN = 0;
+    EVENT_TYPE_ADDED = 1;
+    EVENT_TYPE_REMOVED = 2;
+    EVENT_TYPE_UPDATED = 3;
+    EVENT_TYPE_ATTACHMENT = 4;
+  }
+}
+
+message DataEventNotificationResponse {
+  optional bool alerted = 1;
+  optional NotificationId notification_id = 2;
+  repeated string missing_attachment_ids = 3;
+}
+
+message ActionRequest {
+  optional NotificationId notification_id = 1;
+  optional string action_id = 2;
+  optional string text_reply = 3;
+}
+
+message ActionResponse {
+  optional ActionResponse.Status status = 1;
+  optional NotificationId notification_id = 2;
+  optional string action_id = 3;
+
+  enum Status {
+    STATUS_UNKNOWN = 0;
+    STATUS_SUCCESS = 1;
+    STATUS_FAIL = 2;
+  }
+}
+
+message RemoveAllNotificationsRequest {
+  optional uint32 timestamp = 1;
+}
+
+message RemoveAllNotificationsResponse {
+}
+
+message DisplayAttributes {
+  optional uint32 width_px = 1;
+  optional uint32 height_px = 2;
+  optional uint32 max_byte_size = 3;
+  optional uint32 quality = 4;
+}
+
+message NotificationConfiguration {
+  optional uint32 max_title_length = 1;
+  optional uint32 max_subtitle_length = 2;
+  optional uint32 max_body_length = 3;
+  optional DisplayAttributes attributes = 4;
+  repeated MediaType supported_types = 5;
+}

@@ -1,0 +1,58 @@
+// Recovered from Garmin Connect 5.31 (11761) com.garmin.proto.generated.GDIXeroGameCamProto by tools/proto-recover. Field names/numbers are SEEN (from generated constants); types marked "// inferred" where the type could not be read directly.
+// Types, labels, oneofs and enums are read from the FileDescriptorProto embedded in the class; numbers are cross-checked against *_FIELD_NUMBER constants.
+// Original descriptor file name: GDIXeroGameCam.proto
+
+syntax = "proto2";
+
+package GDI.Proto.XeroGameCam;
+
+option java_package = "com.garmin.proto.generated";
+option java_outer_classname = "GDIXeroGameCamProto";
+option optimize_for = LITE_RUNTIME;
+
+message Service {
+  optional InitialSetupInfoRequest initial_setup_info_request = 1;
+  optional InitialSetupInfoResponse initial_setup_info_response = 2;
+  optional SwitchToWifiRequest switch_to_wifi_request = 3;
+  optional SwitchToWifiResponse switch_to_wifi_response = 4;
+  optional StartOutdoorsActivationRequest start_outdoors_activation_request = 5;
+  optional StartOutdoorsActivationResponse start_outdoors_activation_response = 6;
+}
+
+message InitialSetupInfoRequest {
+}
+
+message InitialSetupInfoResponse {
+  optional string IMEI = 1;
+  optional InitialSetupInfoResponse.WifiConnectionData wifi_data = 2;
+
+  message WifiConnectionData {
+    optional string ssid = 1;
+    optional string password = 2;
+  }
+}
+
+message SwitchToWifiRequest {
+}
+
+message SwitchToWifiResponse {
+  optional SwitchToWifiResponse.Status status = 1;
+
+  enum Status {
+    UNKNOWN = 0;
+    SUCCESS = 1;
+    PIN_SWITCH_FAILURE = 2;
+  }
+}
+
+message StartOutdoorsActivationRequest {
+}
+
+message StartOutdoorsActivationResponse {
+  optional StartOutdoorsActivationResponse.Status status = 1;
+
+  enum Status {
+    UNKNOWN = 0;
+    SUCCESS = 1;
+  }
+}

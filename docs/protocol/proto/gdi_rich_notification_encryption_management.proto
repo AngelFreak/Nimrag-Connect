@@ -1,0 +1,67 @@
+// Recovered from Garmin Connect 5.31 (11761) com.garmin.proto.generated.GDIRichNotificationEncryptionManagement by tools/proto-recover. Field names/numbers are SEEN (from generated constants); types marked "// inferred" where the type could not be read directly.
+// Types, labels, oneofs and enums are read from the FileDescriptorProto embedded in the class; numbers are cross-checked against *_FIELD_NUMBER constants.
+// Original descriptor file name: GDIRichNotificationEncryptionManagement.proto
+
+syntax = "proto2";
+
+package GDI.Proto.RichNotificationEncryptionManagement;
+
+option java_package = "com.garmin.proto.generated";
+option java_outer_classname = "GDIRichNotificationEncryptionManagement";
+option optimize_for = LITE_RUNTIME;
+
+enum Ciphersuite {
+  CIPHERSUITE_UNKNOWN = 0;
+  CIPHERSUITE_P256_SHA256_AESGCM256 = 1;
+  CIPHERSUITE_XWINGMLKEM768X25519_SHA256_AESGCM256 = 2;
+}
+
+enum EncryptionKeyFailureReason {
+  FAILURE_REASON_UNKNOWN = 0;
+  FAILURE_REASON_NO_SUPPORTED_CIPHERSUITES = 1;
+  FAILURE_REASON_UNSUPPORTED_CIPHERSUITE = 2;
+}
+
+message Service {
+  optional EncryptionKeyRequest encryption_key_request = 1;
+  optional EncryptionKeyResponse encryption_key_response = 2;
+  optional EncryptionKeyExchangeRequest encryption_key_exchange_request = 3;
+  optional EncryptionKeyExchangeResponse encryption_key_exchange_response = 4;
+  optional EncryptionKeyFailureNotification encryption_key_failure_notification = 5;
+}
+
+message EncryptionKeyRequest {
+  repeated Ciphersuite supported_ciphersuites = 1;
+}
+
+message EncryptionKeyResponse {
+  optional Ciphersuite ciphersuite = 1;
+  optional bytes public_key = 2;
+  optional EncryptionKeyResponse.Status status = 3;
+  optional EncryptionKeyFailureReason failure_reason = 4;
+
+  enum Status {
+    STATUS_UNKNOWN = 0;
+    STATUS_SUCCESS = 1;
+    STATUS_FAIL = 2;
+  }
+}
+
+message EncryptionKeyExchangeRequest {
+  optional string receiver_context_str = 1;
+  optional bytes encapsulated_key = 2;
+}
+
+message EncryptionKeyExchangeResponse {
+  optional EncryptionKeyExchangeResponse.Status status = 1;
+
+  enum Status {
+    STATUS_UNKNOWN = 0;
+    STATUS_SUCCESS = 1;
+    STATUS_FAIL = 2;
+  }
+}
+
+message EncryptionKeyFailureNotification {
+  optional EncryptionKeyFailureReason failure_reason = 1;
+}

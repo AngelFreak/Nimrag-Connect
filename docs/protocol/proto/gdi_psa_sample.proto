@@ -1,0 +1,70 @@
+// Recovered from Garmin Connect 5.31 (11761) com.garmin.proto.generated.PSASample by tools/proto-recover. Field names/numbers are SEEN (from generated constants); types marked "// inferred" where the type could not be read directly.
+// Types, labels, oneofs and enums are read from the FileDescriptorProto embedded in the class; numbers are cross-checked against *_FIELD_NUMBER constants.
+// Original descriptor file name: GDIPSASample.proto
+
+syntax = "proto2";
+
+package GDI.Proto.PSASample;
+
+import "gdi_core.proto";
+import "gdi_event_sharing.proto";
+
+option java_package = "com.garmin.proto.generated";
+option java_outer_classname = "PSASample";
+option optimize_for = LITE_RUNTIME;
+
+message Service {
+  optional SampleNotification sample_notification = 1;
+  optional SampleRequest sample_request = 2;
+  optional SampleResponse sample_response = 3;
+}
+
+message SampleNotification {
+  optional bytes msg = 1;
+  optional uint32 sample_int = 2;
+}
+
+message SampleRequest {
+  optional bytes msg = 1;
+  optional uint32 sample_int = 2;
+}
+
+message SampleResponse {
+  optional bytes msg = 1;
+  optional uint32 sample_int = 2;
+}
+
+message CapabilitiesRequest {
+  optional uint32 sample_int = 1;
+  extend .GDI.Proto.Core.FeatureCapabilitiesRequest {
+    optional CapabilitiesRequest features_request = 1001;
+  }
+}
+
+message PSASampleCapabilities {
+  optional bool sample_bool = 1;
+}
+
+message CapabilitiesResponse {
+  optional PSASampleCapabilities psa_sample_capabilities = 1;
+  extend .GDI.Proto.Core.FeatureCapabilitiesResponse {
+    optional CapabilitiesResponse features_response = 1001;
+  }
+}
+
+message AlertDetails {
+  optional bytes test_data = 1;
+  optional DummyInfo dummy_info = 2;
+  extend .GDI.Proto.EventSharing.AlertNotification {
+    optional AlertDetails details = 1019;
+  }
+}
+
+message DummyInfo {
+  optional DummyInfo.DummyInfoType dummy_type = 1;
+
+  enum DummyInfoType {
+    DUMMY0 = 0;
+    DUMMY1 = 1;
+  }
+}

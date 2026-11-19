@@ -1,0 +1,156 @@
+// Recovered from Garmin Connect 5.31 (11761) com.garmin.proto.generated.GDIIndoorTrainer by tools/proto-recover. Field names/numbers are SEEN (from generated constants); types marked "// inferred" where the type could not be read directly.
+// Types, labels, oneofs and enums are read from the FileDescriptorProto embedded in the class; numbers are cross-checked against *_FIELD_NUMBER constants.
+// Original descriptor file name: GDIIndoorTrainer.proto
+
+syntax = "proto2";
+
+package GDI.Proto.IndoorTrainer;
+
+import "gdi_core.proto";
+
+option java_package = "com.garmin.proto.generated";
+option java_outer_classname = "GDIIndoorTrainer";
+option optimize_for = LITE_RUNTIME;
+
+message Service {
+  optional PowerZoneFtpRequest power_zone_ftp_request = 1;
+  optional PowerZoneFtpResponse power_zone_ftp_response = 2;
+  optional PowerZoneManualThresholdsRequest power_zone_manual_thresholds_request = 3;
+  optional PowerZoneManualThresholdsResponse power_zone_manual_thresholds_response = 4;
+  optional PowerZoneModeRequest power_zone_mode_request = 5;
+  optional PowerZoneModeResponse power_zone_mode_response = 6;
+  optional TrainerPowerModeNotification trainer_power_mode_notification = 7;
+  optional TrainerPowerModeRequest trainer_power_mode_request = 8;
+  optional TrainerPowerModeResponse trainer_power_mode_response = 9;
+  optional PedalPowerNotification pedal_power_notification = 10;
+  optional EdgeMountStatusNotification edge_mount_status_notification = 11;
+  optional EdgeMountStatusRequest edge_mount_status_request = 12;
+  optional EdgeMountStatusResponse edge_mount_status_response = 13;
+  optional TrainerVirtualSpeedNotification trainer_virtual_speed_notification = 14;
+}
+
+message FeatureCapabilitiesMessage {
+  optional uint32 service_version = 1;
+  optional bool supports_ftp_thresholds = 2;
+  optional bool supports_power_mode = 3;
+  optional bool supports_pedal_power_balance = 4;
+  optional bool supports_edge_mount_status = 5;
+  optional bool supports_virtual_speed = 6;
+}
+
+message CapabilitiesRequest {
+  optional FeatureCapabilitiesMessage msg = 1;
+  extend .GDI.Proto.Core.FeatureCapabilitiesRequest {
+    optional CapabilitiesRequest features_request = 43;
+  }
+}
+
+message CapabilitiesResponse {
+  optional FeatureCapabilitiesMessage msg = 1;
+  extend .GDI.Proto.Core.FeatureCapabilitiesResponse {
+    optional CapabilitiesResponse features_response = 43;
+  }
+}
+
+message PowerZoneFtpMessage {
+  optional uint32 ftp_value = 1;
+}
+
+message PowerZoneFtpRequest {
+  optional PowerZoneFtpMessage msg = 1;
+}
+
+message PowerZoneFtpResponse {
+  optional PowerZoneFtpMessage msg = 1;
+}
+
+message PowerZoneManualThresholdsMessage {
+  repeated uint32 zone_upper_milli_watts = 1;
+}
+
+message PowerZoneManualThresholdsRequest {
+  optional PowerZoneManualThresholdsMessage msg = 1;
+}
+
+message PowerZoneManualThresholdsResponse {
+  optional PowerZoneManualThresholdsMessage msg = 1;
+}
+
+message PowerZoneModeMessage {
+  optional PowerZoneModeMessage.Mode mode = 1;
+
+  enum Mode {
+    UNKNOWN = 0;
+    FTP = 1;
+    MANUAL_THRESHOLDS = 2;
+  }
+}
+
+message PowerZoneModeRequest {
+  optional PowerZoneModeMessage msg = 1;
+}
+
+message PowerZoneModeResponse {
+  optional PowerZoneModeMessage msg = 1;
+}
+
+message TrainerPowerModeMessage {
+  optional TrainerPowerModeMessage.Mode mode = 1;
+  optional uint32 time_to_sleep_ms = 2;
+
+  enum Mode {
+    UNKNOWN = 0;
+    ACTIVE = 1;
+    SLEEP = 2;
+  }
+}
+
+message TrainerPowerModeNotification {
+  optional TrainerPowerModeMessage msg = 1;
+}
+
+message TrainerPowerModeRequest {
+}
+
+message TrainerPowerModeResponse {
+  optional TrainerPowerModeMessage msg = 1;
+}
+
+message PedalPowerNotification {
+  optional PedalPowerNotification.BalanceReference reference = 1;
+  optional float balance = 2;
+
+  enum BalanceReference {
+    UNKNOWN = 0;
+    LEFT = 1;
+  }
+}
+
+message EdgeMountStatusMessage {
+  optional bool mounted = 1;
+  optional bool charging = 2;
+  optional bool charging_fault_detected = 3;
+  optional EdgeMountStatusMessage.ChargingMode charging_mode = 4;
+
+  enum ChargingMode {
+    UNKNOWN = 0;
+    AUTO = 1;
+    MANUAL_OVERRIDE = 2;
+  }
+}
+
+message EdgeMountStatusNotification {
+  optional EdgeMountStatusMessage msg = 1;
+}
+
+message EdgeMountStatusRequest {
+}
+
+message EdgeMountStatusResponse {
+  optional EdgeMountStatusMessage msg = 1;
+}
+
+message TrainerVirtualSpeedNotification {
+  optional bool available = 1;
+  optional float virtual_speed_kmh = 2;
+}

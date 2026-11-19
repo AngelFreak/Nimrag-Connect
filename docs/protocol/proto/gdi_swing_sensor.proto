@@ -1,0 +1,42 @@
+// Recovered from Garmin Connect 5.31 (11761) com.garmin.proto.generated.GDISwingSensor by tools/proto-recover. Field names/numbers are SEEN (from generated constants); types marked "// inferred" where the type could not be read directly.
+// Types, labels, oneofs and enums are read from the FileDescriptorProto embedded in the class; numbers are cross-checked against *_FIELD_NUMBER constants.
+// Original descriptor file name: GDISwingSensor.proto
+
+syntax = "proto2";
+
+package GDI.Proto.SwingSensor;
+
+import "gdi_swing_sensor_clubs.proto";
+import "gdi_swing_sensor_metrics.proto";
+import "gdi_swing_sensor_user_settings.proto";
+
+option java_package = "com.garmin.proto.generated";
+option java_outer_classname = "GDISwingSensor";
+option optimize_for = LITE_RUNTIME;
+
+message NewSwingNotification {
+  required uint32 id = 1;
+  required uint32 size = 2;
+}
+
+message SwingSensorConnectedNotification {
+}
+
+message SwingSensorDisconnectedNotification {
+}
+
+message SwingSensorService {
+  optional NewSwingNotification new_swing_notification = 1;
+  optional .GDI.Proto.SwingSensorClubs.GetClubListRequest get_club_list_request = 4;
+  optional .GDI.Proto.SwingSensorClubs.GetClubListResponse get_club_list_response = 5;
+  optional .GDI.Proto.SwingSensorClubs.SetActiveClubRequest set_active_club_request = 8;
+  optional .GDI.Proto.SwingSensorClubs.SetActiveClubResponse set_active_club_response = 9;
+  optional .GDI.Proto.SwingSensorUserSettings.GetUserSettingsRequest get_user_settings_request = 10;
+  optional .GDI.Proto.SwingSensorUserSettings.GetUserSettingsResponse get_user_settings_response = 11;
+  optional .GDI.Proto.SwingSensorUserSettings.SetUserSettingsRequest set_user_settings_request = 12;
+  optional .GDI.Proto.SwingSensorUserSettings.SetUserSettingsResponse set_user_settings_response = 13;
+  optional SwingSensorConnectedNotification swing_sensor_connected_notification = 14;
+  optional SwingSensorDisconnectedNotification swing_sensor_disconnected_notification = 15;
+  optional .GDI.Proto.SwingSensorMetrics.SwingMetricsNotification swing_metrics_notification = 18;
+  optional .GDI.Proto.SwingSensorClubs.ClubListChangedNotification club_list_changed_notification = 19;
+}

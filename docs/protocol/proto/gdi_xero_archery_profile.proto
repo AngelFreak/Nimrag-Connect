@@ -1,0 +1,211 @@
+// Recovered from Garmin Connect 5.31 (11761) com.garmin.proto.generated.GDIXeroArcheryProfile by tools/proto-recover. Field names/numbers are SEEN (from generated constants); types marked "// inferred" where the type could not be read directly.
+// Types, labels, oneofs and enums are read from the FileDescriptorProto embedded in the class; numbers are cross-checked against *_FIELD_NUMBER constants.
+// Original descriptor file name: GDIXeroArcheryProfile.proto
+
+syntax = "proto2";
+
+package GDI.Proto.XeroArcheryProfile;
+
+import "gdi_core.proto";
+import "gdi_data_types.proto";
+
+option java_package = "com.garmin.proto.generated";
+option java_outer_classname = "GDIXeroArcheryProfile";
+option optimize_for = LITE_RUNTIME;
+
+enum ResponseStatus {
+  RESPONSE_STATUS_UNKNOWN = 0;
+  RESPONSE_STATUS_SUCCESS = 1;
+  RESPONSE_STATUS_FAILURE = 2;
+}
+
+message Service {
+  optional GetProfileRequest get_profile_request = 1;
+  optional GetProfileResponse get_profile_response = 2;
+  optional SetProfileRequest set_profile_request = 3;
+  optional SetProfileResponse set_profile_response = 4;
+  optional ProfileChangeNotification profile_change_notification = 5;
+  optional GetSettingsRequest get_settings_request = 6;
+  optional GetSettingsResponse get_settings_response = 7;
+  optional SetSettingsRequest set_settings_request = 8;
+  optional SetSettingsResponse set_settings_response = 9;
+  optional SettingsChangeNotification settings_change_notification = 10;
+  optional CalibrationAdvanceRequest calibration_advance_request = 11;
+  optional CalibrationAdvanceResponse calibration_advance_response = 12;
+}
+
+message CalibratedPin {
+  optional float range_distance_m = 1;
+  optional uint32 reference_led_number = 2;
+  optional uint32 mount_position = 3;
+}
+
+message FixedPin {
+  optional float range_distance_m = 1;
+  optional float position = 2;
+  optional FixedPin.PinColor color = 3;
+
+  enum PinColor {
+    PIN_COLOR_UNKNOWN = 0;
+    PIN_COLOR_RED = 1;
+    PIN_COLOR_GREEN = 2;
+    PIN_COLOR_BLUE = 3;
+  }
+}
+
+message XeroArcheryProfile {
+  optional bytes uuid = 1;
+  optional string name = 2;
+  optional XeroArcheryProfile.ProfileType profile_type = 3;
+  repeated CalibratedPin calibrated_pins = 4;
+  optional uint32 arrow_diameter_micro_m = 5;
+  optional XeroArcheryProfile.TipType tip_type = 6;
+  repeated FixedPin fixed_pins = 7;
+  optional float bow_speed_fps = 8;
+  optional float max_range_m = 9;
+  optional float validated_speed_fps = 10;
+
+  enum ProfileType {
+    PROFILE_TYPE_UNKNOWN = 0;
+    PROFILE_TYPE_BOW = 1;
+    PROFILE_TYPE_CROSSBOW = 2;
+  }
+
+  enum TipType {
+    TIP_TYPE_UNKNOWN = 0;
+    TIP_TYPE_FIELD_POINT = 1;
+    TIP_TYPE_FIXED_BROADHEAD = 2;
+    TIP_TYPE_MECHANICAL_BROADHEAD = 3;
+  }
+}
+
+message GetProfileRequest {
+}
+
+message GetProfileResponse {
+  optional ResponseStatus status = 1;
+  optional XeroArcheryProfile profile = 2;
+}
+
+message SetProfileRequest {
+  optional XeroArcheryProfile profile = 1;
+}
+
+message SetProfileResponse {
+  optional ResponseStatus status = 1;
+}
+
+message ProfileChangeNotification {
+  optional XeroArcheryProfile profile = 1;
+}
+
+message XeroArcherySettings {
+  optional XeroArcherySettings.RangeType range_type = 1;
+  optional bool flight_apex_enabled = 2;
+  optional bool roll_indicator_enabled = 3;
+  optional bool steady_aim_enabled = 4;
+  optional .GDI.Proto.DataTypes.MeasurementUnit units = 5;
+
+  enum RangeType {
+    RANGE_TYPE_UNKNOWN = 0;
+    RANGE_TYPE_LOS = 1;
+    RANGE_TYPE_ACR = 2;
+  }
+}
+
+message GetSettingsRequest {
+}
+
+message GetSettingsResponse {
+  optional ResponseStatus status = 1;
+  optional XeroArcherySettings settings = 2;
+}
+
+message SetSettingsRequest {
+  optional XeroArcherySettings settings = 1;
+}
+
+message SetSettingsResponse {
+  optional ResponseStatus status = 1;
+}
+
+message SettingsChangeNotification {
+  optional XeroArcherySettings settings = 1;
+}
+
+message CalibrationStepValue {
+  optional float draw_length_in = 1;
+  optional float arrow_speed_fps = 2;
+  optional uint32 arrow_diameter_micro_m = 3;
+  optional float sight_length_cm = 4;
+  optional float range_m = 5;
+  optional bool selected_yes = 6;
+}
+
+message CalibrationAdvanceRequest {
+  optional CalibrationAdvanceResponse.Step completed_step = 1;
+  optional CalibrationAdvanceRequest.Outcome completed_step_outcome = 2;
+  optional CalibrationStepValue completed_step_value = 3;
+  optional CalibrationAdvanceResponse.Step next_step = 4;
+
+  enum Outcome {
+    OUTCOME_UNKNOWN = 0;
+    OUTCOME_SUCCESS = 1;
+    OUTCOME_RETRY = 2;
+    OUTCOME_SKIP = 3;
+    OUTCOME_ABORT = 4;
+  }
+}
+
+message CalibrationAdvanceResponse {
+  optional CalibrationAdvanceResponse.Step step = 1;
+
+  enum Step {
+    STEP_UNKNOWN = 0;
+    STEP_DRAW_LENGTH = 1;
+    STEP_ARROW_SPEED = 2;
+    STEP_ARROW_DIAMETER = 3;
+    STEP_SIGHT_LENGTH = 4;
+    STEP_LOWER_STOP_IS_SET = 5;
+    STEP_ROUGH_ALIGNMENT = 6;
+    STEP_WITHIN_5_IN = 7;
+    STEP_ROUGH_ALIGNMENT_TIPS = 8;
+    STEP_PRECISE_ALIGNMENT_INTRO = 9;
+    STEP_PRECISE_ALIGNMENT = 10;
+    STEP_ALIGNMENT_VALIDATION_INTRO = 11;
+    STEP_HIT_CENTER = 12;
+    STEP_ALIGNMENT_VALIDATION_TIPS = 13;
+    STEP_SET_UPPER_STOP_INTRO = 14;
+    STEP_ALIGN_RETICLE_INTRO = 15;
+    STEP_IS_RETICLE_ALIGNED = 16;
+    STEP_ALIGN_RETICLE_TIPS = 17;
+    STEP_START_OPTIONAL_VALIDATION = 18;
+    STEP_OPTIONAL_VALIDATION_INTRO = 19;
+    STEP_OPTIONAL_VALIDATION = 20;
+    STEP_TAKE_A_SHOT_TIPS = 21;
+    STEP_OPTIONAL_VALIDATION_TIPS = 22;
+    STEP_VALIDATION_COMPLETE = 23;
+    STEP_QUICK_PINS_INTRO = 24;
+    STEP_DYNAMIC_LEVEL_INTRO = 25;
+    STEP_COMPLETE = 26;
+    STEP_ABORTED = 27;
+  }
+}
+
+message ArcheryCapabilities {
+  repeated CalibrationAdvanceResponse.Step supported_calibration_steps = 1;
+}
+
+message CapabilitiesRequest {
+  optional ArcheryCapabilities archery_capabilities = 1;
+  extend .GDI.Proto.Core.FeatureCapabilitiesRequest {
+    optional CapabilitiesRequest features_request = 45;
+  }
+}
+
+message CapabilitiesResponse {
+  optional ArcheryCapabilities archery_capabilities = 1;
+  extend .GDI.Proto.Core.FeatureCapabilitiesResponse {
+    optional CapabilitiesResponse features_response = 45;
+  }
+}

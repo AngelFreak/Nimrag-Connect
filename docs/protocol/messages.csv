@@ -1,0 +1,58 @@
+id,name,direction,fields,purpose,status,evidence,in_gadgetbridge
+5000,Response (acknowledgement),both,"u16 original_id; u8 status (0 ACK,1 NAK,2 UNKNOWN_OR_NOT_SUPPORTED,3 COBS_DECODER_ERROR,4 CRC_ERROR,5 LENGTH_ERROR); message-specific payload",Reply to every request,seen,"vns.m72690a + gu2 (writer); h6p case 15 (reader, len>=9); enum ly00",differs (GB sends no reply to unhandled ids; app auto-replies via vid/xid)
+5002,Download File,phone->watch,"u16 file_index; u32 offset; u8 request_type (app sends 1); u16 crc_seed; u32 max_size (0 = whole file); u8 flags",Start reading a file; reply payload u8 status + u32 file_size,seen,"wtz ~line 295 (request), wtz.m74589c (response statuses 0..6)",yes
+5003,Upload File,phone->watch,"u16 file_index; u32 size; u32 offset; u16 crc_seed (layout from GB, not yet verified in app)",Start writing a file to the watch,inferred,"name in sns.m67763a; layout unverified",yes
+5004,File Data,both,"u8 flags; u16 running_crc; u32 offset; data. Reply payload: u8 status (0 ok,2 abort,3 crc mismatch,4 offset mismatch/resend); u32 bytes_received",File chunk with running CRC-16/ARC over all bytes so far,seen,"yw40.mo63519a; yw40.m78120e",differs (GB has no resend/abort handling)
+5005,Create File,phone->watch,unverified in app (GB: u32 size; u8 data_type; u8 sub_type; u16 index; ...),Allocate a file on the watch before upload,unknown,name in sns.m67763a,yes
+5006,Delete File,phone->watch,unknown,Delete a file on the watch,unknown,"name in sns.m67763a; DeleteFileResponseMessage.MESSAGE_ID",no
+5007,Directory Filter,phone->watch,"u8 filter (0 NO_FILTER,1 DEFAULT,3 PENDING_UPLOADS_ONLY); reply payload u8 (0 = supported)",Limit the next directory listing,seen,"C8648a.m22286a; enum zgd; FileManagerCompat FILTER_TYPE_PENDING_UPLOADS=3",yes
+5008,Set File Flags,phone->watch,"u16 file_index; u8 flags (app sends 0x10 ARCHIVE)",Mark a file synced (archive) on the watch,seen,"C8648a.m22287c; EnumC8652e",yes
+5009,File Ready,watch->phone,"16-byte directory entry: u16 index; u8 data_type; u8 sub_type; u16 file_number; u8 specific_flags; u8 flags; u32 size; u32 timestamp",Watch announces a new file,seen,p860.onMessageReceived (len>=16),differs (GB expects one extra trailing byte)
+5011,FIT Definition,both,FIT definition record(s),Carry FIT definition messages (capabilities in; connectivity/weather out),seen,smg (listener 5011),yes
+5012,FIT Data,both,FIT data record(s),Carry FIT data messages,seen,smg (listener 5012); smg.m67689c sends FIT connectivity (global 127),yes
+5014,Weather Request,watch->phone,unverified in app (GB: u8 format; s32 lat; s32 lon; u8 hours),Watch asks for weather,inferred,name in sns.m67763a,yes
+5015,Weather Alert,phone->watch,unknown,Weather alert,unknown,name in sns.m67763a,no
+5016,LiveTrack Tracking Request,watch->phone,unknown,LiveTrack,unknown,name in sns.m67763a,no
+5019,Ephemeris Data Request,watch->phone,unknown,GPS assist over GFDI (older path),unknown,name in sns.m67763a,no
+5020,Ephemeris Data,phone->watch,unknown,GPS assist data over GFDI,unknown,name in sns.m67763a,no
+5022,Cancel File Transfer,watch->phone,unknown,Abort the running transfer,seen,C8648a listener 5022 ("Received cancel transfer request"),no
+5023,Battery Status,watch->phone,unverified in app (GB: status bits; voltage; percent),Battery report,inferred,dx3 listener 5023 (BatteryStatusDataHandler),yes
+5024,Device Information,both,"watch: u16 protocol_version; u16 product_number; u32 unit_id; u16 software_version; u16 max_packet_size; str bt_name; str device_name; str model_name; [u8 dual_pairing; 6B ble_mac; 6B bt_mac]; [u8 limitation]. Phone reply payload: u16 protocol (113 or 150); u16 0xFFFF; u32 0xFFFFFFFF; u16 app_version; u16 0xFFFF; str friendly_name; str manufacturer; str model; u8 1",Session start,seen,zxl.onMessageReceived; zxl.m79856h,yes
+5025,LiveTrack Stop Tracking,watch->phone,unknown,LiveTrack,unknown,name in sns.m67763a,no
+5026,Set Device Settings,phone->watch,"u8 count; count x (u8 id; u8 len; value). Time push uses ids 1..5 (garmin time, dst savings, tz offset, next DST, following DST)",Push settings to the watch,seen,r6a (time push when capability 71 absent),differs (GB uses it for auto-upload/weather flags)
+5027,Queued Download,watch->phone,"u8 n; n-byte bitmask",Watch has queued items; reply payload [0x00],seen,"zxl / p860 onMessageReceived",no
+5028,Ephemeris EPO Request,watch->phone,unknown,GPS assist (EPO),unknown,name in sns.m67763a,no
+5029,Ephemeris EPO Data,phone->watch,unknown,GPS assist (EPO),unknown,name in sns.m67763a,no
+5030,System Event,phone->watch,"u8 event (SYNC_COMPLETE 0 .. REQUEST_REBOOT 17, see PROTOCOL.md); u8 value",Lifecycle signals (handshake complete, time updated, sync complete),seen,"enum ub60; r6a sends [16,0]",yes
+5031,Supported File Types,both,"request: empty. reply payload: u8 count; count x (u8 data_type; u8 sub_type; str name)",Learn the watch's file types,seen,C8648a ~line 332-360,yes
+5033,GNCS Notification Source,phone->watch,unverified in app,Notification update,inferred,name in sns.m67763a,yes
+5034,GNCS Control Point,watch->phone,unverified in app,Notification attribute/action request,inferred,name in sns.m67763a,yes
+5035,GNCS Data Source,phone->watch,unverified in app,Notification attribute data,inferred,"name in sns.m67763a; GncsDataSourceMessage.MESSAGE_ID",yes
+5036,GNCS Notification Service Subscription,watch->phone,unverified in app,Watch subscribes to notifications,inferred,"name in sns.m67763a; NotificationServiceSubscriptionMessage.MESSAGE_ID",yes
+5037,Sync Request,watch->phone,"u8 option (0 MANUAL,1 INVISIBLE,2 VISIBLE_AS_NEEDED); u8 n; n-byte bitmask",Watch asks the phone to sync,seen,p860.onMessageReceived,yes
+5039,Find My Phone,watch->phone,unverified in app (GB: u8 duration),Ring the phone,inferred,name in sns.m67763a,yes
+5040,Cancel Find My Phone,watch->phone,unknown,Stop ringing,inferred,name in sns.m67763a,yes
+5041,Music Control,watch->phone,unknown,Media control,inferred,MusicDataHandler.MUSIC_CONTROL_MESSAGE_ID,yes
+5042,Music Control Capabilities,both,unknown,Media control,inferred,MusicDataHandler.MUSIC_CAPABILITIES_MESSAGE_ID,yes
+5043,Protobuf Request,both,unverified in app (GB: u16 request_id; u32 offset; u32 total_len; u32 chunk_len; bytes),Carry a protobuf Smart message,inferred,name in sns.m67763a; ProtobufHandler t3z,yes
+5044,Protobuf Response,both,as 5043,Carry a protobuf Smart message,inferred,name in sns.m67763a,yes
+5045,Cancel Protobuf,both,unknown,Abort a protobuf transfer,unknown,name in sns.m67763a,no
+5046,LiveTrack Auto Start Tracking,watch->phone,unknown,LiveTrack,unknown,name in sns.m67763a,no
+5047,LiveTrack Auto Start Cancel,watch->phone,unknown,LiveTrack,unknown,name in sns.m67763a,no
+5048,LiveTrack Auto Start Failure,watch->phone,unknown,LiveTrack,unknown,name in sns.m67763a,no
+5049,Music Entity Update,phone->watch,unknown,Media metadata,inferred,MusicDataHandler.MUSIC_ENTITY_UPDATE_MESSAGE_ID,yes
+5050,Configuration,both,"u8 n; n-byte capability bitmask (bit i of byte k = capability 8k+i)",Exchange capability sets,seen,zxl.onMessageReceived; ayl,yes
+5052,Current Time,watch->phone,"request: u32 reference_id. reply payload: u32 reference_id; u32 garmin_time; s32 utc_offset_s; u32 next_dst; u32 following_dst",Time and time zone,seen,r6a.onMessageReceived,yes
+5054,Compressed File Data,watch->phone,unknown (parser qv7),Compressed variant of 5004,seen (exists),C8648a listener 5054; qv7,no
+5101,Auth Negotiation Begin,watch->phone,unknown,"Start of app-level 'Garmin Auth' pairing; only used when the phone is not BLE-bonded",seen (exists),rq50 / mr2 listener 5101,differs (GB echoes it back with GUESS_OK; the app on a bonded phone treats it as an error and resets)
+5102,LTK Reconnect,both,unknown,Garmin Auth,seen (name),sns.m67763a,no (enumerated only)
+5103,STK Begin Generation,both,unknown,Garmin Auth,seen (name),sns.m67763a,no (enumerated only)
+5104,Confirm Number,both,unknown,Garmin Auth,seen (name),sns.m67763a,no (enumerated only)
+5105,STK Rand Number,both,unknown,Garmin Auth,seen (name),sns.m67763a,no (enumerated only)
+5106,STK Generation Status,both,unknown,Garmin Auth,seen (name),sns.m67763a,no (enumerated only)
+5107,LTK Key Distribution,both,unknown,Garmin Auth,seen (name),sns.m67763a,no (enumerated only)
+5108,Session Key SKD Distribution,both,unknown,Garmin Auth,seen (name),sns.m67763a,no (enumerated only)
+5109,Session Key Verification,both,unknown,Garmin Auth,seen (name),sns.m67763a,no (enumerated only)
+5110,Passkey Redisplay,both,unknown,Garmin Auth,seen (name),sns.m67763a,no (enumerated only)
+5111,Secure Session,both,unknown,"Garmin Auth; its ACK is sent unencrypted",seen,vns.m72690a (5111 exception),no (enumerated only)
+5112,Out-of-Band Passkey Data,both,unknown,Garmin Auth,seen (name),sns.m67763a,no (enumerated only)

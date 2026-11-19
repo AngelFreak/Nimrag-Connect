@@ -1,0 +1,54 @@
+// Recovered from Garmin Connect 5.31 (11761) com.garmin.proto.generated.GDIDiagnostics by tools/proto-recover. Field names/numbers are SEEN (from generated constants); types marked "// inferred" where the type could not be read directly.
+// Types, labels, oneofs and enums are read from the FileDescriptorProto embedded in the class; numbers are cross-checked against *_FIELD_NUMBER constants.
+// Original descriptor file name: GDIDiagnostics.proto
+
+syntax = "proto2";
+
+package GDI.Proto.Diagnostics;
+
+import "gdi_core.proto";
+
+option java_package = "com.garmin.proto.generated";
+option java_outer_classname = "GDIDiagnostics";
+option optimize_for = LITE_RUNTIME;
+
+message Service {
+  optional EchoRequest echo_request = 1;
+  optional EchoResponse echo_response = 2;
+}
+
+message Payload {
+  optional bytes data = 1;
+}
+
+message EchoRequest {
+  optional Payload payload = 1;
+}
+
+message EchoResponse {
+  optional Payload payload = 1;
+  optional EchoResponse.Error error = 2;
+
+  enum Error {
+    UNKNOWN = 0;
+    NO_RESOURCES = 1;
+    BUFFER_IN_USE = 2;
+  }
+}
+
+message CapabilitiesRequest {
+  extend .GDI.Proto.Core.FeatureCapabilitiesRequest {
+    optional CapabilitiesRequest features_request = 44;
+  }
+}
+
+message DiagnosticsCapabilities {
+  optional bool echo = 1;
+}
+
+message CapabilitiesResponse {
+  optional DiagnosticsCapabilities diagnostics_capabilities = 1;
+  extend .GDI.Proto.Core.FeatureCapabilitiesResponse {
+    optional CapabilitiesResponse features_response = 44;
+  }
+}

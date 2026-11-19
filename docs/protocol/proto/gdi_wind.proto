@@ -1,0 +1,38 @@
+// Recovered from Garmin Connect 5.31 (11761) com.garmin.proto.generated.GDIWind by tools/proto-recover. Field names/numbers are SEEN (from generated constants); types marked "// inferred" where the type could not be read directly.
+// Types, labels, oneofs and enums are read from the FileDescriptorProto embedded in the class; numbers are cross-checked against *_FIELD_NUMBER constants.
+// Original descriptor file name: GDIWind.proto
+
+syntax = "proto2";
+
+package GDI.Proto.Wind;
+
+import "gdi_data_types.proto";
+
+option java_package = "com.garmin.proto.generated";
+option java_outer_classname = "GDIWind";
+option optimize_for = LITE_RUNTIME;
+
+message WindService {
+  optional WindDataRequest wind_data_request = 1;
+  optional WindDataResponse wind_data_response = 2;
+}
+
+message WindDataRequest {
+  optional .GDI.Proto.DataTypes.ScPoint current_location = 1;
+}
+
+message WindDataResponse {
+  required WindDataResponse.ResponseStatus status = 1;
+  optional int32 wind_origin = 2;
+  optional int32 wind_heading = 3;
+  optional .GDI.Proto.DataTypes.CompassDirection wind_compass_direction = 4;
+  optional double wind_speed = 5;
+
+  enum ResponseStatus {
+    UNKNOWN_RESPONSE_STATUS = 0;
+    OK = 1;
+    DATA_UNAVAILABLE = 2;
+    NETWORK_ERROR = 3;
+    MOBILE_LOCATION_NOT_AVAILABLE = 4;
+  }
+}

@@ -1,0 +1,83 @@
+// Recovered from Garmin Connect 5.31 (11761) com.garmin.proto.generated.GDIMessengerOnDevice by tools/proto-recover. Field names/numbers are SEEN (from generated constants); types marked "// inferred" where the type could not be read directly.
+// Types, labels, oneofs and enums are read from the FileDescriptorProto embedded in the class; numbers are cross-checked against *_FIELD_NUMBER constants.
+// Original descriptor file name: GDIMessengerOnDevice.proto
+
+syntax = "proto2";
+
+package GDI.Proto.MessengerOnDevice;
+
+import "gdi_core.proto";
+import "gdi_data_types.proto";
+
+option java_package = "com.garmin.proto.generated";
+option java_outer_classname = "GDIMessengerOnDevice";
+option optimize_for = LITE_RUNTIME;
+
+enum HermesEnvironment {
+  DEV = 1;
+  TEST = 2;
+  PRODUCTION = 3;
+}
+
+message MessengerOnDeviceService {
+  optional HermesTokenRequest hermes_token_request = 1;
+  optional HermesTokenResponse hermes_token_response = 2;
+  optional HermesProviderNotification hermes_provider_notifications = 3;
+}
+
+message HermesTokenRequest {
+  optional string phone_number = 1;
+  optional .GDI.Proto.DataTypes.UUID instance_id = 2;
+}
+
+message HermesTokenResponse {
+  required HermesTokenResponse.Status status = 1;
+  optional string phone_number = 2;
+  optional .GDI.Proto.DataTypes.UUID instance_id = 3;
+  optional string bearer_token = 4;
+  optional fixed32 bearer_token_expiration = 5;
+  optional string refresh_token = 6;
+  optional HermesEnvironment environment = 7;
+
+  enum Status {
+    OK = 1;
+    GENERIC_ERROR = 2;
+    SERVICE_UNAVAILABLE = 3;
+    SERVICE_ERROR = 4;
+    NO_INTERNET_GENERIC = 5;
+  }
+}
+
+message HermesProviderNotification {
+  optional HermesProviderNotification.ServiceStatus service_status = 1;
+  optional bool hermes_token_available = 2;
+  optional string phone_number = 3;
+  optional HermesEnvironment environment = 4;
+
+  enum ServiceStatus {
+    AVAILABLE = 1;
+    UNAVAILABLE = 2;
+    SERVICE_ERROR = 3;
+    NO_INTERNET_GENERIC = 4;
+  }
+}
+
+message CapabilitiesRequest {
+  optional bool inreach_contact_sync_support = 1 [default = false];
+  optional bool inreach_message_sync_support = 2 [default = false];
+  optional bool inreach_call_sync_support = 3 [default = false];
+  optional bool inreach_chat_event_sync_support = 4 [default = false];
+  extend .GDI.Proto.Core.FeatureCapabilitiesRequest {
+    optional CapabilitiesRequest messenger_on_device_capability_request = 20;
+  }
+}
+
+message CapabilitiesResponse {
+  optional bool inreach_contact_sync_support = 1 [default = false];
+  optional bool inreach_message_sync_support = 2 [default = false];
+  optional bool inreach_call_sync_support = 3 [default = false];
+  optional bool inreach_chat_event_sync_support = 4 [default = false];
+  extend .GDI.Proto.Core.FeatureCapabilitiesResponse {
+    optional CapabilitiesResponse messenger_on_device_capability_response = 20;
+  }
+}

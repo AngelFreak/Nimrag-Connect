@@ -1,0 +1,55 @@
+// Recovered from Garmin Connect 5.31 (11761) com.garmin.proto.generated.GDIConnectionManagement by tools/proto-recover. Field names/numbers are SEEN (from generated constants); types marked "// inferred" where the type could not be read directly.
+// Types, labels, oneofs and enums are read from the FileDescriptorProto embedded in the class; numbers are cross-checked against *_FIELD_NUMBER constants.
+// Original descriptor file name: GDIConnectionManagement.proto
+
+syntax = "proto2";
+
+package GDI.Proto.ConnectionManagement;
+
+import "gdi_core.proto";
+
+option java_package = "com.garmin.proto.generated";
+option java_outer_classname = "GDIConnectionManagement";
+option optimize_for = LITE_RUNTIME;
+
+enum SupportedConnectionTypes {
+  OFF = 0;
+  SECURE = 1;
+  OPEN = 2;
+}
+
+message Service {
+  optional ConnectionModeRequest connection_mode_request = 1;
+  optional ConnectionModeResponse connection_mode_response = 2;
+}
+
+message CapabilitiesRequest {
+  extend .GDI.Proto.Core.FeatureCapabilitiesRequest {
+    optional CapabilitiesRequest features_request = 28;
+  }
+}
+
+message ConnectionManagementCapabilities {
+  optional bool is_connection_mode_request_supported = 1;
+}
+
+message CapabilitiesResponse {
+  optional ConnectionManagementCapabilities connection_management_capabilities = 1;
+  extend .GDI.Proto.Core.FeatureCapabilitiesResponse {
+    optional CapabilitiesResponse features_response = 28;
+  }
+}
+
+message ConnectionModeRequest {
+  optional SupportedConnectionTypes connection_mode = 1;
+}
+
+message ConnectionModeResponse {
+  optional ConnectionModeResponse.Response response = 1;
+  optional SupportedConnectionTypes connection_mode = 2;
+
+  enum Response {
+    ERROR = 0;
+    SUCCESS = 1;
+  }
+}

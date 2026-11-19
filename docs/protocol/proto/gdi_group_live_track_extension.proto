@@ -1,0 +1,18 @@
+// Recovered from Garmin Connect 5.31 (11761) com.garmin.proto.generated.GDIGroupLiveTrackExtension by tools/proto-recover. Field names/numbers are SEEN (from generated constants); types marked "// inferred" where the type could not be read directly.
+// Types, labels, oneofs and enums are read from the FileDescriptorProto embedded in the class; numbers are cross-checked against *_FIELD_NUMBER constants.
+// Original descriptor file name: GDIGroupLiveTrackExtension.proto
+
+syntax = "proto2";
+
+package GDI.Proto.Smart;
+
+import "gdi_smart.proto";
+import "gdi_group_live_track.proto";
+
+option java_package = "com.garmin.proto.generated";
+option java_outer_classname = "GDIGroupLiveTrackExtension";
+option optimize_for = LITE_RUNTIME;
+
+extend Smart {
+  optional .GDI.Proto.GroupLiveTrack.GroupLiveTrackService group_live_track_service = 14;
+}

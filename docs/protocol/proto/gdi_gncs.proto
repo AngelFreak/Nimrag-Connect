@@ -1,0 +1,110 @@
+// Recovered from Garmin Connect 5.31 (11761) com.garmin.proto.generated.GDIGNCS by tools/proto-recover. Field names/numbers are SEEN (from generated constants); types marked "// inferred" where the type could not be read directly.
+// Types, labels, oneofs and enums are read from the FileDescriptorProto embedded in the class; numbers are cross-checked against *_FIELD_NUMBER constants.
+// Original descriptor file name: GDIGNCS.proto
+
+syntax = "proto2";
+
+package GDI.Proto.GNCS;
+
+import "gdi_core.proto";
+import "gdi_data_types.proto";
+
+option java_package = "com.garmin.proto.generated";
+option java_outer_classname = "GDIGNCS";
+option optimize_for = LITE_RUNTIME;
+
+enum NotificationDisabledReason {
+  LOW_RAM_MOBILE_DEVICE = 1;
+  PERMISSION_NOT_GRANTED = 2;
+  SERVICE_NOT_BOUND = 3;
+}
+
+enum MediaType {
+  PNG = 0;
+  JPEG = 1;
+}
+
+message CapabilitiesRequest {
+  optional uint32 np_version = 1;
+  optional NotificationDisabledReason notification_disabled_reason = 2;
+  optional string default_messaging_app_id = 3;
+  optional string default_dialer_app_id = 4;
+  extend .GDI.Proto.Core.FeatureCapabilitiesRequest {
+    optional CapabilitiesRequest gncs = 12;
+  }
+}
+
+message CapabilitiesResponse {
+  optional uint32 nc_version = 1;
+  optional bool support_blocked_apps = 2;
+  extend .GDI.Proto.Core.FeatureCapabilitiesResponse {
+    optional CapabilitiesResponse gncs = 12;
+  }
+}
+
+message Service {
+  optional MediaRequest media_request = 1;
+  optional MediaResponse media_response = 2;
+  optional BlockedAppsHashNotification blocked_app_hash_notification = 3;
+  optional AppStatusRequest app_status_request = 4;
+  optional AppStatusResponse app_status_response = 5;
+}
+
+message DisplayAttributes {
+  optional uint32 width_px = 1;
+  optional uint32 height_px = 2;
+  optional uint32 max_byte_size = 3;
+  optional uint32 quality = 4;
+}
+
+message MediaRequest {
+  optional uint32 notification_uid = 1;
+  optional uint32 index = 2;
+  optional DisplayAttributes attributes = 3;
+  repeated MediaType supported_types = 4;
+}
+
+message MediaResponse {
+  optional MediaResponse.Status status = 1;
+  optional uint32 notification_uid = 2;
+  optional uint32 index = 3;
+  optional MediaType type = 4;
+  optional .GDI.Proto.DataTypes.DataTransferItem transfer_info = 5;
+
+  enum Status {
+    UNKNOWN = 0;
+    SUCCESS = 1;
+    INVALID_UID = 2;
+    INVALID_INDEX = 3;
+  }
+}
+
+message BlockedAppsHashNotification {
+  optional bytes blocked_apps_hash = 1;
+}
+
+message AppStatusRequest {
+  optional AppStatusRequest.Status status = 1;
+
+  enum Status {
+    UNKNOWN = 0;
+    BLOCKED = 1;
+    ALL = 2;
+  }
+}
+
+message AppStatusResponse {
+  repeated AppStatus apps = 1;
+}
+
+message AppStatus {
+  optional string package_id = 1;
+  optional string name = 2;
+  optional AppStatus.Status status = 3;
+
+  enum Status {
+    UNKNOWN = 0;
+    BLOCKED = 1;
+    ALLOWED = 2;
+  }
+}

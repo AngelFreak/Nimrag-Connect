@@ -1,0 +1,34 @@
+// Recovered from Garmin Connect 5.31 (11761) com.garmin.proto.generated.GDISubscriptionsProto by tools/proto-recover. Field names/numbers are SEEN (from generated constants); types marked "// inferred" where the type could not be read directly.
+// Types, labels, oneofs and enums are read from the FileDescriptorProto embedded in the class; numbers are cross-checked against *_FIELD_NUMBER constants.
+// Original descriptor file name: GDISubscriptions.proto
+
+syntax = "proto2";
+
+package GDI.Proto.Subscriptions;
+
+option java_package = "com.garmin.proto.generated";
+option java_outer_classname = "GDISubscriptionsProto";
+option optimize_for = LITE_RUNTIME;
+
+message SubscriptionService {
+  optional CustomerSubscriptionNotification customerSubscriptionNotification = 1;
+  optional FeatureStatusRequest feature_status_request = 2;
+  optional FeatureStatusResponse feature_status_response = 3;
+}
+
+message CustomerSubscriptionNotification {
+}
+
+message FeatureStatusRequest {
+}
+
+message FeatureStatusResponse {
+  repeated FeatureStatusResponse.Type current = 1;
+  repeated FeatureStatusResponse.Type available = 2;
+
+  enum Type {
+    LIVE_TRACK = 1;
+    LIVE_SESSION_VIEW = 2;
+    NUTRITION = 3;
+  }
+}

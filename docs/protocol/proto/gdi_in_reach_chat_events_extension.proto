@@ -1,0 +1,18 @@
+// Recovered from Garmin Connect 5.31 (11761) com.garmin.proto.generated.GDIInReachChatEventsExtension by tools/proto-recover. Field names/numbers are SEEN (from generated constants); types marked "// inferred" where the type could not be read directly.
+// Types, labels, oneofs and enums are read from the FileDescriptorProto embedded in the class; numbers are cross-checked against *_FIELD_NUMBER constants.
+// Original descriptor file name: GDIInReachChatEventsExtension.proto
+
+syntax = "proto2";
+
+package GDI.Proto.Smart;
+
+import "gdi_smart.proto";
+import "gdi_in_reach_chat_events.proto";
+
+option java_package = "com.garmin.proto.generated";
+option java_outer_classname = "GDIInReachChatEventsExtension";
+option optimize_for = LITE_RUNTIME;
+
+extend Smart {
+  optional .GDI.Proto.InReachChatEvents.InReachChatEventsService inreach_chat_events_service = 93;  // SEEN: number 93 is also bound by wifi_unified_setup_service in another file of this app
+}

@@ -1,0 +1,26 @@
+// Recovered from Garmin Connect 5.31 (11761) com.garmin.proto.generated.GDITopsideBuoyProto by tools/proto-recover. Field names/numbers are SEEN (from generated constants); types marked "// inferred" where the type could not be read directly.
+// Types, labels, oneofs and enums are read from the FileDescriptorProto embedded in the class; numbers are cross-checked against *_FIELD_NUMBER constants.
+// Original descriptor file name: GDITopsideBuoy.proto
+
+syntax = "proto2";
+
+package GDI.Proto.TopsideBuoy;
+
+option java_package = "com.garmin.proto.generated";
+option java_outer_classname = "GDITopsideBuoyProto";
+option optimize_for = LITE_RUNTIME;
+
+message Service {
+  optional WifiConnectionDataNotification wifi_connection_data_notification = 1;
+}
+
+message WifiConnectionData {
+  optional string ssid = 1;
+  optional bytes password = 2;
+  optional bytes mac_adr = 3;
+  optional uint32 ant_id = 4;
+}
+
+message WifiConnectionDataNotification {
+  optional WifiConnectionData wifi_connection_data = 1;
+}

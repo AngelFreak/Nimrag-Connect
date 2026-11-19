@@ -1,0 +1,34 @@
+// Recovered from Garmin Connect 5.31 (11761) com.garmin.proto.generated.GDIExpresspayCommand by tools/proto-recover. Field names/numbers are SEEN (from generated constants); types marked "// inferred" where the type could not be read directly.
+// Types, labels, oneofs and enums are read from the FileDescriptorProto embedded in the class; numbers are cross-checked against *_FIELD_NUMBER constants.
+// Original descriptor file name: GDIExpresspayCommand.proto
+
+syntax = "proto2";
+
+package GDI.Proto.ExpresspayCommand;
+
+option java_package = "com.garmin.proto.generated";
+option java_outer_classname = "GDIExpresspayCommand";
+option optimize_for = LITE_RUNTIME;
+
+message ExpresspayCommandService {
+  optional ExpresspayRequest request = 1;
+  optional ExpresspayResponse response = 2;
+}
+
+message ExpresspayRequest {
+  optional ExpresspayRequest.ControlCommandType ControlCommand = 1;
+  optional bytes APDUCommandData = 2;
+
+  enum ControlCommandType {
+    UNKNOWN_CONTROL_COMMAND_TYPE = 0;
+    APDU_COMMAND = 1;
+    CONNECT = 2;
+    DISCONNECT = 3;
+    RESET = 4;
+    QUREY = 5;
+  }
+}
+
+message ExpresspayResponse {
+  required bytes Data = 1;
+}

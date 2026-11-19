@@ -1,0 +1,369 @@
+// Recovered from Garmin Connect 5.31 (11761) com.garmin.proto.generated.GDIInternationalGolf by tools/proto-recover. Field names/numbers are SEEN (from generated constants); types marked "// inferred" where the type could not be read directly.
+// Types, labels, oneofs and enums are read from the FileDescriptorProto embedded in the class; numbers are cross-checked against *_FIELD_NUMBER constants.
+// Original descriptor file name: GDIInternationalGolf.proto
+
+syntax = "proto2";
+
+package GDI.Proto.InternationalGolf;
+
+import "gdi_data_types.proto";
+import "gdi_event_sharing.proto";
+
+option java_package = "com.garmin.proto.generated";
+option java_outer_classname = "GDIInternationalGolf";
+option optimize_for = LITE_RUNTIME;
+
+enum MapType {
+  MEDIUM = 0;
+  MEDIUM_PLUS = 1;
+  COURSE_VIEW = 2;
+  GREEN_CONTOUR = 3;
+}
+
+enum StatTrendType {
+  UP = 0;
+  DOWN = 1;
+  EVEN = 2;
+}
+
+enum GolfSubscriptionType {
+  NONE = 0;
+  RENEWABLE = 1;
+  LIFETIME = 2;
+}
+
+enum PlaysLikeDirectionType {
+  UNKNOWN_RESPONSE_STATUS = 0;
+  FLAT = 1;
+  UPHILL = 2;
+  DOWNHILL = 3;
+}
+
+enum PlaysLikeFactors {
+  NOT_SUPPORTED = 0;
+  ELEVATION_ONLY = 1;
+  ELEVATION_PLUS_WEATHER = 2;
+  ELEVATION_PLUS_WIND = 3;
+  ELEVATION_PLUS_WIND_AND_WEATHER = 4;
+}
+
+enum DeviceType {
+  EMBEDDED_DEVICE = 0;
+  MOBILE_APP = 1;
+}
+
+message InternationalGolfService {
+  optional GetGolfCourseListRequest get_golf_course_list_request = 1;
+  optional GetGolfCourseListResponse get_golf_course_list_response = 2;
+  optional GetGolfCourseRequest get_golf_course_request = 3;
+  optional GetGolfCourseResponse get_golf_course_response = 4;
+  optional CourseUpdateRequest course_update_request = 5;
+  optional CourseUpdateResponse course_update_response = 6;
+  optional ScorecardDataNotification scorecard_data_notification = 7;
+  optional RoundSettingsRequest round_settings_request = 8;
+  optional RoundSettingsResponse round_settings_response = 9;
+  optional EndRoundRequest end_round_request = 10;
+  optional EndRoundResponse end_round_response = 11;
+  optional VirtualTournamentRequest virtual_tournament_request = 12;
+  optional VirtualTournamentResponse virtual_tournament_response = 13;
+  optional TournamentInfoRequest tournament_info_request = 14;
+  optional TournamentInfoResponse tournament_info_response = 15;
+  optional PerformanceStatsRequest performance_stats_request = 16;
+  optional PerformanceStatsResponse performance_stats_response = 17;
+  optional GolfClubListRequest golf_club_list_request = 18;
+  optional GolfClubListResponse golf_club_list_response = 19;
+  optional GolfClubUpdateListRequest golf_club_update_list_request = 20;
+  optional GolfClubUpdateListResponse golf_club_update_list_response = 21;
+}
+
+message GetGolfCourseListRequest {
+  required int32 num_courses = 1;
+  optional .GDI.Proto.DataTypes.ScPoint position = 2;
+}
+
+message GetGolfCourseListResponse {
+  optional GetGolfCourseListResponse.ResponseStatus status = 1;
+  repeated GolfCourseInfo course_list = 2;
+
+  enum ResponseStatus {
+    UNKNOWN_RESPONSE_STATUS = 0;
+    OK = 100;
+    DATABASE_ERROR = 200;
+  }
+}
+
+message GetGolfCourseRequest {
+  required int32 build_id = 1;
+  required int32 global_id = 2;
+  optional MapType map_type = 3 [default = MEDIUM];
+  optional bool is_non_english_map = 4;
+}
+
+message GetGolfCourseResponse {
+  optional GetGolfCourseResponse.ResponseStatus status = 1;
+  optional bytes golf_course_data = 2;
+  optional .GDI.Proto.DataTypes.DataTransferItem golf_course_file = 3;
+  optional bytes golf_course_gma_data = 4;
+  optional bytes golf_course_unl_data = 5;
+  optional int32 global_id = 6;
+  optional string part_number = 7;
+  optional int32 version = 8;
+  optional MapType map_type = 9;
+
+  enum ResponseStatus {
+    UNKNOWN_RESPONSE_STATUS = 0;
+    OK = 100;
+    DATABASE_ERROR = 200;
+    COURSE_NOT_AVAILABLE = 300;
+  }
+}
+
+message GolfCourseInfo {
+  required int32 build_id = 1;
+  required int32 global_id = 2;
+  optional .GDI.Proto.DataTypes.ScPoint position = 3;
+  optional string name = 4;
+}
+
+message CourseUpdateRequestInfo {
+  optional int32 build_id = 1;
+  required int32 global_id = 2;
+  optional string part_number = 3;
+  optional int32 version = 4;
+  optional string green_contour_part_number = 5;
+  optional int32 green_contour_version = 6;
+  optional bool is_non_english_map = 7;
+}
+
+message CourseUpdateResponseInfo {
+  optional int32 build_id = 1;
+  required int32 global_id = 2;
+  required bool update_available = 3;
+  optional bool green_contour_update_available = 4;
+}
+
+message CourseUpdateRequest {
+  optional MapType map_type = 1 [default = MEDIUM];
+  repeated CourseUpdateRequestInfo installed_courses = 2;
+}
+
+message CourseUpdateResponse {
+  required CourseUpdateResponse.ResponseStatus status = 1;
+  repeated CourseUpdateResponseInfo installed_courses = 2;
+  optional GolfSubscriptionType golf_subscription_type = 3;
+  optional uint32 golf_subscription_end_time = 4;
+
+  enum ResponseStatus {
+    UNKNOWN_RESPONSE_STATUS = 0;
+    OK = 100;
+    ERROR = 200;
+  }
+}
+
+message ScorecardDataNotification {
+  required uint32 id = 1;
+  required uint32 size = 2;
+}
+
+message RoundSettingsRequest {
+  required uint32 global_course_id = 1;
+  optional string tee_box_name = 2;
+  optional uint32 back_nine_global_course_id = 3;
+  optional string back_nine_tee_box_name = 4;
+}
+
+message RoundSettingsResponse {
+  optional bool is_tournament = 1;
+  optional bool is_live_scoring = 2;
+  optional sint32 player_course_handicap = 3;
+  optional uint32 player_profile_id = 4;
+}
+
+message EndRoundRequest {
+  required uint32 global_course_id = 1;
+  required bool scorecard_saved = 2;
+  optional uint32 stop_time = 3;
+}
+
+message EndRoundResponse {
+  required EndRoundResponse.ResponseStatus status = 1;
+
+  enum ResponseStatus {
+    UNKNOWN_RESPONSE_STATUS = 0;
+    OK = 1;
+    ERROR = 2;
+  }
+}
+
+message VirtualTournamentRequest {
+}
+
+message VirtualTournamentResponse {
+  required VirtualTournamentResponse.ResponseStatus status = 1;
+  optional GolfCourseInfo course_info = 2;
+
+  enum ResponseStatus {
+    UNKNOWN_RESPONSE_STATUS = 0;
+    OK = 1;
+    NO_ACTIVE_TOURNAMENT = 2;
+    NETWORK_UNAVAILABLE = 3;
+    NETWORK_ERROR = 4;
+  }
+}
+
+message TournamentInfoRequest {
+}
+
+message TournamentInfoResponse {
+  required bool is_tournament = 1;
+  optional string tournament_name = 2;
+  optional uint32 start_time = 3;
+  optional GolfCourseInfo course_info = 4;
+  optional string tee_box_name = 5;
+  optional GolfCourseInfo back_nine_course_info = 6;
+  optional string back_nine_tee_box_name = 7;
+}
+
+message PerformanceStatsRequest {
+}
+
+message PerformanceStatsResponse {
+  required PerformanceStatsResponse.ResponseStatus status = 1;
+  optional float handicap = 2;
+  optional StatTrendType handicap_trend = 3;
+  optional DriveShotStats drive_shot_stats = 4;
+  optional ApproachShotStats approach_shot_stats = 5;
+  optional ChipShotStats chip_shot_stats = 6;
+  optional PuttShotStats putt_shot_stats = 7;
+  repeated StrokesGainedRating strokes_gained_ratings = 8;
+
+  enum ResponseStatus {
+    UNKNOWN_RESPONSE_STATUS = 0;
+    OK = 1;
+    NETWORK_ERROR = 2;
+  }
+}
+
+message StrokesGainedRating {
+  optional float strokes_gained = 1;
+  optional StatTrendType trend = 2;
+  optional StrokesGainedRating.ShotType shot_type = 3;
+
+  enum ShotType {
+    DRIVE = 0;
+    APPROACH = 1;
+    CHIP = 2;
+    PUTT = 3;
+    BUNKER = 4;
+    RECOVERY = 5;
+  }
+}
+
+message DriveShotStats {
+  optional float percent_fairway_hit = 1;
+  optional float percent_fairway_left = 2;
+  optional float percent_fairway_right = 3;
+  optional float min_shot_distance = 4;
+  optional float max_shot_distance = 5;
+  optional float avg_shot_distance = 6;
+  optional float min_dispersion_distance = 7;
+  optional float max_dispersion_distance = 8;
+}
+
+message ApproachShotStats {
+  optional float percent_hit_green = 1;
+  optional float percent_hit_green_10 = 2;
+  optional float percent_hit_green_20 = 3;
+  optional float percent_hit_green_20_plus = 4;
+  optional float percent_missed_green = 5;
+  optional float percent_short_of_green = 6;
+  optional float percent_long_of_green = 7;
+  optional float percent_left_of_green = 8;
+  optional float percent_right_of_green = 9;
+  optional float green_in_regulation = 10;
+}
+
+message ChipShotStats {
+  optional float percent_hit_green_10 = 1;
+  optional float percent_hit_green_20 = 2;
+  optional float percent_hit_green_20_plus = 3;
+  optional float percent_missed_green = 4;
+  optional float percent_up_down = 5;
+  optional float percent_sandies = 6;
+}
+
+message PuttShotStats {
+  optional float average_putts_per_hole = 1;
+}
+
+message GolfHoleInfo {
+  optional uint32 hole_number = 1;
+  optional float green_front_dist = 2;
+  optional float green_back_dist = 3;
+  optional float green_front_plays_like_dist = 4;
+  optional float green_back_plays_like_dist = 5;
+  optional PlaysLikeDirectionType green_front_plays_like_dir = 6;
+  optional PlaysLikeDirectionType green_back_plays_like_dir = 7;
+  optional float green_front_to_pin_dist = 8;
+  optional float green_back_to_pin_dist = 9;
+  optional float laser_range_plays_like_dist = 10;
+  optional PlaysLikeDirectionType laser_range_plays_like_dir = 11;
+  optional PlaysLikeFactors plays_like_factors = 12;
+  optional DeviceType device_type = 13;
+}
+
+message GolfStateChangedNotification {
+  optional GolfHoleInfo current_hole_info = 1;
+  extend .GDI.Proto.EventSharing.AlertNotification {
+    optional GolfStateChangedNotification golf_state_changed = 1006;
+  }
+}
+
+message GolfClubInfo {
+  optional uint32 club_id_upper = 1;
+  optional uint32 club_id_lower = 2;
+  optional uint32 club_type = 3;
+  optional uint32 hole_number = 4;
+  optional float last_posn_lat = 5;
+  optional float last_posn_lon = 6;
+  optional uint32 last_connected_time = 7;
+  optional string ct1_uuid = 8;
+  optional uint32 ct1_last_updated_time = 9;
+}
+
+message GolfClubStatusChangedNotification {
+  optional GolfClubInfo golf_club_info = 1;
+  extend .GDI.Proto.EventSharing.AlertNotification {
+    optional GolfClubStatusChangedNotification golf_club_status_changed = 1009;
+  }
+}
+
+message GolfClubListRequest {
+}
+
+message GolfClubListResponse {
+  required GolfClubListResponse.ResponseStatus status = 1;
+  optional uint32 club_count = 2;
+  repeated GolfClubInfo club_list = 3;
+
+  enum ResponseStatus {
+    UNKNOWN_RESPONSE_STATUS = 0;
+    OK = 1;
+    ERROR = 2;
+  }
+}
+
+message GolfClubUpdateListRequest {
+  optional uint32 club_count = 1;
+  repeated GolfClubInfo club_list = 2;
+}
+
+message GolfClubUpdateListResponse {
+  required GolfClubUpdateListResponse.ResponseStatus status = 1;
+
+  enum ResponseStatus {
+    UNKNOWN_RESPONSE_STATUS = 0;
+    OK = 1;
+    ERROR = 2;
+  }
+}

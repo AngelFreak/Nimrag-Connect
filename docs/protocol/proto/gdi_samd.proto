@@ -1,0 +1,43 @@
+// Recovered from Garmin Connect 5.31 (11761) com.garmin.proto.generated.GDISaMD by tools/proto-recover. Field names/numbers are SEEN (from generated constants); types marked "// inferred" where the type could not be read directly.
+// Types, labels, oneofs and enums are read from the FileDescriptorProto embedded in the class; numbers are cross-checked against *_FIELD_NUMBER constants.
+// Original descriptor file name: GDISaMD.proto
+
+syntax = "proto2";
+
+package GDI.Proto.SaMD;
+
+import "gdi_core.proto";
+
+option java_package = "com.garmin.proto.generated";
+option java_outer_classname = "GDISaMD";
+option optimize_for = LITE_RUNTIME;
+
+extend .GDI.Proto.Core.FeatureCapabilitiesRequest {
+  optional bytes requestSaMDCapabilities = 10;
+}
+extend .GDI.Proto.Core.FeatureCapabilitiesResponse {
+  optional bytes responseSaMDCapabilities = 10;
+}
+
+enum CapabilityBits {
+  EMBEDDED_HEALTH_TOKEN = 0;
+  ECG_SERVICE = 1;
+  FILE_TRANSFER = 2;
+  DATA_XFER = 3;
+}
+
+enum SaMDCommonFailures {
+  OTHER = 0;
+  NOT_READY = 1;
+  GHS_SERVER = 2;
+  NO_NETWORK_CONNECTION = 3;
+  NO_UPLOAD_CONSENT = 4;
+  NO_APP_AUTHORIZATION = 5;
+  SAMDID_MISMATCH = 6;
+}
+
+message Service {
+  optional bytes garmin_health_service = 1;
+  optional bytes ecg_service = 2;
+  optional string garmin_health_service_file_transfer = 3;
+}

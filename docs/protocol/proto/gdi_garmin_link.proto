@@ -1,0 +1,39 @@
+// Recovered from Garmin Connect 5.31 (11761) com.garmin.proto.generated.GDIGarminLink by tools/proto-recover. Field names/numbers are SEEN (from generated constants); types marked "// inferred" where the type could not be read directly.
+// Types, labels, oneofs and enums are read from the FileDescriptorProto embedded in the class; numbers are cross-checked against *_FIELD_NUMBER constants.
+// Original descriptor file name: GDIGarminLink.proto
+
+syntax = "proto2";
+
+package GDI.Proto.GarminLink;
+
+import "gdi_core.proto";
+
+option java_package = "com.garmin.proto.generated";
+option java_outer_classname = "GDIGarminLink";
+option optimize_for = LITE_RUNTIME;
+
+message Service {
+  optional DeviceInfoRequest device_info_request = 1;
+  optional DeviceInfoResponse device_info_response = 2;
+}
+
+message CapabilitiesRequest {
+  optional bool auto_hr_broadcast_supported = 1;
+  extend .GDI.Proto.Core.FeatureCapabilitiesRequest {
+    optional CapabilitiesRequest features_request = 36;
+  }
+}
+
+message CapabilitiesResponse {
+  optional bool garmin_link_sensor_type_preferred = 1;
+  extend .GDI.Proto.Core.FeatureCapabilitiesResponse {
+    optional CapabilitiesResponse features_response = 36;
+  }
+}
+
+message DeviceInfoRequest {
+}
+
+message DeviceInfoResponse {
+  optional uint32 unit_id = 1;
+}

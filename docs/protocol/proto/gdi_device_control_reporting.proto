@@ -1,0 +1,53 @@
+// Recovered from Garmin Connect 5.31 (11761) com.garmin.proto.generated.GDIDeviceControlReporting by tools/proto-recover. Field names/numbers are SEEN (from generated constants); types marked "// inferred" where the type could not be read directly.
+// Types, labels, oneofs and enums are read from the FileDescriptorProto embedded in the class; numbers are cross-checked against *_FIELD_NUMBER constants.
+// Original descriptor file name: GDIDeviceControlReporting.proto
+
+syntax = "proto2";
+
+package GDI.Proto.DeviceControlReporting;
+
+import "gdi_core.proto";
+import "gdi_event_sharing.proto";
+
+option java_package = "com.garmin.proto.generated";
+option java_outer_classname = "GDIDeviceControlReporting";
+option optimize_for = LITE_RUNTIME;
+
+enum ControlStatus {
+  UNCONTROLLED = 0;
+  REQUESTED = 1;
+  GRANTED = 2;
+  REJECTED = 3;
+  RELEASED = 4;
+}
+
+enum ControlDevice {
+  UNKNOWN = 0;
+  TRAINER = 1;
+}
+
+message Service {
+  optional ControllingDeviceRequest controller_request = 1;
+  optional ControllingDeviceResponse controller_response = 2;
+}
+
+message ControllingDevice {
+  optional ControlStatus status = 1;
+  optional string name = 2;
+  optional ControlDevice control_device = 3;
+}
+
+message ControllingDeviceRequest {
+  optional ControlDevice control_device = 1;
+}
+
+message ControllingDeviceResponse {
+  optional ControllingDevice device = 1;
+}
+
+message ControllingDeviceNotification {
+  repeated ControllingDevice devices = 1;
+  extend .GDI.Proto.EventSharing.AlertNotification {
+    optional ControllingDeviceNotification data = 1024;
+  }
+}

@@ -1,0 +1,77 @@
+// Recovered from Garmin Connect 5.31 (11761) com.garmin.proto.generated.GDISmsNotificationProto by tools/proto-recover. Field names/numbers are SEEN (from generated constants); types marked "// inferred" where the type could not be read directly.
+// Types, labels, oneofs and enums are read from the FileDescriptorProto embedded in the class; numbers are cross-checked against *_FIELD_NUMBER constants.
+// Original descriptor file name: GDISmsNotification.proto
+
+syntax = "proto2";
+
+package GDI.Proto.SmsNotification;
+
+import "gdi_core.proto";
+
+option java_package = "com.garmin.proto.generated";
+option java_outer_classname = "GDISmsNotificationProto";
+option optimize_for = LITE_RUNTIME;
+
+enum CannedListType {
+  PHONE_CALL_RESPONSE = 0;
+  SMS_MESSAGE_RESPONSE = 1;
+  GROUP_TRACK_RESPONSE = 2;
+}
+
+message SmsNotificationService {
+  optional SmsSendMessageRequest sms_send_message_request = 1;
+  optional SmsSendMessageResponse sms_send_message_response = 2;
+  optional SmsCannedListChangedNotification sms_canned_list_changed_notification = 3;
+  optional SmsCannedListRequest sms_canned_list_request = 4;
+  optional SmsCannedListResponse sms_canned_list_response = 5;
+}
+
+message SmsSendMessageRequest {
+  optional string receiver_number = 1;
+  optional string message = 2;
+}
+
+message SmsSendMessageResponse {
+  optional SmsSendMessageResponse.ResponseStatus status = 1 [default = SUCCESS];
+
+  enum ResponseStatus {
+    SUCCESS = 0;
+    GENERIC_ERROR = 1;
+  }
+}
+
+message SmsCannedListChangedNotification {
+  repeated CannedListType changed_types = 1;
+}
+
+message SmsCannedListRequest {
+  repeated CannedListType requested_types = 1;
+}
+
+message SmsCannedList {
+  optional CannedListType type = 1;
+  repeated string responses = 2;
+}
+
+message SmsCannedListResponse {
+  optional SmsCannedListResponse.ResponseStatus status = 1 [default = SUCCESS];
+  repeated SmsCannedList lists = 2;
+
+  enum ResponseStatus {
+    SUCCESS = 0;
+    GENERIC_ERROR = 1;
+  }
+}
+
+message CapabilitiesRequest {
+  extend .GDI.Proto.Core.FeatureCapabilitiesRequest {
+    optional CapabilitiesRequest messages_capability_request = 17;
+  }
+}
+
+message CapabilitiesResponse {
+  repeated CannedListType type = 1;
+  extend .GDI.Proto.Core.FeatureCapabilitiesResponse {
+    optional CapabilitiesResponse messages_capability_response = 17;
+  }
+}

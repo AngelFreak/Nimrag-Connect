@@ -1,0 +1,75 @@
+// Recovered from Garmin Connect 5.31 (11761) com.garmin.proto.generated.GDIConnectedDevicesReporting by tools/proto-recover. Field names/numbers are SEEN (from generated constants); types marked "// inferred" where the type could not be read directly.
+// Types, labels, oneofs and enums are read from the FileDescriptorProto embedded in the class; numbers are cross-checked against *_FIELD_NUMBER constants.
+// Original descriptor file name: GDIConnectedDevicesReporting.proto
+
+syntax = "proto2";
+
+package GDI.Proto.ConnectedDevicesReporting;
+
+import "gdi_core.proto";
+
+option java_package = "com.garmin.proto.generated";
+option java_outer_classname = "GDIConnectedDevicesReporting";
+option optimize_for = LITE_RUNTIME;
+
+message Service {
+  optional ConnectedDevicesRequest connected_devices_request = 1;
+  optional ConnectedDevicesResponse connected_devices_response = 2;
+  optional ConnectionAlertRegistrationRequest connection_alert_registration_request = 3;
+  optional ConnectionAlertRegistrationResponse connection_alert_registration_response = 4;
+  optional DevicesConnectedRequest device_connected_request = 5;
+  optional DevicesConnectedResponse device_connected_response = 6;
+  optional DevicesDisconnectedRequest device_disconnected_request = 7;
+  optional DevicesDisconnectedResponse device_disconnected_response = 8;
+}
+
+message ConnectedDevice {
+  optional string device_name = 1;
+  optional uint32 unit_id = 2;
+}
+
+message ConnectedDevicesRequest {
+}
+
+message ConnectedDevicesResponse {
+  repeated ConnectedDevice connected_devices = 1;
+}
+
+message ConnectionAlertRegistrationRequest {
+  repeated ConnectedDevice tracked_devices = 1;
+}
+
+message ConnectionAlertRegistrationResponse {
+}
+
+message DevicesConnectedRequest {
+  repeated ConnectedDevice other = 1;
+}
+
+message DevicesConnectedResponse {
+  repeated uint32 status = 1;
+}
+
+message DevicesDisconnectedRequest {
+  repeated ConnectedDevice other = 1;
+}
+
+message DevicesDisconnectedResponse {
+  repeated uint32 status = 1;
+}
+
+message CapabilitiesRequest {
+  optional bool device_connection_alerts_supported = 1;
+  optional bool requests_supported = 2;
+  extend .GDI.Proto.Core.FeatureCapabilitiesRequest {
+    optional CapabilitiesRequest features_request = 32;
+  }
+}
+
+message CapabilitiesResponse {
+  optional uint32 max_connected_devices = 1;
+  optional ConnectedDevice self = 2;
+  extend .GDI.Proto.Core.FeatureCapabilitiesResponse {
+    optional CapabilitiesResponse features_response = 32;
+  }
+}
