@@ -1,8 +1,8 @@
 //! HTTP API: POST /api/files, GET /api/files/{sha256}, GET /api/health.
 
-use crate::ledger::{self, Meta, Sidecar, UploadEvent};
-use crate::{derive, store, tokens};
-use anyhow::Context;
+use crate::ingest;
+use crate::ledger::Meta;
+use crate::{store, tokens};
 use axum::{
     body::Body,
     extract::{DefaultBodyLimit, FromRef, FromRequestParts, Path, Query, State},
@@ -25,7 +25,7 @@ pub struct AppState {
     pub data_dir: Arc<PathBuf>,
     pub max_body: usize,
     /// Serialises sidecar read-modify-write.
-    ledger_lock: Arc<tokio::sync::Mutex<()>>,
+    pub(crate) ledger_lock: Arc<tokio::sync::Mutex<()>>,
 }
 
 impl AppState {
@@ -172,26 +172,17 @@ async fn upload(
         }
         Err(store::ReceiveError::Other(e)) => return Err(e.into()),
     };
-    let store::Received { tmp, sha256, size } = received;
+    let store::Received { tmp, sha256, size } = &received;
     if params
         .sha256
         .as_deref()
         .is_some_and(|claimed| claimed != sha256)
     {
-        let _ = tokio::fs::remove_file(&tmp).await;
+        let _ = tokio::fs::remove_file(tmp).await;
         return Err(ApiError::bad_request(
             "sha256 does not match the uploaded bytes",
         ));
     }
-    {
-        let (dir, tmp, sha) = (state.data_dir.clone(), tmp, sha256.clone());
-        tokio::task::spawn_blocking(move || store::commit(&dir, &tmp, &sha))
-            .await
-            .context("commit task")??;
-    }
-
-    // Record the upload in the sidecar (source of truth) first, then mirror it into the DB.
-    let at = ledger::now(&state.pool).await?;
     let meta = Meta {
         source,
         data_type: params.data_type,
@@ -200,86 +191,17 @@ async fn upload(
         file_number: params.file_number,
         watch_timestamp: params.watch_timestamp,
     };
-    let (sidecar, event, repeat) = {
-        let _guard = state.ledger_lock.lock().await;
-        let existing = ledger::read_sidecar(&state.data_dir, &sha256)?;
-        let created = existing.is_none();
-        let mut event = UploadEvent {
-            at: at.clone(),
-            device_id: Some(device.id),
-            device_name: Some(device.name),
-            meta: meta.clone(),
-            created,
-            repeat_count: 0,
-            last_at: None,
-        };
-        let mut sidecar = existing.unwrap_or_else(|| Sidecar {
-            sha256: sha256.clone(),
-            size: size as i64,
-            received_at: at.clone(),
-            meta,
-            uploads: vec![],
-        });
-        // An identical re-upload only bumps a counter, keeping sidecars bounded.
-        let repeat = match sidecar.uploads.last_mut() {
-            Some(last) if last.same_as(&event) => {
-                last.repeat_count += 1;
-                last.last_at = Some(at);
-                event = last.clone();
-                true
-            }
-            _ => {
-                sidecar.uploads.push(event.clone());
-                false
-            }
-        };
-        ledger::write_sidecar(&state.data_dir, &sidecar)?;
-        (sidecar, event, repeat)
-    };
-    let created = event.created && !repeat;
+    let device_id = device.id;
+    let created = ingest::ingest(
+        &state,
+        &received,
+        Some((device.id, device.name)),
+        meta,
+        None,
+    )
+    .await?;
 
-    // Parse when the bytes are FIT and the database has no parse result yet.
-    // Decided from the DB, not from `created`, so a retry after a failure repairs.
-    let mut parsed = None;
-    let head = {
-        let (dir, sha) = (state.data_dir.clone(), sha256.clone());
-        tokio::task::spawn_blocking(move || store::read_head(&dir, &sha, derive::SNIFF_LEN))
-            .await
-            .context("sniff task")??
-    };
-    if derive::looks_like_fit(&head) {
-        let done = sqlx::query!(
-            r#"SELECT 1 as "x!: i64" FROM file_parse WHERE sha256 = ?"#,
-            sha256
-        )
-        .fetch_optional(&state.pool)
-        .await?
-        .is_some();
-        if !done {
-            let (dir, sha) = (state.data_dir.clone(), sha256.clone());
-            parsed = Some(
-                tokio::task::spawn_blocking(move || -> anyhow::Result<derive::Parsed> {
-                    Ok(derive::parse(&store::read_verified(&dir, &sha)?))
-                })
-                .await
-                .context("parse task")??,
-            );
-        }
-    }
-
-    let mut tx = state.pool.begin().await?;
-    ledger::insert_file(&mut tx, &sidecar).await?;
-    if repeat && ledger::bump_last_upload(&mut tx, &sha256, &event).await? {
-        // folded into the existing row
-    } else {
-        ledger::insert_upload(&mut tx, &sha256, &event).await?;
-    }
-    if let Some(parsed) = &parsed {
-        derive::write(&mut tx, &sha256, parsed).await?;
-    }
-    tx.commit().await?;
-
-    tracing::info!(%sha256, size, created, device_id = device.id, "upload");
+    tracing::info!(%sha256, size, created, device_id, "upload");
     let status = if created {
         StatusCode::CREATED
     } else {
@@ -288,8 +210,8 @@ async fn upload(
     Ok((
         status,
         Json(UploadResponse {
-            sha256,
-            size,
+            sha256: sha256.clone(),
+            size: *size,
             created,
         }),
     ))

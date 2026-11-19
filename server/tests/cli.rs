@@ -161,3 +161,32 @@ fn real_serve_accepts_tokens_created_before_and_after() {
     let after = create_token(dir.path(), "after");
     assert!(post(port, &after, b"two").starts_with("HTTP/1.1 201"));
 }
+
+#[test]
+fn second_writer_on_the_same_data_dir_is_refused() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut serve = Command::new(env!("CARGO_BIN_EXE_nimrag-server"))
+        .args(["serve", "--listen", "127.0.0.1:0", "--data-dir"])
+        .arg(dir.path())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .unwrap();
+    // The holder writes its command name once it owns the lock.
+    let lock = dir.path().join(".lock");
+    for _ in 0..100 {
+        if std::fs::read_to_string(&lock).is_ok_and(|s| s == "serve") {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+    for cmd in ["reparse", "rebuild-ledger", "import-export", "serve"] {
+        let out = bin(dir.path(), &[cmd, dir.path().to_str().unwrap()]);
+        assert!(!out.status.success(), "{cmd} must be refused");
+        let e = String::from_utf8_lossy(&out.stderr);
+        assert!(e.contains("in use by `serve`"), "{cmd}: {e}");
+    }
+    serve.kill().unwrap();
+    serve.wait().unwrap();
+    // The lock dies with the process.
+    assert!(bin(dir.path(), &["reparse"]).status.success());
+}

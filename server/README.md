@@ -108,6 +108,7 @@ Versions verified on crates.io on 2026-11-19 (latest stable, not yanked).
 | tracing / tracing-subscriber | 0.1.44 / 0.3.23 (json, env-filter) | structured logs, optional JSON output |
 | anyhow | 1.0.104 | error context in a binary-style app |
 | getrandom | 0.4.3 | OS randomness for 256-bit device tokens (avoids the larger `rand` tree) |
+| zip | =9.6.1 (default-features off, `deflate` only) | read the Garmin export archive and the zips nested in it. Maintained (zip-rs/zip2, ~350M downloads, releases through 2026-11-19; 9.7.x was hours old at selection so 9.6.1 is pinned), `enclosed_name()` path-traversal protection built in. Server crate only; core stays std-only |
 | dev: tower 0.5.3, http-body-util 0.1.5, tempfile 3.27.0 | | drive the real router with `oneshot`, read bodies, temp data dirs |
 
 CLI is hand-rolled (no clap): five fixed subcommands and three flags; one fewer
@@ -126,3 +127,37 @@ non-root user with `/data` as a volume.
 
 Testing note: `derive::DERIVE_OVERRIDE` is a test-only seam. Tests that set it
 must live in `tests/derive_shared.rs` and hold its lock.
+
+## Importing a Garmin data export
+
+```
+nimrag-server import-export --data-dir DIR [--list-skipped]
+    [--max-depth N] [--max-entries N] [--max-total-bytes N] <archive.zip | extracted-dir>
+```
+
+Reads files only (no network). Walks the zip recursively (zips inside zips) and
+sends every entry whose bytes look like FIT through the same `ingest::ingest` the
+HTTP upload uses, with `source = import`. The archive-relative path is recorded
+as `origin` on the sidecar upload event and in the `uploads.origin` column.
+
+- Limits (defaults: depth 4, 2M entries, 64 GiB materialised bytes in total, 64
+  MiB per FIT entry) are enforced on bytes actually read, not on declared sizes.
+  Nested zips are spooled to temp files in `<data>/files/.incoming/` (removed
+  afterwards), so the data dir needs room for the largest inner zip.
+- Names are metadata only: blobs are stored by hash and a name never touches the
+  filesystem. Absolute or `..` names are therefore imported, with the raw name as
+  `origin`, and reported as "unsafe names (imported, name kept as metadata only)".
+- Idempotent by hash: a re-run only bumps the repeat counter of the matching event.
+  Re-importing the same export extracted differently (directory vs zip, different
+  root) has different origins, so it adds one new event per file.
+- A failed entry is reported and the rest carries on; the exit is non-zero if any
+  entry errored or a global limit aborted the run.
+- Not stored in this stage (counted and listed by extension): TCX, GPX, JSON and
+  anything not FIT by content. Open item: the JSON wellness summaries are
+  Garmin-computed cloud data, not watch files; the owner decides later whether to
+  import them.
+
+`serve`, `import-export`, `reparse` and `rebuild-ledger` take an exclusive lock on
+`<data>/.lock`; a second one fails fast with "data dir ... in use by `<command>`".
+(`token` does not lock.) This needs Rust 1.89 for `File::try_lock`, so the server
+crate sets `rust-version = "1.89"`; core stays at 1.80.

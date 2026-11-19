@@ -49,7 +49,8 @@ Roles: main session orchestrates and integrates; Sonnet builders implement on di
 
 ## Stage 1d: parsers (activities, monitoring, sleep, HRV, metrics)
 **Status**: Complete (sleep/HRV/SpO2 unverified on real files until a night capture)
-## Stage 1e: Garmin export importer — after 1c
+## Stage 1e: Garmin export importer
+**Status**: Complete (FIT only; TCX/GPX/JSON counted, not stored — owner decision pending)
 ## Gate 1
 
 ### Advisor notes for stage 1d (parsers), recorded 2026-11-19

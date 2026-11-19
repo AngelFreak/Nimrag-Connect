@@ -98,6 +98,35 @@ async fn stream_to(tmp: &Path, body: Body, max: usize) -> Result<(String, u64), 
     Ok((crate::hex(&hasher.finalize()), size))
 }
 
+/// Blocking counterpart of [`receive`] for bytes already in memory (importer).
+pub fn receive_bytes(root: &Path, bytes: &[u8]) -> Result<Received> {
+    let dir = root.join("files").join(".incoming");
+    fs::create_dir_all(&dir).context("creating incoming dir")?;
+    let tmp = dir.join(unique_name());
+    let written = (|| -> Result<()> {
+        let mut f = File::create(&tmp)?;
+        f.write_all(bytes)?;
+        f.sync_all()?;
+        Ok(())
+    })();
+    if let Err(e) = written {
+        let _ = fs::remove_file(&tmp);
+        return Err(e).context("writing temp file");
+    }
+    Ok(Received {
+        tmp,
+        sha256: crate::sha256_hex(bytes),
+        size: bytes.len() as u64,
+    })
+}
+
+/// A fresh temp path inside the incoming dir (created if needed).
+pub fn incoming_tmp(root: &Path) -> Result<PathBuf> {
+    let dir = root.join("files").join(".incoming");
+    fs::create_dir_all(&dir).context("creating incoming dir")?;
+    Ok(dir.join(unique_name()))
+}
+
 /// Move a received temp file to its hash path. Returns true if the blob is new;
 /// if it already exists the temp file is discarded.
 pub fn commit(root: &Path, tmp: &Path, sha256: &str) -> Result<bool> {

@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO uploads (sha256, device_id, device_name, at, source, data_type, sub_type,\n            file_index, file_number, watch_timestamp, created, repeat_count, last_at, origin)\n         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 14
+    },
+    "nullable": []
+  },
+  "hash": "a28fb32af645ae8f193a62ea00ce36c1215b1f29a459b62ed3a0e738d4c518d3"
+}

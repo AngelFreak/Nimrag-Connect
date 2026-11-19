@@ -31,12 +31,15 @@ pub struct UploadEvent {
     pub repeat_count: i64,
     #[serde(default)]
     pub last_at: Option<String>,
+    /// Where the bytes came from inside an import (archive-relative path).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub origin: Option<String>,
 }
 
 impl UploadEvent {
     /// True if `other` would be recorded as a repeat of this event.
     pub fn same_as(&self, other: &UploadEvent) -> bool {
-        self.device_id == other.device_id && self.meta == other.meta
+        self.device_id == other.device_id && self.meta == other.meta && self.origin == other.origin
     }
 }
 
@@ -106,8 +109,8 @@ pub async fn insert_upload(
     let m = &ev.meta;
     sqlx::query!(
         "INSERT INTO uploads (sha256, device_id, device_name, at, source, data_type, sub_type,
-            file_index, file_number, watch_timestamp, created, repeat_count, last_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            file_index, file_number, watch_timestamp, created, repeat_count, last_at, origin)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         sha256,
         ev.device_id,
         ev.device_name,
@@ -120,31 +123,24 @@ pub async fn insert_upload(
         m.watch_timestamp,
         ev.created,
         ev.repeat_count,
-        ev.last_at
+        ev.last_at,
+        ev.origin
     )
     .execute(&mut **tx)
     .await?;
     Ok(())
 }
 
-/// Mirror a repeat into the last `uploads` row of this file. Returns false if
-/// the file has no `uploads` row yet (an earlier ingest never committed).
-pub async fn bump_last_upload(
-    tx: &mut Transaction<'_, Sqlite>,
-    sha256: &str,
-    ev: &UploadEvent,
-) -> Result<bool> {
-    let n = sqlx::query!(
-        "UPDATE uploads SET repeat_count = ?, last_at = ?
-         WHERE id = (SELECT MAX(id) FROM uploads WHERE sha256 = ?)",
-        ev.repeat_count,
-        ev.last_at,
-        sha256
-    )
-    .execute(&mut **tx)
-    .await?
-    .rows_affected();
-    Ok(n > 0)
+/// Make the `uploads` rows of one file exactly the sidecar's events, in order.
+/// The sidecar is the source of truth, so ingest and `rebuild` share this.
+pub async fn replace_uploads(tx: &mut Transaction<'_, Sqlite>, sc: &Sidecar) -> Result<()> {
+    sqlx::query!("DELETE FROM uploads WHERE sha256 = ?", sc.sha256)
+        .execute(&mut **tx)
+        .await?;
+    for ev in &sc.uploads {
+        insert_upload(tx, &sc.sha256, ev).await?;
+    }
+    Ok(())
 }
 
 #[derive(Debug, Default, PartialEq, Eq)]
@@ -174,13 +170,8 @@ pub async fn rebuild(pool: &SqlitePool, root: &Path) -> Result<LedgerReport> {
         }
         report.sidecars += 1;
         report.files_added += insert_file(&mut tx, &sc).await? as u64;
-        sqlx::query!("DELETE FROM uploads WHERE sha256 = ?", sha)
-            .execute(&mut *tx)
-            .await?;
-        for ev in &sc.uploads {
-            insert_upload(&mut tx, &sha, ev).await?;
-            report.uploads += 1;
-        }
+        replace_uploads(&mut tx, &sc).await?;
+        report.uploads += sc.uploads.len() as u64;
     }
     tx.commit().await?;
     Ok(report)

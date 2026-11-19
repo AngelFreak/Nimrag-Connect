@@ -2,7 +2,7 @@
 //! three flags do not justify a parser dependency.
 
 use anyhow::{bail, Context, Result};
-use nimrag_server::{api, db, derive, ledger, tokens};
+use nimrag_server::{api, db, derive, import, ledger, tokens};
 use std::path::PathBuf;
 
 const USAGE: &str = "\
@@ -12,6 +12,8 @@ usage:
   nimrag-server token list [--data-dir DIR]
   nimrag-server token revoke ID [--data-dir DIR]
   nimrag-server reparse [--data-dir DIR]          rebuild derived tables from the files
+  nimrag-server import-export [--data-dir DIR] [--list-skipped]
+                      [--max-depth N] [--max-entries N] [--max-total-bytes N] <archive.zip | extracted-dir>
   nimrag-server rebuild-ledger [--data-dir DIR]   recreate files/uploads rows from sidecars
 --data-dir defaults to $NIMRAG_DATA_DIR or ./data; --listen to 127.0.0.1:8080";
 
@@ -19,8 +21,15 @@ struct Opts {
     data_dir: PathBuf,
     listen: String,
     log_json: bool,
+    list_skipped: bool,
+    limits: import::Limits,
     name: Option<String>,
     positional: Vec<String>,
+}
+
+fn number<T: std::str::FromStr>(s: &str) -> Result<T> {
+    s.parse()
+        .map_err(|_| anyhow::anyhow!("{s} is not a number"))
 }
 
 fn parse_opts(args: &[String]) -> Result<Opts> {
@@ -28,6 +37,8 @@ fn parse_opts(args: &[String]) -> Result<Opts> {
         data_dir: std::env::var_os("NIMRAG_DATA_DIR").map_or_else(|| "data".into(), Into::into),
         listen: "127.0.0.1:8080".into(),
         log_json: false,
+        list_skipped: false,
+        limits: import::Limits::default(),
         name: None,
         positional: vec![],
     };
@@ -43,6 +54,12 @@ fn parse_opts(args: &[String]) -> Result<Opts> {
             "--listen" => o.listen = value("--listen")?,
             "--name" => o.name = Some(value("--name")?),
             "--log-json" => o.log_json = true,
+            "--list-skipped" => o.list_skipped = true,
+            "--max-depth" => o.limits.max_depth = number(&value("--max-depth")?)?,
+            "--max-entries" => o.limits.max_entries = number(&value("--max-entries")?)?,
+            "--max-total-bytes" => {
+                o.limits.max_total_bytes = number(&value("--max-total-bytes")?)?;
+            }
             s if s.starts_with("--") => bail!("unknown flag {s}\n{USAGE}"),
             _ => o.positional.push(a.clone()),
         }
@@ -58,7 +75,16 @@ async fn main() -> Result<()> {
     };
     let o = parse_opts(rest)?;
     init_logging(o.log_json);
-    if matches!(cmd.as_str(), "serve" | "reparse") {
+    // Hold for the whole process: one writer per data dir.
+    let _lock = if matches!(
+        cmd.as_str(),
+        "serve" | "import-export" | "reparse" | "rebuild-ledger"
+    ) {
+        Some(db::lock_data_dir(&o.data_dir, cmd)?)
+    } else {
+        None
+    };
+    if matches!(cmd.as_str(), "serve" | "reparse" | "import-export") {
         warn_if_no_profile();
     }
 
@@ -88,6 +114,7 @@ async fn main() -> Result<()> {
             );
             Ok(())
         }
+        "import-export" => import_export(o).await,
         "token" => token(o).await,
         _ => bail!("unknown command {cmd}\n{USAGE}"),
     }
@@ -169,5 +196,49 @@ async fn serve(o: Opts) -> Result<()> {
             let _ = tokio::signal::ctrl_c().await;
         })
         .await?;
+    Ok(())
+}
+
+async fn import_export(o: Opts) -> Result<()> {
+    let [input] = o.positional.as_slice() else {
+        bail!("import-export needs exactly one archive or directory\n{USAGE}");
+    };
+    let pool = db::open(&o.data_dir).await?;
+    let state = api::AppState::new(pool, o.data_dir.clone(), api::MAX_BODY_BYTES);
+    let r = import::run(&state, std::path::Path::new(input), o.limits.clone()).await?;
+    println!("entries scanned:      {}", r.scanned);
+    println!("FIT imported new:     {}", r.fit_new);
+    println!("FIT already present:  {}", r.fit_present);
+    let non_fit: usize = r.non_fit.values().map(Vec::len).sum();
+    println!("non-FIT (not stored): {non_fit}");
+    for (ext, paths) in &r.non_fit {
+        println!("  .{ext}: {}", paths.len());
+        let shown = if o.list_skipped { paths.len() } else { 5 };
+        for p in paths.iter().take(shown) {
+            println!("    {p}");
+        }
+        if paths.len() > shown {
+            println!(
+                "    ... {} more (--list-skipped lists all)",
+                paths.len() - shown
+            );
+        }
+    }
+    if !r.unsafe_names.is_empty() {
+        println!(
+            "unsafe names (imported, name kept as metadata only): {}",
+            r.unsafe_names.len()
+        );
+        for n in &r.unsafe_names {
+            println!("    {n}");
+        }
+    }
+    println!("errors:               {}", r.errors.len());
+    for e in &r.errors {
+        eprintln!("error: {e}");
+    }
+    if !r.errors.is_empty() {
+        bail!("{} entries failed", r.errors.len());
+    }
     Ok(())
 }
