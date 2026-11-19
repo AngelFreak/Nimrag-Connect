@@ -1,52 +1,136 @@
-# nimrag
+<p align="center">
+  <img src="docs/assets/banner.svg" alt="Nimrag Connect: your watch, your server, your data. Self-hosted sync for Garmin wearables and Android, no cloud required." width="100%">
+</p>
 
-A self-hosted replacement for the Garmin Connect app and cloud, built for one Garmin Instinct 2 and one Android phone.
+<p align="center">
+  <img alt="Status: work in progress" src="https://img.shields.io/badge/status-work%20in%20progress-FFA24D?style=flat-square&labelColor=171E22">
+  <img alt="Rust 1.89+" src="https://img.shields.io/badge/rust-1.89%2B-7DBBFF?style=flat-square&logo=rust&logoColor=E8EDEE&labelColor=171E22">
+  <img alt="Platform: Android" src="https://img.shields.io/badge/phone-Android-4FD1B5?style=flat-square&logo=android&logoColor=E8EDEE&labelColor=171E22">
+  <img alt="No cloud" src="https://img.shields.io/badge/cloud-none-A594FF?style=flat-square&labelColor=171E22">
+  <img alt="Licence: not chosen yet" src="https://img.shields.io/badge/licence-not%20chosen%20yet-9AA7AC?style=flat-square&labelColor=171E22">
+</p>
 
-- An Android app pairs with the watch over Bluetooth LE, pulls its files, and uploads them to a server you run.
-- The server keeps every original file untouched (addressed by SHA-256), derives everything else from those files, and serves its own web interface.
-- Nothing is sent to Garmin. The only planned exception is optional GPS-assist data, which will be a setting you can turn off.
+<p align="center">
+  <a href="#why">Why</a> ·
+  <a href="#how-it-works">How it works</a> ·
+  <a href="#roadmap">Roadmap</a> ·
+  <a href="#getting-started">Getting started</a> ·
+  <a href="#principles">Principles</a> ·
+  <a href="docs/protocol/PROTOCOL.md">Protocol notes</a>
+</p>
 
-## Status
+---
 
-Work in progress. See [`IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md) for the full roadmap and the status of each stage.
+**Nimrag Connect** is a self-hosted replacement for the Garmin Connect app and cloud. An Android app talks to your Garmin wearable over Bluetooth LE, pulls every file it records, and sends them to a server you run. The server keeps the originals untouched and turns them into your own dashboards. No account, no cloud, no third party in the middle.
 
-| Phase | State |
+## Why
+
+- **Your data stays yours.** Activities, sleep, heart rate and the rest go from your wrist to your server, and nowhere else.
+- **Originals first.** Every file from the watch is stored byte for byte, addressed by its SHA-256. The database is only a view, and you can rebuild it from the files at any time.
+- **Nothing made up.** Nimrag Connect shows what the watch measured and computed. If a metric isn't in the files, it says *unavailable* instead of estimating it.
+- **Built from evidence.** The Bluetooth protocol was mapped from our own captures and static analysis, and every finding is labelled *seen*, *inferred* or *unknown*.
+
+## Highlights
+
+| | |
 | --- | --- |
-| 0. Protocol map from static analysis and our own Bluetooth captures | done; night-sync and fresh-pairing captures still open |
-| 1. Server: ingest, file store, FIT decoding, parsers, `reparse`, export import | done (gate 1 passed on a USB copy of the watch) |
-| 2. Android sync | sans-IO protocol client done (replays every captured session); Android app next |
-| 3. Web interface | not started |
-| 4. Workouts to the watch, backups, export, runbook | not started |
+| ⌚ **Direct watch sync** | Our own implementation of the watch link (multi-link, reliable transport, file transfer). Files are only marked as synced on the watch once the phone has stored them safely. |
+| 🗄️ **Content-addressed store** | Idempotent uploads, a SHA-256 file store with sidecars, and `reparse` to rebuild every table from the originals. |
+| 🧬 **Lossless FIT decoding** | Keeps every message and field, including unknown and manufacturer-specific ones, with their raw bytes. |
+| 📈 **Health and training data** | Activities, laps and GPS tracks, strength sets, all-day heart rate, stress, steps, breathing, SpO₂, sleep, HRV, training load and recovery. |
+| 📦 **Bring your history** | Imports a Garmin data export, nested zips and all, through the same path as live uploads. |
+| 🔒 **Built to run at home** | A single Rust binary with SQLite, meant to sit behind your own VPN. |
 
-## Layout
+## How it works
 
-| Path | What |
-| --- | --- |
-| `core/` | Rust crate: sans-IO watch protocol, protocol client, FIT decoding and parsers |
-| `server/` | Rust service (axum, SQLite via sqlx): ingest, store, `reparse`, importer |
-| `tools/decode/` | CLI over `core` that decodes Bluetooth snoop logs and FIT files |
-| `tools/proto-recover/`, `tools/fit-profile/` | generators used during protocol work |
-| `docs/protocol/` | the protocol as decoded: `PROTOCOL.md`, message and file-type tables, recovered schemas, open questions |
-| `docs/` | architecture and licensing records |
+```mermaid
+flowchart LR
+    W["⌚ Garmin wearable"] -- "Bluetooth LE" --> A["📱 Android app<br/>(Kotlin, foreground sync)"]
+    A -. "uses" .-> C["🦀 nimrag-core<br/>(Rust, sans-IO protocol + FIT)"]
+    A -- "HTTPS upload<br/>device token" --> S["🖥️ nimrag-server<br/>(axum + SQLite)"]
+    S -. "uses" .-> C
+    S --> F[("Original files<br/>SHA-256")]
+    F -- "reparse" --> D[("Derived tables")]
+    D --> UI["🌐 Web interface<br/>(React PWA)"]
+    UI -. "embedded in" .-> A
+```
 
-## Building and testing
+One Rust crate, `nimrag-core`, holds the watch protocol and all FIT decoding. It is *sans-IO*: bytes go in, and bytes and events come out. The server links it directly, and the Android app will call it through generated Kotlin bindings, so there is exactly one implementation of the protocol and one of the parsers.
+
+## Roadmap
+
+| | Phase | State |
+| --- | --- | --- |
+| ✅ | **0. Protocol map:** static analysis and live Bluetooth captures, decoded end to end | Done. Night-sync and fresh-pairing captures still to record. |
+| ✅ | **1. Server:** ingest, file store, FIT decoding, parsers, `reparse`, export importer | Done. Gate passed on a full USB copy of a watch. |
+| 🚧 | **2. Android sync:** protocol client, Android app, upload queue, companion duties | The protocol client is done and replays every captured session. The Android app is next. |
+| ⏳ | **3. Web interface:** Today, activities, sleep, trends, training, calendar and more | Planned. |
+| ⏳ | **4. Writing and operations:** workouts to the watch, backups, export, runbook | Planned. |
+
+The full plan, with every stage and its status, is in [`IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md).
+
+## Getting started
+
+Nimrag Connect is not ready for everyday use yet. To build it and run the tests:
 
 ```sh
+git clone https://github.com/AngelFreak/Nimrag-Connect.git
+cd Nimrag-Connect
 cargo test --workspace
 ```
 
-No test needs the watch. Tests that replay real captures run only when the git-ignored `private/` directory is present, and skip otherwise.
+No test needs a watch. Tests that replay real captures run only when the git-ignored `private/` directory is present, and skip otherwise.
 
-FIT field names come from a profile table generated locally from your own copy of the Garmin Connect app (`tools/fit-profile/`). The table is Garmin material, so it is never committed. Without it, everything builds and raw decoding works, but derived tables (activities, wellness) stay empty. Do not share binaries or images built with a generated profile. See [`docs/LICENSING.md`](docs/LICENSING.md).
+Running the server:
 
-## Rules this project follows
+```sh
+cargo run -p nimrag-server -- token create --data-dir ./data --name phone   # prints a device token
+cargo run -p nimrag-server -- serve --data-dir ./data --listen 127.0.0.1:8080
+curl -H "Authorization: Bearer <token>" --data-binary @activity.fit \
+     "http://127.0.0.1:8080/api/files?source=usb"
+```
 
-- Original files are the source of truth; the database can always be rebuilt from them.
-- Never invent data: a metric the watch didn't record is shown as unavailable.
-- Protocol work follows evidence. Every finding in `docs/protocol/` is marked as seen, inferred or unknown.
-- Gadgetbridge (AGPL) was read as documentation only; no code was copied. See `docs/LICENSING.md`.
-- No personal data in the repository. Captures and real files stay in the git-ignored `private/` directory.
+Importing a Garmin data export:
 
-## Licence
+```sh
+cargo run -p nimrag-server -- import-export --data-dir ./data ~/Downloads/garmin-export.zip
+```
 
-Not chosen yet. Until a licence is added, all rights are reserved. "Garmin", "Instinct" and "Garmin Connect" are trademarks of Garmin Ltd.; this project is not affiliated with Garmin.
+> [!NOTE]
+> FIT field names come from a profile table that you generate locally from your own copy of the Garmin Connect app (see [`tools/fit-profile/`](tools/fit-profile/)). That table is Garmin material, so it is never committed. Without it, everything builds and raw decoding works, but the derived tables (activities, wellness) stay empty. Don't share binaries or images built with a generated profile.
+
+## Repository layout
+
+| Path | What |
+| --- | --- |
+| [`core/`](core/) | Rust crate: sans-IO watch protocol, protocol client, FIT decoding and parsers |
+| [`server/`](server/) | Rust service (axum, SQLite via sqlx): ingest, store, `reparse`, importer |
+| [`tools/decode/`](tools/decode/) | CLI that decodes Bluetooth snoop logs, live streams and FIT files |
+| [`tools/proto-recover/`](tools/proto-recover/), [`tools/fit-profile/`](tools/fit-profile/) | generators used during protocol work |
+| [`docs/protocol/`](docs/protocol/) | the protocol as decoded, with message tables, schemas and open questions |
+| [`docs/`](docs/) | architecture and licensing records |
+
+## Principles
+
+1. **No cloud.** No component calls Garmin's servers. The one planned exception, GPS-assist data, will be a setting you can turn off.
+2. **Original files are the source of truth.** The database can always be rebuilt from them.
+3. **Never invent data.** Prefer values the watch computed. Missing means *unavailable*.
+4. **Our own design.** Our own interface, names and layout; no Garmin screens, icons or wording.
+5. **Evidence over assumption.** Anything marked *unknown* in the protocol notes gets a capture or a test before it gets code.
+6. **No personal data in the repository.** Captures and real files stay in the git-ignored `private/` directory, and committed fixtures use made-up ids.
+
+## Compatibility
+
+Nimrag Connect is built for Android phones and Garmin wearables that use Garmin's multi-link Bluetooth protocol. So far all development and verification has been done against an **Instinct 2**, and a few details, such as the Bluetooth packet size, were measured on that model. Reports from other watches are welcome.
+
+## Acknowledgements
+
+[Gadgetbridge](https://codeberg.org/Freeyourgadget/Gadgetbridge) was read as documentation while mapping the protocol; no code was copied. Every fact we implement was checked against our own captures. See [`docs/LICENSING.md`](docs/LICENSING.md).
+
+## Licence and disclaimer
+
+A licence has not been chosen yet, so until one is added all rights are reserved.
+
+Nimrag Connect is an independent project and is not affiliated with, endorsed by or supported by Garmin. Garmin, Garmin Connect and Instinct are trademarks of Garmin Ltd. or its subsidiaries, used here only to describe compatibility.
+
+<p align="center"><img src="docs/assets/logo.svg" alt="Nimrag Connect logo" width="56"></p>

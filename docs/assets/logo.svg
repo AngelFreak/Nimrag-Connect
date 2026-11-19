@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="240" height="240" viewBox="0 0 120 120">
+  <title>Nimrag Connect</title>
+  <defs>
+    <linearGradient id="ring" x1="20" y1="20" x2="100" y2="100" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#7DBBFF"/>
+      <stop offset="1" stop-color="#4FD1B5"/>
+    </linearGradient>
+  </defs>
+  <rect x="1" y="1" width="118" height="118" rx="28" fill="#0F1417" stroke="#243037" stroke-width="2"/>
+  <path d="M87.58 36.86 A36 36 0 1 1 53.75 24.55" fill="none" stroke="url(#ring)" stroke-width="7" stroke-linecap="round"/>
+  <path d="M65.2 23.0 L52.0 16.6 L55.3 32.2 Z" fill="#7DBBFF" stroke="#7DBBFF" stroke-width="2" stroke-linejoin="round"/>
+  <path d="M33 62 H45 L51.5 47 L60 77 L67.5 53 L72.5 62 H87" fill="none" stroke="#FF6B6B" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
