@@ -1,121 +1,207 @@
-import { useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
-import { Card, CardHeader, DataList, Legend, TopBar } from '../components';
+import { useQuery } from '@tanstack/react-query';
+import { useEffect, useRef, useState } from 'react';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
+import { api } from '../api/client';
+import type { CalendarResponse } from '../api/generated';
+import { Card, CardHeader, DataList, TopBar } from '../components';
 import { addMonths, browserToday, fmtMonth, fmtShortDay, isIsoMonth } from '../lib/dates';
+import { fmtInt } from '../lib/format';
 import { usePageTitle } from '../lib/hooks';
+import { activityRow, activityWords, CALENDAR_KEYS, dayMarkers, daysOfMonth, energyText, leadingBlanks, moveFocus, sleepText } from './body/calendar';
+import { PageError, PageSkeleton, useOwnerToday } from './body/common';
+import type { CalendarDay } from './body/types';
 
-// STUB (stage 3l wires it to GET /api/calendar/{yyyy-mm}): static canvas markers, shown for
-// November 2026 only. `/calendar/:month?` without a month means the current month.
+// Stage 3l: GET /api/calendar/{yyyy-mm}. The month is in the URL (/calendar/2026-11, none means
+// the current month). Every day is a link to /day/{date}; the grid is one tab stop and moves with
+// the arrow keys (Page Up / Page Down change the month). Cardio is a circle, strength a square.
 
-type Kind = 'cardio' | 'strength';
-const MARKS: Record<string, { kind: Kind; label: string }> = {
-  '2026-11-03': { kind: 'strength', label: 'strength' },
-  '2026-11-05': { kind: 'cardio', label: 'run' },
-  '2026-11-08': { kind: 'strength', label: 'strength' },
-  '2026-11-10': { kind: 'strength', label: 'strength' },
-  '2026-11-11': { kind: 'cardio', label: 'run' },
-  '2026-11-13': { kind: 'cardio', label: 'walk' },
-  '2026-11-15': { kind: 'strength', label: 'strength' },
-  '2026-11-16': { kind: 'cardio', label: 'run' },
-  '2026-11-18': { kind: 'strength', label: 'strength' },
-};
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
 export function CalendarPage() {
   const { month: param } = useParams();
-  const today = browserToday();
-  const month = isIsoMonth(param) ? param : today.slice(0, 7);
-  const [picked, setSelected] = useState('2026-11-18');
-  const selected = picked.startsWith(month) ? picked : `${month}-01`;
-  const title = fmtMonth(month);
-  usePageTitle(title);
+  const ownerToday = useOwnerToday();
+  const today = ownerToday ?? browserToday();
+  const paramOk = isIsoMonth(param);
+  // Without a month in the URL, wait until the owner's own "today" is known.
+  const month = paramOk ? param : ownerToday?.slice(0, 7);
+  const title = month ? fmtMonth(month) : 'Calendar';
+  usePageTitle(month ? `Calendar ${title}` : 'Calendar');
 
-  const first = new Date(`${month}-01T00:00:00Z`);
-  const lead = (first.getUTCDay() + 6) % 7; // Monday first
-  const count = new Date(Date.UTC(first.getUTCFullYear(), first.getUTCMonth() + 1, 0)).getUTCDate();
-  const days = Array.from({ length: count }, (_, i) => `${month}-${String(i + 1).padStart(2, '0')}`);
-  const mark = MARKS[selected];
-
+  const query = useQuery({
+    queryKey: ['calendar', month],
+    queryFn: ({ signal }) => api.get<CalendarResponse>(`/api/calendar/${month}`, { signal }),
+    enabled: month !== undefined,
+  });
+  const data = query.data;
   return (
     <>
       <TopBar
         variant="pager"
         title={title}
-        subtitle="Calendar · sample data"
+        subtitle={data?.sample ? 'Calendar · sample data' : 'Calendar'}
         prevLabel="Previous month"
         nextLabel="Next month"
-        prev={{ to: `/calendar/${addMonths(month, -1)}` }}
-        next={{ to: `/calendar/${addMonths(month, 1)}` }}
+        prev={month ? { to: `/calendar/${addMonths(month, -1)}` } : null}
+        next={month ? { to: `/calendar/${addMonths(month, 1)}` } : null}
       />
-      <div className="page">
-        <Card padding="sm" aria-label={`Calendar for ${title}`} className="cal">
+      {query.isError ? (
+        <PageError title="The calendar could not be loaded" error={query.error} onRetry={() => void query.refetch()} />
+      ) : !data || !month ? (
+        <PageSkeleton cards={2} />
+      ) : (
+        <CalendarBody key={month} month={month} data={data} today={today} />
+      )}
+    </>
+  );
+}
+
+export function CalendarBody({ month, data, today }: { month: string; data: CalendarResponse; today: string }) {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const grid = useRef<HTMLDivElement>(null);
+  const days = daysOfMonth(month);
+  const byDate = new Map<string, CalendarDay>(data.days.map((d) => [d.date, d]));
+  const monthName = fmtMonth(month).split(' ')[0];
+  // A key press that crossed into this month names the day to focus in the navigation state.
+  const carried = (location.state as { focus?: string } | null)?.focus;
+  const arrivedAt = carried && carried.startsWith(month) ? carried : null;
+  const [focusDay, setFocusDay] = useState(arrivedAt ?? (today.startsWith(month) ? today : `${month}-01`));
+
+  useEffect(() => {
+    if (arrivedAt) grid.current?.querySelector<HTMLElement>(`[data-date="${arrivedAt}"]`)?.focus();
+  }, [arrivedAt]);
+
+  // Arrow keys move between the days; Page Up and Page Down change the month. A native listener
+  // keeps the grid a plain group of links (the links are the interactive elements).
+  useEffect(() => {
+    const el = grid.current;
+    if (!el) return;
+    const onKeyDown = (e: globalThis.KeyboardEvent) => {
+      if (!CALENDAR_KEYS.includes(e.key) || e.altKey || e.ctrlKey || e.metaKey) return;
+      const from = (e.target as HTMLElement).closest<HTMLElement>('[data-date]')?.dataset['date'];
+      if (!from) return;
+      e.preventDefault();
+      let next: string | null;
+      if (e.key === 'PageUp' || e.key === 'PageDown') {
+        const target = addMonths(month, e.key === 'PageUp' ? -1 : 1);
+        next = `${target}-${String(Math.min(Number(from.slice(8)), daysOfMonth(target).length)).padStart(2, '0')}`;
+      } else {
+        next = moveFocus(from, e.key);
+      }
+      if (!next) return;
+      if (next.startsWith(month)) {
+        setFocusDay(next);
+        el.querySelector<HTMLElement>(`[data-date="${next}"]`)?.focus();
+      } else {
+        void navigate(`/calendar/${next.slice(0, 7)}`, { state: { focus: next } });
+      }
+    };
+    el.addEventListener('keydown', onKeyDown);
+    return () => el.removeEventListener('keydown', onKeyDown);
+  }, [month, navigate]);
+
+  const selected = byDate.get(focusDay);
+  const isCurrentMonth = today.startsWith(month);
+
+  return (
+    <div className="page">
+      <div className="grid-panels" style={{ alignItems: 'start' }}>
+        <Card padding="sm" aria-label={`Calendar for ${fmtMonth(month)}`} className="cal">
           <div className="cal-head" aria-hidden="true">
             {WEEKDAYS.map((d) => (
               <span key={d}>{d}</span>
             ))}
           </div>
-          <div className="cal-grid">
-            {Array.from({ length: lead }, (_, i) => (
-              <span key={`lead-${i}`} />
+          <div className="cal-grid" ref={grid} role="group" aria-label="Days, use the arrow keys to move between them">
+            {Array.from({ length: leadingBlanks(month) }, (_, i) => (
+              <span key={`lead-${i}`} aria-hidden="true" />
             ))}
             {days.map((d) => {
-              const m = MARKS[d];
+              const markers = dayMarkers(byDate.get(d));
+              const words = activityWords(byDate.get(d));
               const n = Number(d.slice(8));
-              const label = `${n} ${fmtMonth(month).split(' ')[0]}${m ? `, ${m.label}` : ''}${d === today ? ', today' : ''}${d === selected ? ', selected' : ''}`;
+              const label = [`${n} ${monthName}`, words, d === today ? 'today' : null].filter(Boolean).join(', ');
               return (
-                <button
+                <Link
                   key={d}
-                  type="button"
+                  to={`/day/${d}`}
+                  data-date={d}
                   className={d > today ? 'cal-day cal-day--future' : 'cal-day'}
-                  aria-pressed={d === selected}
                   aria-current={d === today ? 'date' : undefined}
                   aria-label={label}
-                  onClick={() => setSelected(d)}
+                  tabIndex={d === focusDay ? 0 : -1}
+                  onFocus={() => setFocusDay(d)}
                 >
                   {n}
-                  {m ? <span className={`dot dot--${m.kind}`} /> : <span className="dot" />}
-                </button>
+                  <span style={{ display: 'flex', gap: 3, height: 6 }} aria-hidden="true">
+                    {markers.length === 0 ? <span className="dot" style={{ background: 'none' }} /> : markers.map((m) => <span key={m} className={`dot dot--${m}`} />)}
+                  </span>
+                </Link>
               );
             })}
           </div>
-          <Legend
-            items={[
-              { key: 'cardio', label: 'Cardio (circle)', color: 'var(--link)' },
-              { key: 'strength', label: 'Strength (square)', color: 'var(--warn)' },
-            ]}
-          />
+          <ul className="legend">
+            <li className="legend__item">
+              <span className="dot dot--cardio" aria-hidden="true" />
+              <span className="legend__label">Cardio (circle)</span>
+            </li>
+            <li className="legend__item">
+              <span className="dot dot--strength" aria-hidden="true" />
+              <span className="legend__label">Strength (square)</span>
+            </li>
+          </ul>
         </Card>
-        <Card padding="lg">
-          <CardHeader title={fmtShortDay(selected)} />
-          {mark ? (
-            <Link to="/activities" className="plain-row plain-row--first" style={{ textDecoration: 'none' }}>
-              <span>{mark.label === 'strength' ? 'Strength · 18:05' : 'Run · 17:40'}</span>
-              <span className="plain-row__sub">{mark.label === 'strength' ? '42 min · 18 sets' : '38 min · 6.4 km'}</span>
-            </Link>
-          ) : (
-            <p className="plain-row__sub">No activity on this day.</p>
-          )}
-          <DataList
-            items={[
-              { label: 'Sleep', value: '7h 12m · score 81' },
-              { label: 'Steps', value: '8,360' },
-              { label: 'Resting heart rate', value: '51 bpm' },
-              { label: 'Energy', value: 'High 94 · low 38' },
-            ]}
-          />
-          <Link to={`/day/${selected}`}>Open day view</Link>
-        </Card>
-        <Card padding="lg">
-          <CardHeader title="Month so far" />
-          <DataList
-            items={[
-              { label: 'Activities', value: '9' },
-              { label: 'Strength sessions', value: '5' },
-              { label: 'Cardio sessions', value: '4' },
-            ]}
-          />
-        </Card>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
+          <Card padding="lg" aria-labelledby="cal-day-title">
+            <CardHeader title={fmtShortDay(focusDay)} id="cal-day-title" />
+            <DaySummary day={selected} />
+            <Link to={`/day/${focusDay}`}>Open day view</Link>
+          </Card>
+          <Card padding="lg" aria-labelledby="cal-totals-title">
+            <CardHeader title={isCurrentMonth ? 'Month so far' : 'Month totals'} id="cal-totals-title" />
+            <DataList
+              items={[
+                { label: 'Activities', value: fmtInt(data.totals.activities) },
+                { label: 'Strength sessions', value: fmtInt(data.totals.strength_sessions) },
+                { label: 'Cardio sessions', value: fmtInt(data.totals.cardio_sessions) },
+              ]}
+            />
+          </Card>
+        </div>
       </div>
+    </div>
+  );
+}
+
+function DaySummary({ day }: { day: CalendarDay | undefined }) {
+  return (
+    <>
+      {day && day.activities.length > 0 ? (
+        <ul>
+          {day.activities.map((a, i) => {
+            const row = activityRow(a);
+            return (
+              <li key={a.id}>
+                <Link to={`/activities/${a.id}`} className={i === 0 ? 'plain-row plain-row--first' : 'plain-row'} style={{ textDecoration: 'none' }}>
+                  <span>{row.title}</span>
+                  {row.sub ? <span className="plain-row__sub">{row.sub}</span> : null}
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+      ) : (
+        <p className="plain-row__sub">No activity on this day.</p>
+      )}
+      <DataList
+        items={[
+          { label: 'Sleep', value: day ? sleepText(day) : null },
+          { label: 'Steps', value: day ? fmtInt(day.steps) : null },
+          { label: 'Resting heart rate', value: day && day.resting_hr_bpm !== null ? `${fmtInt(day.resting_hr_bpm)} bpm` : null },
+          { label: 'Energy', value: day ? energyText(day) : null },
+        ]}
+      />
     </>
   );
 }

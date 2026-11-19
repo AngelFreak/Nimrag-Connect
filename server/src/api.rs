@@ -38,6 +38,8 @@ pub struct AppState {
     pub(crate) login_gate: Arc<tokio::sync::Semaphore>,
     /// Networks whose `X-Forwarded-For` is believed (`--trusted-proxy`); empty by default.
     pub(crate) trusted_proxies: Arc<Vec<crate::auth::Cidr>>,
+    /// Forward mode (Garmin Connect upload): runtime state and the worker wake-up.
+    pub garmin: Arc<crate::garmin::Garmin>,
     clock: Arc<dyn Fn() -> i64 + Send + Sync>,
 }
 
@@ -52,6 +54,7 @@ impl AppState {
             limiter: Default::default(),
             login_gate: Arc::new(tokio::sync::Semaphore::new(1)),
             trusted_proxies: Default::default(),
+            garmin: Default::default(),
             clock: Arc::new(system_now),
         }
     }
@@ -64,6 +67,12 @@ impl AppState {
     /// Believe `X-Forwarded-For` from these peers when naming the login client.
     pub fn with_trusted_proxies(mut self, nets: Vec<crate::auth::Cidr>) -> Self {
         self.trusted_proxies = Arc::new(nets);
+        self
+    }
+
+    /// Replace the Garmin client configuration (tests point it at a fake Garmin).
+    pub fn with_garmin(mut self, cfg: crate::garmin::GarminConfig) -> Self {
+        self.garmin = Arc::new(crate::garmin::Garmin::new(cfg));
         self
     }
 

@@ -77,6 +77,13 @@ fn every_api_type_is_exported() {
         "BodyEntry",
         "DevicesResponse",
         "StorageResponse",
+        "GarminStatus",
+        "GarminLoginRequest",
+        "GarminLoginResponse",
+        "GarminMfaRequest",
+        "GarminBackfillRequest",
+        "GarminBackfillResponse",
+        "GarminImportTokens",
     ] {
         assert!(
             index.contains(&format!("{t}\"")) || index.contains(&format!("{t} ")),

@@ -19,7 +19,9 @@ ENV SQLX_OFFLINE=true
 RUN cargo build --release --locked -p nimrag-server
 
 FROM debian:bookworm-slim
-RUN useradd --system --uid 10001 --home-dir /data nimrag \
+# ca-certificates: Forward mode talks to Garmin over TLS.
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates && rm -rf /var/lib/apt/lists/* \
+    && useradd --system --uid 10001 --home-dir /data nimrag \
     && mkdir /data && chown nimrag /data
 COPY --from=build /src/target/release/nimrag-server /usr/local/bin/nimrag-server
 USER nimrag

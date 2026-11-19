@@ -47,6 +47,7 @@ pub fn router() -> Router<AppState> {
         .merge(training::routes())
         .merge(body::routes())
         .merge(system::routes())
+        .merge(crate::garmin::api::routes())
 }
 
 // ---- request context ----------------------------------------------------------
@@ -183,6 +184,7 @@ macro_rules! export_all_types {
 /// reference) into `dir`, plus an `index.ts` re-exporting the top-level ones.
 /// Files are rewritten only when their content differs.
 pub fn export_types(dir: &Path) -> anyhow::Result<()> {
+    use crate::garmin::api as garmin;
     use crate::web_api::*;
     std::fs::create_dir_all(dir)?;
     let cfg = Config::new()
@@ -215,6 +217,13 @@ pub fn export_types(dir: &Path) -> anyhow::Result<()> {
         body::BodyEntry,
         system::DevicesResponse,
         system::StorageResponse,
+        garmin::GarminStatus,
+        garmin::GarminLoginRequest,
+        garmin::GarminLoginResponse,
+        garmin::GarminMfaRequest,
+        garmin::GarminBackfillRequest,
+        garmin::GarminBackfillResponse,
+        garmin::GarminImportTokens,
         crate::settings::HomeCard,
         crate::settings::HomeCards,
     );

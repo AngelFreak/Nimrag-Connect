@@ -1,0 +1,227 @@
+import type { ReactNode } from 'react';
+import { Link } from 'react-router-dom';
+import type { HomeCard, HomeCards, Today } from '../../api/generated';
+import { ProgressBar, SeriesChart, StageBar, StatTile, type Tone } from '../../components';
+import { fmtFixed, fmtInt, isMissing } from '../../lib/format';
+import {
+  baselineLabel,
+  fmtSeconds,
+  fmtTime,
+  hrvStatusLabel,
+  signed,
+  stressLevelWord,
+  targetLabel,
+  unit,
+} from './format';
+
+/** Name shown on the card and in the Edit home list. Our words, not the watch maker's. */
+export const CARD_LABEL: Record<HomeCard, string> = {
+  energy: 'Energy',
+  heart_rate: 'Heart rate',
+  stress: 'Stress',
+  sleep: 'Sleep',
+  hrv: 'Overnight HRV',
+  training_status: 'Training status',
+  intensity_minutes: 'Intensity minutes',
+  training_load: 'Training load',
+  steps: 'Steps',
+  recovery_time: 'Recovery time',
+  vo2_max: 'VO2 max',
+  respiration: 'Breathing',
+  spo2: 'Blood oxygen',
+  weight: 'Body weight',
+  training_readiness: 'Training readiness',
+};
+
+/** Detail page each card opens. */
+export const CARD_LINK: Record<HomeCard, string> = {
+  energy: '/day',
+  heart_rate: '/day',
+  stress: '/day',
+  sleep: '/sleep',
+  hrv: '/health',
+  training_status: '/training',
+  intensity_minutes: '/training',
+  training_load: '/training',
+  steps: '/movement',
+  recovery_time: '/training',
+  vo2_max: '/training',
+  respiration: '/health',
+  spo2: '/health',
+  weight: '/body',
+  training_readiness: '/training',
+};
+
+/** The server's default layout (settings.rs), used by "Reset to default". */
+export const DEFAULT_HOME_CARDS: HomeCards = {
+  order: [
+    'energy',
+    'heart_rate',
+    'stress',
+    'sleep',
+    'hrv',
+    'training_status',
+    'intensity_minutes',
+    'training_load',
+    'steps',
+    'recovery_time',
+    'vo2_max',
+    'respiration',
+    'spo2',
+    'weight',
+    'training_readiness',
+  ],
+  hidden: ['respiration', 'spo2', 'weight', 'training_readiness'],
+};
+
+/** The cards to show, in the owner's order, without the hidden ones. */
+export function visibleCards(cards: HomeCards): HomeCard[] {
+  const hidden = new Set(cards.hidden);
+  return cards.order.filter((id) => !hidden.has(id));
+}
+
+function join(...parts: (string | null | undefined | false)[]): string | null {
+  const present = parts.filter((p): p is string => typeof p === 'string' && p.length > 0);
+  return present.length > 0 ? present.join(' · ') : null;
+}
+
+interface Built {
+  value: string | null;
+  sub?: string | null;
+  tone?: Tone;
+  extra?: ReactNode;
+}
+
+function build(id: HomeCard, t: Today): Built {
+  const tz = t.timezone;
+  switch (id) {
+    case 'energy':
+      return {
+        value: fmtInt(t.energy.now),
+        tone: 'energy',
+        sub: join(
+          isMissing(t.energy.charged) ? null : `${signed(t.energy.charged)} charged`,
+          isMissing(t.energy.drained) ? null : `${signed(-t.energy.drained)} drained`,
+        ),
+      };
+    case 'heart_rate': {
+      const lo = fmtInt(t.heart_rate.day.low_bpm);
+      const hi = fmtInt(t.heart_rate.day.high_bpm);
+      return { value: unit(t.heart_rate.resting_hr_bpm, 'bpm'), tone: 'heart', sub: join('Resting', lo && hi ? `today ${lo} to ${hi}` : null) };
+    }
+    case 'stress': {
+      const word = stressLevelWord(t.stress.main_level);
+      return { value: fmtInt(t.stress.average), tone: 'warn', sub: join('Average', word ? `mostly ${word}` : null) };
+    }
+    case 'sleep': {
+      const s = t.sleep;
+      return {
+        value: fmtSeconds(s?.duration_s),
+        tone: 'sleep',
+        sub: s ? join(isMissing(s.score) ? null : `Score ${fmtInt(s.score)}`, s.score_label) : null,
+        extra:
+          s?.stages_available === true ? (
+            <StageBar
+              height={8}
+              label={`Sleep stages: deep ${fmtSeconds(s.deep_s) ?? 'unavailable'}, light ${fmtSeconds(s.light_s) ?? 'unavailable'}, REM ${fmtSeconds(s.rem_s) ?? 'unavailable'}, awake ${fmtSeconds(s.awake_s) ?? 'unavailable'}`}
+              segments={[
+                { key: 'deep', label: 'Deep', value: s.deep_s, color: 'var(--stage-deep)' },
+                { key: 'light', label: 'Light', value: s.light_s, color: 'var(--stage-light)' },
+                { key: 'rem', label: 'REM', value: s.rem_s, color: 'var(--stage-rem)' },
+                { key: 'awake', label: 'Awake', value: s.awake_s, color: 'var(--stage-awake)' },
+              ]}
+            />
+          ) : null,
+      };
+    }
+    case 'hrv': {
+      const h = t.hrv;
+      const values = h.values_4w.map((d) => d.value);
+      const band: [number, number] | undefined =
+        !isMissing(h.baseline_low_ms) && !isMissing(h.baseline_high_ms) ? [h.baseline_low_ms, h.baseline_high_ms] : undefined;
+      return {
+        value: unit(h.last_night_ms, 'ms'),
+        tone: 'link',
+        sub: join(baselineLabel(h.vs_baseline), hrvStatusLabel(h.status)),
+        extra:
+          values.some((v) => v !== null) ? (
+            <SeriesChart
+              label="Overnight HRV, last 4 weeks"
+              summary={`Overnight HRV over the last 4 weeks, ${values.filter((v) => v !== null).length} nights${band ? `, usual range ${band[0]} to ${band[1]} milliseconds` : ''}.`}
+              x={values.map((_, i) => i)}
+              series={[{ label: 'HRV', color: 'link', data: values, width: 2 }]}
+              {...(band ? { band } : {})}
+              height={36}
+            />
+          ) : null,
+      };
+    }
+    case 'training_status': {
+      const s = t.training_status;
+      return { value: s.label, sub: s.label ? join(s.since ? `Since ${s.since}${s.since_is_lower_bound ? ' or earlier' : ''}` : null) : null };
+    }
+    case 'training_readiness': {
+      const r = t.training_readiness;
+      return { value: r ? fmtInt(r.score) : null, sub: r ? r.label : 'Not provided by this watch yet' };
+    }
+    case 'intensity_minutes': {
+      const m = t.intensity_minutes;
+      return {
+        value: unit(m.total_min, 'min'),
+        sub: `This week, goal ${fmtInt(m.goal_min)}`,
+        extra: <ProgressBar value={m.total_min} max={m.goal_min} color="var(--energy)" label={`Intensity minutes this week: ${fmtInt(m.total_min) ?? 'unavailable'} of ${fmtInt(m.goal_min)}`} />,
+      };
+    }
+    case 'training_load': {
+      const l = t.training_load;
+      const range = !isMissing(l.target_min) && !isMissing(l.target_max) ? `${fmtInt(l.target_min)} to ${fmtInt(l.target_max)}` : null;
+      return { value: fmtInt(l.seven_day_load), sub: join(targetLabel(l.vs_target), range) };
+    }
+    case 'steps': {
+      const s = t.steps;
+      return {
+        value: fmtInt(s.steps),
+        tone: 'steps',
+        sub: `Goal ${fmtInt(s.goal)}`,
+        extra: <ProgressBar value={s.steps} max={s.goal} label={`${fmtInt(s.steps) ?? 'unavailable'} of ${fmtInt(s.goal)} steps`} />,
+      };
+    }
+    case 'recovery_time': {
+      const r = t.recovery_time;
+      const ready = fmtTime(r.ready_at, tz);
+      return { value: fmtSeconds(r.remaining_s), sub: ready ? `Ready around ${ready}` : null };
+    }
+    case 'vo2_max': {
+      const v = t.vo2max;
+      const change = signed(v.change_3m, 1);
+      return { value: fmtFixed(v.value, 1), sub: join('ml/kg/min, derived', change ? `${change} in 3 months` : null) };
+    }
+    case 'respiration': {
+      const r = t.respiration;
+      const asleep = fmtFixed(r.sleep_avg_brpm, 1);
+      return { value: fmtFixed(r.latest_brpm, 1), sub: join('breaths a minute', asleep ? `asleep ${asleep}` : null) };
+    }
+    case 'spo2': {
+      const o = t.spo2;
+      const low = fmtInt(o.sleep_low_percent);
+      return { value: isMissing(o.latest_percent) ? null : `${fmtFixed(o.latest_percent, 0)}%`, sub: low ? `Lowest asleep ${low}%` : null };
+    }
+    case 'weight': {
+      const w = t.weight;
+      const change = signed(w.change_30d_kg, 1);
+      return { value: unit(w.weight_kg, 'kg', 1), sub: change ? `${change} kg in 30 days` : null };
+    }
+  }
+}
+
+/** One small card of the "At a glance" grid. The whole card is a link to its detail page. */
+export function GlanceCard({ id, today }: { id: HomeCard; today: Today }) {
+  const b = build(id, today);
+  return (
+    <Link to={CARD_LINK[id]} className="glance" data-card={id}>
+      <StatTile label={CARD_LABEL[id]} value={b.value} {...(b.sub ? { sub: b.sub } : {})} tone={b.tone ?? 'muted'}>
+        {b.extra}
+      </StatTile>
+    </Link>
+  );
+}

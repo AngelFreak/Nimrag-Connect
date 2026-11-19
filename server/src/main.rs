@@ -258,17 +258,18 @@ async fn serve(o: Opts) -> Result<()> {
     if swept > 0 {
         tracing::warn!(swept, "removed leftovers of interrupted uploads");
     }
-    let app = api::router(
-        api::AppState::new(pool, o.data_dir, api::MAX_BODY_BYTES)
-            .with_insecure_cookies(o.insecure_cookies)
-            .with_trusted_proxies(o.trusted_proxies.clone()),
-    );
+    let state = api::AppState::new(pool, o.data_dir, api::MAX_BODY_BYTES)
+        .with_insecure_cookies(o.insecure_cookies)
+        .with_trusted_proxies(o.trusted_proxies.clone());
     if !o.trusted_proxies.is_empty() {
         tracing::info!(
             networks = o.trusted_proxies.len(),
             "trusting X-Forwarded-For from the configured proxy networks"
         );
     }
+    // Forward mode: uploads queued activity files to Garmin Connect (idle until the owner logs in).
+    nimrag_server::garmin::queue::spawn_worker(state.clone());
+    let app = api::router(state);
     if o.insecure_cookies {
         tracing::warn!(
             "session cookies are sent without the Secure flag; use only on a trusted plain-http network"

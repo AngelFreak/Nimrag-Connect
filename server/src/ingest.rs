@@ -112,5 +112,9 @@ pub async fn ingest(
         derive::write(&mut tx, sha256, parsed).await?;
     }
     tx.commit().await?;
-    Ok(event.created && !repeat)
+    drop(_guard);
+    let created = event.created && !repeat;
+    let is_fit = derive::looks_like_fit(&head);
+    crate::garmin::on_stored(state, sha256, &event.meta, is_fit, created).await;
+    Ok(created)
 }
