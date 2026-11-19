@@ -13,5 +13,6 @@ pub mod describe;
 pub mod fit;
 pub mod gfdi;
 pub mod link;
+pub mod messages;
 pub mod mlr;
 pub mod multilink;

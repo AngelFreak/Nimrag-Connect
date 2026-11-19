@@ -9,8 +9,8 @@ use std::collections::HashMap;
 
 use crate::capture::{Att, Direction};
 use crate::cobs::FrameDecoder;
-use crate::describe::DirEntry;
 use crate::gfdi::{Message, Status};
+use crate::messages::{self, DirEntry};
 use crate::mlr::{self, Receive, ReceiveWindow};
 use crate::multilink::{self, Control};
 
@@ -387,8 +387,12 @@ impl LinkDecoder {
     fn track_files(&mut self, direction: Direction, client: Link, m: &Message) -> Vec<Event> {
         let st = self.clients.get_mut(&client).unwrap();
         match (direction, m.id) {
-            (Direction::Sent, 5002) if m.payload.len() >= 2 => {
-                let index = u16::from_le_bytes([m.payload[0], m.payload[1]]);
+            (Direction::Sent, 5002) => {
+                // As lenient as before: only the index is needed.
+                let Some(index) = m.payload.get(..2).map(|b| u16::from_le_bytes([b[0], b[1]]))
+                else {
+                    return Vec::new();
+                };
                 st.download = Some(Download {
                     index,
                     crc_ok: true,
@@ -399,31 +403,33 @@ impl LinkDecoder {
             (Direction::Received, 5000) => {
                 if let (Some(r), Some(d)) = (m.as_response(), st.download.as_mut()) {
                     if r.request_id == 5002 {
-                        if r.status == Status::Ack
-                            && r.body.first() == Some(&0)
-                            && r.body.len() >= 5
-                        {
-                            d.size = Some(u32::from_le_bytes(r.body[1..5].try_into().unwrap()));
-                        } else {
-                            st.download = None;
+                        match messages::parse_download_reply(r.body) {
+                            Some(reply)
+                                if r.status == Status::Ack
+                                    && reply.status == 0
+                                    && r.body.len() >= 5 =>
+                            {
+                                d.size = Some(reply.size);
+                            }
+                            _ => st.download = None,
                         }
                     }
                 }
                 Vec::new()
             }
-            (Direction::Received, 5004) if m.payload.len() >= 7 => {
+            (Direction::Received, 5004) => {
+                let Some(chunk) = messages::parse_file_chunk(&m.payload) else {
+                    return Vec::new();
+                };
                 let Some(d) = st.download.as_mut() else {
                     return Vec::new();
                 };
-                let crc = u16::from_le_bytes([m.payload[1], m.payload[2]]);
-                let offset = u32::from_le_bytes(m.payload[3..7].try_into().unwrap()) as usize;
-                let chunk = &m.payload[7..];
-                if offset != d.data.len() {
+                if chunk.offset as usize != d.data.len() {
                     return Vec::new(); // duplicate / resend; the phone will answer with a status
                 }
-                d.crc = crate::crc::update(d.crc, chunk);
-                d.crc_ok &= d.crc == crc;
-                d.data.extend_from_slice(chunk);
+                d.crc = crate::crc::update(d.crc, &chunk.data);
+                d.crc_ok &= d.crc == chunk.crc;
+                d.data.extend_from_slice(&chunk.data);
                 let done = d.size.is_some_and(|s| d.data.len() >= s as usize);
                 if !done {
                     return Vec::new();
@@ -432,12 +438,7 @@ impl LinkDecoder {
                 let entry = st.directory.get(&d.index).cloned();
                 let mut ev = Vec::new();
                 if d.index == 0 {
-                    let entries: Vec<DirEntry> = d
-                        .data
-                        .chunks_exact(16)
-                        .skip(1)
-                        .filter_map(DirEntry::parse)
-                        .collect();
+                    let entries = messages::parse_directory(&d.data);
                     for e in &entries {
                         st.directory.insert(e.index, e.clone());
                     }

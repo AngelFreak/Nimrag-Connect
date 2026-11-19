@@ -22,7 +22,17 @@
 //! The public API is UniFFI-friendly on purpose: owned values, no lifetimes
 //! or generics, plain records and enums.
 
+use crate::cobs;
 use crate::describe::DirEntry;
+
+pub mod reliable;
+mod session;
+mod sync;
+mod transport;
+
+use reliable::MIN_ATT_MTU;
+use session::{Out, Session};
+use transport::{Transport, TransportOut};
 
 /// Seconds between the Unix epoch and the Garmin epoch (1989-12-31T00:00Z).
 pub const GARMIN_EPOCH_UNIX_S: i64 = 631_065_600;
@@ -33,6 +43,10 @@ pub const GARMIN_EPOCH_UNIX_S: i64 = 631_065_600;
 pub struct ClientConfig {
     /// Multi-link client id (u64 chosen by the host).
     pub client_id: u64,
+    /// Distinct for every `Client` the caller creates (an in-process counter
+    /// is enough). Transfer ids carry it, so a confirmation that belongs to an
+    /// earlier connection can never match a download of this one.
+    pub connection_epoch: u32,
     /// Host details for the reply to DeviceInformation (5024).
     pub host_name: String,
     pub host_manufacturer: String,
@@ -69,9 +83,9 @@ pub enum Input {
     StartSync,
     /// The bytes of `Event::FileDownloaded { transfer_id, .. }` are durably
     /// stored on the phone. Only this permits the archive request (5008).
-    FileStored { transfer_id: u32 },
+    FileStored { transfer_id: u64 },
     /// Storing failed; the file stays pending on the watch.
-    FileStoreFailed { transfer_id: u32 },
+    FileStoreFailed { transfer_id: u64 },
     /// The GATT link is gone. Terminal.
     Disconnected,
 }
@@ -110,7 +124,7 @@ pub enum Event {
     /// A complete file whose size and running CRC both checked out. The
     /// client now waits for `FileStored` / `FileStoreFailed`.
     FileDownloaded {
-        transfer_id: u32,
+        transfer_id: u64,
         entry: DirEntry,
         data: Vec<u8>,
     },
@@ -122,11 +136,11 @@ pub enum Event {
     },
     /// The watch acknowledged the archive flag for this transfer.
     FileArchived {
-        transfer_id: u32,
+        transfer_id: u64,
     },
     /// A `FileStored` that did not match the transfer being waited on.
     StaleConfirmation {
-        transfer_id: u32,
+        transfer_id: u64,
     },
     SyncFinished {
         cycle: u32,
@@ -164,12 +178,7 @@ pub struct DeviceInfo {
     pub capabilities: Vec<u8>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct FileType {
-    pub data_type: u8,
-    pub sub_type: u8,
-    pub name: String,
-}
+pub use crate::messages::FileType;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SyncTrigger {
@@ -191,6 +200,8 @@ pub enum FileFailure {
     },
     /// The entry is not a readable FIT file; skipped by policy.
     Skipped,
+    /// The watch sent compressed data (5054), which is not supported.
+    Compressed,
     StoreFailed,
     /// The watch refused the archive flag.
     ArchiveRefused,
@@ -262,23 +273,170 @@ pub enum Phase {
 /// The client state machine. See the module documentation.
 #[derive(Debug)]
 pub struct Client {
-    _private: (),
+    state: State,
+    clock_ms: u64,
+    transport: Transport,
+    session: Session,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum State {
+    /// Before `Input::Connected`.
+    Idle,
+    Active,
+    Closed,
 }
 
 impl Client {
     pub fn new(config: ClientConfig) -> Client {
-        let _ = config;
-        todo!("stage 2a")
+        Client {
+            state: State::Idle,
+            clock_ms: 0,
+            transport: Transport::new(config.client_id),
+            session: Session::new(&config),
+        }
     }
 
     /// Feed one input and collect what to write, what happened and when to
     /// call again. Never blocks, never panics on malformed peer data.
     pub fn handle(&mut self, now: Now, input: Input) -> Step {
-        let _ = (now, input);
-        todo!("stage 2a")
+        let mut step = Step::default();
+        if self.state == State::Closed {
+            return step;
+        }
+        // Monotonic time must not go backwards; tolerate a caller that does.
+        self.clock_ms = self.clock_ms.max(now.mono_ms);
+        let now = Now {
+            mono_ms: self.clock_ms,
+            ..now
+        };
+        match input {
+            Input::Disconnected => self.close(CloseReason::Disconnected, &mut step),
+            Input::Connected { att_mtu } => self.connect(&now, att_mtu, &mut step),
+            _ if self.state == State::Idle => {}
+            input => {
+                self.apply_input(&now, input, &mut step);
+                if self.state == State::Active {
+                    self.run_timers(&now, &mut step);
+                }
+            }
+        }
+        if self.state == State::Active {
+            step.wake_at_mono_ms = self.next_wake();
+        }
+        step
     }
 
     pub fn phase(&self) -> Phase {
-        todo!("stage 2a")
+        match self.state {
+            State::Idle => Phase::Idle,
+            State::Closed => Phase::Closed,
+            State::Active if !self.transport.is_up() => Phase::BringUp,
+            State::Active => self.session.phase(),
+        }
+    }
+
+    fn connect(&mut self, now: &Now, att_mtu: u16, step: &mut Step) {
+        if self.state != State::Idle {
+            return;
+        }
+        if att_mtu < MIN_ATT_MTU {
+            self.close(CloseReason::MtuTooSmall, step);
+            return;
+        }
+        self.state = State::Active;
+        let out = self.transport.start(now.mono_ms, att_mtu);
+        self.apply_transport(now, out, step);
+    }
+
+    fn apply_input(&mut self, now: &Now, input: Input, step: &mut Step) {
+        match input {
+            Input::Notification { value } => {
+                let out = self.transport.on_notification(now.mono_ms, &value);
+                self.apply_transport(now, out, step);
+            }
+            Input::Tick => {}
+            Input::StartSync => {
+                let out = self.session.start_sync(now);
+                self.apply_session(now, out, step);
+            }
+            Input::FileStored { transfer_id } => {
+                let out = self.session.file_stored(now, transfer_id, true);
+                self.apply_session(now, out, step);
+            }
+            Input::FileStoreFailed { transfer_id } => {
+                let out = self.session.file_stored(now, transfer_id, false);
+                self.apply_session(now, out, step);
+            }
+            Input::Connected { .. } | Input::Disconnected => {}
+        }
+    }
+
+    /// Run every timer that is due; early calls do nothing.
+    fn run_timers(&mut self, now: &Now, step: &mut Step) {
+        let out = self.transport.on_tick(now.mono_ms);
+        self.apply_transport(now, out, step);
+        if self.state == State::Active && self.transport.is_up() {
+            let out = self.session.on_tick(now);
+            self.apply_session(now, out, step);
+        }
+    }
+
+    fn apply_transport(&mut self, now: &Now, out: TransportOut, step: &mut Step) {
+        step.writes.extend(out.writes);
+        for kind in out.anomalies {
+            step.events.push(Event::Anomaly {
+                kind,
+                message_id: 0,
+            });
+        }
+        if let Some(reason) = out.closed {
+            self.close(reason, step);
+            return;
+        }
+        if out.link_ready {
+            step.events.push(Event::LinkReady);
+            self.session.start(now);
+        }
+        for frame in out.frames {
+            if self.state != State::Active {
+                break;
+            }
+            let session_out = self.session.on_frame(now, frame);
+            self.apply_session(now, session_out, step);
+        }
+    }
+
+    fn apply_session(&mut self, now: &Now, out: Out, step: &mut Step) {
+        step.events.extend(out.events);
+        for msg in out.msgs {
+            let framed = cobs::encode_frame(&msg.encode());
+            step.writes
+                .extend(self.transport.send_gfdi(now.mono_ms, &framed));
+        }
+        if let Some(reason) = out.closed {
+            self.close(reason, step);
+        }
+    }
+
+    fn close(&mut self, reason: CloseReason, step: &mut Step) {
+        self.state = State::Closed;
+        // Nothing is worth writing on a link we are abandoning.
+        step.writes.clear();
+        step.wake_at_mono_ms = None;
+        step.events.push(Event::Closed { reason });
+    }
+
+    fn next_wake(&self) -> Option<u64> {
+        let transport = self.transport.next_wake();
+        let session = if self.transport.is_up() {
+            self.session.next_wake()
+        } else {
+            None
+        };
+        match (transport, session) {
+            (Some(a), Some(b)) => Some(a.min(b)),
+            (a, b) => a.or(b),
+        }
     }
 }

@@ -67,7 +67,7 @@ Roles as phase 1. Order follows the brief: the core state machine passes the pha
 **Goal**: `nimrag_core::client::Client`, our side of the watch link as a pure state machine: multi-link bring-up, MLR, GFDI handshake, time duty, pending-file listing, download with CRC check, archive only after the caller confirms safe storage. Bytes and caller decisions in; GATT writes, events and one deadline out.
 **Success Criteria**: (1) the committed synthetic session tests pass through `Client::handle` only; (2) for every session in the three private captures, the replay harness below reports zero differences outside the allowed list; (3) no 5008 is ever emitted without a matching `FileStored`; (4) `core` stays std-only; `cargo clippy` and `cargo fmt --check` clean.
 **Tests**: `core/tests/client_synthetic.rs` (committed, fake ids), `core/tests/client_replay_private.rs` (skips with a printed notice when `private/captures` is absent; fails instead when `NIMRAG_REQUIRE_PRIVATE=1`), unit tests per module.
-**Status**: In Progress (client, unit and synthetic tests done; private replay passes every lane and is blocked only on two stop-and-report items awaiting the orchestrator: app-initiated protobuf requests and close-handle control types)
+**Status**: Complete (private replay: 5 Connect sessions, 28 files, zero differences outside §3/§5/§10)
 
 ### Stage 2a contract
 
@@ -105,7 +105,7 @@ Labels as in PROTOCOL.md: **seen** / **inferred** / **unknown**; **ours** = a fr
 | any other request (5036, 5042, 5014, 5034, 5009, 5011/5012, 5022, 5023, 5027, 5054, …) | 5000 `id, status 2`, no body; emit `Unsupported` | inferred (APK auto-reply; status value never seen on the wire, Q-GFDI-5) |
 | 5000 matching no request; bad COBS / length / CRC | `Anomaly`, nothing sent | ours |
 
-- Deliberately not sent (each is on the allowed-differences list): info page 5; NFC and real-time service registrations; 5043 FeatureCapabilitiesRequest; app-initiated 5043 protobuf requests on Smart field 21 (music) and field 42 (RealtimeSettings: settings screens, a later companion duty) together with the watch's ACK/5044 replies to them; 5026 settings 6/7/8 (Explore omits it too); 5030 HOST_DID_ENTER_FOREGROUND; 5033/5035/5049; every 5044 answer to a watch protobuf request, including the cloud HTTP proxy; the 255/19 upload (5005/5003/5004); weather 5011/5012.
+- Deliberately not sent (each is on the allowed-differences list): info page 5; NFC and real-time service registrations, and the app's later close-handle (control type 2) for those same handles with the watch's close-handle responses (type 3); 5043 FeatureCapabilitiesRequest; app-initiated 5043 protobuf requests on Smart field 21 (music) and field 42 (RealtimeSettings: settings screens, a later companion duty) together with the watch's ACK/5044 replies to them; 5026 settings 6/7/8 (Explore omits it too); 5030 HOST_DID_ENTER_FOREGROUND; 5033/5035/5049; every 5044 answer to a watch protobuf request, including the cloud HTTP proxy; the 255/19 upload (5005/5003/5004); weather 5011/5012.
 
 #### 4. Sync cycle and safety (`client/sync.rs`)
 - Trigger: a watch 5037, or `StartSync`, which sends 5043 with `Smart.core(13){1{1=0}}` (header `request_id, offset 0, total 6, chunk 6`; request ids count from 0) and then waits for the watch's 5037 [seen: CAP-1 t=62.56–62.71]. No 5037 within 30 s → `Anomaly(SyncNotGranted)`, back to `Ready`, no listing.
@@ -169,8 +169,17 @@ Labels as in PROTOCOL.md: **seen** / **inferred** / **unknown**; **ours** = a fr
 - MLR: fixed window 32, no RTT estimator, 30 s reply deadline closes the session.
 - Committing a scrubbed message-level transcript of a real capture: owner decision, not now.
 
-## Stage 2b: Android build of /core (cargo-ndk, UniFFI, Gradle module) — needs Android SDK/NDK
-**Status**: Not Started
+#### 10. Orchestrator decisions after the advisor code review (2026-11-19)
+- **Transfer ids unique across connections (blocker B1).** `ClientConfig` gains `connection_epoch: u32`; the caller gives every `Client` a new value (an in-process counter is enough: stale confirmations can only come from the same process). `transfer_id` becomes `u64 = (epoch << 32) | n`. A confirmation carrying another epoch → `StaleConfirmation`, nothing sent.
+- **Per-file failure instead of closing (S2).** A non-ACK status to 5002 → `FileFailed(Refused)`; to 5008 → `FileFailed(ArchiveRefused)`; both continue with the next file. Non-ACK to 5007, a handshake request or any bring-up step still closes. Reply silence (30 s) still closes in every phase (the link is probably gone); a file that makes the watch go silent every time is a known risk to watch in 2c.
+- **5054 (S1).** A 5054 while a download is active fails that file (`FileFailed`, no archive) and the cycle continues; outside a download → `Anomaly`. 5002 flags stay 0x01.
+- **Allowed differences (S4).** "NFC and real-time service registrations" explicitly includes the app's data on those handles. 5026 only for settings 6/7/8. Control type 4, decoder `Unknown`, `MlrOutOfOrder` and anything else unnamed → unclassified (fail).
+- **Replay cannot pass empty (S3).** If `private/captures` exists, all three captures must load, sessions per capture must be 1/2/2, files replayed > 0, and a client `Anomaly` fails the session.
+- **Nits accepted:** input applied before timers; caller inputs never extend the reply deadline; empty 5004 chunks are not progress; saturating arithmetic on caller times; a duplicate ACK-only restarts the retransmit timer (PROTOCOL §1.4); `link.rs` tracks a 5002 as leniently as before; `FileType` lives in `messages` (re-exported by `client`). Kept as is, to check live in 2c: a stray 5004 gets ACK status 2.
+
+## Stage 2b: Android build of /core (cargo-ndk, UniFFI, Gradle module)
+**Toolchain (installed 2026-11-19, owner approved incl. SDK licences)**: `ANDROID_HOME=~/opt/android-sdk` (cmdline-tools 23.0, checksum-verified; platform-tools 37.0.1, build-tools 37.0.0, platforms/android-37.2, NDK 30.0.16248370), Rust targets aarch64/x86_64-linux-android, cargo-ndk 4.1.2, JDK 25 at ~/opt/rea-engines/jdk25. `cargo ndk -t arm64-v8a -t x86_64 build -p nimrag-core` builds. UniFFI goes in a separate FFI crate so `core` stays std-only.
+**Status**: Not Started (waits for the 2a API to settle)
 
 ## Stage 2c: Android foreground service, BLE link, pairing without the official app — needs owner (watch re-pairing)
 **Status**: Not Started

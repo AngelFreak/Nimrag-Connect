@@ -2,21 +2,11 @@
 //! Layouts are documented in docs/protocol/PROTOCOL.md.
 
 use crate::gfdi::{message_name, Message, Status};
+use crate::messages;
 
-fn u16le(b: &[u8], i: usize) -> Option<u16> {
-    Some(u16::from_le_bytes([*b.get(i)?, *b.get(i + 1)?]))
-}
 fn u32le(b: &[u8], i: usize) -> Option<u32> {
     Some(u32::from_le_bytes(b.get(i..i + 4)?.try_into().ok()?))
 }
-/// u8 length-prefixed string at `*pos`.
-fn lstr(b: &[u8], pos: &mut usize) -> Option<String> {
-    let n = *b.get(*pos)? as usize;
-    let s = b.get(*pos + 1..*pos + 1 + n)?;
-    *pos += 1 + n;
-    Some(String::from_utf8_lossy(s).into_owned())
-}
-
 pub fn hex(b: &[u8]) -> String {
     b.iter().map(|x| format!("{x:02x}")).collect()
 }
@@ -60,33 +50,9 @@ pub fn unix_time(secs: i64) -> String {
     )
 }
 
-/// One 16-byte directory entry (also the FileReady payload).
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct DirEntry {
-    pub index: u16,
-    pub data_type: u8,
-    pub sub_type: u8,
-    pub file_number: u16,
-    pub specific_flags: u8,
-    pub flags: u8,
-    pub size: u32,
-    pub timestamp: u32,
-}
+pub use crate::messages::DirEntry;
 
 impl DirEntry {
-    pub fn parse(b: &[u8]) -> Option<Self> {
-        Some(Self {
-            index: u16le(b, 0)?,
-            data_type: *b.get(2)?,
-            sub_type: *b.get(3)?,
-            file_number: u16le(b, 4)?,
-            specific_flags: *b.get(6)?,
-            flags: *b.get(7)?,
-            size: u32le(b, 8)?,
-            timestamp: u32le(b, 12)?,
-        })
-    }
-
     pub fn describe(&self) -> String {
         let ts = if self.timestamp == 0 {
             "-".into()
@@ -232,17 +198,17 @@ fn system_event_name(e: u8) -> &'static str {
 fn describe_request(id: u16, p: &[u8]) -> Option<String> {
     Some(match id {
         5024 => {
-            let mut pos = 12;
-            let bt = lstr(p, &mut pos)?;
-            let dev = lstr(p, &mut pos)?;
-            let model = lstr(p, &mut pos)?;
+            let d = messages::parse_device_information(p)?;
             format!(
-                "protocol={} product={} unit_id=<redacted> software={} max_packet={} bt_name={bt:?} device={dev:?} model={model:?} tail=<{}>",
-                u16le(p, 0)?,
-                u16le(p, 2)?,
-                u16le(p, 8)?,
-                u16le(p, 10)?,
-                p.len() - pos
+                "protocol={} product={} unit_id=<redacted> software={} max_packet={} bt_name={:?} device={:?} model={:?} tail=<{}>",
+                d.protocol,
+                d.product,
+                d.software,
+                d.max_packet,
+                d.bluetooth_name,
+                d.device_name,
+                d.model_name,
+                d.tail.len()
             )
         }
         5050 => {
@@ -267,40 +233,43 @@ fn describe_request(id: u16, p: &[u8]) -> Option<String> {
             format!("{o}bits={:?}", bits(mask))
         }
         5009 => DirEntry::parse(p)?.describe(),
-        5002 => format!(
-            "index={} offset={} type={} crc_seed=0x{:04x} max_size={} flags=0x{:02x}",
-            u16le(p, 0)?,
-            u32le(p, 2)?,
-            p.get(6)?,
-            u16le(p, 7)?,
-            u32le(p, 9)?,
-            p.get(13).copied().unwrap_or(0)
-        ),
-        5004 | 5054 => format!(
-            "flags=0x{:02x} crc=0x{:04x} offset={} len={}",
-            p.first()?,
-            u16le(p, 1)?,
-            u32le(p, 3)?,
-            p.len().saturating_sub(7)
-        ),
+        5002 => {
+            let r = messages::parse_download_request(p)?;
+            format!(
+                "index={} offset={} type={} crc_seed=0x{:04x} max_size={} flags=0x{:02x}",
+                r.index, r.offset, r.kind, r.crc_seed, r.max_size, r.flags
+            )
+        }
+        5004 | 5054 => {
+            let c = messages::parse_file_chunk(p)?;
+            format!(
+                "flags=0x{:02x} crc=0x{:04x} offset={} len={}",
+                c.flags,
+                c.crc,
+                c.offset,
+                c.data.len()
+            )
+        }
         5007 => format!("filter={}", p.first()?),
-        5008 => format!("index={} flags=0x{:02x}", u16le(p, 0)?, p.get(2)?),
-        5030 => format!(
-            "event={} value={}",
-            system_event_name(*p.first()?),
-            p.get(1)?
-        ),
+        5008 => {
+            let (index, flags) = messages::parse_set_file_flags(p)?;
+            format!("index={index} flags=0x{flags:02x}")
+        }
+        5030 => {
+            let (event, value) = messages::parse_system_event(p)?;
+            format!("event={} value={value}", system_event_name(event))
+        }
         5052 => format!("reference=0x{:08x}", u32le(p, 0)?),
         5031 => "request".into(),
         5023 => format!("raw={}", hex(p)),
         5043 | 5044 => {
-            let body = p.get(14..)?;
+            let (h, body) = messages::parse_protobuf(p)?;
             format!(
                 "request_id={} offset={} total={} chunk={} proto=[{}]",
-                u16le(p, 0)?,
-                u32le(p, 2)?,
-                u32le(p, 6)?,
-                u32le(p, 10)?,
+                h.request_id,
+                h.offset,
+                h.total,
+                h.chunk,
                 protobuf_wire(body, 0).unwrap_or_else(|| format!("raw {}", hex(body)))
             )
         }
@@ -312,42 +281,38 @@ fn describe_request(id: u16, p: &[u8]) -> Option<String> {
 fn describe_response_body(request_id: u16, b: &[u8]) -> Option<String> {
     Some(match request_id {
         5024 => {
-            let mut pos = 12;
-            let name = lstr(b, &mut pos)?;
-            let manu = lstr(b, &mut pos)?;
-            let model = lstr(b, &mut pos)?;
+            let h = messages::parse_host_info(b)?;
             format!(
-                "host protocol={} app_version={} name={name:?} manufacturer={manu:?} model={model:?}",
-                u16le(b, 0)?,
-                u16le(b, 8)?
+                "host protocol={} app_version={} name={:?} manufacturer={:?} model={:?}",
+                h.protocol, h.app_version, h.name, h.manufacturer, h.model
             )
         }
-        5002 => format!(
-            "download_status={} size={}",
-            b.first()?,
-            u32le(b, 1).unwrap_or(0)
-        ),
-        5004 | 5054 => format!("transfer_status={} received={}", b.first()?, u32le(b, 1)?),
+        5002 => {
+            let r = messages::parse_download_reply(b)?;
+            format!("download_status={} size={}", r.status, r.size)
+        }
+        5004 | 5054 => {
+            let (status, received) = messages::parse_chunk_ack(b)?;
+            format!("transfer_status={status} received={received}")
+        }
         5007 => format!("filter_status={}", b.first()?),
-        5052 => format!(
-            "reference=0x{:08x} time={} utc_offset={}s next_dst={} following_dst={}",
-            u32le(b, 0)?,
-            garmin_time(u32le(b, 4)?),
-            u32le(b, 8)? as i32,
-            u32le(b, 12)?,
-            u32le(b, 16)?
-        ),
+        5052 => {
+            let r = messages::parse_current_time_reply(b)?;
+            format!(
+                "reference=0x{:08x} time={} utc_offset={}s next_dst={} following_dst={}",
+                r.reference,
+                garmin_time(r.garmin_time),
+                r.utc_offset_s,
+                r.next_dst,
+                r.following_dst
+            )
+        }
         5031 => {
-            let n = *b.first()? as usize;
-            let mut pos = 1;
-            let mut v = Vec::new();
-            for _ in 0..n {
-                let dt = *b.get(pos)?;
-                let st = *b.get(pos + 1)?;
-                pos += 2;
-                let name = lstr(b, &mut pos)?;
-                v.push(format!("{dt}/{st}:{name}"));
-            }
+            let types = messages::parse_supported_file_types(b)?;
+            let v: Vec<String> = types
+                .iter()
+                .map(|t| format!("{}/{}:{}", t.data_type, t.sub_type, t.name))
+                .collect();
             format!("types=[{}]", v.join(", "))
         }
         _ if b.is_empty() => String::new(),
