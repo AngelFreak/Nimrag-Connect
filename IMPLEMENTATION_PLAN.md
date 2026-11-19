@@ -332,13 +332,39 @@ Owner decisions, needed by stage 2f (not blocking now): who fetches GPS-assist d
 From the 2b review: an in-app licence screen with the AGPL source offer (§6), the MPL-2.0 notice for UniFFI, the Apache-2.0 notice for JNA, and MIT/Apache attributions for every linked Rust crate (generated, e.g. with `cargo about`). Not needed while the APK stays on the owner's devices; required in whichever stage first distributes it.
 
 ## Stage 2c: Android foreground service, BLE link, pairing without the official app — needs owner (watch re-pairing)
-**Status**: Not Started
+**Goal**: the app pairs with the watch on its own, keeps a link in a foreground service, and drives `NimragClient` over it.
+**Success Criteria**: on the owner's phone the app bonds with the Instinct 2 (watch in "Pair phone" mode), reaches `HandshakeDone`, answers the time request, reconnects by itself after the watch leaves and comes back, and survives the screen being off for an hour.
+**Tests**: unit tests (JVM, `app/src/test`) for the DST pair, the capability hex parser, characteristic-pair choice and the write queue; the live checks above by the owner.
+**Status**: In Progress (built 2026-11-19; live test with the owner pending)
+
+Design (integrator, 2026-11-19; contract file `android/app/src/main/kotlin/dev/nimrag/app/model/AppState.kt`):
+- Process: `NimragApplication` creates the engine (`WatchController`) and sets `AppGraph.controller`. `WatchService` (foreground, type `connectedDevice`, ongoing notification with link state) owns the GATT link and the `NimragClient`. It is started when a watch is paired and on `BOOT_COMPLETED` (when one is remembered), and stopped on `forget()`. One `HandlerThread` serialises every `handle` call and every GATT callback; writes go out one at a time (`writeCharacteristic(char, value, WRITE_TYPE_NO_RESPONSE)`, next one after `onCharacteristicWrite`).
+- Scan: `BluetoothLeScanner`, no filter, low latency, only while the Watch screen asks (stops after 30 s). A result counts as Garmin when its manufacturer data has company id 0x0087 or `identifyDevice` matches its name; model and sync support come from the device catalogue through a new FFI function `identify_device(name, manufacturer_data)`.
+- Pairing: `createBond()`, wait for `BOND_BONDED` (a broadcast receiver), then remember address, name and model, set `first_connect = true`, start the service. `first_connect` is cleared on `PairingCompleted`, or after one more connection that ended without it (the 2a contract §1).
+- Link: `connectGatt(autoConnect = true, TRANSPORT_LE)`; `requestMtu(515)`; discover; service `6A4E2800-…`; notify characteristics `6A4E2810…2819` present → pick one at random, write = same UUID with `281x` → `282x`; enable the CCCD; then `Input.Connected(att_mtu)`. `CloseReason.ChannelInUse(retry_char)` → close and reconnect on that characteristic (its 16-bit id names the notify char). Any other close or a disconnect → drop the client, reconnect with backoff 2 s … 5 min (autoConnect keeps waiting in range). One client per connection; `connection_epoch` = in-process counter.
+- `ClientConfig`: `client_id` random u64 per install (stored); host name = the phone's device name, manufacturer/model from `Build`; `app_version` = 38215 (Garmin Explore's, seen working in CAP-1) [ours, revisit]; `capabilities` from settings, default hex `39000020000000008010000000` = bits 0 CONNECT_MOBILE_FIT_LINK, 3 SYNC, 4 DEVICE_INITIATES_SYNC, 5 HOST_INITIATED_SYNC_REQUESTS, 29 EXPLICIT_ARCHIVE, 71 CURRENT_TIME_REQUEST_SUPPORT, 76 MULTI_LINK_SERVICE (bit i = byte i/8, value 1 << i%8). Explore's mask (contract §9) lives only in the private captures; this minimal mask claims only what the client implements [ours, to verify live].
+- `Now`: `mono_ms = SystemClock.elapsedRealtime()`, wall clock and offset from `java.time`; the DST pair by the rule on `Now.dst` (PROTOCOL §3 step 6) from `ZoneRules.nextTransition`. Timer: the single `wake_at_mono_ms`, armed on the HandlerThread (replaces the previous one).
+- After `HandshakeDone`: `RequestBattery`; `StartSync` if the last finished sync is older than `autoSyncMinutes`; repeat both every `autoSyncMinutes` while connected (0 = never; the watch also asks by itself).
 
 ## Stage 2d: sync to phone storage, mark synced only after safe storage; upload queue (persistent, backoff, Wi-Fi/VPN only, dedupe by hash)
-**Status**: Not Started
+**Goal**: every downloaded file is durable on the phone before the watch may archive it, then reaches the server exactly once.
+**Success Criteria**: kill the app between `FileDownloaded` and upload: the file is on disk, not archived twice, and uploaded on the next start; the server receives each file once (dedupe by SHA-256).
+**Tests**: JVM unit tests for the store's write path (temp, fsync, rename), the upload backoff and the network rule.
+**Status**: In Progress (built 2026-11-19)
+
+Design (integrator, 2026-11-19):
+- Store: `filesDir/watch/<sha256>.fit`, written to a temp file, `FileOutputStream.fd.sync()`, renamed, directory fsynced; a row in SQLite (`android.database.sqlite`, no Room): `files(sha256 PK, size, data_type, sub_type, file_index, file_number, watch_timestamp, received_at, uploaded_at, attempts, next_attempt_at, last_error)`. Only after the row is committed does the engine send `FileStored`; any failure → `FileStoreFailed`. Bytes already stored (same hash) count as stored.
+- Upload: a worker thread in the process, woken on a new file, a network change, `uploadNow()` and at start. Rule: the active network must be unmetered or a VPN, unless `allowMobileData`. `POST {server}/api/files?data_type=&sub_type=&file_index=&file_number=&watch_timestamp=&source=watch&sha256=` with `Authorization: Bearer <token>` and the raw bytes (`HttpURLConnection`, 30 s timeouts). 200/201 → `uploaded_at`. 401/403 → stop all uploads until the settings change. 413 or another 4xx → that file is marked failed with the status, others go on. IO errors / 5xx / 408 / 429 → exponential backoff 30 s … 1 h per file. Files stay on the phone after upload (cleanup is a later decision).
+- Settings and secrets in private `SharedPreferences` (the token is never logged nor put into `AppState`). The phone is the owner's; Android's app sandbox is the protection.
+- Log: last 500 lines in memory and in SQLite (`log` table, trimmed to 1000), no unit id, no token.
 
 ## Stage 2e: time duty, Devices and sync screen
-**Status**: Not Started
+**Goal**: the native app UI: Watch (scan, pair, link, battery, forget), Sync (sync now, progress, last result, stored files and upload state, log) and Settings (server URL and token, network rule, auto-sync interval, capability mask, about and licences). Time duty = the `Now` above (the client answers 5052).
+**Success Criteria**: the owner can pair, see the link and battery, start a sync, watch files arrive and upload, and configure the server without adb.
+**Tests**: Compose previews with a fake controller; manual check on the phone.
+**Status**: In Progress (built 2026-11-19)
+
+Design (integrator, 2026-11-19): Jetpack Compose + Material 3 (dynamic colour, light and dark), one activity, bottom bar with the three screens; the UI reads `AppState` and calls `WatchController` only. Runtime permissions (`BLUETOOTH_SCAN` with `neverForLocation`, `BLUETOOTH_CONNECT`, `POST_NOTIFICATIONS`) are asked for on the Watch screen with a short reason. Settings → About shows the version, the AGPL-3.0-or-later notice with the source link (`https://github.com/AngelFreak/Nimrag-Connect`) and the licences of the bundled libraries (UniFFI MPL-2.0, JNA Apache-2.0, AndroidX/Compose and kotlinx-coroutines Apache-2.0, and the Rust crates linked into `libnimrag_ffi.so` with their licences), which covers the 2b review note for the public debug builds.
 
 ## Stage 2f: further companion duties
 **Goal**: one at a time, each a user setting: GPS assist data (the only allowed Garmin call; off switch), weather, notifications, music control, find my phone. Port Gadgetbridge's implementation of each (`agps`, `NotificationsHandler`, weather, music handlers) instead of decoding from scratch.

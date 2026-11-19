@@ -1,5 +1,6 @@
 plugins {
     alias(libs.plugins.android.application)
+    alias(libs.plugins.kotlin.compose)
 }
 
 android {
@@ -23,6 +24,7 @@ android {
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"))
         }
     }
+    buildFeatures { compose = true }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -31,4 +33,13 @@ android {
 
 dependencies {
     implementation(project(":core"))
+    implementation(platform(libs.compose.bom))
+    implementation(libs.compose.ui)
+    implementation(libs.compose.ui.tooling.preview)
+    implementation(libs.compose.material3)
+    implementation(libs.compose.material.icons.core)
+    implementation(libs.activity.compose)
+    implementation(libs.lifecycle.runtime.compose)
+    implementation(libs.kotlinx.coroutines.android)
+    debugImplementation(libs.compose.ui.tooling)
 }
