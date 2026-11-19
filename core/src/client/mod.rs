@@ -121,7 +121,8 @@ pub struct Step {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Event {
-    /// GFDI is registered in reliable mode; waiting for 5024.
+    /// GFDI is registered (reliable, or plain when MLR is not granted);
+    /// waiting for 5024.
     LinkReady,
     /// HANDSHAKE_COMPLETE was acknowledged by the watch.
     HandshakeDone {
@@ -248,6 +249,12 @@ pub enum AnomalyKind {
     ChunkedProtobuf,
     /// `StartSync` was sent but the watch did not follow with 5037.
     SyncNotGranted,
+    /// The watch closed the GFDI handle; the transport registers GFDI again
+    /// (inferred from Gadgetbridge; PROTOCOL.md 9.1). Only while the session
+    /// is idle: otherwise the client closes with `CloseReason::GfdiClosed`.
+    /// Frames sent meanwhile go out on the new handle; a 5024 from the watch
+    /// afterwards restarts the handshake.
+    GfdiClosedByWatch,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -263,8 +270,11 @@ pub enum CloseReason {
         service: u16,
         status: u8,
     },
-    /// GFDI was registered without the reliable flag.
-    ReliableNotGranted,
+    /// The watch closed the GFDI handle while a request or a sync cycle was
+    /// outstanding in this phase; its answer is lost. Reconnect.
+    GfdiClosed {
+        phase: Phase,
+    },
     /// Auth Negotiation (5101): unexpected on a bonded link.
     AuthRequested,
     /// The watch reports a GFDI protocol version below 150.
@@ -358,7 +368,9 @@ impl Client {
         match self.state {
             State::Idle => Phase::Idle,
             State::Closed => Phase::Closed,
-            State::Active if !self.transport.is_up() => Phase::BringUp,
+            State::Active if !self.transport.is_up() || self.transport.reopening() => {
+                Phase::BringUp
+            }
             State::Active => self.session.phase(),
         }
     }
@@ -419,6 +431,11 @@ impl Client {
         }
         if let Some(reason) = out.closed {
             self.close(reason, step);
+            return;
+        }
+        if out.gfdi_closed && !self.session.is_idle() {
+            let phase = self.session.phase();
+            self.close(CloseReason::GfdiClosed { phase }, step);
             return;
         }
         if out.link_ready {

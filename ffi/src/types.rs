@@ -164,6 +164,7 @@ pub enum AnomalyKind {
     ClockInvalid,
     ChunkedProtobuf,
     SyncNotGranted,
+    GfdiClosedByWatch,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
@@ -182,9 +183,9 @@ pub enum CloseReason {
     MtuTooSmall,
     ChannelInUse { retry_char: u16 },
     RegisterRejected { service: u16, status: u8 },
-    ReliableNotGranted,
     AuthRequested,
     ProtocolTooOld { version: u16 },
     Timeout { phase: Phase },
+    GfdiClosed { phase: Phase },
     RequestFailed { message_id: u16, status: u8 },
 }

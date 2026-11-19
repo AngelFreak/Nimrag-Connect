@@ -28,6 +28,8 @@ pub const NOTIFY_ATT: u16 = 0x18;
 pub const WRITE_ATT: u16 = 0x1B;
 pub const REG_HANDLE: u8 = 0x2E;
 pub const GFDI_HANDLE_BYTE: u8 = 0x83;
+/// GFDI handle the fake watch hands out when it does not grant MLR.
+pub const PLAIN_GFDI_HANDLE: u8 = 0x31;
 pub const KA_HANDLE: u8 = 0x30;
 pub const MTU: u16 = 23;
 
@@ -220,6 +222,8 @@ pub struct FakeWatch {
     pub archived_indices: Vec<u16>,
     file_chunks_sent: usize,
     endpoint: Option<MlrEndpoint>,
+    /// Handle of a plain (mode 0) GFDI registration.
+    plain_gfdi: Option<u8>,
     cobs: FrameDecoder,
     serving: Option<Serving>,
 }
@@ -253,6 +257,7 @@ impl FakeWatch {
             phone_raw: Vec::new(),
             archived_indices: Vec::new(),
             endpoint: None,
+            plain_gfdi: None,
             cobs: FrameDecoder::new(),
             serving: None,
         }
@@ -271,6 +276,7 @@ impl FakeWatch {
     /// New radio link: everything link-level starts over, files persist.
     pub fn reset_link(&mut self) {
         self.endpoint = None;
+        self.plain_gfdi = None;
         self.cobs = FrameDecoder::new();
         self.serving = None;
         self.file_chunks_sent = 0;
@@ -300,18 +306,38 @@ impl FakeWatch {
     /// Queue a GFDI message from the watch; returns the packets to deliver.
     pub fn send(&mut self, now: u64, msg: &Message) -> Vec<Vec<u8>> {
         let framed = cobs::encode_frame(&msg.encode());
-        match self.endpoint.as_mut() {
-            Some(e) => e.send(now, &framed),
-            None => Vec::new(),
-        }
+        self.send_raw_frame(now, &framed)
     }
 
-    /// Send already COBS-framed bytes (to inject malformed frames).
+    /// Send already COBS-framed bytes (to inject malformed frames). In plain
+    /// mode: `[handle, up to mtu - 4 bytes]` per packet.
     pub fn send_raw_frame(&mut self, now: u64, framed: &[u8]) -> Vec<Vec<u8>> {
+        if let (Some(handle), None) = (self.plain_gfdi, self.endpoint.as_ref()) {
+            return framed
+                .chunks(self.mtu as usize - 4)
+                .map(|c| [&[handle][..], c].concat())
+                .collect();
+        }
         match self.endpoint.as_mut() {
             Some(e) => e.send(now, framed),
             None => Vec::new(),
         }
+    }
+
+    /// The watch closes its GFDI handle on its own: forget the stream and
+    /// return the close-handle response (type 3) it sends.
+    pub fn close_gfdi(&mut self) -> Vec<u8> {
+        let handle = match (self.endpoint.take(), self.plain_gfdi.take()) {
+            (Some(_), _) => GFDI_HANDLE_BYTE,
+            (None, Some(handle)) => handle,
+            (None, None) => panic!("GFDI is not registered"),
+        };
+        self.cobs = FrameDecoder::new();
+        self.serving = None;
+        let mut v = vec![0, 3];
+        v.extend_from_slice(&self.client_id.to_le_bytes());
+        v.extend_from_slice(&[1, 0, handle, 0]);
+        v
     }
 
     pub fn device_information(&self) -> Message {
@@ -331,6 +357,8 @@ impl FakeWatch {
         let mut out = Vec::new();
         if value[0] == 0 {
             self.on_control(value, &mut out);
+        } else if Some(value[0]) == self.plain_gfdi {
+            self.on_gfdi_bytes(now, &value[1..], &mut out);
         } else if value[0] & 0x80 != 0 {
             self.on_mlr(now, value, &mut out);
         } else if value[0] == REG_HANDLE {
@@ -357,23 +385,22 @@ impl FakeWatch {
                 mode,
             }) => {
                 let status = self.register_status.get(&service).copied().unwrap_or(0);
+                let reliable = mode == 2 && self.grant_reliable;
                 let (handle, flags) = match service {
                     4 => (REG_HANDLE, 0),
-                    1 => (
-                        GFDI_HANDLE_BYTE,
-                        if mode == 2 && self.grant_reliable {
-                            1
-                        } else {
-                            0
-                        },
-                    ),
+                    1 if reliable => (GFDI_HANDLE_BYTE, 1),
+                    1 => (PLAIN_GFDI_HANDLE, 0),
                     _ => (KA_HANDLE, 0),
                 };
                 out.push(register_response(
                     client_id, service, status, handle, flags, 1,
                 ));
                 if service == 1 && status == 0 {
-                    self.endpoint = Some(MlrEndpoint::new(GFDI_HANDLE_BYTE & 7, self.mtu));
+                    // A new registration starts a new byte stream.
+                    self.cobs = FrameDecoder::new();
+                    self.endpoint =
+                        reliable.then(|| MlrEndpoint::new(GFDI_HANDLE_BYTE & 7, self.mtu));
+                    self.plain_gfdi = (!reliable).then_some(PLAIN_GFDI_HANDLE);
                 }
             }
             _ => {}
@@ -389,10 +416,15 @@ impl FakeWatch {
         };
         let received = ep.receive(now, header, data);
         out.extend(received.writes);
-        if received.data.is_empty() {
+        self.on_gfdi_bytes(now, &received.data, out);
+    }
+
+    /// In-order GFDI stream bytes from the phone, reliable or plain.
+    fn on_gfdi_bytes(&mut self, now: u64, bytes: &[u8], out: &mut Vec<Vec<u8>>) {
+        if bytes.is_empty() {
             return;
         }
-        let frames = self.cobs.push(&received.data);
+        let frames = self.cobs.push(bytes);
         for frame in frames {
             let frame = frame.expect("phone sent a valid COBS frame");
             let msg = Message::parse(&frame).expect("phone sent a valid GFDI message");

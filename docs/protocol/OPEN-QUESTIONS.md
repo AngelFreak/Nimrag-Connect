@@ -78,7 +78,7 @@ What Gadgetbridge at `7257742b` says about the questions above. Each answer is *
 | Id | Gadgetbridge's answer | State after 2p |
 | --- | --- | --- |
 | Q-MLR-1, Q-MLR-2 | Nothing new; its MLR is a re-implementation with different timing (PROTOCOL §1.4). | open |
-| Q-MLR-3 | Plain mode is its original transport and still a per-device option: register GFDI with mode 0, then one handle byte per write. | open, but very probably yes; test in 2c |
+| Q-MLR-3 | Plain mode is its original transport and still a per-device option: register GFDI with mode 0, then one handle byte per write. | answered as *inferred*: mode 0 works on the devices Gadgetbridge supports (per its authors). Built as a fallback in `core::client::transport` (plan row 8): we ask for mode 2 and carry on in plain mode when the response has no reliable flag. The Instinct 2 itself is still untested: a register response without the flag has never been seen, so the proof is one real session in plain mode (`grant_reliable = false` in the synthetic tests only shows our side). |
 | Q-ML-1 | It accepts any close-all status and goes on. | open; confirms the status can be ignored |
 | Q-ML-2 | It uses the fixed client id 2 on every device and drops control messages addressed to another id. | open for the case "Connect connected at the same time"; a client id of our own is safe otherwise |
 | Q-ML-3 | It reads only the byte after the handle and treats non-zero as "reliable". | open |

@@ -202,6 +202,11 @@ impl Session {
         self.deadline = Some(now.mono_ms.saturating_add(REPLY_DEADLINE_MS));
     }
 
+    /// Handshake done, no request outstanding or queued, no sync cycle.
+    pub fn is_idle(&self) -> bool {
+        self.ready && !self.req.is_pending() && self.req.queue.is_empty() && !self.sync.running()
+    }
+
     pub fn phase(&self) -> Phase {
         if !self.ready {
             Phase::Handshake
@@ -372,6 +377,7 @@ impl Session {
                     });
                 }
                 if self.first_connect {
+                    self.first_connect = false;
                     self.send_first_connect_events(out);
                 }
                 self.sync.on_ready(&mut Ctx {
@@ -480,6 +486,14 @@ impl Session {
                 version: d.protocol,
             });
             return false;
+        }
+        if self.is_idle() {
+            // A new 5024 on an idle, finished session (e.g. after the watch
+            // reopened GFDI) starts the handshake again: wait for its 5050,
+            // then our 5050, 5031 and event 8. [ours]
+            self.ready = false;
+            self.handshake_started = false;
+            self.watch_capabilities = None;
         }
         self.device = Some(DeviceInfo {
             protocol_version: d.protocol,

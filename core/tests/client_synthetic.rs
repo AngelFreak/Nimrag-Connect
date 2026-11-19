@@ -13,6 +13,7 @@ use nimrag_core::gfdi::Message;
 use nimrag_core::link::{Event as LinkEvent, LinkDecoder};
 use nimrag_core::messages::{self as m, DirEntry};
 use nimrag_core::mlr;
+use nimrag_core::multilink;
 use support::*;
 
 const FILE_A: u16 = 71;
@@ -1023,12 +1024,205 @@ fn register_rejection_names_the_service() {
     );
 }
 
+// ---- plain mode and recovery from a watch-side close (inferred, Gadgetbridge) ----------
+
 #[test]
-fn gfdi_without_the_reliable_flag_is_refused() {
-    let mut sim = Sim::new();
+fn gfdi_without_the_reliable_flag_runs_in_plain_mode() {
+    let mut sim = two_file_sim();
     sim.watch.grant_reliable = false;
-    sim.connect();
-    assert_eq!(sim.closed_reason(), Some(CloseReason::ReliableNotGranted));
+    sim.handshake();
+    assert!(sim.events.contains(&Event::LinkReady));
+    assert!(sim
+        .events
+        .iter()
+        .any(|e| matches!(e, Event::HandshakeDone { .. })));
+    assert!(
+        sim.watch.endpoint().is_none(),
+        "no MLR endpoint on the watch"
+    );
+    sim.watch_sends(&sim.watch.sync_request(2));
+    store_everything(&mut sim);
+    sim.watch_sends(&sim.watch.sync_request(1));
+
+    assert!(sim.closed_reason().is_none());
+    assert_eq!(sim.client.phase(), Phase::Ready);
+    let downloaded = sim.downloaded();
+    assert_eq!(downloaded.len(), 2);
+    assert_eq!(downloaded[0].2, lcg_bytes(1, 2000));
+    assert_eq!(downloaded[1].2, lcg_bytes(2, 300));
+    assert_eq!(sim.watch.archived_indices, vec![FILE_A, FILE_B]);
+    assert_archive_rule(&sim);
+
+    // On the wire: after the bring-up every GFDI write is the plain handle and
+    // at most MTU - 4 bytes; there is not one MLR packet in either direction.
+    let gfdi_writes: Vec<&Vec<u8>> = sim
+        .phone_writes
+        .iter()
+        .map(|(_, w)| w)
+        .filter(|w| w[0] == PLAIN_GFDI_HANDLE)
+        .collect();
+    assert!(gfdi_writes.len() > 5);
+    assert!(gfdi_writes.iter().all(|w| w.len() <= MTU as usize - 3));
+    assert!(sim.trace.iter().all(|(_, v)| v[0] & 0x80 == 0 || v[0] == 0));
+}
+
+/// A reliable session in which the watch closes the GFDI handle between two
+/// sync cycles. The watch grants MLR again (or not, `grant_after`).
+fn gfdi_closed_by_the_watch_then_a_sync(grant_after: bool) -> Sim {
+    let mut sim = two_file_sim();
+    sim.handshake();
+    let writes_before = sim.phone_writes.len();
+    sim.watch.grant_reliable = grant_after;
+    let close = sim.watch.close_gfdi();
+    sim.deliver(close);
+
+    // The transport registered GFDI again, in the bring-up mode, and said so.
+    assert_eq!(
+        sim.phone_writes[writes_before..]
+            .iter()
+            .map(|(_, w)| w.clone())
+            .collect::<Vec<_>>(),
+        vec![multilink::register_request(CLIENT_ID, 1, 2)]
+    );
+    assert!(sim.events.contains(&Event::Anomaly {
+        kind: AnomalyKind::GfdiClosedByWatch,
+        message_id: 0
+    }));
+    assert!(sim.closed_reason().is_none());
+    assert_eq!(sim.client.phase(), Phase::Ready, "the session is not reset");
+    assert_eq!(
+        sim.events_of(|e| matches!(e, Event::LinkReady)).len(),
+        1,
+        "bring-up is not repeated"
+    );
+    assert_eq!(sim.watch.endpoint().is_some(), grant_after);
+    // Nothing is pending: no timer is left to close the session.
+    sim.advance(120_000);
+    assert!(sim.closed_reason().is_none());
+
+    // The new stream carries a full sync cycle.
+    sim.watch_sends(&sim.watch.sync_request(2));
+    store_everything(&mut sim);
+    sim.watch_sends(&sim.watch.sync_request(1));
+    assert!(sim.closed_reason().is_none());
+    assert_eq!(sim.watch.archived_indices, vec![FILE_A, FILE_B]);
+    assert_eq!(sim.downloaded()[0].2, lcg_bytes(1, 2000));
+    assert_archive_rule(&sim);
+    sim
+}
+
+#[test]
+fn watch_closing_gfdi_mid_session_is_recovered_with_a_fresh_mlr_stream() {
+    let sim = gfdi_closed_by_the_watch_then_a_sync(true);
+    // Sequence numbers restarted: the first data packet after the
+    // re-registration is seq 0 again, on handle 3. The handshake had already
+    // used several numbers, so a continued stream would show a later one.
+    let after = sim
+        .phone_writes
+        .iter()
+        .rposition(|(_, w)| *w == multilink::register_request(CLIENT_ID, 1, 2))
+        .and_then(|first| {
+            sim.phone_writes[first + 1..]
+                .iter()
+                .position(|(_, w)| w.len() > 2)
+                .map(|i| first + 1 + i)
+        })
+        .expect("data after the re-registration");
+    let (header, _) = mlr::parse(&sim.phone_writes[after].1).unwrap();
+    assert_eq!((header.handle, header.seq), (3, 0));
+}
+
+#[test]
+fn watch_closing_gfdi_may_be_answered_with_a_plain_handle() {
+    let sim = gfdi_closed_by_the_watch_then_a_sync(false);
+    assert!(sim.watch.endpoint().is_none());
+    assert!(sim
+        .phone_writes
+        .iter()
+        .any(|(_, w)| w[0] == PLAIN_GFDI_HANDLE));
+}
+
+#[test]
+fn unanswered_re_registration_closes_after_the_reply_deadline() {
+    let mut sim = Sim::new();
+    sim.handshake();
+    let close = sim.watch.close_gfdi();
+    sim.watch.mute = true;
+    sim.deliver(close);
+    assert!(sim.closed_reason().is_none());
+    assert_eq!(sim.client.phase(), Phase::BringUp, "while re-registering");
+    sim.advance(29_999);
+    assert!(sim.closed_reason().is_none());
+    sim.advance(1);
+    assert_eq!(
+        sim.closed_reason(),
+        Some(CloseReason::Timeout {
+            phase: Phase::BringUp
+        })
+    );
+}
+
+#[test]
+fn watch_closing_gfdi_during_a_download_closes_at_once_naming_the_cause() {
+    let mut sim = two_file_sim();
+    sim.watch.stall_after = Some(1);
+    sim.handshake();
+    sim.watch_sends(&sim.watch.sync_request(2));
+    assert_eq!(sim.client.phase(), Phase::Syncing);
+    let writes_before = sim.phone_writes.len();
+    let close = sim.watch.close_gfdi();
+    sim.deliver(close);
+    assert_eq!(
+        sim.closed_reason(),
+        Some(CloseReason::GfdiClosed {
+            phase: Phase::Syncing
+        })
+    );
+    assert_eq!(sim.phone_writes.len(), writes_before, "nothing written");
+    assert!(sim.downloaded().is_empty());
+    assert!(sim.watch.archived_indices.is_empty());
+}
+
+#[test]
+fn a_5024_after_a_reopen_runs_the_handshake_again() {
+    let mut sim = two_file_sim();
+    sim.handshake();
+    let close = sim.watch.close_gfdi();
+    sim.deliver(close);
+    assert_eq!(sim.client.phase(), Phase::Ready);
+    let info = sim.watch.device_information();
+    sim.watch_sends(&info);
+    assert_eq!(sim.client.phase(), Phase::Ready, "handshake finished again");
+    assert_eq!(sim.phone_requests(5050).len(), 2);
+    assert_eq!(sim.phone_requests(5031).len(), 2);
+    let done = sim.events_of(|e| matches!(e, Event::HandshakeDone { .. }));
+    assert_eq!(done.len(), 2);
+    sim.watch_sends(&sim.watch.sync_request(2));
+    store_everything(&mut sim);
+    assert_eq!(sim.watch.archived_indices, vec![FILE_A, FILE_B]);
+    assert!(sim.closed_reason().is_none());
+}
+
+#[test]
+fn a_sync_asked_for_while_gfdi_reopens_goes_out_on_the_new_handle() {
+    let mut sim = two_file_sim();
+    sim.handshake();
+    let close = sim.watch.close_gfdi();
+    sim.watch.mute = true;
+    sim.deliver(close);
+    let writes_before = sim.phone_writes.len();
+    sim.input(Input::StartSync);
+    assert_eq!(sim.phone_writes.len(), writes_before, "held while closed");
+    // The watch answers the re-registration.
+    sim.watch.mute = false;
+    let register = multilink::register_request(CLIENT_ID, 1, 2);
+    for reply in sim.watch.on_write(sim.t, &register) {
+        sim.deliver(reply);
+    }
+    assert_eq!(sim.phone_requests(5043).len(), 1, "sent after the reopen");
+    store_everything(&mut sim);
+    assert_eq!(sim.watch.archived_indices, vec![FILE_A, FILE_B]);
+    assert!(sim.closed_reason().is_none());
 }
 
 #[test]

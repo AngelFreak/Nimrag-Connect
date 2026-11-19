@@ -3,6 +3,16 @@
 //! Every characteristic value starts with a one-byte handle. Handle 0 is the
 //! control channel; other handles carry a registered service's byte stream
 //! (GFDI is service id 1). See docs/protocol/PROTOCOL.md "Transport".
+//!
+//! The six file-transfer service ids (`0x2018` ... `0xE018`) in
+//! [`service_name`] come from Gadgetbridge commit
+//! 7257742b96a30fff0db9e79230435ac2aeb39f57 (AGPL-3.0-or-later),
+//! `app/src/main/java/nodomain/freeyourgadget/gadgetbridge/service/devices/
+//! garmin/communicator/v2/CommunicatorV2.java` (`Service` enum).
+//! Copyright (C) 2024-2026 Daniele Gobbetti, José Rebelo, Thomas Kuehne and
+//! the other Gadgetbridge contributors. Inferred (Gadgetbridge): never seen
+//! in our captures. Gadgetbridge's other new ids (8, 12, 13, 16, 19, 21, 26)
+//! were already named here from the app's tables.
 
 /// 128-bit UUIDs (big-endian text form) used by multi-link.
 pub const SERVICE_UUID: &str = "6a4e2800-667b-11e3-949a-0800200c9a66";
@@ -18,7 +28,8 @@ pub fn is_write_char(short: u16) -> bool {
     (0x2820..=0x2829).contains(&short)
 }
 
-/// Known multi-link service ids.
+/// Known multi-link service ids. The file-transfer ids are *inferred
+/// (Gadgetbridge)*, see the module header.
 pub fn service_name(id: u16) -> &'static str {
     match id {
         1 => "GFDI",
@@ -44,6 +55,12 @@ pub fn service_name(id: u16) -> &'static str {
         25 => "REAL_TIME_TRAINING_READINESS",
         26 => "REAL_TIME_ACTIVE_TIME",
         29 => "REAL_TIME_PUSHES",
+        0x2018 => "FILE_TRANSFER_2",
+        0x4018 => "FILE_TRANSFER_4",
+        0x6018 => "FILE_TRANSFER_6",
+        0xA018 => "FILE_TRANSFER_A",
+        0xC018 => "FILE_TRANSFER_C",
+        0xE018 => "FILE_TRANSFER_E",
         _ => "UNKNOWN",
     }
 }
@@ -217,6 +234,28 @@ pub fn close_all_request(client_id: u64) -> Vec<u8> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn service_names_cover_gadgetbridge_ids() {
+        for (id, name) in [
+            (8, "REAL_TIME_CALORIES"),
+            (12, "REAL_TIME_HRV"),
+            (13, "REAL_TIME_STRESS"),
+            (16, "REAL_TIME_ACCELEROMETER"),
+            (19, "REAL_TIME_SPO2"),
+            (21, "REAL_TIME_RESPIRATION"),
+            (26, "REAL_TIME_ACTIVE_TIME"),
+            (0x2018, "FILE_TRANSFER_2"),
+            (0x4018, "FILE_TRANSFER_4"),
+            (0x6018, "FILE_TRANSFER_6"),
+            (0xA018, "FILE_TRANSFER_A"),
+            (0xC018, "FILE_TRANSFER_C"),
+            (0xE018, "FILE_TRANSFER_E"),
+        ] {
+            assert_eq!(service_name(id), name, "service {id:#x}");
+        }
+        assert_eq!(service_name(0x8018), "UNKNOWN");
+    }
 
     #[test]
     fn register_request_roundtrip() {

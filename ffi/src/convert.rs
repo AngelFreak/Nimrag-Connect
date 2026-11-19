@@ -202,6 +202,7 @@ impl From<core::AnomalyKind> for AnomalyKind {
             core::AnomalyKind::ClockInvalid => AnomalyKind::ClockInvalid,
             core::AnomalyKind::ChunkedProtobuf => AnomalyKind::ChunkedProtobuf,
             core::AnomalyKind::SyncNotGranted => AnomalyKind::SyncNotGranted,
+            core::AnomalyKind::GfdiClosedByWatch => AnomalyKind::GfdiClosedByWatch,
         }
     }
 }
@@ -230,11 +231,13 @@ impl From<core::CloseReason> for CloseReason {
             core::CloseReason::RegisterRejected { service, status } => {
                 CloseReason::RegisterRejected { service, status }
             }
-            core::CloseReason::ReliableNotGranted => CloseReason::ReliableNotGranted,
             core::CloseReason::AuthRequested => CloseReason::AuthRequested,
             core::CloseReason::ProtocolTooOld { version } => {
                 CloseReason::ProtocolTooOld { version }
             }
+            core::CloseReason::GfdiClosed { phase } => CloseReason::GfdiClosed {
+                phase: phase.into(),
+            },
             core::CloseReason::Timeout { phase } => CloseReason::Timeout {
                 phase: phase.into(),
             },
