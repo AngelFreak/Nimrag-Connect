@@ -12,3 +12,12 @@ adb -s <serial> bugreport bugreport.zip     # snoop log must be enabled in Devel
 unzip -j bugreport.zip FS/data/misc/bluetooth/logs/btsnoop_hci.log -d private/captures/<date-name>/
 cargo test -p nimrag-decode                 # replays it in strict mode
 ```
+
+Live recording (no bugreport needed): enable "Bluetooth HCI snoop log socket" in Developer options, restart Bluetooth, then
+
+```sh
+adb -s <serial> forward tcp:8872 tcp:8872
+nimrag-decode tcp:127.0.0.1:8872            # or tee the raw stream into private/captures/live-<stamp>/
+```
+
+Live recordings usually start mid-session, so the strict replay test skips `live-*` directories.

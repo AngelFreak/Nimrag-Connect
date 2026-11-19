@@ -291,8 +291,12 @@ fn private_captures() -> Vec<PathBuf> {
     let Ok(rd) = std::fs::read_dir(root) else {
         return Vec::new();
     };
+    // `live-*` recordings come from the snoop socket and usually start in the
+    // middle of a session (registrations not seen), so only complete
+    // bugreport captures are held to the strict no-unknown-frames gate.
     let mut v: Vec<PathBuf> = rd
         .flatten()
+        .filter(|e| !e.file_name().to_string_lossy().starts_with("live-"))
         .map(|e| e.path().join("btsnoop_hci.log"))
         .filter(|p| p.exists())
         .collect();

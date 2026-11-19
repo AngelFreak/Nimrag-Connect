@@ -23,6 +23,7 @@ Status: phase 0. The static map is complete and one live capture has been decode
 | APK `cls.method` | Garmin Connect 5.31 (11761), names as produced by jadx 1.5.3 `--deobf`. See `PROVENANCE.md`. |
 | CAP-1 | HCI snoop capture of 2026-11-19 09:41: Bluetooth restart, reconnect, one manual sync and one app-started sync. Raw file kept private; SHA-256 `34d283c5…79e49ae`. Decoded by `tools/decode`. |
 | CAP-2 | HCI snoop capture continuing to 2026-11-19 10:02: Connect and Explore reconnect on new characteristic pairs (about t = 700 s), then a sync after a recorded test activity (activity 128/4, monitoring 128/32, metrics 128/44, 128/58). Raw file kept private; SHA-256 `fc919d19…91417e7f`. |
+| CAP-3 | HCI snoop capture continuing to 2026-11-19 10:13: the owner changed the watch's time format in Connect, plus a watch weather request. Raw file kept private; SHA-256 `7335e27a…3e77da54`. |
 | GB `path` | Gadgetbridge at `7257742b`; cross-check only. |
 
 Labels: **seen** means observed in code or capture. **inferred** means reasoned from surrounding evidence. **unknown** means each has an entry in `OPEN-QUESTIONS.md`.
@@ -230,6 +231,21 @@ A normal sync downloads the pending files among these. The app limits itself to 
 | Keep-alive | multi-link service 22, watch → phone counter `00 nn` about every 25 s | none needed | unknown | seen (CAP-1) |
 
 The time duty is the only one our client needs on day one. The others are optional, and each becomes a setting.
+
+## 6a. Watch settings (seen in CAP-3)
+
+Changing a watch setting in Connect uses protobuf `Smart.realtime_settings (42)`, not a FIT settings file. Message names come from the recovered `gdi_realtime_settings.proto`.
+
+1. `start_up_data_request (8)` with locale strings (`"en_US"`, a country code). The response (9) carries part-number strings.
+2. `settings_request (3) {1: screen_id}`. The response (4) is the screen's tree of entries and option ids.
+3. `composition_request (1) {1: screen_id, 3: locale}`. The response (2) carries display strings, for example "Time" and "Time Format" for screen 34.
+4. `settings_change_request (5) {1: 34, 2: 0, 4: {1: new_value}}`. The response (6) has `{1: 0}`, which is success.
+
+Our web interface can offer the same settings by walking this tree. The settings themselves stay on the watch; we store nothing. [seen: CAP-3 t ≈ 1775–1790 s]
+
+## 6b. Weather (seen in CAP-3)
+
+The watch sends **W→P 5014 WeatherRequest** with a 10-byte payload. The phone ACKs it and then pushes FIT weather messages: **5011** definitions and **5012** data, containing current conditions, hourly forecast and a location name. The 5014 payload layout is in `messages.csv` (from Gadgetbridge, inferred); the FIT messages are the standard `weather_conditions` messages.
 
 ## 7. Protobuf
 

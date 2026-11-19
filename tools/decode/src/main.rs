@@ -296,6 +296,9 @@ impl Decoder {
         };
         if let Some(l) = line {
             let _ = writeln!(self.out, "{t:9.3} {l}");
+            if self.opts.source == "-" || self.opts.source.starts_with("tcp:") {
+                let _ = self.out.flush(); // live source: show each line as it happens
+            }
         }
     }
 

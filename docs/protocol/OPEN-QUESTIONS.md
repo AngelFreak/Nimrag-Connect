@@ -57,5 +57,5 @@ Each entry lists what is unknown, whether our client needs the answer to pair, l
 | Reconnect and normal sync | **done** (CAP-1) |
 | Fresh pairing | needs the owner (Q-PAIR-1) |
 | Sync after an activity | **done** (CAP-2) |
-| Sync after a night | wear the watch overnight, sync next morning |
-| Settings change | change a watch setting in the app (Q-GFDI-4) |
+| Sync after a night | **not yet**: CAP-1 was the first sync of the day, but the overnight sleep and HRV files had already synced before logging started. Needs tomorrow morning's first sync. |
+| Settings change | **done** (CAP-3: time format, via RealtimeSettings) |
