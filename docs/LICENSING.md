@@ -32,7 +32,7 @@ The owner has not chosen a licence yet. Crates declare `LicenseRef-nimrag-pendin
 ## Garmin material
 
 - APKs, decompiled sources and raw captures stay in `private/`, which git ignores, and are not redistributed.
-- The recovered `.proto` schemas describe a wire format and exist for interoperability with the owner's own device. Remove them from any public branch if the owner decides they should not be published.
+- The recovered `.proto` schemas describe a wire format and exist for interoperability with the owner's own device. Owner decision, 2026-11-19: they are published in the public repository (github.com/AngelFreak/Nimrag-Connect), as Gadgetbridge publishes its own schemas. The decompiled sources, APKs and captures they were recovered from stay private.
 - FIT profile (owner decision, 2026-11-19, revised the same day):
   - Garmin's public FIT SDK (npm `@garmin/fitsdk` 21.222.0) ships under the "FIT Protocol License Agreement". That licence treats the SDK as confidential and forbids distributing it or anything derived from it (§2(c), §4). The table extracted from the app is Garmin's work too.
   - Decision: **profile tables are generated locally and never committed.** Only the generator (`tools/fit-profile/`) and the lookup API (`core/src/fit/profile.rs`) are in the repository.

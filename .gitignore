@@ -17,3 +17,8 @@ dist/
 # Locally generated FIT profile tables (Garmin material; never commit)
 /core/src/fit/generated/
 __pycache__/
+
+# Agent tooling state (never commit)
+.swarm/
+.claude-flow/
+.hive-mind/
