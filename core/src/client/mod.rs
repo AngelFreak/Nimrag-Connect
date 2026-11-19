@@ -65,9 +65,21 @@ pub struct Now {
     pub unix_s: i64,
     /// Current total offset from UTC of the phone's time zone, seconds.
     pub utc_offset_s: i32,
-    /// Next two time-zone transitions, Unix seconds UTC.
-    pub next_dst_unix_s: i64,
-    pub following_dst_unix_s: i64,
+    /// Daylight-saving pair for the 5052 reply, computed by the caller.
+    /// Rule (Garmin Connect): t1 is the next zone transition after now; with
+    /// none, pass `None` (both reply fields are sent as 0). If t1 is a
+    /// transition into DST, `start_unix_s = t1` and `end_unix_s` is the next
+    /// transition after t1 + 1 day; otherwise `start_unix_s` is the next
+    /// transition after t1 + 1 day and `end_unix_s = t1`. In summer time the
+    /// start is therefore the later of the two.
+    pub dst: Option<DstPair>,
+}
+
+/// Next DST start and next DST end, Unix seconds UTC.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DstPair {
+    pub start_unix_s: i64,
+    pub end_unix_s: i64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

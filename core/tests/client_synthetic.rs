@@ -5,6 +5,7 @@ mod support;
 
 use nimrag_core::capture::Direction;
 use nimrag_core::client::reliable::WINDOW;
+use nimrag_core::client::DstPair;
 use nimrag_core::client::{
     AnomalyKind, CloseReason, Event, FileFailure, Input, Phase, SyncTrigger,
 };
@@ -87,8 +88,8 @@ fn happy_path_two_files_then_empty_listing_matches_golden_sequence() {
         reference: 0x0102_0304,
         garmin_time: garmin(UNIX_NOW),
         utc_offset_s: 3600,
-        next_dst: garmin(UNIX_NOW + 86_400 * 30),
-        following_dst: garmin(UNIX_NOW + 86_400 * 200),
+        dst_start: garmin(UNIX_NOW + 86_400 * 30),
+        dst_end: garmin(UNIX_NOW + 86_400 * 200),
     });
     let ack = |id: u16| ack_body(id, &[]);
     let expected: Vec<(u16, Option<u8>, Vec<u8>)> = vec![
@@ -676,12 +677,45 @@ fn time_reply_carries_reference_garmin_time_offset_and_dst() {
     assert_eq!(t.reference, 0xDEAD_BEEF);
     assert_eq!(t.garmin_time, garmin(UNIX_NOW + 5));
     assert_eq!(t.utc_offset_s, 3600);
-    assert_eq!(t.next_dst, garmin(UNIX_NOW + 86_400 * 30));
-    assert_eq!(t.following_dst, garmin(UNIX_NOW + 86_400 * 200));
+    assert_eq!(t.dst_start, garmin(UNIX_NOW + 86_400 * 30));
+    assert_eq!(t.dst_end, garmin(UNIX_NOW + 86_400 * 200));
     assert!(sim.events.contains(&Event::TimeSent {
         garmin_time: garmin(UNIX_NOW + 5),
         utc_offset_s: 3600
     }));
+}
+
+fn time_reply_for(dst: Option<DstPair>, unix_s: i64) -> m::CurrentTimeReply {
+    let mut sim = Sim::new();
+    sim.handshake();
+    sim.unix_s_override = Some(unix_s);
+    sim.dst_override = Some(dst);
+    sim.watch_sends(&Message::new(5052, 1u32.to_le_bytes().to_vec()));
+    let reply = sim.phone_responses(5052).pop().expect("a 5052 reply");
+    m::parse_current_time_reply(reply.as_response().unwrap().body).unwrap()
+}
+
+#[test]
+fn summer_time_reply_has_the_start_after_the_end() {
+    // In summer the next transition is the end; the start is the later one.
+    let end = UNIX_NOW + 86_400 * 40;
+    let start = UNIX_NOW + 86_400 * 220;
+    let t = time_reply_for(
+        Some(DstPair {
+            start_unix_s: start,
+            end_unix_s: end,
+        }),
+        UNIX_NOW,
+    );
+    assert_eq!((t.dst_start, t.dst_end), (garmin(start), garmin(end)));
+    assert!(t.dst_start > t.dst_end);
+}
+
+#[test]
+fn no_dst_gives_zero_in_both_fields() {
+    let t = time_reply_for(None, UNIX_NOW);
+    assert_eq!((t.dst_start, t.dst_end), (0, 0));
+    assert_eq!(t.garmin_time, garmin(UNIX_NOW));
 }
 
 #[test]

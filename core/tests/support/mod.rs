@@ -14,7 +14,7 @@ use std::collections::{HashMap, VecDeque};
 use nimrag_core::capture::{Att, Direction};
 use nimrag_core::client::reliable::MlrEndpoint;
 use nimrag_core::client::{
-    Client, ClientConfig, Event, FileType, Input, Now, Phase, Step, GARMIN_EPOCH_UNIX_S,
+    Client, ClientConfig, DstPair, Event, FileType, Input, Now, Phase, Step, GARMIN_EPOCH_UNIX_S,
 };
 use nimrag_core::cobs::{self, FrameDecoder};
 use nimrag_core::crc;
@@ -54,8 +54,10 @@ pub fn test_now(mono_ms: u64) -> Now {
         mono_ms,
         unix_s: UNIX_NOW + (mono_ms / 1000) as i64,
         utc_offset_s: 3600,
-        next_dst_unix_s: UNIX_NOW + 86_400 * 30,
-        following_dst_unix_s: UNIX_NOW + 86_400 * 200,
+        dst: Some(DstPair {
+            start_unix_s: UNIX_NOW + 86_400 * 30,
+            end_unix_s: UNIX_NOW + 86_400 * 200,
+        }),
     }
 }
 
@@ -632,6 +634,8 @@ pub struct Sim {
     pub stored: Vec<u64>,
     pub epoch: u32,
     pub unix_s_override: Option<i64>,
+    /// `Some(x)` replaces the DST pair given to the client with `x`.
+    pub dst_override: Option<Option<DstPair>>,
     inbox: VecDeque<Vec<u8>>,
 }
 
@@ -655,6 +659,7 @@ impl Sim {
             stored: Vec::new(),
             epoch: 1,
             unix_s_override: None,
+            dst_override: None,
             inbox: VecDeque::new(),
         }
     }
@@ -663,6 +668,9 @@ impl Sim {
         let mut n = test_now(self.t);
         if let Some(u) = self.unix_s_override {
             n.unix_s = u;
+        }
+        if let Some(d) = self.dst_override {
+            n.dst = d;
         }
         n
     }

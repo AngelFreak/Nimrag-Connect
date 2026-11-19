@@ -202,7 +202,7 @@ Labels as in PROTOCOL.md: **seen** / **inferred** / **unknown**; **ours** = a fr
 1. Any replay difference outside §5's list, or a transcript item the harness cannot classify.
 2. A register status, flag or control type this contract does not name, in a capture.
 3. 5054, a chunked protobuf, a non-ACK status, or a 5008 reply body that breaks the "index − 1" pattern, in a capture.
-4. 5052 for a zone without DST transitions (encoding unknown): `Now` requires both fields; do not invent a sentinel.
+4. (Removed: 5052 without DST transitions is settled by Q-TIME-2; `Now.dst: Option<DstPair>`, `None` sends 0, 0.)
 5. Need for a default capability mask, client id or app version in `core`.
 6. Anything that would require copying capture bytes containing ids, names, notification text or cloud answers into a committed file.
 7. A conflict between this contract and PROTOCOL.md: PROTOCOL.md and the captures win; report it.
@@ -213,7 +213,7 @@ Labels as in PROTOCOL.md: **seen** / **inferred** / **unknown**; **ours** = a fr
 - Unhandled watch requests → 5000 status 2 (inferred, Q-GFDI-5); watch protobuf requests → 8-byte ACK, no 5044.
 - 5002 flags 0x01 as the app sends; a 5054 reply → `FileFailed`, no archive.
 - No SHA-256 in `FileStored`: the store (2d) owns hashing and its own audit log.
-- 5052 without DST transitions: out of scope (owner's zone has DST); stop rule 4 stands.
+- 5052 DST fields: settled by Q-TIME-2 (start, end; 0, 0 without transitions); the caller computes `Now.dst`, stop rule 4 is gone.
 - MLR: fixed window 32, no RTT estimator, 30 s reply deadline closes the session.
 - Committing a scrubbed message-level transcript of a real capture: owner decision, not now.
 
@@ -310,9 +310,9 @@ Gadgetbridge generates one Java class per FIT message from `fit_profile.json` an
 1. **Q-TIME-2 (5052 DST fields).** Settle from evidence before anything is renamed: the app's 5052 reply builder in the decompiled APK (static), else a capture in summer time. `Now` keeps its field names until then; the reviewer checks the APK. Must be closed before the March clock change.
 2. **5002 flags** stay 0x01 (as Garmin Connect sends) until 2c; switch to 0 only if a 5054 ever arrives.
 3. **Upload chunk size** (row 21, when ported): the whole frame must fit `max_packet` (one CAP-2 chunk fits that exactly), stricter than Gadgetbridge's `max_packet − 13`; confirm with a capture.
-4. **Catalogue sync status**: models that need the V0/V1 transports (row 10) or the new sync (row 23) are marked "recognised, cannot sync yet" until those rows are ported.
+4. **Catalogue sync status**: models that use the new sync (row 23; `defaultNewSyncProtocol`, 5 models) are marked "recognised, cannot sync yet" in the catalogue. The V0/V1 transports (row 10) are not a per-model fact in Gadgetbridge: it picks the communicator at connect time from the GATT services the device exposes. Our app does the same in 2c and reports "cannot sync yet" for a V1-only device until row 10 is ported.
 5. **`GarminCapability` and `FileType` names** are Gadgetbridge's own lists, not FIT profile data: portable.
-6. **Row 42 data**: the USB copy (gate 1) holds a real sleep session, so sleep parity can be checked now on real files; re-check after the night-sync capture.
+6. **Row 42 data** (corrected): the USB copy has no sleep-stage data (empty `Sleep/`, no `sleep_level`, no sleep events; the Instinct 2 hands sleep over Bluetooth at sync). Row 42 waits for the night-sync capture. The copy does hold a 7-night `sleep_summary` history in `FbtBackup/lha_bkup.fit`, of which `derive::sleep` kept only the first: fixed separately.
 
 Owner decisions, needed by stage 2f (not blocking now): who fetches GPS-assist data (Gadgetbridge serves a user-supplied file; the brief allows one Garmin call); a non-Garmin weather source; confirm the skipped features (Explore sync, Connect IQ, contacts, canned SMS replies, hydration, ECG, alarms via FIT); fake OAuth stays skipped unless a wanted duty fails without it.
 

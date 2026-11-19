@@ -488,8 +488,9 @@ impl Session {
             reference,
             garmin_time: garmin(now.unix_s),
             utc_offset_s: now.utc_offset_s,
-            next_dst: garmin(now.next_dst_unix_s),
-            following_dst: garmin(now.following_dst_unix_s),
+            // No transition ahead: a literal 0 in both fields.
+            dst_start: now.dst.map_or(0, |d| garmin(d.start_unix_s)),
+            dst_end: now.dst.map_or(0, |d| garmin(d.end_unix_s)),
         };
         out.msgs
             .push(response(msg, 0, &m::build_current_time_reply(&reply)));

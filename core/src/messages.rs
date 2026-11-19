@@ -291,9 +291,10 @@ pub struct CurrentTimeReply {
     /// Seconds since 1989-12-31T00:00Z.
     pub garmin_time: u32,
     pub utc_offset_s: i32,
-    /// Garmin-epoch times of the next two zone transitions.
-    pub next_dst: u32,
-    pub following_dst: u32,
+    /// Garmin-epoch time of the next DST start (0 when there is none).
+    pub dst_start: u32,
+    /// Garmin-epoch time of the next DST end (0 when there is none).
+    pub dst_end: u32,
 }
 
 pub fn build_current_time_reply(r: &CurrentTimeReply) -> Vec<u8> {
@@ -301,8 +302,8 @@ pub fn build_current_time_reply(r: &CurrentTimeReply) -> Vec<u8> {
     v.extend_from_slice(&r.reference.to_le_bytes());
     v.extend_from_slice(&r.garmin_time.to_le_bytes());
     v.extend_from_slice(&r.utc_offset_s.to_le_bytes());
-    v.extend_from_slice(&r.next_dst.to_le_bytes());
-    v.extend_from_slice(&r.following_dst.to_le_bytes());
+    v.extend_from_slice(&r.dst_start.to_le_bytes());
+    v.extend_from_slice(&r.dst_end.to_le_bytes());
     v
 }
 
@@ -311,8 +312,8 @@ pub fn parse_current_time_reply(b: &[u8]) -> Option<CurrentTimeReply> {
         reference: u32le(b, 0)?,
         garmin_time: u32le(b, 4)?,
         utc_offset_s: u32le(b, 8)? as i32,
-        next_dst: u32le(b, 12)?,
-        following_dst: u32le(b, 16)?,
+        dst_start: u32le(b, 12)?,
+        dst_end: u32le(b, 16)?,
     })
 }
 
@@ -563,8 +564,8 @@ mod tests {
             reference: 1,
             garmin_time: 2,
             utc_offset_s: -3600,
-            next_dst: 4,
-            following_dst: 5,
+            dst_start: 4,
+            dst_end: 5,
         };
         assert_eq!(
             parse_current_time_reply(&build_current_time_reply(&r)),

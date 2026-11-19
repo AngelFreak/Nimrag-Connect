@@ -530,8 +530,7 @@ struct Peer {
 pub struct WallClock {
     pub base_unix_s: i64,
     pub utc_offset_s: i32,
-    pub next_dst_unix_s: i64,
-    pub following_dst_unix_s: i64,
+    pub dst: Option<nimrag_core::client::DstPair>,
 }
 
 impl WallClock {
@@ -540,8 +539,7 @@ impl WallClock {
             mono_ms,
             unix_s: self.base_unix_s + (mono_ms / 1000) as i64,
             utc_offset_s: self.utc_offset_s,
-            next_dst_unix_s: self.next_dst_unix_s,
-            following_dst_unix_s: self.following_dst_unix_s,
+            dst: self.dst,
         }
     }
 }
@@ -577,8 +575,7 @@ fn wall_clock(s: &SessionTranscript) -> WallClock {
     let mut clock = WallClock {
         base_unix_s: (s.t0_us - capture::BTSNOOP_UNIX_OFFSET_US) / 1_000_000,
         utc_offset_s: 0,
-        next_dst_unix_s: 0,
-        following_dst_unix_s: 0,
+        dst: None,
     };
     for it in &s.items {
         if let (true, Kind::Gfdi(msg)) = (it.from_phone, &it.kind) {
@@ -586,10 +583,13 @@ fn wall_clock(s: &SessionTranscript) -> WallClock {
                 if r.request_id == 5052 {
                     if let Some(t) = m::parse_current_time_reply(r.body) {
                         clock.utc_offset_s = t.utc_offset_s;
-                        clock.next_dst_unix_s =
-                            t.next_dst as i64 + nimrag_core::client::GARMIN_EPOCH_UNIX_S;
-                        clock.following_dst_unix_s =
-                            t.following_dst as i64 + nimrag_core::client::GARMIN_EPOCH_UNIX_S;
+                        let epoch = nimrag_core::client::GARMIN_EPOCH_UNIX_S;
+                        clock.dst = (t.dst_start != 0 || t.dst_end != 0).then(|| {
+                            nimrag_core::client::DstPair {
+                                start_unix_s: t.dst_start as i64 + epoch,
+                                end_unix_s: t.dst_end as i64 + epoch,
+                            }
+                        });
                         break;
                     }
                 }
@@ -1564,8 +1564,8 @@ fn compare(
             });
         match (app, ours) {
             (Some(a), Some(o)) => {
-                if (a.reference, a.utc_offset_s, a.next_dst, a.following_dst)
-                    != (o.reference, o.utc_offset_s, o.next_dst, o.following_dst)
+                if (a.reference, a.utc_offset_s, a.dst_start, a.dst_end)
+                    != (o.reference, o.utc_offset_s, o.dst_start, o.dst_end)
                 {
                     fail.push(format!(
                         "time reply fields differ at {} ms",

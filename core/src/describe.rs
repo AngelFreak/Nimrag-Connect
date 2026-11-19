@@ -299,12 +299,12 @@ fn describe_response_body(request_id: u16, b: &[u8]) -> Option<String> {
         5052 => {
             let r = messages::parse_current_time_reply(b)?;
             format!(
-                "reference=0x{:08x} time={} utc_offset={}s next_dst={} following_dst={}",
+                "reference=0x{:08x} time={} utc_offset={}s dst_start={} dst_end={}",
                 r.reference,
                 garmin_time(r.garmin_time),
                 r.utc_offset_s,
-                r.next_dst,
-                r.following_dst
+                r.dst_start,
+                r.dst_end
             )
         }
         5031 => {
