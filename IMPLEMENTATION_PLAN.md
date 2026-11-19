@@ -1,6 +1,6 @@
 # nimrag implementation plan
 
-Source of truth for scope: the owner's build prompt (phases 0–4, hard rules, decisions, design system, engineering standards) and the phase 0 brief "map the Garmin Connect ↔ Instinct 2 BLE sync protocol". Each phase stops at its gate for an owner report. Roles: the main session orchestrates and integrates; Sonnet builders implement on disjoint paths and do not commit; a Fable advisor drafts contracts and reviews finished work before each commit.
+Source of truth for scope: the owner's build prompt (phases 0–4, hard rules, decisions, design system, engineering standards) and the phase 0 brief "map the Garmin Connect ↔ Instinct 2 BLE sync protocol". Each phase stops at its gate for an owner report. Workflow: AI-assisted. An integrator plans each stage and commits; AI implementers build on separate paths and never commit; an independent AI reviewer drafts contracts and reviews finished work before each commit; every commit is verified by the integrator (tests in both profile modes, real-data checks); the owner makes the product decisions.
 
 ## Roadmap: phase 0 to finished product
 
@@ -64,7 +64,7 @@ Every phase ends with an update to `docs/ARCHITECTURE.md` and a gate report (eng
 
 # Phase 1: server ingest and parsing (started 2026-11-19 at owner's request; phase 0 still awaits night + fresh-pairing captures)
 
-Roles: main session orchestrates and integrates; Sonnet builders implement on disjoint paths and do not commit; a Fable advisor reviews the contract and finished work.
+Workflow as described at the top of this file.
 
 ## Stage 1a: FIT decoder (/core/src/fit/decode.rs) — builder A
 **Goal**: sans-IO FIT binary decoder per contract in core/src/fit/mod.rs; keeps every message and field (unknown, manufacturer-specific, developer) with raw bytes
@@ -118,7 +118,7 @@ Roles as phase 1. Order follows the brief: the core state machine passes the pha
 
 Labels as in PROTOCOL.md: **seen** / **inferred** / **unknown**; **ours** = a free choice of this client. CAP-1 = `2026-11-19-reconnect-sync`, CAP-2 = `…-activity-sync`, CAP-3 = `…-settings-timeformat`; `t=` is seconds in `nimrag-decode --verbose` output. Connect is client `c1`, Explore the other client.
 
-#### 1. API (fixed in `core/src/client/mod.rs`; change it only via the orchestrator)
+#### 1. API (fixed in `core/src/client/mod.rs`; change it only via the integrator)
 - One `Client` per GATT connection and per characteristic pair; created at connect, dropped at disconnect. The caller picks the pair (notify `6A4E281x`, write `6A4E282x`), bonds, exchanges MTU, enables the CCCD, then sends `Input::Connected { att_mtu }`. All writes go to that pair's write characteristic as write-without-response, in order. [seen: PROTOCOL §1.1]
 - `handle(now, input) -> Step { writes, events, wake_at_mono_ms }`. No IO, no clock reads, no panics on peer data. After `Closed`, every input returns an empty `Step`.
 - Time: `Now.mono_ms` drives every timer; the wall fields are used only for the 5052 reply. All timers (MLR ack delay, MLR retransmit, reply deadlines, retry delays) collapse into the single `wake_at_mono_ms`; the caller arms one timer and sends `Input::Tick`. A late Tick is fine; an early one is a no-op.
@@ -204,7 +204,7 @@ Labels as in PROTOCOL.md: **seen** / **inferred** / **unknown**; **ours** = a fr
 6. Anything that would require copying capture bytes containing ids, names, notification text or cloud answers into a committed file.
 7. A conflict between this contract and PROTOCOL.md: PROTOCOL.md and the captures win; report it.
 
-#### 9. Orchestrator decisions on the advisor's open points (2026-11-19)
+#### 9. Integrator decisions on the reviewer's open points (2026-11-19)
 - Capability mask, client id, app version, host strings: config only, no defaults in `core`. 2c starts with Explore's 5050 set (seen working; weather 5014 then gets status 2) and confirms it live.
 - 5043 FeatureCapabilitiesRequest: not sent in 2a. 2c checks live whether the watch needs it; if so, Explore's body (no account GUID).
 - Unhandled watch requests → 5000 status 2 (inferred, Q-GFDI-5); watch protobuf requests → 8-byte ACK, no 5044.
@@ -214,7 +214,7 @@ Labels as in PROTOCOL.md: **seen** / **inferred** / **unknown**; **ours** = a fr
 - MLR: fixed window 32, no RTT estimator, 30 s reply deadline closes the session.
 - Committing a scrubbed message-level transcript of a real capture: owner decision, not now.
 
-#### 10. Orchestrator decisions after the advisor code review (2026-11-19)
+#### 10. Integrator decisions after the reviewer code review (2026-11-19)
 - **Transfer ids unique across connections (blocker B1).** `ClientConfig` gains `connection_epoch: u32`; the caller gives every `Client` a new value (an in-process counter is enough: stale confirmations can only come from the same process). `transfer_id` becomes `u64 = (epoch << 32) | n`. A confirmation carrying another epoch → `StaleConfirmation`, nothing sent.
 - **Per-file failure instead of closing (S2).** A non-ACK status to 5002 → `FileFailed(Refused)`; to 5008 → `FileFailed(ArchiveRefused)`; both continue with the next file. Non-ACK to 5007, a handshake request or any bring-up step still closes. Reply silence (30 s) still closes in every phase (the link is probably gone); a file that makes the watch go silent every time is a known risk to watch in 2c.
 - **5054 (S1).** A 5054 while a download is active fails that file (`FileFailed`, no archive) and the cycle continues; outside a download → `Anomaly`. 5002 flags stay 0x01.
@@ -295,15 +295,15 @@ Each page renders from real synced data, shows "unavailable" correctly for missi
 ## Gate 4
 Final report: what works, what was verified and how, what is still unknown.
 
-# Appendix: contracts and advisor notes
+# Appendix: contracts and reviewer notes
 
-### Advisor notes for stage 1d (parsers), recorded 2026-11-19
+### Reviewer notes for stage 1d (parsers), recorded 2026-11-19
 - timestamp_16 / timestamp_min_8 (monitoring) and event_timestamp_12 (hr) accumulate against the last full timestamp; timestamps < 0x10000000 are device-relative, not UTC → show as unavailable.
 - Cross-file duplicates (watch vs export, overlapping monitoring): derived entities need natural keys (e.g. file_id serial + time_created; (timestamp, metric)) and a precedence rule independent of ingest order.
 - Expansion of components/subfields and accumulation live in a pure `fit::interpret` layer; the decoder stays raw.
 - Phase 4 encoder: separate `fit::encode` with typed inputs; needs BaseType::{size, invalid, to_byte}.
 
-## Stage 1d contract (advisor draft, accepted by orchestrator 2026-11-19)
+## Stage 1d contract (reviewer draft, accepted by integrator 2026-11-19)
 
 ### Architecture
 - Core (pure, std-only, reusable on Android): `core/src/derive/{mod,activity,monitoring,sleep,hrv,metrics}.rs`. `pub fn derive(file: &FitFile) -> Result<Derived, DeriveError>`. `Derived` = plain structs, one Vec per row type, plus `FileFacts`. No IO, serde or SQL.

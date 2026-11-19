@@ -7,6 +7,7 @@
   <img alt="Rust 1.89+" src="https://img.shields.io/badge/rust-1.89%2B-7DBBFF?style=flat-square&logo=rust&logoColor=E8EDEE&labelColor=171E22">
   <img alt="Platform: Android" src="https://img.shields.io/badge/phone-Android-4FD1B5?style=flat-square&logo=android&logoColor=E8EDEE&labelColor=171E22">
   <img alt="No cloud" src="https://img.shields.io/badge/cloud-none-A594FF?style=flat-square&labelColor=171E22">
+  <img alt="AI-assisted, responsibly" src="https://img.shields.io/badge/AI--assisted-responsibly-F2D45C?style=flat-square&labelColor=171E22">
   <img alt="Licence: not chosen yet" src="https://img.shields.io/badge/licence-not%20chosen%20yet-9AA7AC?style=flat-square&labelColor=171E22">
 </p>
 
@@ -16,6 +17,7 @@
   <a href="#roadmap">Roadmap</a> ·
   <a href="#getting-started">Getting started</a> ·
   <a href="#principles">Principles</a> ·
+  <a href="#ai-assisted-development">AI-assisted</a> ·
   <a href="docs/protocol/PROTOCOL.md">Protocol notes</a>
 </p>
 
@@ -122,6 +124,19 @@ cargo run -p nimrag-server -- import-export --data-dir ./data ~/Downloads/garmin
 ## Compatibility
 
 Nimrag Connect is built for Android phones and Garmin wearables that use Garmin's multi-link Bluetooth protocol. So far all development and verification has been done against an **Instinct 2**, and a few details, such as the Bluetooth packet size, were measured on that model. Reports from other watches are welcome.
+
+## AI-assisted development
+
+Nimrag Connect is built with AI coding assistants, openly. The owner decides what gets built and how it should behave. AI does much of the implementation and review. Nothing is committed until it has been checked by tests, an independent review and, where it matters, real data from a real watch.
+
+AI-assisted contributions are welcome. We ask that they are responsible:
+
+- **Own your change.** Understand it, be able to explain it, and stand behind it, whoever or whatever typed it.
+- **Prove it.** Tests for new behaviour, and tests that go through the real entry point, not just a unit in isolation. Run the full suite before you open a pull request.
+- **Evidence, not plausibility.** AI is good at confident guesses. Protocol and data claims need a capture, a file or a test, and must be labelled *seen*, *inferred* or *unknown*. Never invent values.
+- **Respect licences.** Don't paste or translate code from Gadgetbridge (AGPL) or other projects into this codebase, and never commit Garmin profile tables.
+- **Keep personal data out.** No real captures, ids, positions or account data in commits, prompts you share or test fixtures.
+- **Say how it was made.** Mention AI assistance in your pull request so reviewers know where to look harder.
 
 ## Acknowledgements
 
