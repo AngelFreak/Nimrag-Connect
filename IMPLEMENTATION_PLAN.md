@@ -179,7 +179,10 @@ Labels as in PROTOCOL.md: **seen** / **inferred** / **unknown**; **ours** = a fr
 
 ## Stage 2b: Android build of /core (cargo-ndk, UniFFI, Gradle module)
 **Toolchain (installed 2026-11-19, owner approved incl. SDK licences)**: `ANDROID_HOME=~/opt/android-sdk` (cmdline-tools 23.0, checksum-verified; platform-tools 37.0.1, build-tools 37.0.0, platforms/android-37.2, NDK 30.0.16248370), Rust targets aarch64/x86_64-linux-android, cargo-ndk 4.1.2, JDK 25 at ~/opt/rea-engines/jdk25. `cargo ndk -t arm64-v8a -t x86_64 build -p nimrag-core` builds. UniFFI goes in a separate FFI crate so `core` stays std-only.
-**Status**: Not Started (waits for the 2a API to settle)
+**Goal**: `ffi/` crate `nimrag-ffi` (workspace member) exposing `nimrag_core::client` through UniFFI (proc-macros; `core` stays std-only); `android/` Gradle project with `:core` (Android library: generated Kotlin bindings + `.so` for arm64-v8a and x86_64 built by cargo-ndk from Gradle) and a minimal `:app` shell for 2c.
+**Success Criteria**: `./gradlew :core:assembleRelease :app:assembleDebug` builds from a clean checkout; the APK contains `libnimrag_ffi.so` for both ABIs and no FIT profile data (built with `NIMRAG_FIT_PROFILE=none`, enforced in the Gradle task); Kotlin can drive a `Client` end to end.
+**Tests**: Rust tests in `ffi/` for the conversion layer; a host JVM test (bindings + the x86_64-linux `.so` via JNA) that drives a `Client` through Kotlin with fake ids: Connected → close-all write; a scripted bring-up/handshake reaching `HandshakeDone`; a FileStored for a stale transfer id gives `StaleConfirmation`. Optional instrumented smoke test on the Pixel.
+**Status**: In Progress
 
 ## Stage 2c: Android foreground service, BLE link, pairing without the official app — needs owner (watch re-pairing)
 **Status**: Not Started
