@@ -16,6 +16,18 @@ fn run(b: FitBuilder) -> Result<Derived, DeriveError> {
 fn without_profile_derive_is_unavailable() {
     let b = FitBuilder::new().message(55, &[(253, Fv::U32(1_000_000_000)), (27, Fv::U8(60))]);
     assert_eq!(run(b), Err(DeriveError::ProfileUnavailable));
+    // New in 2p: battery and multi-night sleep summaries degrade the same way.
+    let b = FitBuilder::new()
+        .message(104, &[(253, Fv::U32(1_000_000_000)), (2, Fv::U8(87))])
+        .message(
+            411,
+            &[(10, Fv::U32(1_000_000_000)), (8, Fv::U32(1_000_028_800))],
+        )
+        .message(
+            411,
+            &[(10, Fv::U32(1_000_086_400)), (8, Fv::U32(1_000_115_200))],
+        );
+    assert_eq!(run(b), Err(DeriveError::ProfileUnavailable));
 }
 
 #[cfg(fit_profile)]
@@ -311,6 +323,53 @@ mod with_profile {
             (d.sleep_sessions[0].start_ts, d.sleep_sessions[0].end_ts),
             (None, None)
         );
+    }
+
+    #[test]
+    fn every_sleep_summary_becomes_a_session() {
+        let night = |start: u32, score: u8| {
+            [
+                (10, Fv::U32(start)),
+                (8, Fv::U32(start + 28_800)),
+                (0, Fv::U8(score)),
+            ]
+        };
+        let d = run(FitBuilder::new()
+            .message(411, &night(T, 70))
+            .message(411, &night(T + 86_400, 71))
+            .message(411, &night(T, 99)) // same start: first wins
+            .message(411, &night(T + 172_800, 72))
+            .message(346, &[(6, Fv::U8(81))]))
+        .unwrap();
+        let got: Vec<_> = d
+            .sleep_sessions
+            .iter()
+            .map(|s| (s.start_ts, s.overall_score))
+            .collect();
+        assert_eq!(
+            got,
+            vec![
+                (Some(unix(T)), Some(70.0)),
+                (Some(unix(T + 86_400)), Some(71.0)),
+                (Some(unix(T + 172_800)), Some(72.0)),
+            ]
+        );
+        assert_eq!(d.skipped, 1, "assessment not attributed to any night");
+    }
+
+    #[test]
+    fn battery_capacity_rows() {
+        let d = run(FitBuilder::new()
+            .message(
+                104,
+                &[(253, Fv::U32(T)), (2, Fv::U8(87)), (0, Fv::U16(4100))],
+            )
+            .message(104, &[(253, Fv::U32(T + 60)), (0, Fv::U16(4090))]) // no capacity
+            .message(104, &[(253, Fv::U32(100)), (2, Fv::U8(50))])) // device-relative
+        .unwrap();
+        assert_eq!(d.battery.len(), 1);
+        assert_eq!((d.battery[0].ts, d.battery[0].percent), (unix(T), 87.0));
+        assert_eq!(d.skipped, 1);
     }
 
     #[test]

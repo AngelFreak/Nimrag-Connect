@@ -1,9 +1,10 @@
 //! Wellness persistence: sample tables (rank-based upsert) and the two entity
-//! tables `mon_info` and `sleep_sessions` (first row per file wins).
+//! tables `mon_info` (first row per file wins) and `sleep_sessions` (every session of a file, keyed by position).
 use anyhow::Result;
 use nimrag_core::derive::{
-    Derived, HrvSummary, HrvValue, MonActivity, MonExtra, MonHr, RecoveryTime, Respiration,
-    RestingHr, SleepLevel, Spo2, Stress, TrainingBalance, TrainingLoad, TrainingStatus, Vo2max,
+    Battery, Derived, HrvSummary, HrvValue, MonActivity, MonExtra, MonHr, RecoveryTime,
+    Respiration, RestingHr, SleepLevel, Spo2, Stress, TrainingBalance, TrainingLoad,
+    TrainingStatus, Vo2max,
 };
 use sqlx::{Sqlite, Transaction};
 
@@ -25,6 +26,7 @@ pub const SAMPLE_TABLES: &[&str] = &[
     "training_balance",
     "recovery_time",
     "vo2max",
+    "battery",
 ];
 pub const ENTITY_TABLES: &[&str] = &["mon_info", "sleep_sessions"];
 
@@ -306,6 +308,17 @@ pub async fn write(
             .map(|x: &Vo2max| vec![i(x.ts), r(x.maximal_met), oi(x.sport)])
     );
 
+    up!(
+        tx,
+        "battery",
+        &["ts"],
+        &["percent"],
+        src,
+        d.battery
+            .iter()
+            .map(|x: &Battery| vec![i(x.ts), r(x.percent)])
+    );
+
     if let Some(m) = &d.mon_info {
         sqlx::query(
             "INSERT OR IGNORE INTO mon_info (sha256, local_offset_s, rmr_kcal_day, steps_goal)
@@ -318,14 +331,15 @@ pub async fn write(
         .execute(&mut **tx)
         .await?;
     }
-    // One row per file: the first session of the first chain file that has one.
-    if let Some(s) = d.sleep_sessions.first() {
+    // One row per session in the file (idx = position), replaced with the file.
+    for (idx, s) in d.sleep_sessions.iter().enumerate() {
         sqlx::query(
-            "INSERT OR IGNORE INTO sleep_sessions (sha256, start_ts, end_ts, overall_score,
+            "INSERT OR IGNORE INTO sleep_sessions (sha256, idx, start_ts, end_ts, overall_score,
                 quality_score, duration_score, recovery_score, deep_score, light_score, rem_score,
-                awakenings_count, avg_stress) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                awakenings_count, avg_stress) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         )
         .bind(sha256)
+        .bind(idx as i64)
         .bind(s.start_ts)
         .bind(s.end_ts)
         .bind(s.overall_score)

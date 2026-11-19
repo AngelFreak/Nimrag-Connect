@@ -11,6 +11,7 @@
 //! `Derived::skipped`).
 
 pub mod activity;
+pub mod battery;
 pub mod hrv;
 pub mod metrics;
 pub mod monitoring;
@@ -198,6 +199,13 @@ pub struct RecoveryTime {
     pub minutes: f64,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct Battery {
+    pub ts: i64,
+    /// Remaining capacity, percent.
+    pub percent: f64,
+}
+
 /// Everything derived from one `FitFile`. One Vec per row type.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct Derived {
@@ -222,6 +230,7 @@ pub struct Derived {
     pub training_balance: Vec<TrainingBalance>,
     pub recovery_time: Vec<RecoveryTime>,
     pub vo2max: Vec<Vo2max>,
+    pub battery: Vec<Battery>,
 }
 
 pub fn derive(file: &FitFile) -> Result<Derived, DeriveError> {
@@ -238,6 +247,7 @@ pub fn derive(file: &FitFile) -> Result<Derived, DeriveError> {
     sleep::run(&msgs, &mut d);
     hrv::run(&msgs, &mut d);
     metrics::run(&msgs, &mut d);
+    battery::run(&msgs, &mut d);
     Ok(d)
 }
 

@@ -98,6 +98,22 @@ async fn without_profile_status_is_no_profile_and_raw_tables_fill() {
     assert!(count(&e.pool, "fit_messages").await > 0);
 }
 
+#[tokio::test]
+async fn without_profile_battery_and_sleep_sessions_stay_empty() {
+    if nimrag_core::fit::profile::available() {
+        return;
+    }
+    let e = common::env().await;
+    let f = FitBuilder::new()
+        .message(104, &[(253, Fv::U32(T)), (2, Fv::U8(87))])
+        .message(411, &[(10, Fv::U32(T)), (8, Fv::U32(T + 100))])
+        .message(411, &[(10, Fv::U32(T + 86_400)), (8, Fv::U32(T + 86_500))])
+        .build();
+    upload(&e, &f).await;
+    assert_eq!(count(&e.pool, "battery").await, 0);
+    assert_eq!(count(&e.pool, "sleep_sessions").await, 0);
+}
+
 mod with_profile {
     use super::*;
 
@@ -189,6 +205,7 @@ mod with_profile {
             )
             .message(227, &[(1, Fv::U32(T)), (0, Fv::S16(30))])
             .message(297, &[(253, Fv::U32(T)), (0, Fv::S16(1500))])
+            .message(104, &[(253, Fv::U32(T)), (2, Fv::U8(87))])
             .message(269, &[(253, Fv::U32(T)), (0, Fv::U8(97))])
             .message(211, &[(253, Fv::U32(T)), (0, Fv::U8(52))])
             .message(103, &[(253, Fv::U32(T)), (5, Fv::U16(1700))])
@@ -325,6 +342,67 @@ mod with_profile {
         assert_eq!(cur, vec![75.0]); // more messages, same start
     }
 
+    #[tokio::test]
+    async fn file_with_several_sleep_summaries_keeps_all_and_reparses_identically() {
+        need_profile!();
+        let mut b = FitBuilder::new();
+        for n in 0..3u32 {
+            b = b.message(
+                411,
+                &[
+                    (10, Fv::U32(T + n * 86_400)),
+                    (8, Fv::U32(T + n * 86_400 + 100)),
+                    (0, Fv::U8(70 + n as u8)),
+                ],
+            );
+        }
+        let e = ingest(&[&b.build()]).await;
+        assert_eq!(count(&e.pool, "sleep_sessions").await, 3);
+        assert_eq!(count(&e.pool, "sleep_sessions_current").await, 3);
+        let before = dump(&e.pool).await;
+        reparse(e.dir.path());
+        assert_eq!(dump(&e.pool).await, before);
+    }
+
+    #[tokio::test]
+    async fn battery_rows_through_the_router() {
+        need_profile!();
+        let e = common::env().await;
+        let f = FitBuilder::new()
+            .message(104, &[(253, Fv::U32(T)), (2, Fv::U8(87))])
+            .message(104, &[(253, Fv::U32(T + 60)), (2, Fv::U8(86))])
+            .build();
+        upload(&e, &f).await;
+        let v: Vec<f64> = sqlx::query_scalar("SELECT percent FROM battery ORDER BY ts")
+            .fetch_all(&e.pool)
+            .await
+            .unwrap();
+        assert_eq!(v, vec![87.0, 86.0]);
+    }
+
+    /// Private USB copy: the watch backup holds 7 nights of sleep summaries.
+    /// Prints counts only. Skipped when the copy is absent.
+    #[test]
+    fn private_usb_backup_has_seven_sleep_summaries() {
+        if !nimrag_core::fit::profile::available() {
+            return;
+        }
+        let p = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../private/usb/2026-11-19/GARMIN/FbtBackup/lha_bkup.fit");
+        let Ok(bytes) = std::fs::read(&p) else {
+            eprintln!("private USB copy absent; skipping");
+            return;
+        };
+        let decoded = nimrag_core::fit::decode(&bytes);
+        let n: usize = decoded
+            .files
+            .iter()
+            .map(|f| nimrag_core::derive::derive(f).unwrap().sleep_sessions.len())
+            .sum();
+        eprintln!("lha_bkup.fit: {n} sleep sessions");
+        assert_eq!(n, 7);
+    }
+
     fn corpus() -> Vec<Vec<u8>> {
         vec![
             hr_file(&[(T, 60), (T + 60, 61)]),
@@ -333,6 +411,7 @@ mod with_profile {
             FitBuilder::new()
                 .message(227, &[(1, Fv::U32(T)), (0, Fv::S16(30)), (3, Fv::S8(50))])
                 .message(297, &[(253, Fv::U32(T)), (0, Fv::S16(1500))])
+                .message(104, &[(253, Fv::U32(T)), (2, Fv::U8(87))])
                 .message(
                     103,
                     &[
@@ -361,7 +440,11 @@ mod with_profile {
         let b = ingest(&rev).await;
         let c2 = ingest(&mid).await;
         let before = dump(&a.pool).await;
-        assert!(before.contains("mon_hr|") && before.contains("sleep_levels|"));
+        assert!(
+            before.contains("mon_hr|")
+                && before.contains("sleep_levels|")
+                && before.contains("battery|")
+        );
         assert_eq!(before, dump(&b.pool).await);
         assert_eq!(before, dump(&c2.pool).await);
 

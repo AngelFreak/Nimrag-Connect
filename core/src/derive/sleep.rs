@@ -5,11 +5,16 @@
 //! from the local profile and synthetic tests only.
 //!
 //! - `sleep_levels`: `sleep_level` value and enum label, at the message time.
-//! - One `SleepSession` per file at most, from the first `sleep_assessment`
-//!   (scores) and first `sleep_summary` (explicit `sleep_start_timestamp_utc` /
-//!   `sleep_end_timestamp_utc`; no other source of start/end is used, so they
-//!   stay NULL without a summary). The overall score prefers the assessment's
-//!   and falls back to the summary's.
+//! - `sleep_sessions`: one `SleepSession` per `sleep_summary` (explicit
+//!   `sleep_start_timestamp_utc` / `sleep_end_timestamp_utc`; no other source of
+//!   start/end is used, so they stay NULL without a start). A file such as the
+//!   watch's backup holds a history of nights, so every summary becomes a row;
+//!   a second summary with the same start time within a file is dropped.
+//!   `sleep_assessment` (scores, no time of its own) is attached only when it
+//!   is unambiguous: a file with exactly one summary (the assessment beats the
+//!   summary's overall score) or with no summary (a session without times).
+//!   With several summaries the assessments are not attributed to any night
+//!   and are counted in `Derived::skipped`.
 use super::{fit_utc, Derived, SleepLevel, SleepSession};
 use crate::fit::interpret::Interpreted;
 
@@ -18,38 +23,64 @@ const SLEEP_ASSESSMENT: u16 = 346;
 const SLEEP_SUMMARY: u16 = 411;
 
 pub fn run(msgs: &[Interpreted], out: &mut Derived) {
-    let mut session = SleepSession::default();
-    let mut seen_assessment = false;
-    let mut seen_summary = false;
+    let mut assessment: Option<SleepSession> = None;
+    let mut assessments = 0u64;
+    let mut summaries: Vec<SleepSession> = Vec::new();
     for m in msgs {
         match m.global {
             SLEEP_LEVEL => level(m, out),
-            SLEEP_ASSESSMENT if !seen_assessment => {
-                seen_assessment = true;
-                session.overall_score = m.number("overall_sleep_score");
-                session.quality_score = m.number("sleep_quality_score");
-                session.duration_score = m.number("sleep_duration_score");
-                session.recovery_score = m.number("sleep_recovery_score");
-                session.deep_score = m.number("deep_sleep_score");
-                session.light_score = m.number("light_sleep_score");
-                session.rem_score = m.number("rem_sleep_score");
-                session.awakenings_count = m.number("awakenings_count");
-                session.avg_stress = m.number("average_stress_during_sleep");
-            }
-            SLEEP_SUMMARY if !seen_summary => {
-                seen_summary = true;
-                session.start_ts = m.number("sleep_start_timestamp_utc").and_then(fit_utc);
-                session.end_ts = m.number("sleep_end_timestamp_utc").and_then(fit_utc);
-                if session.overall_score.is_none() {
-                    session.overall_score = m.number("overall_sleep_score");
+            SLEEP_ASSESSMENT => {
+                assessments += 1;
+                if assessment.is_none() {
+                    assessment = Some(SleepSession {
+                        overall_score: m.number("overall_sleep_score"),
+                        quality_score: m.number("sleep_quality_score"),
+                        duration_score: m.number("sleep_duration_score"),
+                        recovery_score: m.number("sleep_recovery_score"),
+                        deep_score: m.number("deep_sleep_score"),
+                        light_score: m.number("light_sleep_score"),
+                        rem_score: m.number("rem_sleep_score"),
+                        awakenings_count: m.number("awakenings_count"),
+                        avg_stress: m.number("average_stress_during_sleep"),
+                        ..Default::default()
+                    });
                 }
+            }
+            SLEEP_SUMMARY => {
+                let start_ts = m.number("sleep_start_timestamp_utc").and_then(fit_utc);
+                if start_ts.is_some() && summaries.iter().any(|s| s.start_ts == start_ts) {
+                    continue; // first summary per start time wins
+                }
+                summaries.push(SleepSession {
+                    start_ts,
+                    end_ts: m.number("sleep_end_timestamp_utc").and_then(fit_utc),
+                    overall_score: m.number("overall_sleep_score"),
+                    ..Default::default()
+                });
             }
             _ => {}
         }
     }
-    if session != SleepSession::default() {
-        out.sleep_sessions.push(session);
+    match summaries.len() {
+        0 => out.sleep_sessions.extend(assessment),
+        1 => {
+            let mut s = summaries.remove(0);
+            if let Some(a) = assessment {
+                s = SleepSession {
+                    start_ts: s.start_ts,
+                    end_ts: s.end_ts,
+                    overall_score: a.overall_score.or(s.overall_score),
+                    ..a
+                };
+            }
+            out.sleep_sessions.push(s);
+        }
+        _ => {
+            out.skipped += assessments;
+            out.sleep_sessions.extend(summaries);
+        }
     }
+    out.sleep_sessions.retain(|s| *s != SleepSession::default());
 }
 
 fn level(m: &Interpreted, out: &mut Derived) {
