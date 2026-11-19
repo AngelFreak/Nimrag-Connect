@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "DELETE FROM fit_messages WHERE sha256 NOT IN (SELECT sha256 FROM files)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": []
+  },
+  "hash": "8b188b781f1b203332bb4770005af3d98ef9de85cb6a25372317be12a73c63af"
+}

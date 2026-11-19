@@ -8,3 +8,11 @@ target/
 # Node
 node_modules/
 dist/
+
+# nimrag-server data dirs and dev database (server/.sqlx IS committed)
+/data/
+/server/data/
+/server/dev.db*
+
+# Locally generated FIT profile tables (Garmin material; never commit)
+/core/src/fit/generated/

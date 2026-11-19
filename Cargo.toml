@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["core", "tools/decode"]
+members = ["core", "tools/decode", "server"]
 
 [workspace.package]
 edition = "2021"

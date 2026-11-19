@@ -1,0 +1,35 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT COUNT(*) as \"files!: i64\", COALESCE(SUM(message_count), 0) as \"messages!: i64\",\n                  MIN(crc_ok) as \"crc_ok: i64\"\n           FROM fit_files WHERE sha256 = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "files!: i64",
+        "ordinal": 0,
+        "type_info": "Integer",
+        "origin": "Expression"
+      },
+      {
+        "name": "messages!: i64",
+        "ordinal": 1,
+        "type_info": "Integer",
+        "origin": "Expression"
+      },
+      {
+        "name": "crc_ok: i64",
+        "ordinal": 2,
+        "type_info": "Integer",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "35ad601281adf2671d6f5ba3714693e6077658630f3f20dc7d1b25a76f365f5c"
+}

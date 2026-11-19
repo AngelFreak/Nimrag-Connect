@@ -1,0 +1,122 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT sha256 as \"sha256!\", size, received_at, source, data_type, sub_type,\n                  file_index, file_number, watch_timestamp\n           FROM files WHERE sha256 = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "sha256!",
+        "ordinal": 0,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "files",
+            "name": "sha256"
+          }
+        }
+      },
+      {
+        "name": "size",
+        "ordinal": 1,
+        "type_info": "Integer",
+        "origin": {
+          "Table": {
+            "table": "files",
+            "name": "size"
+          }
+        }
+      },
+      {
+        "name": "received_at",
+        "ordinal": 2,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "files",
+            "name": "received_at"
+          }
+        }
+      },
+      {
+        "name": "source",
+        "ordinal": 3,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "files",
+            "name": "source"
+          }
+        }
+      },
+      {
+        "name": "data_type",
+        "ordinal": 4,
+        "type_info": "Integer",
+        "origin": {
+          "Table": {
+            "table": "files",
+            "name": "data_type"
+          }
+        }
+      },
+      {
+        "name": "sub_type",
+        "ordinal": 5,
+        "type_info": "Integer",
+        "origin": {
+          "Table": {
+            "table": "files",
+            "name": "sub_type"
+          }
+        }
+      },
+      {
+        "name": "file_index",
+        "ordinal": 6,
+        "type_info": "Integer",
+        "origin": {
+          "Table": {
+            "table": "files",
+            "name": "file_index"
+          }
+        }
+      },
+      {
+        "name": "file_number",
+        "ordinal": 7,
+        "type_info": "Integer",
+        "origin": {
+          "Table": {
+            "table": "files",
+            "name": "file_number"
+          }
+        }
+      },
+      {
+        "name": "watch_timestamp",
+        "ordinal": 8,
+        "type_info": "Integer",
+        "origin": {
+          "Table": {
+            "table": "files",
+            "name": "watch_timestamp"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      true,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "a749a6351485267a1f8ba89d91ad69b990227418830f1310109bd510709cd7ff"
+}

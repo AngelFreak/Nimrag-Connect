@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "DELETE FROM file_parse WHERE sha256 NOT IN (SELECT sha256 FROM files)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": []
+  },
+  "hash": "9f927135eb29f37d07b1c9d447a0d025dcb886bf3f7aea416c613911efac62cd"
+}

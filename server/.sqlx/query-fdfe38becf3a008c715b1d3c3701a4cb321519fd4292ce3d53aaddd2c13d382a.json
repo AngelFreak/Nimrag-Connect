@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "DELETE FROM fit_files WHERE sha256 = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": []
+  },
+  "hash": "fdfe38becf3a008c715b1d3c3701a4cb321519fd4292ce3d53aaddd2c13d382a"
+}

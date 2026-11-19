@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "DELETE FROM fit_messages WHERE sha256 = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": []
+  },
+  "hash": "521c3a9a96ee73c6cdb9f9b72359493b5d86be801928b0acda88f829917cbfd0"
+}

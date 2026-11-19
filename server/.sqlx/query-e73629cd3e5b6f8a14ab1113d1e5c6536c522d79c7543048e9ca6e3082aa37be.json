@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO file_parse (sha256, parser_version, profile_version, status, error, crc_status)\n         VALUES (?, ?, NULL, 'error', ?, NULL)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 3
+    },
+    "nullable": []
+  },
+  "hash": "e73629cd3e5b6f8a14ab1113d1e5c6536c522d79c7543048e9ca6e3082aa37be"
+}

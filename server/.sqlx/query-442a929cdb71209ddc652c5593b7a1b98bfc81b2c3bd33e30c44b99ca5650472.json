@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO tokens (name, hash) VALUES (?, ?)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": []
+  },
+  "hash": "442a929cdb71209ddc652c5593b7a1b98bfc81b2c3bd33e30c44b99ca5650472"
+}

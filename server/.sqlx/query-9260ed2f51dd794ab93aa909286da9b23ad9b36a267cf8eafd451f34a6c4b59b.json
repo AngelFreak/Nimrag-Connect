@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE uploads SET repeat_count = ?, last_at = ?\n         WHERE id = (SELECT MAX(id) FROM uploads WHERE sha256 = ?)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 3
+    },
+    "nullable": []
+  },
+  "hash": "9260ed2f51dd794ab93aa909286da9b23ad9b36a267cf8eafd451f34a6c4b59b"
+}

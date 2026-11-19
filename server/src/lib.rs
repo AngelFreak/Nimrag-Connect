@@ -1,0 +1,29 @@
+//! nimrag ingest server. Files are the source of truth (content-addressed on
+//! disk); the SQLite database is a derived view that `reparse` can rebuild.
+
+pub mod api;
+pub mod db;
+pub mod derive;
+pub mod ledger;
+pub mod store;
+pub mod tokens;
+
+use sha2::{Digest, Sha256};
+
+pub fn sha256_hex(bytes: &[u8]) -> String {
+    hex(&Sha256::digest(bytes))
+}
+
+pub fn hex(bytes: &[u8]) -> String {
+    use std::fmt::Write;
+    bytes
+        .iter()
+        .fold(String::with_capacity(bytes.len() * 2), |mut s, b| {
+            let _ = write!(s, "{b:02x}");
+            s
+        })
+}
+
+pub fn is_sha256_hex(s: &str) -> bool {
+    s.len() == 64 && s.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f'))
+}

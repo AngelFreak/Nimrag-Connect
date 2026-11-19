@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO fit_files (sha256, chain_idx, header_size, protocol_version,\n                profile_version, data_size, header_crc, header_crc_ok, byte_offset, byte_len,\n                complete, crc_status, crc_stored, crc_computed, crc_ok, message_count,\n                developer_fields)\n             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 17
+    },
+    "nullable": []
+  },
+  "hash": "8ee9d5843aa9437497c55daaa4555804adff72260bd19b070df570e8cc8e3d3b"
+}

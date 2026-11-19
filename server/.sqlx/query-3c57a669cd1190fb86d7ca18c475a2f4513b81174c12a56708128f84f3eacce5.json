@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO fit_messages (sha256, chain_idx, msg_idx, global, local, timestamp,\n                    time_offset, byte_offset, fields, developer)\n                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 10
+    },
+    "nullable": []
+  },
+  "hash": "3c57a669cd1190fb86d7ca18c475a2f4513b81174c12a56708128f84f3eacce5"
+}

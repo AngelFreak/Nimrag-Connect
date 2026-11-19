@@ -1,0 +1,6 @@
+private/
+target/
+server/dev.db*
+data/
+.git/
+node_modules/

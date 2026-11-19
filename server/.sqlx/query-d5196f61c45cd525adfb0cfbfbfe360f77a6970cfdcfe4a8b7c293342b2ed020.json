@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT OR IGNORE INTO files (sha256, size, received_at, source, data_type, sub_type,\n            file_index, file_number, watch_timestamp) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 9
+    },
+    "nullable": []
+  },
+  "hash": "d5196f61c45cd525adfb0cfbfbfe360f77a6970cfdcfe4a8b7c293342b2ed020"
+}

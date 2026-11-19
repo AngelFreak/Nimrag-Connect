@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "DELETE FROM uploads WHERE sha256 = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": []
+  },
+  "hash": "98d15e52d4454b49833a5c816804da406089ae7a66fa87a6c690e52875bccbef"
+}

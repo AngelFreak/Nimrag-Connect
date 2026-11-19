@@ -1,0 +1,26 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT sha256 as \"sha256!\" FROM files ORDER BY sha256",
+  "describe": {
+    "columns": [
+      {
+        "name": "sha256!",
+        "ordinal": 0,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "files",
+            "name": "sha256"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "b2474b5910f4cfb5a703dcbed0979bf244785d18b8010311c99351e8b405ca08"
+}
