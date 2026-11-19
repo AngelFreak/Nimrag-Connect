@@ -224,3 +224,21 @@ pub enum CloseReason {
     GfdiClosed { phase: Phase },
     RequestFailed { message_id: u16, status: u8 },
 }
+
+/// What the device catalogue says about an advertised Garmin device
+/// (`identify_device`).
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct DeviceModelInfo {
+    /// Catalogue id (Gadgetbridge `DeviceType` constant), e.g. `GARMIN_INSTINCT_2`.
+    pub id: String,
+    /// Model name, e.g. "Garmin Instinct 2".
+    pub name: String,
+    /// True when nothing matched and this is the `GARMIN_GENERIC` fallback.
+    pub generic: bool,
+    /// False when the catalogue says our client cannot sync with the model yet.
+    pub can_sync: bool,
+    /// The reason when `can_sync` is false.
+    pub unsupported_reason: Option<String>,
+    /// True only where our own captures verify the model.
+    pub verified: bool,
+}

@@ -13,8 +13,8 @@ android {
         applicationId = "dev.nimrag.app"
         minSdk = 31
         targetSdk = 37
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = 2
+        versionName = "0.2.0"
         // Only the ABIs the Rust library is built for (this also drops JNA's other ABIs).
         ndk { abiFilters += listOf("arm64-v8a", "x86_64") }
     }
@@ -25,6 +25,11 @@ android {
         }
     }
     buildFeatures { compose = true }
+    testOptions {
+        // JUnit Jupiter (same catalogue entries as :hosttest). The engine's tests only touch
+        // pure Kotlin/JDK classes; Android framework calls would fail loudly.
+        unitTests.all { it.useJUnitPlatform() }
+    }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -42,4 +47,6 @@ dependencies {
     implementation(libs.lifecycle.runtime.compose)
     implementation(libs.kotlinx.coroutines.android)
     debugImplementation(libs.compose.ui.tooling)
+    testImplementation(libs.junit.jupiter)
+    testRuntimeOnly(libs.junit.platform.launcher)
 }

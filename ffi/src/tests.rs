@@ -332,6 +332,40 @@ fn fit_profile_is_off_when_none() {
 }
 
 #[test]
+fn identify_device_by_name_and_by_manufacturer_data() {
+    let by_name = identify_device(Some("Instinct 2".into()), None);
+    assert_eq!(by_name.id, "GARMIN_INSTINCT_2");
+    assert!(by_name.can_sync && by_name.unsupported_reason.is_none());
+    assert!(by_name.verified && !by_name.generic);
+
+    // Garmin manufacturer data (company id removed) decides before the name:
+    // product 3888 = 0x0F30, big endian.
+    let by_product = identify_device(Some("whatever".into()), Some(vec![0x0F, 0x30, 0xAA]));
+    assert_eq!(by_product.id, "GARMIN_INSTINCT_2");
+
+    let unknown = identify_device(Some("Not a Garmin".into()), None);
+    assert!(unknown.generic && unknown.can_sync && !unknown.verified);
+    assert_eq!(unknown.id, "GARMIN_GENERIC");
+    assert!(identify_device(None, None).generic);
+    // One byte of manufacturer data is not a product number: the name decides.
+    let short = identify_device(Some("Instinct 2".into()), Some(vec![0x0F]));
+    assert_eq!(short.id, "GARMIN_INSTINCT_2");
+}
+
+#[test]
+fn identify_device_reports_the_unsupported_reason() {
+    use nimrag_core::devices::{SyncSupport, MODELS};
+    let model = MODELS
+        .iter()
+        .find(|m| matches!(m.sync, SyncSupport::CannotSyncYet(_)) && !m.product_ids.is_empty())
+        .expect("the catalogue has a model that cannot sync yet");
+    let info = identify_device(None, Some(model.product_ids[0].to_be_bytes().to_vec()));
+    assert_eq!(info.id, model.id);
+    assert!(!info.can_sync);
+    assert!(info.unsupported_reason.is_some_and(|r| !r.is_empty()));
+}
+
+#[test]
 fn poisoned_lock_fails_closed() {
     let client = NimragClient::new(config());
     client.handle(now(0), Input::Connected { att_mtu: 23 });

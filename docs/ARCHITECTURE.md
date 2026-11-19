@@ -12,7 +12,7 @@ Current state: phase 0 decoded (night and fresh-pairing captures still open), ph
 | `tools/fit-profile/` | generator for the local, never-committed FIT profile | done |
 | `server/` | `nimrag-server`: axum + sqlx SQLite (WAL); SHA-256 file store with sidecars; device tokens; `POST /api/files`; `reparse`, `rebuild-ledger`, `import-export`; data-dir lock | phase 1 done; JSON read API and auth are phase 3 |
 | `docs/protocol/` | protocol map (`PROTOCOL.md`, CSV tables, `proto/`, `HOOKS.md`, `OPEN-QUESTIONS.md`, `PROVENANCE.md`) | done for static analysis + CAP-1..3 |
-| `ffi/`, `android/` | UniFFI bindings and the Kotlin app | phase 2, stage 2b next |
+| `ffi/`, `android/` | UniFFI bindings and the Kotlin app: `engine/` (BLE link, foreground service, companion association, file store, upload worker), `ui/` (Compose screens), `model/AppState.kt` (their contract) | 2b done; 2c–2e built, live test pending |
 | `web/` | React frontend | phase 3 |
 | `private/` | APKs, decompiled sources, raw captures, notes (git-ignored) | local only |
 

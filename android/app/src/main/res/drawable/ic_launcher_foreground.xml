@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A wristwatch outline with an "N" in the case. Kept inside the 66 dp safe zone. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Straps -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M46,22L62,22L64,34L44,34Z M44,74L64,74L62,86L46,86Z" />
+    <!-- Case ring -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:fillType="evenOdd"
+        android:pathData="M46,32H62A10,10 0 0 1 72,42V66A10,10 0 0 1 62,76H46A10,10 0 0 1 36,66V42A10,10 0 0 1 46,32Z M47,37A6,6 0 0 0 41,43V65A6,6 0 0 0 47,71H61A6,6 0 0 0 67,65V43A6,6 0 0 0 61,37Z" />
+    <!-- The N -->
+    <path
+        android:pathData="M48,63V45L60,63V45"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="3.5"
+        android:strokeLineJoin="miter" />
+</vector>

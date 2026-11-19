@@ -34,6 +34,32 @@ pub fn fit_profile_compiled_in() -> bool {
     nimrag_core::fit::profile::available()
 }
 
+/// Recognise a Garmin device from its advertisement (device catalogue,
+/// `nimrag_core::devices::identify`). `manufacturer_data` is the Garmin
+/// (company 0x0087) payload WITHOUT the company id. Never fails: unknown
+/// devices come back as the generic fallback.
+#[uniffi::export]
+pub fn identify_device(
+    name: Option<String>,
+    manufacturer_data: Option<Vec<u8>>,
+) -> DeviceModelInfo {
+    let model = nimrag_core::devices::identify(name.as_deref(), manufacturer_data.as_deref());
+    let (can_sync, unsupported_reason) = match model.sync {
+        nimrag_core::devices::SyncSupport::Supported => (true, None),
+        nimrag_core::devices::SyncSupport::CannotSyncYet(reason) => {
+            (false, Some(reason.to_string()))
+        }
+    };
+    DeviceModelInfo {
+        id: model.id.to_string(),
+        name: model.name.to_string(),
+        generic: std::ptr::eq(model, &nimrag_core::devices::GENERIC),
+        can_sync,
+        unsupported_reason,
+        verified: model.verified,
+    }
+}
+
 /// One watch link. Create it when the GATT link is up, drop it on disconnect.
 ///
 /// Threading: the object is safe to share, but the protocol is not. The caller

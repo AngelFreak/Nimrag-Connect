@@ -63,6 +63,11 @@ enum class LinkState {
     Connecting,
     /** Handshake done; idle or syncing. */
     Ready,
+    /**
+     * The phone no longer holds a bond with the watch (removed in system settings, or the
+     * watch was reset). The engine stops retrying; the UI offers "Pair again" (forget, then scan).
+     */
+    BondLost,
 }
 
 data class ScanState(

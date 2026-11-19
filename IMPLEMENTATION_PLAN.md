@@ -22,9 +22,9 @@ The finished product: an Android app that pairs with the Instinct 2 without Garm
 | 2 Android sync | 2a | sans-IO protocol client + capture replay | Complete |
 | | 2p | Port Gadgetbridge's Garmin work: survey, device catalogue (≈197 models), protocol diff against our captures | Mostly done: port list, protocol diff, catalogue (193 models + sync status), battery; sleep stages wait for the night capture |
 | | 2b | FFI crate (UniFFI) + Android Gradle project | Complete |
-| | 2c | Foreground service, BLE link, pairing without Garmin Connect | Not Started (needs owner) |
-| | 2d | Phone storage, archive only after safe storage, upload queue | Not Started |
-| | 2e | Time duty + native Devices and sync screen + sync log | Not Started |
+| | 2c | Foreground service, BLE link, pairing without Garmin Connect | Built 2026-11-19 (debug 0.2.0); live test with the watch pending (owner) |
+| | 2d | Phone storage, archive only after safe storage, upload queue | Built 2026-11-19; live test pending |
+| | 2e | Time duty + native Devices and sync screen + sync log | Built 2026-11-19; live test pending |
 | | 2f | Further companion duties, one at a time, ported from Gadgetbridge where it has them: GPS assist (setting, the only Garmin call), weather, notifications, music, find my phone | Not Started |
 | | Gate 2 | A week of normal wear: no manual steps, no lost or duplicated files; counts and hashes against a USB copy | — |
 | 3 Web | 3a | JSON API, web login (password + optional passkey), device tokens created in the web UI, generated TS types | Not Started |
@@ -104,7 +104,7 @@ Workflow as described at the top of this file.
 
 ## Where work stopped (2026-11-19, end of day)
 - Done and committed: phase 0 decoding, phase 1 (gate 1 passed on a USB copy), stage 2a (protocol client), 2b (Android build of core), most of 2p (Gadgetbridge port list, protocol diff, device catalogue with sync status, battery parser), the 5052 DST fix (Q-TIME-2), every sleep summary kept.
-- Next: stage 2c (foreground service, BLE link, pairing). It needs the owner: the watch has to be paired with our app instead of Garmin Connect, so ask first. Rows 16 (first-connect events), 8 (plain GFDI, reopen after a watch-side close), 22 (5009 FileAvailable) and 28 (battery: 5023 and `Input::RequestBattery`) are ported (2026-11-19, second machine without `private/` captures: the private replay was skipped for all four, so run it before 2c; neither 5009 nor 5023 occurs in the captures).
+- Next: the owner tests debug 0.2.0 (stages 2c–2e built: pairing through the companion-device dialog, link, sync, storage, uploads, screens) with the watch; fix what the live test shows. Pairing replaces the Garmin Connect pairing. Rows 16 (first-connect events), 8 (plain GFDI, reopen after a watch-side close), 22 (5009 FileAvailable) and 28 (battery: 5023 and `Input::RequestBattery`) are ported (2026-11-19, second machine without `private/` captures: the private replay was skipped for all four, so run it before 2c; neither 5009 nor 5023 occurs in the captures).
 - Waiting for data: the night-sync capture (sleep stages, port-list row 42; the live recorder was left running) and the fresh-pairing capture.
 - Owner decisions still open: committing a scrubbed real transcript as a fixture; importing non-FIT export JSON once a real export exists; for 2f, who fetches GPS-assist data, which weather source, and confirming the skipped features.
 - Ignore the Samsung device on adb (not ours); the Pixel 9a is the phone.
@@ -338,6 +338,7 @@ From the 2b review: an in-app licence screen with the AGPL source offer (§6), t
 **Status**: In Progress (built 2026-11-19; live test with the owner pending)
 
 Design (integrator, 2026-11-19; contract file `android/app/src/main/kotlin/dev/nimrag/app/model/AppState.kt`):
+- Built: after review, pairing first creates a CompanionDeviceManager association (system dialog) so the service may restart in the background and on the watch's presence (`WatchPresenceService`); without one, a refused background start posts "Open Nimrag Connect to reconnect". A removed bond shows `LinkState.BondLost` and stops retrying. `first_connect` is charged only on connections that reached `HandshakeDone`.
 - Process: `NimragApplication` creates the engine (`WatchController`) and sets `AppGraph.controller`. `WatchService` (foreground, type `connectedDevice`, ongoing notification with link state) owns the GATT link and the `NimragClient`. It is started when a watch is paired and on `BOOT_COMPLETED` (when one is remembered), and stopped on `forget()`. One `HandlerThread` serialises every `handle` call and every GATT callback; writes go out one at a time (`writeCharacteristic(char, value, WRITE_TYPE_NO_RESPONSE)`, next one after `onCharacteristicWrite`).
 - Scan: `BluetoothLeScanner`, no filter, low latency, only while the Watch screen asks (stops after 30 s). A result counts as Garmin when its manufacturer data has company id 0x0087 or `identifyDevice` matches its name; model and sync support come from the device catalogue through a new FFI function `identify_device(name, manufacturer_data)`.
 - Pairing: `createBond()`, wait for `BOND_BONDED` (a broadcast receiver), then remember address, name and model, set `first_connect = true`, start the service. `first_connect` is cleared on `PairingCompleted`, or after one more connection that ended without it (the 2a contract §1).

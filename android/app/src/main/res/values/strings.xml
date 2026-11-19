@@ -1,4 +1,158 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Nimrag Connect</string>
+
+    <!-- Navigation -->
+    <string name="tab_watch">Watch</string>
+    <string name="tab_sync">Sync</string>
+    <string name="tab_settings">Settings</string>
+    <string name="back">Back</string>
+    <string name="cancel">Cancel</string>
+    <string name="save">Save</string>
+    <string name="expand">Expand</string>
+    <string name="collapse">Collapse</string>
+    <string name="unknown">Unknown</string>
+    <string name="never">Never</string>
+    <string name="demo_banner">Demo mode: the sync engine is not installed, nothing here is real.</string>
+
+    <!-- Relative times -->
+    <string name="time_just_now">just now</string>
+    <string name="time_min_ago">%1$d min ago</string>
+    <string name="time_hours_ago">%1$d h ago</string>
+    <string name="time_days_ago">%1$d d ago</string>
+    <string name="updated_ago">updated %1$s</string>
+
+    <!-- Permissions -->
+    <string name="permissions_title">Permissions needed</string>
+    <string name="permissions_bluetooth_why">Bluetooth: to find your watch and talk to it. Nothing else is scanned or shared.</string>
+    <string name="permissions_notifications_why">Notifications: to show the small \"connected\" notice while the app syncs in the background.</string>
+    <string name="permissions_grant">Grant permissions</string>
+    <string name="permissions_open_settings">App settings</string>
+    <string name="permissions_denied_hint">If no dialog appears, Android has blocked the request. Open the app settings and allow the permissions there.</string>
+    <string name="bluetooth_off_title">Bluetooth is off</string>
+    <string name="bluetooth_off_body">Turn Bluetooth on so the phone can reach the watch.</string>
+    <string name="bluetooth_turn_on">Turn on Bluetooth</string>
+
+    <!-- Pairing -->
+    <string name="pair_title">Pair your watch</string>
+    <string name="pair_instructions">Put the watch in phone-pairing mode and keep it next to the phone. It is usually a \"Pair phone\" entry in the watch\'s settings (try holding the menu button). Then tap Scan.</string>
+    <string name="scan_start">Scan for watches</string>
+    <string name="scan_again">Scan again</string>
+    <string name="scan_stop">Stop</string>
+    <string name="scan_running">Looking for watches…</string>
+    <string name="scan_unavailable">Allow Bluetooth and turn it on to scan.</string>
+    <string name="scan_found_title">Watches nearby</string>
+    <string name="scan_none_found">No watch found. Check that it is in pairing mode and close by, then scan again.</string>
+    <string name="cannot_sync_yet">Can\'t sync yet: %1$s</string>
+    <string name="pair_confirm_title">Pair with %1$s?</string>
+    <string name="pair_confirm_body">The phone and the watch will each ask you to confirm. Accept both.</string>
+    <string name="pair_confirm">Pair</string>
+    <string name="pairing_title">Pairing with %1$s</string>
+    <string name="pairing_hint">Accept the pairing request on the phone, then confirm on the watch when it asks. This can take up to a minute.</string>
+    <string name="signal_excellent">Signal strength: excellent</string>
+    <string name="signal_good">Signal strength: good</string>
+    <string name="signal_fair">Signal strength: fair</string>
+    <string name="signal_weak">Signal strength: weak</string>
+
+    <!-- Paired watch -->
+    <string name="label_battery">Battery</string>
+    <string name="label_software">Software</string>
+    <string name="label_last_connected">Last connected</string>
+    <string name="battery_percent">%1$d%%</string>
+    <string name="link_offline">Offline</string>
+    <string name="link_waiting">Waiting</string>
+    <string name="link_connecting">Connecting</string>
+    <string name="link_ready">Ready</string>
+    <string name="link_state_description">Connection: %1$s</string>
+    <string name="link_offline_hint">The background service is stopped or Bluetooth is off.</string>
+    <string name="link_waiting_hint">Waiting for the watch to come into range.</string>
+    <string name="link_connecting_hint">Connecting to the watch.</string>
+    <string name="link_ready_hint">Connected and ready to sync.</string>
+    <string name="link_bond_lost">Pairing lost</string>
+    <string name="link_bond_lost_hint">The phone or the watch forgot the pairing. Pair again to reconnect.</string>
+    <string name="pair_again">Pair again</string>
+    <string name="sync_now">Sync now</string>
+    <string name="sync_running_button">Syncing…</string>
+    <string name="forget_watch">Forget watch</string>
+    <string name="forget_title">Forget %1$s?</string>
+    <string name="forget_body">The phone stops syncing with this watch and removes the pairing. Files already stored on the phone stay.</string>
+    <string name="forget_confirm">Forget</string>
+
+    <!-- Sync -->
+    <string name="sync_title_running">Syncing</string>
+    <string name="sync_title_last">Last sync</string>
+    <string name="sync_reading_list">Reading the file list…</string>
+    <string name="sync_file_of">File %1$d of %2$d</string>
+    <string name="sync_bytes_of">%1$s of %2$s</string>
+    <string name="sync_progress_description">Current file progress: %1$d%%</string>
+    <string name="sync_result">Downloaded %1$d, archived %2$d, failed %3$d</string>
+    <string name="sync_none_yet">No sync yet. Tap Sync now on the Watch tab.</string>
+    <string name="sync_pair_first">Pair a watch on the Watch tab to start syncing.</string>
+
+    <!-- Uploads -->
+    <string name="uploads_title">Uploads</string>
+    <string name="uploads_not_configured">No server is set up, so files stay on the phone only.</string>
+    <string name="uploads_open_settings">Open settings</string>
+    <string name="stat_pending">Waiting</string>
+    <string name="stat_uploaded">Uploaded</string>
+    <string name="stat_stored">Stored</string>
+    <string name="uploads_never">Nothing uploaded yet.</string>
+    <string name="uploads_last">Last upload %1$s</string>
+    <string name="uploads_waiting_wifi">Waiting for Wi-Fi (mobile data is off in Settings)</string>
+    <string name="uploads_waiting_network">Waiting for a network connection</string>
+    <string name="uploads_last_error">Last error: %1$s</string>
+    <string name="uploads_now">Upload now</string>
+
+    <!-- Stored files -->
+    <string name="recent_title">Recent files</string>
+    <string name="recent_empty">No files stored yet.</string>
+    <string name="file_on_watch">watch time %1$s</string>
+    <string name="file_received">Received %1$s</string>
+    <string name="file_uploaded">Uploaded</string>
+    <string name="file_pending">Pending</string>
+
+    <!-- Log -->
+    <string name="log_title">Log (%1$d)</string>
+    <string name="log_expand">Show log</string>
+    <string name="log_collapse">Hide log</string>
+    <string name="log_empty">Nothing logged yet.</string>
+
+    <!-- Settings -->
+    <string name="settings_server">Server</string>
+    <string name="server_url">Server URL</string>
+    <string name="server_url_placeholder">https://nimrag.example.com</string>
+    <string name="server_url_invalid">Enter a URL starting with http:// or https://</string>
+    <string name="server_token">Device token</string>
+    <string name="server_token_saved">Saved</string>
+    <string name="server_token_keep">A token is saved. Leave empty to keep it.</string>
+    <string name="server_token_none">Create one on the server: nimrag-server token create --name phone</string>
+    <string name="server_token_remove">Remove saved token</string>
+    <string name="server_mobile_data">Upload on mobile data</string>
+    <string name="server_mobile_data_hint">Off: uploads wait for Wi-Fi, Ethernet or VPN.</string>
+    <string name="server_test">Test connection</string>
+    <string name="server_save_first">Save your changes before testing.</string>
+    <string name="server_saved">Saved.</string>
+    <string name="server_test_error">The test could not be completed.</string>
+    <string name="server_test_ok">The server answered and accepted the token.</string>
+    <string name="server_test_failed">Test failed: %1$s</string>
+    <string name="settings_sync">Sync</string>
+    <string name="auto_sync_label">Automatic sync interval</string>
+    <string name="interval_off">Off</string>
+    <string name="interval_minutes">%1$d min</string>
+    <string name="auto_sync_hint">While the watch is connected, the phone asks it to sync this often.</string>
+    <string name="auto_sync_off_hint">Off: the phone only syncs when you tap Sync now or the watch asks.</string>
+    <string name="settings_advanced">Advanced</string>
+    <string name="capabilities_label">Capability mask (hex)</string>
+    <string name="capabilities_hint">Takes effect on the next connection.</string>
+    <string name="capabilities_invalid">Not a valid hex mask.</string>
+    <string name="capabilities_saved">Saved. Takes effect on the next connection.</string>
+    <string name="settings_about">About</string>
+    <string name="about_core">Core</string>
+    <string name="about_licence">Licence</string>
+    <string name="about_source">Source code on GitHub</string>
+    <string name="about_open_source">Open-source licences</string>
+    <string name="licences_intro">Nimrag Connect is free software. It bundles the components below; tap a licence name to read it on spdx.org.</string>
+    <string name="licences_app">This app</string>
+    <string name="licences_libraries">Libraries</string>
+    <string name="licences_rust">Rust crates in libnimrag_ffi.so (%1$d)</string>
 </resources>

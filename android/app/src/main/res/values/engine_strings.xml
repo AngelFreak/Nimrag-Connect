@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="engine_channel_name">Watch link</string>
+    <string name="engine_channel_description">Shows that Nimrag Connect keeps the link to your watch.</string>
+    <string name="engine_notif_title">Nimrag Connect</string>
+    <string name="engine_notif_pairing">Pairing with %1$s</string>
+    <string name="engine_notif_offline">Not connected</string>
+    <string name="engine_notif_permission">Bluetooth permission needed</string>
+    <string name="engine_notif_bluetooth_off">Bluetooth is off</string>
+    <string name="engine_notif_waiting">Waiting for %1$s</string>
+    <string name="engine_notif_connecting">Connecting to %1$s</string>
+    <string name="engine_notif_ready">Connected to %1$s</string>
+    <string name="engine_notif_ready_battery">Connected to %1$s, battery %2$d%%</string>
+    <string name="engine_notif_bond_lost">Pairing lost. Open the app to pair again.</string>
+    <string name="engine_channel_reopen_name">Reconnect reminders</string>
+    <string name="engine_channel_reopen_description">Asks you to open the app when Android would not let it reconnect to the watch by itself.</string>
+    <string name="engine_notif_reopen">Open Nimrag Connect to reconnect the watch</string>
+    <string name="engine_notif_syncing">Syncing %1$s</string>
+    <string name="engine_notif_syncing_files">Syncing %1$s, %2$d of %3$d files</string>
+</resources>
