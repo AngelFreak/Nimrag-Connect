@@ -1,69 +1,90 @@
+import { useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { EmptyState, FilterChips, ListRow, SampleDataChip, TopBar } from '../components';
-import { usePageTitle } from '../lib/hooks';
-
-// STUB (stage 3d wires it to GET /api/activities): static canvas values.
-
-const TYPES = [
-  { value: 'all', label: 'All' },
-  { value: 'run', label: 'Run' },
-  { value: 'strength', label: 'Strength' },
-  { value: 'walk', label: 'Walk' },
-] as const;
-type TypeKey = (typeof TYPES)[number]['value'];
-
-interface Row {
-  id: string;
-  kind: Exclude<TypeKey, 'all'>;
-  title: string;
-  when: string;
-  value: string;
-  sub: string;
-  group: 'This week' | 'Last week';
-}
-
-const ROWS: Row[] = [
-  { id: '1', kind: 'strength', title: 'Strength', when: 'Wed 18 Nov · 18:05', value: '42 min', sub: '18 sets · 3,300 kg', group: 'This week' },
-  { id: '2', kind: 'run', title: 'Run', when: 'Mon 16 Nov · 17:40', value: '6.4 km', sub: '38:00 · 5:56 /km', group: 'This week' },
-  { id: '3', kind: 'strength', title: 'Strength', when: 'Sun 15 Nov · 10:20', value: '45 min', sub: '18 sets · 3,180 kg', group: 'Last week' },
-  { id: '4', kind: 'walk', title: 'Walk', when: 'Fri 13 Nov · 12:10', value: '4.8 km', sub: '52 min', group: 'Last week' },
-  { id: '5', kind: 'run', title: 'Run', when: 'Wed 11 Nov · 17:35', value: '5.1 km', sub: '30:40 · 6:01 /km', group: 'Last week' },
-  { id: '6', kind: 'strength', title: 'Strength', when: 'Tue 10 Nov · 18:15', value: '40 min', sub: '17 sets · 3,050 kg', group: 'Last week' },
-];
+import { Button, Card, EmptyState, FilterChips, ListRow, SampleDataChip, TopBar } from '../components';
+import { browserToday } from '../lib/dates';
+import { useIsDesktop, usePageTitle } from '../lib/hooks';
+import { ActivitiesTable, activityHref } from './activities/ActivitiesTable';
+import { useActivityList } from './activities/api';
+import { activityTitle, groupByPeriod, parseType, rowText, sortActivities, TYPE_OPTIONS, whenLabel, type Sort, type SortKey } from './activities/format';
+import { errorText, QueryError, RowsSkeleton } from './activities/PageStates';
+import './activities/activities.css';
 
 export function ActivitiesPage() {
   usePageTitle('Activities');
   const [params, setParams] = useSearchParams();
-  const raw = params.get('type');
-  const type: TypeKey = TYPES.some((t) => t.value === raw) ? (raw as TypeKey) : 'all';
-  const rows = ROWS.filter((r) => type === 'all' || r.kind === type);
-  const groups = (['This week', 'Last week'] as const).filter((g) => rows.some((r) => r.group === g));
+  const type = parseType(params.get('type'));
+  const desktop = useIsDesktop();
+  const query = useActivityList(type);
+  const [sort, setSort] = useState<Sort>({ key: 'date', dir: 'desc' });
 
-  return (
-    <>
-      <TopBar variant="large" title="Activities" aside={<SampleDataChip sample />} />
-      <FilterChips
-        label="Filter by type"
-        options={TYPES}
-        value={type}
-        onChange={(v) => setParams(v === 'all' ? {} : { type: v }, { replace: true })}
-      />
+  const items = useMemo(() => query.data?.pages.flatMap((p) => p.items) ?? [], [query.data]);
+  const sample = query.data?.pages[0]?.sample ?? false;
+  const groups = useMemo(() => groupByPeriod(items, browserToday()), [items]);
+  const sorted = useMemo(() => sortActivities(items, sort), [items, sort]);
+
+  const onSort = (key: SortKey) =>
+    setSort((s) => (s.key === key ? { key, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: key === 'type' ? 'asc' : 'desc' }));
+
+  let body;
+  if (query.isPending) {
+    body = <RowsSkeleton />;
+  } else if (query.isError && items.length === 0) {
+    body = <QueryError error={query.error} what="Activities" onRetry={() => void query.refetch()} backTo="/" />;
+  } else if (items.length === 0) {
+    body = (
       <div className="page" style={{ paddingTop: 0 }}>
-        {rows.length === 0 ? (
-          <EmptyState title="No activities of this type">Pick another type, or sync the watch to bring in new activities.</EmptyState>
+        <EmptyState title={type === 'all' ? 'No activities yet' : 'No activities of this type'}>
+          {type === 'all' ? 'Sync the watch to bring in its activities.' : 'Pick another type, or sync the watch to bring in new activities.'}
+        </EmptyState>
+      </div>
+    );
+  } else {
+    body = (
+      <div className="page" style={{ paddingTop: 0 }}>
+        {desktop ? (
+          <Card padding="xl">
+            <ActivitiesTable rows={sorted} sort={sort} onSort={onSort} />
+            {query.hasNextPage ? <p className="list-hint">Sorting applies to the {items.length} activities loaded so far.</p> : null}
+          </Card>
         ) : (
           groups.map((g) => (
-            <section key={g} aria-label={g} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              <h2 className="section-label">{g}</h2>
-              {rows
-                .filter((r) => r.group === g)
-                .map((r) => (
-                  <ListRow key={r.id} to={r.kind === 'strength' ? `/activities/${r.id}/strength` : `/activities/${r.id}`} title={r.title} sub={r.when} value={r.value} valueSub={r.sub} />
-                ))}
+            <section key={g.label} aria-label={g.label} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <h2 className="section-label">{g.label}</h2>
+              {g.items.map((a) => {
+                const text = rowText(a);
+                return <ListRow key={a.id} to={activityHref(a)} title={activityTitle(a)} sub={whenLabel(a)} value={text.value} valueSub={text.sub} />;
+              })}
             </section>
           ))
         )}
+        <div className="load-more">
+          {query.isFetchNextPageError ? (
+            <p className="status-msg status-msg--error" role="alert">
+              Could not load more activities. {errorText(query.error)}
+            </p>
+          ) : null}
+          {query.hasNextPage ? (
+            <Button onClick={() => void query.fetchNextPage()} disabled={query.isFetchingNextPage} aria-busy={query.isFetchingNextPage}>
+              {query.isFetchingNextPage ? 'Loading more' : query.isFetchNextPageError ? 'Try again' : 'Load more'}
+            </Button>
+          ) : (
+            <p className="list-hint">That is every activity: {items.length}.</p>
+          )}
+        </div>
       </div>
+    );
+  }
+
+  return (
+    <>
+      <TopBar variant="large" title="Activities" aside={<SampleDataChip sample={sample} />} />
+      <FilterChips
+        label="Filter by type"
+        options={TYPE_OPTIONS}
+        value={type}
+        onChange={(v) => setParams(v === 'all' ? {} : { type: v }, { replace: true })}
+      />
+      {body}
     </>
   );
 }
