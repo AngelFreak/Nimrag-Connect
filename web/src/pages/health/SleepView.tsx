@@ -1,14 +1,12 @@
 import { useState, type CSSProperties } from 'react';
-import { Link, Navigate } from 'react-router-dom';
+import { Navigate } from 'react-router-dom';
 import {
-  BackIcon,
   BarSeries,
   Card,
   CardHeader,
   DataList,
   EmptyState,
   Legend,
-  NextIcon,
   SampleDataChip,
   SegmentedControl,
   Skeleton,
@@ -71,23 +69,11 @@ export function SleepView({ date }: { date: string }) {
         backLabel="Back to Health"
         title="Sleep"
         subtitle={`Night of ${fmtShortDay(date)}`}
-        aside={
-          <>
-            {desktop ? <SampleDataChip sample={sample} /> : null}
-            <Link to={`/sleep/${addDays(date, -1)}`} className="icon-btn" aria-label="Previous night">
-              <BackIcon />
-            </Link>
-            {hasNext ? (
-              <Link to={`/sleep/${addDays(date, 1)}`} className="icon-btn" aria-label="Next night">
-                <NextIcon />
-              </Link>
-            ) : (
-              <span className="icon-btn" data-disabled="true" aria-hidden="true">
-                <NextIcon />
-              </span>
-            )}
-          </>
-        }
+        aside={desktop ? <SampleDataChip sample={sample} /> : undefined}
+        prev={{ to: `/sleep/${addDays(date, -1)}` }}
+        next={hasNext ? { to: `/sleep/${addDays(date, 1)}` } : null}
+        prevLabel="Previous night"
+        nextLabel="Next night"
       />
       <div className="page" aria-busy={night.isPending}>
         {!desktop && sample ? (
@@ -228,10 +214,11 @@ function LastNights({
               axisLabels={count === 7 ? undefined : axisDates(bars.dates)}
               label={`Sleep duration for the last ${count} nights`}
               color="var(--stage-deep)"
-              highlightLast="var(--sleep)"
+              highlightIndex={bars.values.length - 1}
+              summary={summary ?? undefined}
+              summaryVisible
               height={count === 7 ? 84 : 96}
             />
-            {summary ? <ChartSummary>{summary}</ChartSummary> : null}
           </>
         ) : null}
         {data && bars && bars.dates.length === 0 ? <p className="stat__sub">No nights recorded yet.</p> : null}

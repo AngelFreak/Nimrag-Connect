@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { Link } from 'react-router-dom';
 import { Card } from './Card';
 import { ValueOrUnavailable } from './Unavailable';
 
@@ -15,14 +16,18 @@ interface StatTileProps {
   size?: TileSize;
   /** Extra content under the sub line (e.g. a ProgressBar). */
   children?: ReactNode;
+  /** Makes the whole tile a link to this route ("/sleep"). Keep `children` non-interactive then. */
+  href?: string;
+  /** `data-*` attributes go on the link when there is one, otherwise on the card. */
+  [dataAttribute: `data-${string}`]: string | undefined;
 }
 
 const PADDING = { sm: 'sm', md: 'tile', lg: 'lg', xl: 'xl' } as const;
 
 /** Label, big value in Space Grotesk, and a sub line in the metric's colour. */
-export function StatTile({ label, value, sub, tone = 'muted', size = 'md', children }: StatTileProps) {
-  return (
-    <Card padding={PADDING[size]} className={`stat stat--${size}`}>
+export function StatTile({ label, value, sub, tone = 'muted', size = 'md', children, href, ...rest }: StatTileProps) {
+  const tile = (
+    <Card padding={PADDING[size]} className={`stat stat--${size}`} {...(href ? {} : rest)}>
       <span className="stat__label">{label}</span>
       <span className="stat__value">
         <ValueOrUnavailable value={value} />
@@ -30,5 +35,12 @@ export function StatTile({ label, value, sub, tone = 'muted', size = 'md', child
       {sub ? <span className={`stat__sub tone-${tone}`}>{sub}</span> : null}
       {children}
     </Card>
+  );
+  return href ? (
+    <Link to={href} className="stat-link" {...rest}>
+      {tile}
+    </Link>
+  ) : (
+    tile
   );
 }

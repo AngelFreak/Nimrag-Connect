@@ -1,8 +1,8 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
 
-// Smoke test against `vite preview` of the production build. The real-server smoke test
-// (against the embedded binary with dev-seed data) comes later.
+// Smoke tests against `vite preview` of the production build: the gallery and the login page,
+// with the API mocked by the tests. Every route against the real server is in real.spec.ts.
 
 /** Fails the test on page errors, console errors, and any request to another origin. */
 function watch(page: Page, baseURL: string) {
@@ -11,7 +11,7 @@ function watch(page: Page, baseURL: string) {
   page.on('pageerror', (e) => problems.push(`pageerror: ${e.message}`));
   page.on('console', (m) => {
     // A server without a tile file answers the map probe with 404: expected, shows the placeholder.
-    if (m.type() === 'error' && !m.location().url.includes('/tiles/')) problems.push(`console: ${m.text()}`);
+    if (m.type() === 'error' && !m.location().url.includes('/tiles/')) problems.push(`console: ${m.text()} (${m.location().url})`);
   });
   page.on('request', (r) => {
     const url = r.url();
@@ -96,33 +96,4 @@ test('login shows an error for a wrong password and stays on the page', async ({
   await page.getByRole('button', { name: 'Log in' }).click();
   await expect(page.getByRole('alert')).toContainText('Wrong password.');
   await expect(page).toHaveURL(/\/login/);
-});
-
-test('every route renders without errors', async ({ page, baseURL }) => {
-  const problems = watch(page, baseURL as string);
-  const paths = [
-    '/',
-    '/activities',
-    '/activities/1',
-    '/activities/1/strength',
-    '/sleep',
-    '/sleep/2026-11-18',
-    '/day',
-    '/day/2026-11-18',
-    '/health',
-    '/movement',
-    '/training',
-    '/body',
-    '/calendar',
-    '/calendar/2026-11',
-    '/workouts/new',
-    '/devices',
-    '/settings',
-    '/does-not-exist',
-  ];
-  for (const path of paths) {
-    await page.goto(path);
-    await expect(page.getByRole('heading', { level: 1 }).first(), path).toBeVisible();
-  }
-  expect(problems).toEqual([]);
 });

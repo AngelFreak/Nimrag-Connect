@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { Route, Routes, useNavigate } from 'react-router-dom';
 import { setUnauthorizedHandler } from './api/client';
 import { AppShell } from './components';
+import { useNativeRouting } from './lib/hooks';
 import { ActivitiesPage } from './pages/ActivitiesPage';
 import { ActivityDetailPage } from './pages/ActivityDetailPage';
 import { BodyPage } from './pages/BodyPage';
@@ -22,6 +23,8 @@ import { WorkoutPage } from './pages/WorkoutPage';
 
 export function App() {
   const navigate = useNavigate();
+  // Android shell: report every page to the app and follow its tab taps (no-op in a browser).
+  useNativeRouting();
 
   // A 401 from the API sends the user to the login page without a full reload.
   useEffect(() => {
@@ -40,6 +43,7 @@ export function App() {
       <Route element={<AppShell tabs />}>
         <Route index element={<TodayPage />} />
         <Route path="activities" element={<ActivitiesPage />} />
+        <Route path="strength" element={<ActivitiesPage strength />} />
         <Route path="health" element={<HealthPage />} />
         <Route path="__gallery" element={<GalleryPage />} />
       </Route>
@@ -49,7 +53,7 @@ export function App() {
         <Route path="activities/:id/strength" element={<StrengthPage />} />
         <Route path="sleep/:date?" element={<SleepPage />} />
         <Route path="day/:date?" element={<DayPage />} />
-        <Route path="movement" element={<MovementPage />} />
+        <Route path="movement/:date?" element={<MovementPage />} />
         <Route path="training" element={<TrainingPage />} />
         <Route path="body" element={<BodyPage />} />
         <Route path="calendar/:month?" element={<CalendarPage />} />

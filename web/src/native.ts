@@ -12,9 +12,15 @@ export interface NativeStatus {
 }
 
 export interface NimragAppBridge {
+  /** True inside the Android app's web view (the app defines it; a plain browser has no bridge). */
+  native?: boolean;
   /** Starts a sync with the watch. May return a promise that settles when the sync ends. */
   syncNow?: () => void | Promise<void>;
   status?: () => NativeStatus;
+  /** Opens the app's own Watch screen (Devices and sync stays native in the app). */
+  openWatch?: () => void;
+  /** Tells the app which page the web view shows, so its bottom bar highlights the right tab. */
+  onRoute?: (path: string) => void;
 }
 
 declare global {
@@ -33,6 +39,50 @@ export function hasNativeSync(): boolean {
   return typeof getBridge()?.syncNow === 'function';
 }
 
+/** True inside the Android app: the web bottom bar is hidden then (the app has its own). */
+export function isNativeApp(): boolean {
+  return getBridge()?.native === true;
+}
+
+/** True when the app can open its own Watch screen. */
+export function hasNativeWatch(): boolean {
+  return typeof getBridge()?.openWatch === 'function';
+}
+
+/** Opens the app's Watch screen. Returns false when there is no app to ask (the caller then links to /devices). */
+export function openWatch(): boolean {
+  const bridge = getBridge();
+  if (typeof bridge?.openWatch !== 'function') return false;
+  try {
+    bridge.openWatch();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Reports the current page (path and query) to the app. Never throws: the app is optional. */
+export function reportRoute(path: string): void {
+  const bridge = getBridge();
+  if (typeof bridge?.onRoute !== 'function') return;
+  try {
+    bridge.onRoute(path);
+  } catch {
+    // A failing bridge must not break navigation.
+  }
+}
+
+/**
+ * The path of a `nimrag:navigate` event, or null when it is not an in-app path. Only paths of
+ * this app are followed ("/strength"); anything else is ignored.
+ */
+export function navigatePath(event: Event): string | null {
+  const detail: unknown = event instanceof CustomEvent ? event.detail : null;
+  const path = detail && typeof detail === 'object' && 'path' in detail ? (detail as { path: unknown }).path : null;
+  if (typeof path !== 'string' || !path.startsWith('/') || path.startsWith('//') || path.includes('\\')) return null;
+  return path;
+}
+
 /** Reads the native status defensively; anything malformed becomes "unknown". */
 export function readNativeStatus(): NativeStatus {
   try {
@@ -48,3 +98,6 @@ export function readNativeStatus(): NativeStatus {
 
 /** Event the app dispatches on `window` when the link state or last sync time changes. */
 export const NATIVE_STATUS_EVENT = 'nimrag:status';
+
+/** Event the app dispatches on `window` when one of its own tabs is tapped; `detail.path` is the page to show. */
+export const NATIVE_NAVIGATE_EVENT = 'nimrag:navigate';

@@ -17,6 +17,7 @@ dist/
 # web: Playwright output and review screenshots (web/dist is covered by dist/ above)
 /web/screenshots/
 /web/test-results/
+/web/.e2e/
 /web/playwright-report/
 
 # Locally generated FIT profile tables (Garmin material; never commit)

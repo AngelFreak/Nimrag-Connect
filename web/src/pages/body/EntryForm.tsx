@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { api } from '../../api/client';
 import type { BodyEntry, NewBodyEntry } from '../../api/generated';
 import { Button, Card, CardHeader, TextField } from '../../components';
@@ -19,8 +19,9 @@ export function EntryForm({ today, onDone, onCancel }: Props) {
   const [values, setValues] = useState<Values>({ date: today, weight: '', fat: '', waist: '' });
   const [errors, setErrors] = useState<FormErrors>({});
 
+  const weight = useRef<HTMLInputElement>(null);
   useEffect(() => {
-    document.getElementById('entry-weight')?.focus();
+    weight.current?.focus();
   }, []);
 
   const save = useMutation({
@@ -47,7 +48,7 @@ export function EntryForm({ today, onDone, onCancel }: Props) {
       <CardHeader title="Add entry" id="entry-form-title" />
       <form onSubmit={submit} noValidate style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
         <TextField
-          id="entry-weight"
+          ref={weight}
           label="Weight (kg)"
           name="weight"
           inputMode="decimal"

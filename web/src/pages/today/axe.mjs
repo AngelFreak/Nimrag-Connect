@@ -13,7 +13,7 @@ for (const [w, h] of [[390, 844], [1360, 1000]]) {
   const page = await context.newPage();
   await page.setViewportSize({ width: w, height: h });
   await page.goto(base + '/');
-  await page.waitForSelector('.glance');
+  await page.waitForSelector('.stat-link');
   if (w > 1000) await page.waitForSelector('.uplot canvas');
   await page.waitForTimeout(500);
   for (const edit of [false, true]) {

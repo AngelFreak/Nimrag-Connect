@@ -11,7 +11,14 @@ export interface LegendItem {
   hasValue?: boolean;
   /** Draw the swatch with an outline (used for the near-background "Activity" bucket). */
   outlined?: boolean;
+  /**
+   * Shape of the swatch, matching what the chart draws: `square` for bars and bands (default),
+   * `line` for a line series, `dash` for a target or goal line, `dot` for single readings.
+   */
+  shape?: LegendShape;
 }
+
+export type LegendShape = 'square' | 'line' | 'dash' | 'dot';
 
 /** Colour key. The text next to each swatch carries the meaning; colour only reinforces it. */
 export function Legend({ items, grid }: { items: LegendItem[]; grid?: boolean }) {
@@ -19,7 +26,11 @@ export function Legend({ items, grid }: { items: LegendItem[]; grid?: boolean })
     <ul className={grid ? 'legend legend--grid' : 'legend'}>
       {items.map((it) => (
         <li className="legend__item" key={it.key}>
-          <span className="swatch" aria-hidden="true" style={{ background: it.color, border: it.outlined ? '1px solid var(--line-strong)' : undefined }} />
+          <span
+            className={it.shape && it.shape !== 'square' ? `swatch swatch--${it.shape}` : 'swatch'}
+            aria-hidden="true"
+            style={{ '--swatch': it.color, border: it.outlined ? '1px solid var(--line-strong)' : undefined } as CSSProperties}
+          />
           <span className="legend__label">{it.label}</span>
           {it.hasValue || it.value !== undefined ? <span className="legend__value">{it.value === null || it.value === undefined ? <Unavailable /> : it.value}</span> : null}
         </li>

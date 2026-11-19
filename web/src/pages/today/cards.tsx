@@ -1,5 +1,4 @@
 import type { ReactNode } from 'react';
-import { Link } from 'react-router-dom';
 import type { HomeCard, HomeCards, Today } from '../../api/generated';
 import { ProgressBar, SeriesChart, StageBar, StatTile, type Tone } from '../../components';
 import { fmtFixed, fmtInt, isMissing } from '../../lib/format';
@@ -218,10 +217,8 @@ function build(id: HomeCard, t: Today): Built {
 export function GlanceCard({ id, today }: { id: HomeCard; today: Today }) {
   const b = build(id, today);
   return (
-    <Link to={CARD_LINK[id]} className="glance" data-card={id}>
-      <StatTile label={CARD_LABEL[id]} value={b.value} {...(b.sub ? { sub: b.sub } : {})} tone={b.tone ?? 'muted'}>
-        {b.extra}
-      </StatTile>
-    </Link>
+    <StatTile href={CARD_LINK[id]} data-card={id} label={CARD_LABEL[id]} value={b.value} {...(b.sub ? { sub: b.sub } : {})} tone={b.tone ?? 'muted'}>
+      {b.extra}
+    </StatTile>
   );
 }

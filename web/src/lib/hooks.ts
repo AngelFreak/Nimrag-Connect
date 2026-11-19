@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
-import { NATIVE_STATUS_EVENT, readNativeStatus, type NativeStatus } from '../native';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { NATIVE_NAVIGATE_EVENT, NATIVE_STATUS_EVENT, navigatePath, readNativeStatus, reportRoute, type NativeStatus } from '../native';
 
 export function useMediaQuery(query: string): boolean {
   const subscribe = useCallback(
@@ -42,4 +43,24 @@ export function useNativeStatus(): NativeStatus {
     };
   }, []);
   return status;
+}
+
+/**
+ * Android shell: tells the app every page the web view shows (`onRoute`) and follows the app's
+ * `nimrag:navigate` event when one of its tabs is tapped. Does nothing in a plain browser.
+ */
+export function useNativeRouting(): void {
+  const { pathname, search } = useLocation();
+  const navigate = useNavigate();
+  useEffect(() => {
+    reportRoute(pathname + search);
+  }, [pathname, search]);
+  useEffect(() => {
+    const follow = (event: Event) => {
+      const path = navigatePath(event);
+      if (path !== null) void navigate(path);
+    };
+    window.addEventListener(NATIVE_NAVIGATE_EVENT, follow);
+    return () => window.removeEventListener(NATIVE_NAVIGATE_EVENT, follow);
+  }, [navigate]);
 }

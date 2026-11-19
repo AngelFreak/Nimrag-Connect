@@ -1,29 +1,5 @@
 /* Page-local styles for Activities, Activity detail and Strength. Tokens come from styles/tokens.css. */
 
-/* Sortable table headers (desktop activities table). */
-.sort-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  min-height: var(--touch);
-  padding: 0;
-  background: none;
-  border: 0;
-  color: inherit;
-  font: inherit;
-  cursor: pointer;
-}
-.sort-btn:hover {
-  color: var(--text);
-}
-.sort-btn__arrow {
-  display: inline-block;
-  min-width: 1ch;
-  color: var(--link);
-}
-.acts-table th .sort-btn {
-  min-height: 36px;
-}
 .acts-table td a {
   display: inline-block;
   padding: 6px 0;
@@ -178,25 +154,6 @@
   border-radius: var(--radius-pill);
   padding: 2px 8px;
   white-space: nowrap;
-}
-
-.status-msg {
-  border-radius: var(--radius-control);
-  padding: 12px 14px;
-  font-size: var(--fs-base);
-  border: 1px solid var(--line-strong);
-  background: var(--card);
-  color: var(--text);
-}
-.status-msg--ok {
-  border-color: var(--energy);
-}
-.status-msg--error {
-  border-color: var(--warn);
-}
-.status-msg ul {
-  margin: 6px 0 0;
-  padding-left: 18px;
 }
 
 .cmp-table .table td:first-child {

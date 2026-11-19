@@ -137,10 +137,11 @@ function SleepPanel() {
                 labels={nights.map((n) => n.date)}
                 axisLabels={dateTicks(nights.map((n) => n.date), 4)}
                 label={label}
-                highlightLast="var(--sleep)"
+                highlightIndex={nights.length - 1}
+                summary={`${label}.`}
+                summaryVisible
                 height={200}
               />
-              <p className="today-note">{label}.</p>
             </>
           );
         }}

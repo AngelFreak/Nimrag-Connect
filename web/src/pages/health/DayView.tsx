@@ -58,24 +58,17 @@ function DayCards({ day }: { day: DayResponse }) {
       <div className="grid-panels" style={{ alignItems: 'start' }}>
         <Card>
           <CardHeader title="Heart rate" aside={hrAside(day.heart_rate) ?? <Unavailable />} />
-          {hr ? (
-            <>
-              <SeriesChart
-                label="Heart rate across the day"
-                summary={hrSummary(day.heart_rate)}
-                x={hr.x}
-                series={[{ label: 'Heart rate', color: 'heart', data: hr.y }]}
-                height={desktop ? 150 : 110}
-                axes={desktop ? 'y' : false}
-              />
-              <ChartAxis labels={HOURS} />
-            </>
-          ) : (
-            <p>
-              <Unavailable />
-            </p>
-          )}
-          <ChartSummary hidden={hr !== null}>{hrSummary(day.heart_rate)}</ChartSummary>
+          <SeriesChart
+            label="Heart rate across the day"
+            summary={hrSummary(day.heart_rate)}
+            summaryVisible
+            x={hr?.x ?? []}
+            xRange={[0, 24]}
+            series={[{ label: 'Heart rate', color: 'heart', data: hr?.y ?? [] }]}
+            height={desktop ? 150 : 110}
+            axes={desktop ? 'y' : false}
+          />
+          {hr ? <ChartAxis labels={HOURS} /> : null}
         </Card>
 
         <Card>
@@ -96,32 +89,22 @@ function DayCards({ day }: { day: DayResponse }) {
 
         <Card>
           <CardHeader title="Energy" aside={energyAside(day.energy) ?? <Unavailable />} />
-          {energy ? (
-            <>
-              <SeriesChart
-                label="Energy across the day"
-                summary={energySummary(day.energy)}
-                x={energy.x}
-                series={[{ label: 'Energy', color: 'energy', data: energy.y, area: true }]}
-                yRange={[0, 100]}
-                height={desktop ? 140 : 100}
-                axes={desktop ? 'y' : false}
-              />
-              <ChartAxis labels={HOURS} />
-            </>
-          ) : (
-            <p>
-              <Unavailable />
-            </p>
-          )}
+          <SeriesChart
+            label="Energy across the day"
+            summary={`${energySummary(day.energy)}${wake ? ` Woke at ${wake}.` : ''}`}
+            summaryVisible
+            x={energy?.x ?? []}
+            xRange={[0, 24]}
+            series={[{ label: 'Energy', color: 'energy', data: energy?.y ?? [], area: true }]}
+            yRange={[0, 100]}
+            height={desktop ? 140 : 100}
+            axes={desktop ? 'y' : false}
+          />
+          {energy ? <ChartAxis labels={HOURS} /> : null}
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
             <span className="tone-energy">{day.energy.charged === null ? <Unavailable /> : `+${fmtInt(day.energy.charged)} charged`}</span>
             <span className="tone-warn">{day.energy.drained === null ? <Unavailable /> : `-${fmtInt(day.energy.drained)} drained`}</span>
           </div>
-          <ChartSummary hidden={energy !== null}>
-            {energySummary(day.energy)}
-            {wake ? ` Woke at ${wake}.` : ''}
-          </ChartSummary>
         </Card>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>

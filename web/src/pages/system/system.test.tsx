@@ -1,0 +1,411 @@
+import { screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { DevicesResponse, GarminStatus, SettingsResponse, StorageResponse, TokenList } from '../../api/generated';
+import { DevicesPage } from '../DevicesPage';
+import { SettingsPage } from '../SettingsPage';
+import { json, mockApi, renderAt } from '../body/testUtils';
+import { parseTokenFile } from './GarminCard';
+import { describeTokenError } from './TokensCard';
+import { validateGoals, formFrom } from './GoalsCard';
+import { ApiError } from '../../api/client';
+
+const settings: SettingsResponse = {
+  timezone: 'Europe/Copenhagen',
+  step_goal: 8000,
+  intensity_goal_min: 150,
+  home_cards: { shown: [], hidden: [] } as unknown as SettingsResponse['home_cards'],
+  sample: false,
+};
+
+const devices = (over: Partial<DevicesResponse> = {}): DevicesResponse => ({
+  sample: false,
+  watch: { model: null, firmware: null, battery_percent: 74, battery_at: '2026-11-19T07:42:00+01:00', last_data_at: '2026-11-19T07:40:00+01:00' },
+  last_sync_at: '2026-11-19T07:42:00+01:00',
+  new_files_24h: 5,
+  upload_devices: [{ id: 1, name: 'Pixel 9a', created_at: '2026-11-02T10:00:00+01:00', last_used_at: '2026-11-19T07:42:00+01:00', active: true }],
+  ...over,
+});
+
+const storage = (over: Partial<StorageResponse> = {}): StorageResponse => ({
+  sample: false,
+  files: 1284,
+  bytes: 212 * 1024 * 1024,
+  by_source: [{ source: 'watch', files: 1200, bytes: 200 * 1024 * 1024 }],
+  parsed_ok: 1280,
+  parsed_partial: 3,
+  parsed_error: 1,
+  database_bytes: 5 * 1024 * 1024,
+  last_backup_at: null,
+  ...over,
+});
+
+const garmin = (over: Partial<GarminStatus> = {}): GarminStatus => ({ state: 'off', pending: 0, done: 0, failed: 0, last_error: null, next_attempt_at: null, ...over });
+
+const tokens = (): TokenList => ({
+  tokens: [
+    { id: 1, name: 'Pixel 9a', created_at: '2026-11-02T10:00:00+01:00', last_used_at: '2026-11-19T07:42:00+01:00', revoked_at: null, active: true },
+    { id: 2, name: 'Old phone', created_at: '2026-10-01T10:00:00+01:00', last_used_at: null, revoked_at: '2026-10-20T09:00:00+01:00', active: false },
+  ],
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+  delete window.NimragApp;
+});
+
+describe('Devices page', () => {
+  it('shows the watch, the server and the upload devices from the API', async () => {
+    mockApi({ '/api/devices': devices(), '/api/storage': storage(), '/api/settings': settings });
+    renderAt(<DevicesPage />, '/devices');
+    expect(await screen.findByText('74%', { selector: '.stat__value' })).toBeInTheDocument();
+    expect(screen.getByText('1,284 files, 212 MB')).toBeInTheDocument();
+    expect(screen.getByText('5.0 MB')).toBeInTheDocument();
+    expect(screen.getByText('Pixel 9a', { selector: 'td' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Manage device tokens' })).toHaveAttribute('href', '/settings');
+    expect(screen.getByText('Read in part').nextElementSibling).toHaveTextContent('3');
+  });
+
+  it('shows "unavailable" for what the server does not know, never 0', async () => {
+    mockApi({
+      '/api/devices': devices({ watch: { model: null, firmware: null, battery_percent: null, battery_at: null, last_data_at: null }, last_sync_at: null }),
+      '/api/storage': storage({ database_bytes: null }),
+      '/api/settings': settings,
+    });
+    renderAt(<DevicesPage />, '/devices');
+    await screen.findByText('Firmware');
+    const row = (label: string) => screen.getByText(label, { selector: 'dt' }).nextElementSibling as HTMLElement;
+    expect(row('Model')).toHaveTextContent('unavailable');
+    expect(row('Firmware')).toHaveTextContent('unavailable');
+    expect(row('Battery')).toHaveTextContent('unavailable');
+    expect(row('Last sync')).toHaveTextContent('unavailable');
+    expect(row('Database')).toHaveTextContent('unavailable');
+    expect(row('Last backup')).toHaveTextContent('unavailable');
+    expect(screen.getByLabelText('Battery unavailable')).toBeInTheDocument();
+  });
+
+  it('says so when a request fails and offers a retry', async () => {
+    let fail = true;
+    mockApi({
+      '/api/devices': () => (fail ? json({ error: 'database busy' }, { status: 500 }) : json(devices())),
+      '/api/storage': storage(),
+      '/api/settings': settings,
+    });
+    renderAt(<DevicesPage />, '/devices');
+    expect(await screen.findAllByRole('alert')).not.toHaveLength(0);
+    expect(screen.getAllByText('database busy').length).toBeGreaterThan(0);
+    fail = false;
+    await userEvent.click(screen.getAllByRole('button', { name: 'Try again' })[0]!);
+    expect(await screen.findByText('74%', { selector: '.stat__value' })).toBeInTheDocument();
+  });
+
+  it('in the browser the sync button refreshes from the server; in the app it asks the watch', async () => {
+    mockApi({ '/api/devices': devices(), '/api/storage': storage(), '/api/settings': settings });
+    const { unmount } = renderAt(<DevicesPage />, '/devices');
+    expect(await screen.findByRole('button', { name: 'Refresh from the server' })).toBeInTheDocument();
+    unmount();
+    const syncNow = vi.fn();
+    window.NimragApp = { native: true, syncNow };
+    renderAt(<DevicesPage />, '/devices');
+    await userEvent.click(await screen.findByRole('button', { name: 'Sync now' }));
+    expect(syncNow).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('goal validation', () => {
+  it('sends only the fields that changed', () => {
+    const form = { ...formFrom(settings), steps: '9000' };
+    expect(validateGoals(form, settings)).toEqual({ errors: {}, patch: { step_goal: 9000 } });
+  });
+
+  it('refuses a bad timezone, non-numbers and out-of-range goals', () => {
+    const r = validateGoals({ timezone: 'Mars/Olympus', steps: '0', intensity: '1.5' }, settings);
+    expect(r.patch).toBeNull();
+    expect(Object.keys(r.errors).sort()).toEqual(['intensity', 'steps', 'timezone']);
+    expect(validateGoals({ ...formFrom(settings), steps: '200001' }, settings).errors.steps).toBeDefined();
+    expect(validateGoals({ ...formFrom(settings), intensity: '10081' }, settings).errors.intensity).toBeDefined();
+  });
+
+  it('has nothing to send when nothing changed', () => {
+    expect(validateGoals(formFrom(settings), settings)).toEqual({ errors: {}, patch: null });
+  });
+});
+
+function settingsRoutes(over: Record<string, unknown> = {}) {
+  return { '/api/settings': settings, '/api/tokens': tokens(), '/api/garmin': garmin(), ...over };
+}
+
+describe('Settings: timezone and goals', () => {
+  it('saves a changed goal with PATCH /api/settings and says so', async () => {
+    const saved = { ...settings, step_goal: 10000 };
+    const { calls } = mockApi({ ...settingsRoutes(), 'PATCH /api/settings': saved });
+    renderAt(<SettingsPage />, '/settings');
+    const field = await screen.findByLabelText('Daily step goal');
+    expect(field).toHaveValue('8000');
+    const save = screen.getByRole('button', { name: 'Save settings' });
+    expect(save).toBeDisabled();
+    await userEvent.clear(field);
+    await userEvent.type(field, '10000');
+    await userEvent.click(save);
+    expect(await screen.findByRole('status', {})).toHaveTextContent('Saved.');
+    const patch = calls.find((c) => c.init?.method === 'PATCH');
+    expect(patch?.url).toBe('/api/settings');
+    expect(JSON.parse(String(patch?.init?.body))).toEqual({ step_goal: 10000 });
+    expect((patch?.init?.headers as Record<string, string>)['X-Nimrag']).toBe('1');
+  });
+
+  it('shows the field error and sends nothing for a bad value', async () => {
+    const { calls } = mockApi(settingsRoutes());
+    renderAt(<SettingsPage />, '/settings');
+    const field = await screen.findByLabelText('Weekly intensity minutes goal');
+    await userEvent.clear(field);
+    await userEvent.type(field, 'many');
+    await userEvent.click(screen.getByRole('button', { name: 'Save settings' }));
+    expect(field).toHaveAttribute('aria-invalid', 'true');
+    expect(screen.getByText(/whole number of minutes/)).toBeInTheDocument();
+    expect(calls.some((c) => c.init?.method === 'PATCH')).toBe(false);
+  });
+
+  it('shows the server message when it refuses', async () => {
+    mockApi({ ...settingsRoutes(), 'PATCH /api/settings': () => json({ error: 'timezone must be an IANA name such as Europe/Copenhagen' }, { status: 400 }) });
+    renderAt(<SettingsPage />, '/settings');
+    const field = await screen.findByLabelText('Timezone (IANA name)');
+    await userEvent.clear(field);
+    await userEvent.type(field, 'Europe/Paris');
+    await userEvent.click(screen.getByRole('button', { name: 'Save settings' }));
+    expect(await screen.findByText(/must be an IANA name/)).toBeInTheDocument();
+  });
+});
+
+describe('Settings: device tokens', () => {
+  it('lists tokens, revoked ones without a Revoke button, never used as "Never"', async () => {
+    mockApi(settingsRoutes());
+    renderAt(<SettingsPage />, '/settings');
+    const table = await screen.findByRole('table', { name: 'Device tokens' });
+    expect(within(table).getByText('Pixel 9a')).toBeInTheDocument();
+    expect(within(table).getByRole('button', { name: 'Revoke token Pixel 9a' })).toBeInTheDocument();
+    expect(within(table).queryByRole('button', { name: 'Revoke token Old phone' })).not.toBeInTheDocument();
+    expect(within(table).getByText('Never')).toBeInTheDocument();
+  });
+
+  it('revoking asks once more, then calls DELETE', async () => {
+    const { calls } = mockApi({ ...settingsRoutes(), 'DELETE /api/tokens/1': () => new Response(null, { status: 204 }) });
+    renderAt(<SettingsPage />, '/settings');
+    await userEvent.click(await screen.findByRole('button', { name: 'Revoke token Pixel 9a' }));
+    expect(calls.some((c) => c.init?.method === 'DELETE')).toBe(false);
+    await userEvent.click(screen.getByRole('button', { name: 'Confirm revoking token Pixel 9a' }));
+    await waitFor(() => expect(calls.some((c) => c.init?.method === 'DELETE' && c.url === '/api/tokens/1')).toBe(true));
+  });
+
+  it('creating a token needs the password, shows the secret once with a warning, and copies it', async () => {
+    const writeText = vi.fn(async () => {});
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+    const { calls } = mockApi({
+      ...settingsRoutes(),
+      'POST /api/tokens': () => json({ id: 3, name: 'Tablet', token: 'nrg_secret_value_123' }, { status: 201 }),
+    });
+    renderAt(<SettingsPage />, '/settings');
+    await userEvent.click(await screen.findByRole('button', { name: 'Create token' }));
+    await userEvent.type(screen.getByLabelText('Name', { exact: true }), 'Tablet');
+    await userEvent.type(screen.getByLabelText('Your password'), 'correct horse battery');
+    await userEvent.click(screen.getByRole('button', { name: 'Create token' }));
+
+    const post = calls.find((c) => c.init?.method === 'POST')!;
+    expect(JSON.parse(String(post.init?.body))).toEqual({ name: 'Tablet', password: 'correct horse battery' });
+    expect(await screen.findByRole('alert')).toHaveTextContent(/shown only once/);
+    expect(screen.getByLabelText('Token')).toHaveValue('nrg_secret_value_123');
+
+    await userEvent.click(screen.getByRole('button', { name: 'Copy token' }));
+    expect(writeText).toHaveBeenCalledWith('nrg_secret_value_123');
+    expect(await screen.findByText('Copied to the clipboard.')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'I have saved it' }));
+    expect(screen.queryByDisplayValue('nrg_secret_value_123')).not.toBeInTheDocument();
+    expect(screen.queryByText(/nrg_secret_value_123/)).not.toBeInTheDocument();
+  });
+
+  it('a wrong password (403) says so and creates nothing', async () => {
+    mockApi({ ...settingsRoutes(), 'POST /api/tokens': () => json({ error: 'wrong password' }, { status: 403 }) });
+    renderAt(<SettingsPage />, '/settings');
+    await userEvent.click(await screen.findByRole('button', { name: 'Create token' }));
+    await userEvent.type(screen.getByLabelText('Name', { exact: true }), 'Tablet');
+    await userEvent.type(screen.getByLabelText('Your password'), 'nope');
+    await userEvent.click(screen.getByRole('button', { name: 'Create token' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Wrong password.');
+    expect(screen.queryByLabelText('Token')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Your password')).toHaveValue('');
+  });
+
+  it('describes the refusals in plain words', () => {
+    expect(describeTokenError(new ApiError(403, 'x'))).toBe('Wrong password.');
+    expect(describeTokenError(new ApiError(429, 'x'))).toMatch(/Too many attempts/);
+    expect(describeTokenError(new ApiError(500, 'database busy'))).toBe('database busy');
+  });
+});
+
+describe('Settings: Garmin Connect (Forward)', () => {
+  it('off: says activities only and unofficial, offers the login form', async () => {
+    mockApi(settingsRoutes());
+    renderAt(<SettingsPage />, '/settings');
+    const card = (await screen.findByRole('heading', { name: 'Garmin Connect (Forward)' })).closest('section') as HTMLElement;
+    expect(await within(card).findByText('Off')).toBeInTheDocument();
+    expect(card).toHaveTextContent(/Activities only/);
+    expect(card).toHaveTextContent(/unofficial/);
+    expect(card).toHaveTextContent(/may stop working/);
+    expect(within(card).getByLabelText('Garmin email')).toBeInTheDocument();
+    expect(within(card).getByLabelText('Garmin password')).toHaveAttribute('type', 'password');
+  });
+
+  it.each(['needs_login', 'paused'] as const)('%s reads "Log in to Garmin again"', async (state) => {
+    mockApi(settingsRoutes({ '/api/garmin': garmin({ state, last_error: 'Garmin refused the login' }) }));
+    renderAt(<SettingsPage />, '/settings');
+    const card = (await screen.findByRole('heading', { name: 'Garmin Connect (Forward)' })).closest('section') as HTMLElement;
+    await waitFor(() => expect(within(card).getAllByText('Log in to Garmin again').length).toBeGreaterThanOrEqual(2));
+    expect(within(card).getByRole('button', { name: 'Log in to Garmin again' })).toBeInTheDocument();
+    expect(within(card).getByText(/Last error: Garmin refused the login/)).toBeInTheDocument();
+  });
+
+  it('logs in with email and password, never keeping the password in the field, then asks for the code', async () => {
+    let status = garmin();
+    const { calls } = mockApi({
+      ...settingsRoutes(),
+      '/api/garmin': () => json(status),
+      'POST /api/garmin/login': () => {
+        status = garmin({ state: 'needs_mfa' });
+        return json({ mfa_required: true });
+      },
+      'POST /api/garmin/mfa': () => {
+        status = garmin({ state: 'connected', done: 4 });
+        return json(status);
+      },
+    });
+    renderAt(<SettingsPage />, '/settings');
+    await userEvent.type(await screen.findByLabelText('Garmin email'), 'me@example.com');
+    await userEvent.type(screen.getByLabelText('Garmin password'), 's3cret!');
+    await userEvent.click(screen.getByRole('button', { name: 'Log in to Garmin' }));
+
+    const login = calls.find((c) => c.url === '/api/garmin/login')!;
+    expect(JSON.parse(String(login.init?.body))).toEqual({ email: 'me@example.com', password: 's3cret!' });
+
+    const code = await screen.findByLabelText('Verification code');
+    await userEvent.type(code, '123456');
+    await userEvent.click(screen.getByRole('button', { name: 'Send code' }));
+    expect(JSON.parse(String(calls.find((c) => c.url === '/api/garmin/mfa')?.init?.body))).toEqual({ code: '123456' });
+
+    expect(await screen.findByText('Connected')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Garmin password')).not.toBeInTheDocument();
+  });
+
+  it('a refused login shows the server message', async () => {
+    mockApi({ ...settingsRoutes(), 'POST /api/garmin/login': () => json({ error: 'Garmin rejected the email or password' }, { status: 422 }) });
+    renderAt(<SettingsPage />, '/settings');
+    await userEvent.type(await screen.findByLabelText('Garmin email'), 'me@example.com');
+    await userEvent.type(screen.getByLabelText('Garmin password'), 'bad');
+    await userEvent.click(screen.getByRole('button', { name: 'Log in to Garmin' }));
+    expect(await screen.findByText('Garmin rejected the email or password')).toBeInTheDocument();
+    expect(screen.getByLabelText('Garmin password')).toHaveValue('');
+  });
+
+  it('imports a token file and sends only the token fields', async () => {
+    const { calls } = mockApi({
+      ...settingsRoutes(),
+      'POST /api/garmin/import-tokens': garmin({ state: 'connected' }),
+    });
+    renderAt(<SettingsPage />, '/settings');
+    const input = await screen.findByLabelText('Garmin token file', { selector: 'input' });
+    const file = new File([JSON.stringify({ di_token: 'aaa', di_refresh_token: 'bbb', di_client_id: 'cid', extra: 'ignored' })], 'garmin_tokens.json', {
+      type: 'application/json',
+    });
+    await userEvent.upload(input, file);
+    await waitFor(() => expect(calls.some((c) => c.url === '/api/garmin/import-tokens')).toBe(true));
+    expect(JSON.parse(String(calls.find((c) => c.url === '/api/garmin/import-tokens')?.init?.body))).toEqual({
+      di_token: 'aaa',
+      di_refresh_token: 'bbb',
+      di_client_id: 'cid',
+    });
+  });
+
+  it('refuses a file that is not a token file without calling the server', async () => {
+    const { calls } = mockApi(settingsRoutes());
+    renderAt(<SettingsPage />, '/settings');
+    const input = await screen.findByLabelText('Garmin token file', { selector: 'input' });
+    await userEvent.upload(input, new File(['{"hello": 1}'], 'other.json', { type: 'application/json' }));
+    expect(await screen.findByText(/not a python-garminconnect token file/)).toBeInTheDocument();
+    expect(calls.some((c) => c.url.includes('import-tokens'))).toBe(false);
+  });
+
+  it('parseTokenFile accepts the python-garminconnect file and nothing else', () => {
+    expect(parseTokenFile('{"di_token":"a","di_refresh_token":"b"}')).toEqual({ di_token: 'a', di_refresh_token: 'b', di_client_id: null });
+    expect(parseTokenFile('{"di_token":"a"}')).toBeNull();
+    expect(parseTokenFile('{"di_token":"","di_refresh_token":"b"}')).toBeNull();
+    expect(parseTokenFile('not json')).toBeNull();
+    expect(parseTokenFile('[]')).toBeNull();
+  });
+
+  it('connected: shows the queue counts and next try, retries failures, backfills, logs out after a confirm', async () => {
+    let status = garmin({ state: 'connected', pending: 2, done: 40, failed: 1, last_error: 'Garmin said 500', next_attempt_at: '2026-11-19T12:30:00+01:00' });
+    const { calls } = mockApi({
+      ...settingsRoutes(),
+      '/api/garmin': () => json(status),
+      'POST /api/garmin/retry': () => {
+        status = { ...status, failed: 0, pending: 3 };
+        return json(status);
+      },
+      'POST /api/garmin/backfill': { queued: 7 },
+      'POST /api/garmin/logout': () => {
+        status = garmin();
+        return new Response(null, { status: 204 });
+      },
+    });
+    renderAt(<SettingsPage />, '/settings');
+    const card = (await screen.findByRole('heading', { name: 'Garmin Connect (Forward)' })).closest('section') as HTMLElement;
+    const row = (label: string) => within(card).getByText(label, { selector: 'dt' }).nextElementSibling as HTMLElement;
+    await waitFor(() => expect(row('Waiting to send')).toHaveTextContent('2'));
+    expect(row('Sent or already there')).toHaveTextContent('40');
+    expect(row('Needs you')).toHaveTextContent('1');
+    expect(row('Next try')).toHaveTextContent('19 Nov');
+    expect(within(card).getByText(/Last error: Garmin said 500/)).toBeInTheDocument();
+
+    await userEvent.click(within(card).getByRole('button', { name: 'Try the failed ones again' }));
+    await waitFor(() => expect(row('Needs you')).toHaveTextContent('0'));
+    expect(within(card).getByRole('button', { name: 'Try the failed ones again' })).toBeDisabled();
+
+    const days = within(card).getByLabelText('Also send activities from the last (days)');
+    await userEvent.clear(days);
+    await userEvent.type(days, '60');
+    await userEvent.click(within(card).getByRole('button', { name: 'Send older activities' }));
+    expect(await within(card).findByText('Queued 7 files.')).toBeInTheDocument();
+    expect(JSON.parse(String(calls.find((c) => c.url === '/api/garmin/backfill')?.init?.body))).toEqual({ days: 60 });
+
+    await userEvent.click(within(card).getByRole('button', { name: 'Log out of Garmin' }));
+    expect(calls.some((c) => c.url === '/api/garmin/logout')).toBe(false);
+    await userEvent.click(within(card).getByRole('button', { name: 'Yes, log out of Garmin' }));
+    expect(await within(card).findByText('Off')).toBeInTheDocument();
+  });
+
+  it('refuses backfill days outside 1 to 3650', async () => {
+    mockApi(settingsRoutes({ '/api/garmin': garmin({ state: 'connected' }) }));
+    renderAt(<SettingsPage />, '/settings');
+    const days = await screen.findByLabelText('Also send activities from the last (days)');
+    await userEvent.clear(days);
+    await userEvent.type(days, '4000');
+    expect(screen.getByRole('button', { name: 'Send older activities' })).toBeDisabled();
+    expect(days).toHaveAttribute('aria-invalid', 'true');
+  });
+
+  it('a failed status request offers a retry', async () => {
+    mockApi(settingsRoutes({ '/api/garmin': () => json({ error: 'database busy' }, { status: 500 }) }));
+    renderAt(<SettingsPage />, '/settings');
+    expect(await screen.findByText('Could not load the Garmin status')).toBeInTheDocument();
+  });
+});
+
+describe('Settings: session', () => {
+  it('Log out posts to /api/logout and goes to the login page', async () => {
+    const { calls } = mockApi({ ...settingsRoutes(), 'POST /api/logout': () => new Response(null, { status: 204 }) });
+    renderAt(<SettingsPage />, '/settings');
+    await userEvent.click(await screen.findByRole('button', { name: 'Log out' }));
+    await waitFor(() => expect(screen.getByTestId('where')).toHaveTextContent('/login'));
+    expect(calls.some((c) => c.url === '/api/logout')).toBe(true);
+  });
+});

@@ -1,4 +1,4 @@
-import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode } from 'react';
+import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, Ref } from 'react';
 import { Link, type LinkProps } from 'react-router-dom';
 import { useId } from 'react';
 
@@ -26,10 +26,12 @@ interface FieldProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 'id'> {
   label: ReactNode;
   hint?: ReactNode;
   id?: string;
+  /** Ref to the `<input>` (focus it after a failed submit, read a file input). */
+  ref?: Ref<HTMLInputElement>;
 }
 
 /** Labelled text input (48 px high, 16 px text so phones do not zoom on focus). */
-export function TextField({ label, hint, id, ...rest }: FieldProps) {
+export function TextField({ label, hint, id, ref, ...rest }: FieldProps) {
   const auto = useId();
   const inputId = id ?? auto;
   return (
@@ -37,7 +39,7 @@ export function TextField({ label, hint, id, ...rest }: FieldProps) {
       <label className="field__label" htmlFor={inputId}>
         {label}
       </label>
-      <input id={inputId} className="field__input" aria-describedby={hint ? `${inputId}-hint` : undefined} {...rest} />
+      <input ref={ref} id={inputId} className="field__input" aria-describedby={hint ? `${inputId}-hint` : undefined} {...rest} />
       {hint ? (
         <span className="field__hint" id={`${inputId}-hint`}>
           {hint}

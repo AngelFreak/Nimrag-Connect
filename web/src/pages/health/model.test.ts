@@ -122,12 +122,12 @@ describe('last nights', () => {
 });
 
 describe('day series', () => {
-  it('places samples in hours since local midnight with empty ends', () => {
+  it('places samples in hours since local midnight (the chart sets the 0 to 24 range)', () => {
     const s = hourSeries('2026-11-18', [
       { time: '2026-11-18T06:00:00+01:00', value: 50 },
       { time: '2026-11-18T18:00:00+01:00', value: null },
     ]);
-    expect(s).toEqual({ x: [0, 6, 18, 24], y: [null, 50, null, null] });
+    expect(s).toEqual({ x: [6, 18], y: [50, null] });
   });
   it('is unavailable without any value', () => {
     expect(hourSeries('2026-11-18', [])).toBeNull();

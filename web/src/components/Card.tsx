@@ -10,6 +10,8 @@ interface CardProps {
   className?: string;
   'aria-label'?: string;
   'aria-labelledby'?: string;
+  /** `data-*` attributes (test hooks, CSS hooks). */
+  [dataAttribute: `data-${string}`]: string | undefined;
   children: ReactNode;
 }
 

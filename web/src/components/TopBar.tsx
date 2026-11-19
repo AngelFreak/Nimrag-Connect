@@ -24,6 +24,11 @@ interface BackProps extends BaseProps {
   subtitle?: ReactNode;
   backTo: string;
   backLabel?: string;
+  /** Previous and next buttons next to the right-hand slot (Sleep: previous and next night). */
+  prev?: NavTarget;
+  next?: NavTarget;
+  prevLabel?: string;
+  nextLabel?: string;
 }
 interface PagerProps extends BaseProps {
   variant: 'pager';
@@ -87,7 +92,21 @@ export function TopBar(props: TopBarProps) {
           <Heading className="topbar__title">{props.title}</Heading>
           {props.subtitle ? <span className="topbar__sub">{props.subtitle}</span> : null}
         </div>
-        {props.aside ? <div className="topbar__aside">{props.aside}</div> : null}
+        {props.aside || props.prev !== undefined || props.next !== undefined ? (
+          <div className="topbar__aside">
+            {props.aside}
+            {props.prev !== undefined ? (
+              <ArrowButton target={props.prev} label={props.prevLabel ?? 'Previous'}>
+                <BackIcon />
+              </ArrowButton>
+            ) : null}
+            {props.next !== undefined ? (
+              <ArrowButton target={props.next} label={props.nextLabel ?? 'Next'}>
+                <NextIcon />
+              </ArrowButton>
+            ) : null}
+          </div>
+        ) : null}
       </header>
     );
   }

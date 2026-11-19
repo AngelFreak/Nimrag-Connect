@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
-import { getBridge, hasNativeSync, type LinkState } from '../native';
+import { getBridge, hasNativeSync, isNativeApp, openWatch, type LinkState } from '../native';
 import { useNativeStatus } from '../lib/hooks';
 import { RefreshIcon, UserIcon, WatchIcon } from './icons';
 
@@ -77,13 +77,28 @@ const LINK_TEXT: Record<LinkState, string> = {
   unknown: 'status unknown',
 };
 
-/** Watch icon that links to Devices, with a status dot. State is also written in the aria-label. */
+/**
+ * Watch icon with a status dot; the state is also written in the aria-label.
+ * In a browser it links to Devices; in the Android app it opens the app's own Watch screen.
+ */
 export function WatchLink({ link }: { link: LinkState }) {
   const text = `Watch ${LINK_TEXT[link]}`;
-  return (
-    <Link to="/devices" className="icon-btn" aria-label={text} title={text}>
+  const icon = (
+    <>
       <WatchIcon />
       <span className="status-dot" data-state={link} aria-hidden="true" />
+    </>
+  );
+  if (isNativeApp() && getBridge()?.openWatch) {
+    return (
+      <button type="button" className="icon-btn" aria-label={text} title={text} onClick={() => openWatch()}>
+        {icon}
+      </button>
+    );
+  }
+  return (
+    <Link to="/devices" className="icon-btn" aria-label={text} title={text}>
+      {icon}
     </Link>
   );
 }
@@ -112,11 +127,12 @@ export function SyncAndWatch() {
 /** Top bar of the main tabs on a phone: profile on the left, sync and watch on the right. */
 export function MainBar() {
   return (
-    <div className="mainbar">
+    // A banner landmark, so the buttons are not outside every landmark (axe: region).
+    <header className="mainbar">
       <ProfileLink />
       <div className="mainbar__right">
         <SyncAndWatch />
       </div>
-    </div>
+    </header>
   );
 }

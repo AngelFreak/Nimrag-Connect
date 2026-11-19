@@ -2,14 +2,17 @@ import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
-import { useState, type ReactNode } from 'react';
+import { createRef, useState, type ReactNode } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import {
   AppShell,
+  BarSeries,
   Card,
   EmptyState,
   ErrorState,
   FilterChips,
+  Legend,
+  navKeyFor,
   ProgressBar,
   Ring,
   SampleDataChip,
@@ -18,6 +21,7 @@ import {
   StatTile,
   SyncButton,
   Table,
+  TextField,
   TopBar,
   Unavailable,
   WatchLink,
@@ -262,7 +266,19 @@ describe('AppShell', () => {
       .getAllByRole('link')
       .map((a) => a.textContent);
     expect(labels).toEqual(['Today', 'Activities', 'Health', 'Strength']);
+    expect(within(bottom as HTMLElement).getByRole('link', { name: 'Strength' })).toHaveAttribute('href', '/strength');
     expect(within(bottom as HTMLElement).getByRole('link', { name: 'Today' })).toHaveAttribute('aria-current', 'page');
+  });
+
+  it('the phone top bar is a landmark, so its buttons are not outside every region', () => {
+    wrap(
+      <AppShell tabs>
+        <h1>Today</h1>
+      </AppShell>,
+    );
+    const bar = document.querySelector('.mainbar') as HTMLElement;
+    expect(bar.tagName).toBe('HEADER');
+    expect(within(bar).getByRole('link', { name: 'Profile and settings' })).toBeInTheDocument();
   });
 
   it('detail pages have no bottom navigation', () => {
@@ -273,5 +289,134 @@ describe('AppShell', () => {
       '/sleep',
     );
     expect(document.querySelector('.bottom-nav')).toBeNull();
+  });
+});
+
+describe('BarSeries', () => {
+  const labels = ['Mon', 'Tue', 'Wed'];
+
+  it('carries its text summary for screen readers, or visibly on request', () => {
+    const { rerender } = render(<BarSeries values={[1, 2, 3]} labels={labels} label="Sleep" summary="Sleep per night: 1, 2 and 3 hours." />);
+    expect(screen.getByRole('img', { name: 'Sleep' })).toBeInTheDocument();
+    expect(screen.getByText('Sleep per night: 1, 2 and 3 hours.')).toHaveClass('sr-only');
+    rerender(<BarSeries values={[1, 2, 3]} labels={labels} label="Sleep" summary="Sleep per night: 1, 2 and 3 hours." summaryVisible />);
+    expect(screen.getByText('Sleep per night: 1, 2 and 3 hours.')).toHaveClass('chart-summary');
+  });
+
+  it('draws the highlighted bar in its own colour', () => {
+    render(<BarSeries values={[1, 2, 3]} labels={labels} label="Sleep" highlightIndex={1} highlightColor="rgb(1, 2, 3)" />);
+    const bars = Array.from(document.querySelectorAll('svg rect')) as SVGRectElement[];
+    expect(bars.map((b) => b.style.fill)).toEqual(['var(--stage-deep)', 'rgb(1, 2, 3)', 'var(--stage-deep)']);
+  });
+
+  it('shows "unavailable" when no bar has a value', () => {
+    render(<BarSeries values={[null, null]} labels={['a', 'b']} label="None" />);
+    expect(screen.getByText('unavailable')).toBeInTheDocument();
+  });
+});
+
+describe('TopBar back variant with previous and next', () => {
+  it('shows both buttons, the next one disabled at the end of the range', () => {
+    wrap(<TopBar variant="back" backTo="/health" title="Sleep" prev={{ to: '/sleep/2026-11-17' }} next={null} prevLabel="Previous night" nextLabel="Next night" />);
+    expect(screen.getByRole('link', { name: 'Back' })).toHaveAttribute('href', '/health');
+    expect(screen.getByRole('link', { name: 'Previous night' })).toHaveAttribute('href', '/sleep/2026-11-17');
+    expect(screen.queryByRole('link', { name: 'Next night' })).not.toBeInTheDocument();
+  });
+
+  it('a click handler works as a target', async () => {
+    const next = vi.fn();
+    wrap(<TopBar variant="back" backTo="/" title="Movement" prev={{ to: '/movement/2026-11-18' }} next={{ onClick: next }} />);
+    await userEvent.click(screen.getByRole('button', { name: 'Next' }));
+    expect(next).toHaveBeenCalledTimes(1);
+  });
+
+  it('without prev and next it is the plain back bar', () => {
+    wrap(<TopBar variant="back" backTo="/" title="Body" />);
+    expect(screen.queryByRole('link', { name: /Previous|Next/ })).not.toBeInTheDocument();
+  });
+});
+
+describe('Table sorting and className', () => {
+  const rows = [{ id: 1, name: 'b' }, { id: 2, name: 'a' }];
+  const columns = [
+    { key: 'name', header: 'Name', sortable: true, cell: (r: (typeof rows)[number]) => r.name },
+    { key: 'id', header: 'Id', cell: (r: (typeof rows)[number]) => r.id },
+  ];
+
+  it('sortable headers are buttons with aria-sort; others are plain', async () => {
+    const onSort = vi.fn();
+    render(<Table caption="Things" className="things" columns={columns} rows={rows} rowKey={(r) => String(r.id)} sort={{ key: 'name', dir: 'asc' }} onSort={onSort} />);
+    expect(screen.getByRole('table')).toHaveClass('things');
+    expect(screen.getByRole('columnheader', { name: /Name/ })).toHaveAttribute('aria-sort', 'ascending');
+    expect(screen.getByRole('columnheader', { name: 'Id' })).not.toHaveAttribute('aria-sort');
+    expect(screen.queryByRole('button', { name: 'Id' })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /Name/ }));
+    expect(onSort).toHaveBeenCalledWith('name');
+  });
+
+  it('without onSort the headers stay plain text', () => {
+    render(<Table caption="Things" columns={columns} rows={rows} rowKey={(r) => String(r.id)} />);
+    expect(screen.queryByRole('button', { name: /Name/ })).not.toBeInTheDocument();
+  });
+});
+
+describe('StatTile as a link', () => {
+  it('links the whole tile and passes data attributes to the link', () => {
+    wrap(<StatTile label="Steps" value="6,240" href="/movement" data-card="steps" />);
+    const link = screen.getByRole('link', { name: /Steps/ });
+    expect(link).toHaveAttribute('href', '/movement');
+    expect(link).toHaveAttribute('data-card', 'steps');
+  });
+
+  it('is not a link without href', () => {
+    render(<StatTile label="Steps" value="6,240" />);
+    expect(screen.queryByRole('link')).not.toBeInTheDocument();
+  });
+});
+
+describe('Legend swatches', () => {
+  it('draws the shape the chart uses', () => {
+    render(
+      <Legend
+        items={[
+          { key: 'bar', label: 'Bars', color: 'red' },
+          { key: 'line', label: 'Line', color: 'blue', shape: 'line' },
+          { key: 'goal', label: 'Goal', color: 'green', shape: 'dash' },
+          { key: 'dot', label: 'Readings', color: 'gray', shape: 'dot' },
+        ]}
+      />,
+    );
+    const swatches = Array.from(document.querySelectorAll('.swatch'));
+    expect(swatches.map((s) => s.className)).toEqual(['swatch', 'swatch swatch--line', 'swatch swatch--dash', 'swatch swatch--dot']);
+    expect(swatches.every((s) => s.getAttribute('aria-hidden') === 'true')).toBe(true);
+  });
+});
+
+describe('TextField', () => {
+  it('hands its ref to the input', () => {
+    const ref = createRef<HTMLInputElement>();
+    render(<TextField ref={ref} label="Weight" />);
+    expect(ref.current).toBe(screen.getByLabelText('Weight'));
+    ref.current?.focus();
+    expect(screen.getByLabelText('Weight')).toHaveFocus();
+  });
+});
+
+describe('navKeyFor', () => {
+  it('does not highlight Overview on Calendar', () => {
+    expect(navKeyFor('/calendar', '')).toBe('health');
+    expect(navKeyFor('/calendar/2026-11', '')).toBe('health');
+    expect(navKeyFor('/', '')).toBe('today');
+    expect(navKeyFor('/day/2026-11-18', '')).toBe('today');
+  });
+
+  it('separates Strength from Activities and knows Movement and Devices', () => {
+    expect(navKeyFor('/strength', '')).toBe('strength');
+    expect(navKeyFor('/activities', '?type=strength')).toBe('strength');
+    expect(navKeyFor('/activities/9/strength', '')).toBe('strength');
+    expect(navKeyFor('/activities/9', '')).toBe('activities');
+    expect(navKeyFor('/movement/2026-11-18', '')).toBe('health');
+    expect(navKeyFor('/devices', '')).toBe('devices');
+    expect(navKeyFor('/settings', '')).toBe('other');
   });
 });

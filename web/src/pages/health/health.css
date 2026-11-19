@@ -1,10 +1,4 @@
 /* Page-local helpers for Sleep, Day and Health (the shared stylesheets belong to the design system). */
-.chart-summary {
-  margin: 0;
-  font-size: var(--fs-sm);
-  color: var(--text-2);
-}
-
 /* A segmented control inside a card: left aligned, not stretched. */
 .card .segmented {
   align-self: flex-start;

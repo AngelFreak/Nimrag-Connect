@@ -8,7 +8,7 @@ export function WorkoutPage() {
   usePageTitle('New workout');
   return (
     <>
-      <TopBar variant="back" backTo="/activities?type=strength" backLabel="Back to strength sessions" title="Workout" subtitle="Coming in stage 4a" />
+      <TopBar variant="back" backTo="/strength" backLabel="Back to strength sessions" title="Workout" subtitle="Coming in stage 4a" />
       <div className="page">
         <Card padding="lg">
           <CardHeader title="Workout builder" tone="muted" />
@@ -18,7 +18,7 @@ export function WorkoutPage() {
           </p>
           <p style={{ margin: 0, fontSize: 'var(--fs-base)', color: 'var(--text-2)' }}>Your recorded strength sessions, with their sets, are under Strength.</p>
         </Card>
-        <LinkButton to="/activities?type=strength" size="lg" variant="primary">
+        <LinkButton to="/strength" size="lg" variant="primary">
           Go to strength sessions
         </LinkButton>
       </div>

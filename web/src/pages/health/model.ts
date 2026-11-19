@@ -106,7 +106,7 @@ export function nightsSummary(nights: NightSummary[], count: number, avgScore: n
 // ---- day ------------------------------------------------------------------------------------
 
 export interface HourSeries {
-  /** Hours since local midnight, with null anchors at 0 and 24 so the axis spans the whole day. */
+  /** Hours since local midnight; the chart is given `xRange={[0, 24]}` so the axis spans the whole day. */
   x: number[];
   y: (number | null)[];
 }
@@ -115,16 +115,14 @@ export function hourSeries(date: string, series: TimedValue[]): HourSeries | nul
   const first = series[0];
   if (!first) return null;
   const start = dayStartMs(date, first.time);
-  const x = [0];
-  const y: (number | null)[] = [null];
+  const x: number[] = [];
+  const y: (number | null)[] = [];
   for (const p of series) {
     const h = (epochMs(p.time) - start) / 3_600_000;
-    if (h <= 0 || h >= 24) continue;
+    if (h < 0 || h >= 24) continue;
     x.push(h);
     y.push(p.value);
   }
-  x.push(24);
-  y.push(null);
   return present(y).length === 0 ? null : { x, y };
 }
 

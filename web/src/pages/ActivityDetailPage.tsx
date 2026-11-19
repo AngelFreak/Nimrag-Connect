@@ -12,7 +12,7 @@ export function ActivityDetailPage() {
   const a = query.data;
   const title = a ? activityTitle(a) : 'Activity';
   usePageTitle(title);
-  const backTo = a?.kind === 'strength' ? '/activities?type=strength' : '/activities';
+  const backTo = a?.kind === 'strength' ? '/strength' : '/activities';
 
   return (
     <>

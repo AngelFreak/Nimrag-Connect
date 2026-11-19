@@ -1,16 +1,14 @@
 import { useQuery } from '@tanstack/react-query';
-import { Link, useParams, useSearchParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import { api } from '../api/client';
 import type { MovementResponse } from '../api/generated';
 import {
-  BackIcon,
   BarSeries,
   Card,
   CardHeader,
   DataList,
   ErrorState,
   Legend,
-  NextIcon,
   ProgressBar,
   SampleDataChip,
   StageBar,
@@ -24,13 +22,11 @@ import { usePageTitle } from '../lib/hooks';
 import { PageError, PageSkeleton, useOwnerToday } from './body/common';
 import { fmtKcal, fmtKm, intensityParts, weekStepsSummary, weekdayShort, wholePercent } from './body/movement';
 
-// Stage 3i: GET /api/movement/{date}. The date is part of the URL: /movement?date=2026-11-18
-// (or /movement/2026-11-18 when the route has a :date segment); without one it is today.
+// Stage 3i: GET /api/movement/{date}. The date is part of the URL, /movement/2026-11-18;
+// without one it is today.
 
 export function MovementPage() {
-  const { date: pathDate } = useParams();
-  const [search] = useSearchParams();
-  const requested = pathDate ?? search.get('date') ?? undefined;
+  const { date: requested } = useParams();
   const invalid = requested !== undefined && !isIsoDay(requested);
   const ownerToday = useOwnerToday();
   const date = requested !== undefined ? (invalid ? undefined : requested) : ownerToday;
@@ -43,34 +39,26 @@ export function MovementPage() {
   });
   const data = query.data;
 
-  const prevDate = date ? addDays(date, -1) : null;
-  const nextDate = date ? addDays(date, 1) : null;
   const canGoNext = date !== undefined && date < (ownerToday ?? browserToday());
   const subtitle = date ? `${fmtShortDay(date)}${data ? ` · week ${data.week_number}` : ''}` : 'Steps, intensity and calories';
 
-  const dayLinks = date ? (
-    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-      <SampleDataChip sample={data?.sample} />
-      <Link className="icon-btn" to={`/movement?date=${prevDate}`} aria-label="Previous day">
-        <BackIcon />
-      </Link>
-      {canGoNext ? (
-        <Link className="icon-btn" to={`/movement?date=${nextDate}`} aria-label="Next day">
-          <NextIcon />
-        </Link>
-      ) : (
-        <span className="icon-btn" data-disabled="true" aria-hidden="true">
-          <NextIcon />
-        </span>
-      )}
-    </span>
-  ) : (
-    <SampleDataChip sample={data?.sample} />
-  );
-
   return (
     <>
-      <TopBar variant="back" backTo="/" title="Movement" subtitle={subtitle} aside={dayLinks} />
+      <TopBar
+        variant="back"
+        backTo="/"
+        title="Movement"
+        subtitle={subtitle}
+        aside={<SampleDataChip sample={data?.sample} />}
+        {...(date
+          ? {
+              prev: { to: `/movement/${addDays(date, -1)}` },
+              next: canGoNext ? { to: `/movement/${addDays(date, 1)}` } : null,
+              prevLabel: 'Previous day',
+              nextLabel: 'Next day',
+            }
+          : {})}
+      />
       {invalid ? (
         <div className="page">
           <ErrorState

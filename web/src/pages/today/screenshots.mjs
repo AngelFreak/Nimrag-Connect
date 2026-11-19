@@ -17,7 +17,7 @@ async function shot(name, width, height, steps) {
   await page.setViewportSize({ width, height });
   await page.goto(base + '/');
   await page.getByRole('heading', { level: 1 }).first().waitFor();
-  await page.waitForSelector('.glance, .state--error', { timeout: 15000 });
+  await page.waitForSelector('.stat-link, .state--error', { timeout: 15000 });
   if (width >= 1024) await page.waitForSelector('.uplot canvas', { timeout: 15000 });
   await page.evaluate(() => document.fonts.ready);
   if (steps) await steps(page);

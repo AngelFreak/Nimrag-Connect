@@ -45,6 +45,10 @@ interface SeriesChartProps {
   band?: [number, number];
   /** Fixed y range; by default fitted to the data with some padding. */
   yRange?: [number, number];
+  /** Fixed x range ([0, 24] hours for a day chart); by default the first and last x value. */
+  xRange?: [number, number];
+  /** Show the summary as a line under the chart too (otherwise only screen readers get it). */
+  summaryVisible?: boolean;
   /**
    * Axis labels and grid lines (desktop charts): true for both axes, 'y' for the value axis only
    * (put your own date labels under the chart), false for the bare phone style.
@@ -57,10 +61,10 @@ function hasData(series: ChartSeries[]): boolean {
 }
 
 /** Line chart on uPlot with an accessible name and a text summary. */
-export function SeriesChart({ label, summary, x, series, height = 90, time = false, band, yRange, axes = false }: SeriesChartProps) {
+export function SeriesChart({ label, summary, x, series, height = 90, time = false, band, yRange, xRange, summaryVisible = false, axes = false }: SeriesChartProps) {
   const host = useRef<HTMLDivElement>(null);
   const available = hasData(series) && x.length > 0;
-  const key = useMemo(() => JSON.stringify([x, series, height, time, band, yRange, axes]), [x, series, height, time, band, yRange, axes]);
+  const key = useMemo(() => JSON.stringify([x, series, height, time, band, yRange, xRange, axes]), [x, series, height, time, band, yRange, xRange, axes]);
 
   useEffect(() => {
     const el = host.current;
@@ -75,7 +79,7 @@ export function SeriesChart({ label, summary, x, series, height = 90, time = fal
       cursor: { show: false },
       select: { show: false, left: 0, top: 0, width: 0, height: 0 },
       scales: {
-        x: { time },
+        x: xRange ? { time, range: () => xRange } : { time },
         y: {
           range: (_u, min, max) => {
             if (yRange) return yRange;
@@ -140,16 +144,19 @@ export function SeriesChart({ label, summary, x, series, height = 90, time = fal
 
   if (!available) {
     return (
-      <p>
-        <Unavailable />
-      </p>
+      <>
+        <p>
+          <Unavailable />
+        </p>
+        {summaryVisible ? <p className="chart-summary">{summary}</p> : null}
+      </>
     );
   }
 
   return (
     <div className="series-chart">
       <div ref={host} role="img" aria-label={label} style={{ minHeight: axes === true ? height + 28 : height }} />
-      <p className="sr-only">{summary}</p>
+      <p className={summaryVisible ? 'chart-summary' : 'sr-only'}>{summary}</p>
     </div>
   );
 }

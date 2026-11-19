@@ -2,22 +2,24 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { api, clearOfflineApiCache } from '../api/client';
-import { Button, Card, CardHeader, SampleDataChip, Table, TextField, TopBar } from '../components';
+import { Button, Card, CardHeader, ErrorState, SampleDataChip, Skeleton, TopBar } from '../components';
 import { usePageTitle } from '../lib/hooks';
+import { GarminCard } from './system/GarminCard';
+import { GoalsCard } from './system/GoalsCard';
+import { TokensCard } from './system/TokensCard';
+import { errorMessage } from './system/errors';
+import { useSettings } from './today/queries';
 
-// STUB (stage 3a/3m wire it to GET/PATCH /api/settings and GET/POST/DELETE /api/tokens):
-// static values. Only "Log out" is real.
-
-const TOKENS = [
-  { id: 't1', name: 'Pixel 8 (phone app)', created: '2 Nov 2026', lastUsed: 'Today 07:42' },
-  { id: 't2', name: 'Test device', created: '14 Oct 2026', lastUsed: null },
-];
+// Stage 3m: GET/PATCH /api/settings (timezone, goals), GET/POST/DELETE /api/tokens, the Garmin
+// Connect (Forward) section on /api/garmin, and Log out.
 
 export function SettingsPage() {
   usePageTitle('Settings');
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const settings = useSettings();
   const [busy, setBusy] = useState(false);
+  const timezone = settings.data?.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
 
   async function logout() {
     setBusy(true);
@@ -33,49 +35,38 @@ export function SettingsPage() {
 
   return (
     <>
-      <TopBar variant="back" backTo="/" title="Settings" subtitle="Account, device tokens, timezone and goals" aside={<SampleDataChip sample />} />
+      <TopBar
+        variant="back"
+        backTo="/"
+        title="Settings"
+        subtitle="Timezone, goals, device tokens and Garmin Connect"
+        aside={<SampleDataChip sample={settings.data?.sample} />}
+      />
       <div className="page">
-        <Card padding="lg">
-          <CardHeader title="Device tokens" aside="Phones and tools that upload files" />
-          <Table
-            caption="Device tokens"
-            wide
-            rows={TOKENS}
-            rowKey={(t) => t.id}
-            columns={[
-              { key: 'name', header: 'Name', cell: (t) => t.name },
-              { key: 'created', header: 'Created', cell: (t) => t.created },
-              { key: 'used', header: 'Last used', cell: (t) => t.lastUsed },
-              {
-                key: 'act',
-                header: <span className="sr-only">Actions</span>,
-                align: 'end',
-                cell: (t) => <Button aria-label={`Revoke token ${t.name}`}>Revoke</Button>,
-              },
-            ]}
-          />
-          <Button variant="dashed" size="lg">
-            Create token
-          </Button>
-        </Card>
-        <Card padding="lg">
-          <CardHeader title="Timezone" />
-          <TextField label="Timezone (IANA name)" defaultValue="Europe/Copenhagen" hint="Days are local days in this timezone." autoComplete="off" />
-        </Card>
-        <Card padding="lg">
-          <CardHeader title="Goals" />
-          <TextField label="Daily step goal" type="number" inputMode="numeric" defaultValue="8000" />
-          <TextField label="Weekly intensity minutes goal" type="number" inputMode="numeric" defaultValue="150" />
-          <Button size="lg" variant="primary">
-            Save settings
-          </Button>
-        </Card>
-        <Card padding="lg">
-          <CardHeader title="Session" />
-          <Button size="lg" onClick={() => void logout()} disabled={busy}>
-            Log out
-          </Button>
-        </Card>
+        <div className="grid-panels" style={{ alignItems: 'start' }}>
+          {settings.isPending ? (
+            <Card padding="lg" aria-label="Loading settings">
+              <Skeleton height={20} width="40%" />
+              <Skeleton height={48} lines={3} />
+            </Card>
+          ) : settings.data ? (
+            <GoalsCard settings={settings.data} />
+          ) : (
+            <Card padding="lg">
+              <ErrorState title="Could not load the settings" action={<Button onClick={() => void settings.refetch()}>Try again</Button>}>
+                {errorMessage(settings.error)}
+              </ErrorState>
+            </Card>
+          )}
+          <TokensCard timezone={timezone} />
+          <GarminCard timezone={timezone} />
+          <Card padding="lg" aria-labelledby="session-title">
+            <CardHeader title="Session" id="session-title" />
+            <Button size="lg" onClick={() => void logout()} disabled={busy}>
+              Log out
+            </Button>
+          </Card>
+        </div>
       </div>
     </>
   );

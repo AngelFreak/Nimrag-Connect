@@ -16,7 +16,7 @@ export function StrengthPage() {
     <>
       <TopBar
         variant="back"
-        backTo="/activities?type=strength"
+        backTo="/strength"
         backLabel="Back to strength sessions"
         title="Strength"
         subtitle={data ? whenLabel({ date: data.start.slice(0, 10), start: data.start }) : undefined}
@@ -25,7 +25,7 @@ export function StrengthPage() {
       {query.isPending ? (
         <PageSkeleton label="Loading strength session" tiles={3} />
       ) : query.isError ? (
-        <QueryError error={query.error} what="Strength session" onRetry={() => void query.refetch()} backTo="/activities?type=strength" />
+        <QueryError error={query.error} what="Strength session" onRetry={() => void query.refetch()} backTo="/strength" />
       ) : (
         <StrengthSession data={query.data} />
       )}

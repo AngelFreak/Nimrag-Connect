@@ -141,6 +141,7 @@ function renderAt(path: string) {
       <MemoryRouter initialEntries={[path]}>
         <Routes>
           <Route path="/activities" element={<ActivitiesPage />} />
+          <Route path="/strength" element={<ActivitiesPage strength />} />
           <Route path="/activities/:id" element={<ActivityDetailPage />} />
           <Route path="/activities/:id/strength" element={<StrengthPage />} />
           <Route path="/workouts/new" element={<WorkoutPage />} />
@@ -187,6 +188,30 @@ describe('ActivitiesPage', () => {
     expect(await screen.findByText('No activities of this type')).toBeInTheDocument();
     expect(calls.some((c) => c.url.searchParams.get('type') === 'swim')).toBe(true);
     expect(screen.getByRole('button', { name: 'Swim' })).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('/strength is the strength list: filtered through the API, titled Strength, and keeps its path', async () => {
+    const user = userEvent.setup();
+    handler = () => ({ body: { sample: false, items: [listItem({ id: ID_STR, kind: 'strength', distance_m: null, avg_pace_s_per_km: null, sets: 18, volume_kg: 3300 })], next_before: null } });
+    renderAt('/strength');
+    expect(await screen.findByText('18 sets · 3,300 kg')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1, name: 'Strength' })).toBeInTheDocument();
+    expect(calls.some((c) => c.url.searchParams.get('type') === 'strength')).toBe(true);
+    expect(screen.getByRole('button', { name: 'Strength' })).toHaveAttribute('aria-pressed', 'true');
+    // Another type leaves the Strength path for the Activities filter.
+    handler = () => ({ body: { sample: false, items: [listItem()], next_before: null } });
+    await user.click(screen.getByRole('button', { name: 'Run' }));
+    expect(await screen.findByText('6.4 km')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1, name: 'Activities' })).toBeInTheDocument();
+  });
+
+  it('the Strength chip on /activities goes to /strength', async () => {
+    const user = userEvent.setup();
+    handler = () => ({ body: { sample: false, items: [listItem()], next_before: null } });
+    renderAt('/activities');
+    await screen.findByText('6.4 km');
+    await user.click(screen.getByRole('button', { name: 'Strength' }));
+    expect(await screen.findByRole('heading', { level: 1, name: 'Strength' })).toBeInTheDocument();
   });
 
   it('shows "unavailable" for missing values, never 0', async () => {

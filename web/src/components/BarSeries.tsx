@@ -11,8 +11,14 @@ interface BarSeriesProps {
   /** Colour for bars below `goal`. */
   belowGoalColor?: string;
   goal?: number;
-  /** Colour of the last bar when it is "now" (sleep: latest night). */
-  highlightLast?: string;
+  /** Index of the bar to draw in `highlightColor` ("now": the latest night, today's steps). */
+  highlightIndex?: number;
+  /** Colour of the highlighted bar; default the sleep colour. */
+  highlightColor?: string;
+  /** Text summary of the chart (values per bar, range, average): read by screen readers. */
+  summary?: string;
+  /** Show the summary as a line under the chart as well (otherwise it is only for screen readers). */
+  summaryVisible?: boolean;
   height?: number;
   /** Fixed full-scale value; default is the largest value. */
   max?: number;
@@ -23,7 +29,7 @@ interface BarSeriesProps {
 const W = 320;
 
 /** Small bar chart (sleep per night, steps per day) drawn as SVG. */
-export function BarSeries({ values, labels, label, color = 'var(--stage-deep)', belowGoalColor, goal, highlightLast, height = 84, max, axisLabels }: BarSeriesProps) {
+export function BarSeries({ values, labels, label, color = 'var(--stage-deep)', belowGoalColor, goal, highlightIndex, highlightColor = 'var(--sleep)', summary, summaryVisible, height = 84, max, axisLabels }: BarSeriesProps) {
   const present = values.filter((v): v is number => typeof v === 'number' && Number.isFinite(v));
   if (present.length === 0) {
     return (
@@ -46,7 +52,7 @@ export function BarSeries({ values, labels, label, color = 'var(--stage-deep)', 
           if (typeof v !== 'number' || !Number.isFinite(v)) {
             return <rect key={i} x={x} y={height - 4} width={barW} height={4} rx={2} style={{ fill: 'var(--track)' }} />;
           }
-          const fill = i === values.length - 1 && highlightLast ? highlightLast : goal !== undefined && v < goal && belowGoalColor ? belowGoalColor : color;
+          const fill = i === highlightIndex ? highlightColor : goal !== undefined && v < goal && belowGoalColor ? belowGoalColor : color;
           return <rect key={i} x={x} y={y(v)} width={barW} height={height - y(v)} rx={4} style={{ fill }} />;
         })}
       </svg>
@@ -63,6 +69,7 @@ export function BarSeries({ values, labels, label, color = 'var(--stage-deep)', 
           ))}
         </div>
       )}
+      {summary ? <p className={summaryVisible ? 'chart-summary' : 'sr-only'}>{summary}</p> : null}
     </div>
   );
 }

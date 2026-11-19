@@ -26,7 +26,7 @@ afterEach(() => {
 describe('MovementPage (3i)', () => {
   it('shows steps against the goal, the week chart, intensity and calories from the API', async () => {
     const { calls } = mockApi({ '/api/today': TODAY, '/api/movement/2026-11-19': movement({ sample: true }) });
-    renderAt(<MovementPage />, '/movement');
+    renderAt(<MovementPage />, '/movement', '/movement/:date?');
     expect(await screen.findByText('6,240')).toBeInTheDocument();
     expect(calls.some((c) => c.url === '/api/movement/2026-11-19')).toBe(true);
     expect(screen.getByText('Goal 8,000')).toBeInTheDocument();
@@ -44,7 +44,7 @@ describe('MovementPage (3i)', () => {
 
   it('floors are unavailable (no data source), never 0', async () => {
     mockApi({ '/api/today': TODAY, '/api/movement/': movement() });
-    renderAt(<MovementPage />, '/movement');
+    renderAt(<MovementPage />, '/movement', '/movement/:date?');
     await screen.findByText('6,240');
     const row = screen.getByText('Floors climbed').closest('div');
     expect(row).not.toBeNull();
@@ -64,7 +64,7 @@ describe('MovementPage (3i)', () => {
         calories: { active_kcal: null, resting_kcal: null, total_kcal: null },
       }),
     });
-    renderAt(<MovementPage />, '/movement');
+    renderAt(<MovementPage />, '/movement', '/movement/:date?');
     await screen.findByText('Steps today');
     await waitFor(() => expect(screen.getAllByText('unavailable').length).toBeGreaterThanOrEqual(8));
     expect(screen.queryByText('0')).not.toBeInTheDocument();
@@ -74,23 +74,23 @@ describe('MovementPage (3i)', () => {
 
   it('takes the date from the URL and links to the previous and next day', async () => {
     const { calls } = mockApi({ '/api/today': TODAY, '/api/movement/': movement({ date: '2026-11-17', week_number: 47 }) });
-    renderAt(<MovementPage />, '/movement?date=2026-11-17');
+    renderAt(<MovementPage />, '/movement/2026-11-17', '/movement/:date?');
     await screen.findByText('6,240');
     expect(calls.some((c) => c.url === '/api/movement/2026-11-17')).toBe(true);
-    expect(screen.getByRole('link', { name: 'Previous day' })).toHaveAttribute('href', '/movement?date=2026-11-16');
-    expect(screen.getByRole('link', { name: 'Next day' })).toHaveAttribute('href', '/movement?date=2026-11-18');
+    expect(screen.getByRole('link', { name: 'Previous day' })).toHaveAttribute('href', '/movement/2026-11-16');
+    expect(screen.getByRole('link', { name: 'Next day' })).toHaveAttribute('href', '/movement/2026-11-18');
   });
 
   it('has no "next day" link on today', async () => {
     mockApi({ '/api/today': TODAY, '/api/movement/': movement() });
-    renderAt(<MovementPage />, '/movement');
+    renderAt(<MovementPage />, '/movement', '/movement/:date?');
     await screen.findByText('6,240');
     expect(screen.queryByRole('link', { name: 'Next day' })).not.toBeInTheDocument();
   });
 
   it('rejects a malformed date without calling the API', async () => {
     const { calls } = mockApi({ '/api/today': TODAY });
-    renderAt(<MovementPage />, '/movement?date=nonsense');
+    renderAt(<MovementPage />, '/movement/nonsense', '/movement/:date?');
     expect(await screen.findByText('That is not a date')).toBeInTheDocument();
     expect(calls.some((c) => c.url.startsWith('/api/movement'))).toBe(false);
   });
@@ -101,7 +101,7 @@ describe('MovementPage (3i)', () => {
       '/api/today': TODAY,
       '/api/movement/': () => (fail ? json({ error: 'database busy' }, { status: 500 }) : json(movement())),
     });
-    renderAt(<MovementPage />, '/movement?date=2026-11-19');
+    renderAt(<MovementPage />, '/movement/2026-11-19', '/movement/:date?');
     expect(screen.getByRole('status')).toHaveTextContent('Loading');
     expect(await screen.findByRole('alert', {}, { timeout: 4000 })).toHaveTextContent('database busy');
     fail = false;

@@ -1,6 +1,7 @@
 import { useEffect, useRef, type ReactNode } from 'react';
 import { Link, Outlet, useLocation } from 'react-router-dom';
 import { ActivitiesIcon, HealthIcon, StrengthIcon, TodayIcon } from './icons';
+import { isNativeApp } from '../native';
 import { MainBar, ProfileLink, SyncAndWatch } from './SyncControls';
 
 export type NavKey = 'today' | 'activities' | 'sleep' | 'health' | 'strength' | 'devices' | 'other';
@@ -8,11 +9,11 @@ export type NavKey = 'today' | 'activities' | 'sleep' | 'health' | 'strength' | 
 /** Which top-level destination a location belongs to (drives aria-current). */
 export function navKeyFor(pathname: string, search: string): NavKey {
   const strength = /(^|[?&])type=strength(&|$)/.test(search);
-  if (pathname === '/' || pathname.startsWith('/day') || pathname.startsWith('/calendar')) return 'today';
+  if (pathname === '/' || pathname.startsWith('/day')) return 'today';
   if (pathname.startsWith('/activities')) return strength || pathname.endsWith('/strength') ? 'strength' : 'activities';
-  if (pathname.startsWith('/workouts')) return 'strength';
+  if (pathname.startsWith('/workouts') || pathname.startsWith('/strength')) return 'strength';
   if (pathname.startsWith('/sleep')) return 'sleep';
-  if (['/health', '/movement', '/training', '/body'].some((p) => pathname.startsWith(p))) return 'health';
+  if (['/health', '/movement', '/training', '/body', '/calendar'].some((p) => pathname.startsWith(p))) return 'health';
   if (pathname.startsWith('/devices')) return 'devices';
   return 'other';
 }
@@ -29,7 +30,7 @@ const PHONE_NAV: NavItem[] = [
   { key: 'today', to: '/', label: 'Today', icon: <TodayIcon /> },
   { key: 'activities', to: '/activities', label: 'Activities', icon: <ActivitiesIcon /> },
   { key: 'health', to: '/health', label: 'Health', icon: <HealthIcon /> },
-  { key: 'strength', to: '/activities?type=strength', label: 'Strength', icon: <StrengthIcon /> },
+  { key: 'strength', to: '/strength', label: 'Strength', icon: <StrengthIcon /> },
 ];
 
 /** Top navigation on the desktop dashboard, as drawn in Web.dc.html. */
@@ -38,7 +39,7 @@ const DESKTOP_NAV: NavItem[] = [
   { key: 'activities', to: '/activities', label: 'Activities' },
   { key: 'sleep', to: '/sleep', label: 'Sleep' },
   { key: 'health', to: '/health', label: 'Health' },
-  { key: 'strength', to: '/activities?type=strength', label: 'Strength' },
+  { key: 'strength', to: '/strength', label: 'Strength' },
   { key: 'devices', to: '/devices', label: 'Devices' },
 ];
 
@@ -122,7 +123,8 @@ export function AppShell({ tabs = false, children }: AppShellProps) {
           {children ?? <Outlet />}
         </main>
       </div>
-      {tabs ? <BottomNav active={active} /> : null}
+      {/* In the Android app the native bottom bar replaces this one. */}
+      {tabs && !isNativeApp() ? <BottomNav active={active} /> : null}
     </div>
   );
 }

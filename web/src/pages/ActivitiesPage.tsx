@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Button, Card, EmptyState, FilterChips, ListRow, SampleDataChip, TopBar } from '../components';
 import { browserToday } from '../lib/dates';
 import { useIsDesktop, usePageTitle } from '../lib/hooks';
@@ -9,10 +9,15 @@ import { activityTitle, groupByPeriod, parseType, rowText, sortActivities, TYPE_
 import { errorText, QueryError, RowsSkeleton } from './activities/PageStates';
 import './activities/activities.css';
 
-export function ActivitiesPage() {
-  usePageTitle('Activities');
+/**
+ * The activities list. At `/strength` (`strength` set) it is the strength sessions: the path the
+ * Strength tab uses in the browser and in the Android app, so both report the same route.
+ */
+export function ActivitiesPage({ strength = false }: { strength?: boolean }) {
+  usePageTitle(strength ? 'Strength' : 'Activities');
   const [params, setParams] = useSearchParams();
-  const type = parseType(params.get('type'));
+  const navigate = useNavigate();
+  const type = strength ? 'strength' : parseType(params.get('type'));
   const desktop = useIsDesktop();
   const query = useActivityList(type);
   const [sort, setSort] = useState<Sort>({ key: 'date', dir: 'desc' });
@@ -77,12 +82,17 @@ export function ActivitiesPage() {
 
   return (
     <>
-      <TopBar variant="large" title="Activities" aside={<SampleDataChip sample={sample} />} />
+      <TopBar variant="large" title={strength ? 'Strength' : 'Activities'} aside={<SampleDataChip sample={sample} />} />
       <FilterChips
         label="Filter by type"
         options={TYPE_OPTIONS}
         value={type}
-        onChange={(v) => setParams(v === 'all' ? {} : { type: v }, { replace: true })}
+        onChange={(v) => {
+          // Strength has its own path; every other type is a filter of /activities.
+          if (v === 'strength') void navigate('/strength', { replace: true });
+          else if (strength) void navigate(v === 'all' ? '/activities' : `/activities?type=${v}`, { replace: true });
+          else setParams(v === 'all' ? {} : { type: v }, { replace: true });
+        }}
       />
       {body}
     </>

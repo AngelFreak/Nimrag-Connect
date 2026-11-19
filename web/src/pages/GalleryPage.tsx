@@ -39,11 +39,16 @@ import {
   type StressBucket,
 } from '../components';
 import { usePageTitle } from '../lib/hooks';
-import { ENERGY_DAY, HRV_30, HR_24H, SLEEP_7, range } from './sample';
 import type { LinkState } from '../native';
 
 // Component gallery for design review at /__gallery. Every component in its states, with
 // the sample values of the design canvas. Static: nothing here talks to the API.
+
+const range = (n: number): number[] => Array.from({ length: n }, (_, i) => i);
+const HR_24H = [62, 58, 52, 49, 48, 50, 60, 72, 68, 76, 72, 82, 134, 148, 118, 86, 74, 68];
+const HRV_30 = [60, 64, 57, 62, 66, 59, 55, 63, 65, 58, 54, 61, 64, 60, 56, 62, 63, 57, 48, 44, 52, 59, 63, 65, 58, 61, 66, 62, 59, 62];
+const ENERGY_DAY = [20, 48, 74, 94, 90, 84, 76, 62, 50, 44, 38, 40, 42];
+const SLEEP_7 = [385, 412, 365, 399, 450, 372, 432];
 
 function Section({ title, note, children }: { title: string; note?: string; children: ReactNode }) {
   return (
@@ -336,7 +341,7 @@ export function GalleryPage() {
           </Card>
           <Card padding="lg">
             <CardHeader title="Last 7 nights" tone="muted" aside="Average 6h 58m" />
-            <BarSeries values={SLEEP_7} labels={['Thu', 'Fri', 'Sat', 'Sun', 'Mon', 'Tue', 'Wed']} highlightLast="var(--sleep)" label="Sleep duration for the last 7 nights, between 6 hours 5 minutes and 7 hours 30 minutes" />
+            <BarSeries values={SLEEP_7} labels={['Thu', 'Fri', 'Sat', 'Sun', 'Mon', 'Tue', 'Wed']} highlightIndex={6} label="Sleep duration for the last 7 nights, between 6 hours 5 minutes and 7 hours 30 minutes" />
           </Card>
           <Card padding="lg">
             <CardHeader title="Steps this week" aside="Avg 7,800 a day" />
