@@ -14,7 +14,11 @@
 //!   Copyright (C) 2026 Andreas Shimokawa
 //!   Copyright (C) 2026 Thomas Kuehne
 
-use super::{DeviceKind, Features, Model};
+use super::{DeviceKind, Features, Model, SyncSupport};
+
+/// Gadgetbridge `defaultNewSyncProtocol()` is true for these models (coordinator override,
+/// inherited through subclasses): they sync with the new FileSync protocol (capability SYNC_2).
+const NEW_SYNC: &str = "uses the new file-sync protocol (Gadgetbridge defaultNewSyncProtocol)";
 
 /// Gadgetbridge `DeviceType` order; name matching returns the first hit, as Gadgetbridge does.
 #[allow(clippy::needless_update)] // `..Features::NONE` is a no-op when every flag is set
@@ -32,6 +36,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: true,
         verified: false,
@@ -47,6 +52,7 @@ pub static MODELS: &[Model] = &[
             manual_heart_rate: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: true,
         verified: false,
@@ -64,6 +70,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: true,
         verified: false,
@@ -81,6 +88,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 0,
         experimental: false,
         verified: false,
@@ -101,6 +109,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 0,
         experimental: false,
         verified: false,
@@ -121,6 +130,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 0,
         experimental: false,
         verified: false,
@@ -139,6 +149,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: true,
         verified: false,
@@ -159,6 +170,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: true,
         verified: false,
@@ -179,6 +191,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: true,
         verified: false,
@@ -200,6 +213,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: true,
         verified: false,
@@ -221,6 +235,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 0,
         experimental: false,
         verified: false,
@@ -242,6 +257,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: true,
         verified: false,
@@ -260,6 +276,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: true,
         verified: false,
@@ -280,6 +297,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: true,
         verified: false,
@@ -301,6 +319,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: true,
         verified: false,
@@ -322,6 +341,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 0,
         experimental: false,
         verified: false,
@@ -343,6 +363,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: true,
         verified: false,
@@ -363,6 +384,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: true,
         verified: false,
@@ -384,6 +406,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: true,
         verified: false,
@@ -405,6 +428,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: true,
         verified: false,
@@ -426,6 +450,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 0,
         experimental: false,
         verified: false,
@@ -447,6 +472,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 0,
         experimental: false,
         verified: false,
@@ -465,6 +491,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 0,
         experimental: false,
         verified: false,
@@ -485,6 +512,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 0,
         experimental: false,
         verified: false,
@@ -503,6 +531,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: true,
         verified: false,
@@ -521,6 +550,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 0,
         experimental: true,
         verified: false,
@@ -542,6 +572,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: true,
         verified: false,
@@ -560,6 +591,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 0,
         experimental: true,
         verified: false,
@@ -578,6 +610,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 0,
         experimental: false,
         verified: false,
@@ -596,6 +629,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 0,
         experimental: true,
         verified: false,
@@ -614,6 +648,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 0,
         experimental: false,
         verified: false,
@@ -631,6 +666,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 0,
         experimental: false,
         verified: false,
@@ -649,6 +685,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 0,
         experimental: false,
         verified: false,
@@ -681,6 +718,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: false,
         verified: false,
@@ -713,6 +751,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: true,
         verified: false,
@@ -745,6 +784,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: false,
         verified: false,
@@ -777,6 +817,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: true,
         verified: false,
@@ -799,6 +840,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: false,
         verified: false,
@@ -830,6 +872,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: true,
         verified: false,
@@ -861,6 +904,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: false,
         verified: false,
@@ -892,6 +936,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: false,
         verified: false,
@@ -923,6 +968,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: true,
         verified: false,
@@ -954,6 +1000,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: false,
         verified: false,
@@ -985,6 +1032,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: false,
         verified: false,
@@ -1007,6 +1055,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: true,
         verified: false,
@@ -1030,6 +1079,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: true,
         verified: false,
@@ -1056,6 +1106,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: true,
         verified: false,
@@ -1082,6 +1133,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: true,
         verified: false,
@@ -1109,6 +1161,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: false,
         verified: false,
@@ -1136,6 +1189,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: true,
         verified: false,
@@ -1163,6 +1217,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: true,
         verified: false,
@@ -1190,6 +1245,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: true,
         verified: false,
@@ -1217,6 +1273,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: true,
         verified: false,
@@ -1245,6 +1302,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: true,
         verified: false,
@@ -1276,6 +1334,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: false,
         verified: false,
@@ -1307,6 +1366,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: true,
         verified: false,
@@ -1338,6 +1398,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: false,
         verified: false,
@@ -1369,6 +1430,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: false,
         verified: false,
@@ -1400,6 +1462,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: false,
         verified: false,
@@ -1431,6 +1494,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: false,
         verified: false,
@@ -1462,6 +1526,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: true,
         verified: false,
@@ -1494,6 +1559,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: false,
         verified: false,
@@ -1525,6 +1591,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: false,
         verified: false,
@@ -1556,6 +1623,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: true,
         verified: false,
@@ -1587,6 +1655,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: false,
         verified: false,
@@ -1619,6 +1688,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: false,
         verified: false,
@@ -1650,6 +1720,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: false,
         verified: false,
@@ -1682,6 +1753,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: false,
         verified: false,
@@ -1714,6 +1786,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: false,
         verified: false,
@@ -1745,6 +1818,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: false,
         verified: false,
@@ -1777,6 +1851,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: true,
         verified: false,
@@ -1809,6 +1884,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: false,
         verified: false,
@@ -1840,6 +1916,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: false,
         verified: false,
@@ -1872,6 +1949,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: true,
         verified: false,
@@ -1903,6 +1981,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: false,
         verified: false,
@@ -1935,6 +2014,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: true,
         verified: false,
@@ -1966,6 +2046,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: false,
         verified: false,
@@ -1998,6 +2079,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: true,
         verified: false,
@@ -2029,6 +2111,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: true,
         verified: false,
@@ -2060,6 +2143,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: true,
         verified: false,
@@ -2091,6 +2175,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: true,
         verified: false,
@@ -2123,6 +2208,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: true,
         verified: false,
@@ -2154,6 +2240,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: true,
         verified: false,
@@ -2174,6 +2261,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: true,
         verified: false,
@@ -2197,6 +2285,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: true,
         verified: false,
@@ -2221,6 +2310,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: false,
         verified: false,
@@ -2248,6 +2338,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: false,
         verified: false,
@@ -2275,6 +2366,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: true,
         verified: false,
@@ -2303,6 +2395,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: false,
         verified: false,
@@ -2333,6 +2426,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: false,
         verified: false,
@@ -2363,6 +2457,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: false,
         verified: false,
@@ -2394,6 +2489,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: false,
         verified: false,
@@ -2425,6 +2521,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: false,
         verified: false,
@@ -2444,6 +2541,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: true,
         verified: false,
@@ -2464,6 +2562,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: true,
         verified: false,
@@ -2488,6 +2587,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: false,
         verified: false,
@@ -2513,6 +2613,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: false,
         verified: false,
@@ -2543,6 +2644,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: false,
         verified: false,
@@ -2573,6 +2675,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: false,
         verified: false,
@@ -2604,6 +2707,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: false,
         verified: false,
@@ -2635,6 +2739,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: false,
         verified: false,
@@ -2666,6 +2771,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: false,
         verified: false,
@@ -2697,6 +2803,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: false,
         verified: false,
@@ -2728,6 +2835,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: false,
         verified: false,
@@ -2759,6 +2867,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: false,
         verified: false,
@@ -2790,6 +2899,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: false,
         verified: false,
@@ -2811,6 +2921,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: false,
         verified: false,
@@ -2834,6 +2945,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: false,
         verified: false,
@@ -2861,6 +2973,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: true,
         verified: false,
@@ -2888,6 +3001,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: false,
         verified: false,
@@ -2919,6 +3033,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: true,
         verified: false,
@@ -2946,6 +3061,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: false,
         verified: false,
@@ -2977,6 +3093,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: false,
         verified: false,
@@ -2999,6 +3116,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: false,
         verified: false,
@@ -3021,6 +3139,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: true,
         verified: false,
@@ -3049,6 +3168,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: false,
         verified: false,
@@ -3080,6 +3200,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: false,
         verified: false,
@@ -3111,6 +3232,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: true,
         verified: false,
@@ -3142,6 +3264,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: false,
         verified: false,
@@ -3173,6 +3296,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: false,
         verified: false,
@@ -3204,6 +3328,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: false,
         verified: false,
@@ -3235,6 +3360,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: true,
         verified: false,
@@ -3266,6 +3392,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: true,
         verified: false,
@@ -3298,6 +3425,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: true,
         verified: false,
@@ -3330,6 +3458,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: true,
         verified: false,
@@ -3361,6 +3490,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: false,
         verified: false,
@@ -3392,6 +3522,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: false,
         verified: false,
@@ -3423,6 +3554,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: false,
         verified: false,
@@ -3455,6 +3587,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: true,
         verified: false,
@@ -3479,6 +3612,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: false,
         verified: false,
@@ -3496,6 +3630,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: false,
         verified: false,
@@ -3518,6 +3653,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: false,
         verified: false,
@@ -3544,6 +3680,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: false,
         verified: false,
@@ -3567,6 +3704,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: false,
         verified: false,
@@ -3593,6 +3731,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: false,
         verified: false,
@@ -3624,6 +3763,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: false,
         verified: true,
@@ -3655,6 +3795,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: false,
         verified: false,
@@ -3687,6 +3828,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: false,
         verified: false,
@@ -3718,6 +3860,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: false,
         verified: false,
@@ -3749,6 +3892,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: true,
         verified: false,
@@ -3781,6 +3925,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: false,
         verified: false,
@@ -3812,6 +3957,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: false,
         verified: false,
@@ -3844,6 +3990,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: false,
         verified: false,
@@ -3875,6 +4022,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: false,
         verified: false,
@@ -3906,6 +4054,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: false,
         verified: false,
@@ -3936,6 +4085,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: false,
         verified: false,
@@ -3967,6 +4117,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: false,
         verified: false,
@@ -3999,6 +4150,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: true,
         verified: false,
@@ -4031,6 +4183,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: true,
         verified: false,
@@ -4062,6 +4215,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: false,
         verified: false,
@@ -4089,6 +4243,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: true,
         verified: false,
@@ -4117,6 +4272,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: false,
         verified: false,
@@ -4145,6 +4301,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: false,
         verified: false,
@@ -4161,6 +4318,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: true,
         verified: false,
@@ -4189,6 +4347,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: false,
         verified: false,
@@ -4217,6 +4376,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: false,
         verified: false,
@@ -4245,6 +4405,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: false,
         verified: false,
@@ -4273,6 +4434,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: false,
         verified: false,
@@ -4301,6 +4463,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: false,
         verified: false,
@@ -4329,6 +4492,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: true,
         verified: false,
@@ -4358,6 +4522,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: false,
         verified: false,
@@ -4387,6 +4552,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: true,
         verified: false,
@@ -4415,6 +4581,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: false,
         verified: false,
@@ -4443,6 +4610,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: false,
         verified: false,
@@ -4471,6 +4639,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: false,
         verified: false,
@@ -4499,6 +4668,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: false,
         verified: false,
@@ -4527,6 +4697,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: false,
         verified: false,
@@ -4558,6 +4729,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::CannotSyncYet(NEW_SYNC),
         battery_count: 1,
         experimental: false,
         verified: false,
@@ -4589,6 +4761,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::CannotSyncYet(NEW_SYNC),
         battery_count: 1,
         experimental: false,
         verified: false,
@@ -4608,6 +4781,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: true,
         verified: false,
@@ -4633,6 +4807,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: false,
         verified: false,
@@ -4658,6 +4833,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: false,
         verified: false,
@@ -4683,6 +4859,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: true,
         verified: false,
@@ -4711,6 +4888,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: false,
         verified: false,
@@ -4739,6 +4917,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: false,
         verified: false,
@@ -4767,6 +4946,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: false,
         verified: false,
@@ -4797,6 +4977,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::CannotSyncYet(NEW_SYNC),
         battery_count: 1,
         experimental: false,
         verified: false,
@@ -4819,6 +5000,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: false,
         verified: false,
@@ -4837,6 +5019,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: true,
         verified: false,
@@ -4857,6 +5040,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: true,
         verified: false,
@@ -4877,6 +5061,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: true,
         verified: false,
@@ -4902,6 +5087,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: false,
         verified: false,
@@ -4929,6 +5115,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: false,
         verified: false,
@@ -4957,6 +5144,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: false,
         verified: false,
@@ -4982,6 +5170,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: false,
         verified: false,
@@ -5010,6 +5199,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::CannotSyncYet(NEW_SYNC),
         battery_count: 1,
         experimental: true,
         verified: false,
@@ -5038,6 +5228,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: true,
         verified: false,
@@ -5066,6 +5257,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: true,
         verified: false,
@@ -5097,6 +5289,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::CannotSyncYet(NEW_SYNC),
         battery_count: 1,
         experimental: true,
         verified: false,
@@ -5129,6 +5322,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: true,
         verified: false,
@@ -5160,6 +5354,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: true,
         verified: false,
@@ -5191,6 +5386,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: true,
         verified: false,
@@ -5222,6 +5418,7 @@ pub static MODELS: &[Model] = &[
             data_fetching: true,
             ..Features::NONE
         },
+        sync: SyncSupport::Supported,
         battery_count: 1,
         experimental: true,
         verified: false,

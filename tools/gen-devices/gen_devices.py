@@ -135,7 +135,8 @@ for key, cls in entries:
     k = resolve(cls, "getDeviceKind")
     kind = KIND[k.split(".")[-1]] if k else "Unknown"
     bc = resolve(cls, "getBatteryCount")
-    out.append(dict(key=key, cls=cls, name=names[res.group(1)], pat=pattern(cls), kind=kind,
+    new_sync = resolve(cls, "defaultNewSyncProtocol") == "true"
+    out.append(dict(key=key, new_sync=new_sync, cls=cls, name=names[res.group(1)], pat=pattern(cls), kind=kind,
                     flags=flags, battery=int(bc) if bc is not None else 1,
                     exp=resolve(cls, "isExperimental") == "true",
                     prods=sorted(prods.get(key, []))))
@@ -157,7 +158,10 @@ w("//!   FitCodeGenerator/src/main/resources/fit_profile.json (product id -> Dev
 w("//! Original copyright lines of the ported files (aggregated):\n")
 for h in hdr:
     w("//!   Copyright (C) %s\n" % h)
-w("\nuse super::{DeviceKind, Features, Model};\n\n")
+w("\nuse super::{DeviceKind, Features, Model, SyncSupport};\n\n")
+w("/// Gadgetbridge `defaultNewSyncProtocol()` is true for these models (coordinator override,\n")
+w("/// inherited through subclasses): they sync with the new FileSync protocol (capability SYNC_2).\n")
+w('const NEW_SYNC: &str = "uses the new file-sync protocol (Gadgetbridge defaultNewSyncProtocol)";\n\n')
 w("/// Gadgetbridge `DeviceType` order; name matching returns the first hit, as Gadgetbridge does.\n")
 w("#[allow(clippy::needless_update)] // `..Features::NONE` is a no-op when every flag is set\npub static MODELS: &[Model] = &[\n")
 for e in out:
@@ -167,6 +171,10 @@ for e in out:
         rs(e["key"]), rs(e["name"]), rs(e["pat"])))
     w("        product_ids: &[%s],\n        kind: DeviceKind::%s,\n" % (", ".join(map(str, e["prods"])), e["kind"]))
     w("        features: Features { %s%s..Features::NONE },\n" % (on, ", " if on else ""))
+    if e["new_sync"]:
+        w('        sync: SyncSupport::CannotSyncYet(NEW_SYNC),\n')
+    else:
+        w("        sync: SyncSupport::Supported,\n")
     w("        battery_count: %d,\n        experimental: %s,\n        verified: %s,\n    },\n" % (
         e["battery"], "true" if e["exp"] else "false", "true" if e["key"] == "GARMIN_INSTINCT_2" else "false"))
 w("];\n")

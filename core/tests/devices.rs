@@ -188,3 +188,32 @@ fn feature_flags_follow_gadgetbridge_hierarchy() {
     let bike = by_name("Edge 530").unwrap();
     assert!(bike.features.recorded_activities);
 }
+
+#[test]
+fn sync_support_instinct2_supported() {
+    use nimrag_core::devices::SyncSupport;
+    assert_eq!(by_name("Instinct 2").unwrap().sync, SyncSupport::Supported);
+    assert_eq!(by_product_id(3888).unwrap().sync, SyncSupport::Supported);
+}
+
+#[test]
+fn sync_support_new_sync_models_cannot_sync_yet() {
+    use nimrag_core::devices::SyncSupport;
+    for name in [
+        "Venu 4 - 45mm",
+        "CIRQA Smart Band",
+        "Venu X1",
+        "vívoactive 6",
+    ] {
+        let m = by_name(name).unwrap_or_else(|| panic!("{name}"));
+        assert!(
+            matches!(m.sync, SyncSupport::CannotSyncYet(r) if r.contains("new file-sync")),
+            "{name}"
+        );
+    }
+    let n = MODELS
+        .iter()
+        .filter(|m| m.sync != SyncSupport::Supported)
+        .count();
+    assert_eq!(n, 5, "D2 Air X15 inherits it from Venu X1");
+}

@@ -99,12 +99,28 @@ pub struct Model {
     pub product_ids: &'static [u16],
     pub kind: DeviceKind,
     pub features: Features,
+    pub sync: SyncSupport,
     /// 0 means the device does not report a battery level (Gadgetbridge default is 1).
     pub battery_count: u8,
     /// Gadgetbridge marks the model experimental.
     pub experimental: bool,
     /// True only where our own captures verify the model.
     pub verified: bool,
+}
+
+/// Whether our client can sync with the model. Our client implements the V2 multi-link
+/// transport with MLR and the classic file sync.
+///
+/// Derived from Gadgetbridge coordinator code: `defaultNewSyncProtocol()` true means the
+/// model needs the new FileSync protocol, which we do not implement. The V0/V1 GATT
+/// transports (`CommunicatorV1`, services `9B012401-...` / `6A4E2401-...`) are NOT
+/// derivable per model: Gadgetbridge tries V2 on every device and falls back to V1 at run
+/// time depending on the services the device exposes, so no coordinator records it.
+/// V1-only models therefore show as `Supported` here until a capture shows otherwise.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SyncSupport {
+    Supported,
+    CannotSyncYet(&'static str),
 }
 
 /// Returned for anything unrecognised: a Garmin device with no known features.
@@ -115,6 +131,7 @@ pub static GENERIC: Model = Model {
     product_ids: &[],
     kind: DeviceKind::Unknown,
     features: Features::NONE,
+    sync: SyncSupport::Supported,
     battery_count: 1,
     experimental: true,
     verified: false,
