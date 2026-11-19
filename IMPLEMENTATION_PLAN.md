@@ -1,29 +1,66 @@
 # nimrag implementation plan
 
-Source of truth for scope: the owner's build prompt (phases 0–4) and the
-phase 0 brief "map the Garmin Connect ↔ Instinct 2 BLE sync protocol".
-Each phase stops at its gate for an owner report.
+Source of truth for scope: the owner's build prompt (phases 0–4, hard rules, decisions, design system, engineering standards) and the phase 0 brief "map the Garmin Connect ↔ Instinct 2 BLE sync protocol". Each phase stops at its gate for an owner report. Roles: the main session orchestrates and integrates; Sonnet builders implement on disjoint paths and do not commit; a Fable advisor drafts contracts and reviews finished work before each commit.
+
+## Roadmap: phase 0 to finished product
+
+The finished product: an Android app that pairs with the Instinct 2 without Garmin Connect, pulls every file, and uploads it to a self-hosted server; the server keeps the original files (SHA-256), derives everything else from them, and serves our own web interface (also inside the app); workouts can be sent to the watch; backups, export and a runbook exist. Nothing talks to Garmin except the optional GPS-assist duty.
+
+| Phase | Stage | What | Status |
+| --- | --- | --- | --- |
+| 0 Protocol | 0a | Static protocol map (`docs/protocol/`) | Complete |
+| | 0b | Live captures: reconnect, activity, settings | Complete |
+| | 0b | Live captures: night sync, fresh pairing | **Open** (night: recorder running; pairing: needs owner) |
+| | 0c | `/core` framing + `tools/decode` | Complete |
+| | Gate 0 | Report | Reported 2026-11-19 |
+| 1 Server | 1a | FIT decoder | Complete |
+| | 1b | FIT profile (generated locally, never committed) | Complete |
+| | 1c | Server ingest, store, tokens, `reparse` | Complete |
+| | 1d | Parsers: activities, monitoring, sleep, HRV, metrics | Complete (sleep/HRV/SpO2 await a night capture) |
+| | 1e | Garmin export importer | Complete (FIT only) |
+| | Gate 1 | USB copy uploads, parses, reparses identically | **Passed** 2026-11-19 |
+| 2 Android sync | 2a | sans-IO protocol client + capture replay | Complete |
+| | 2b | FFI crate (UniFFI) + Android Gradle project | Not Started (brief ready) |
+| | 2c | Foreground service, BLE link, pairing without Garmin Connect | Not Started (needs owner) |
+| | 2d | Phone storage, archive only after safe storage, upload queue | Not Started |
+| | 2e | Time duty + native Devices and sync screen + sync log | Not Started |
+| | 2f | Further companion duties, one at a time: GPS assist (setting, the only Garmin call), weather, notifications | Not Started |
+| | Gate 2 | A week of normal wear: no manual steps, no lost or duplicated files; counts and hashes against a USB copy | — |
+| 3 Web | 3a | JSON API, web login (password + optional passkey), device tokens created in the web UI, generated TS types | Not Started |
+| | 3b | Web scaffold: Vite/React/TS, TanStack Query, design system, PWA, embedded in the server binary, Docker image | Not Started |
+| | 3c–3m | Pages 1–11 of the brief (Today … Desktop extras) | Not Started |
+| | 3n | Android shell: web view with native bottom bar, offline via PWA cache | Not Started |
+| | Gate 3 | Every page from real data, "unavailable" shown correctly, accessibility check | — |
+| 4 Writing + ops | 4a | FIT encoder + workout builder, sent to the watch via the phone | Not Started (needs upload-to-watch protocol evidence) |
+| | 4b | Scheduled backups + documented restore test | Not Started |
+| | 4c | Export: originals + CSV per data type | Not Started |
+| | 4d | Runbook: install, upgrade, restore, re-pair, firmware over USB | Not Started |
+| | Gate 4 | Final report | — |
+
+Every phase ends with an update to `docs/ARCHITECTURE.md` and a gate report (engineering standards).
+
+# Phase 0: protocol (static map + captures)
 
 ## Stage 0a: Static protocol map (RE brief)
 **Goal**: `docs/protocol/` deliverables: PROTOCOL.md, messages.csv, filetypes.csv, proto/, HOOKS.md, OPEN-QUESTIONS.md, PROVENANCE.md
 **Success Criteria**: brief's "done when": transport, framing, session start and file sync have no unknowns, or each has a concrete phase 2 test; must-have file types identified; HOOKS.md has raw write/notify and dispatch
 **Tests**: n/a (documentation); every "seen" claim cites class/method + anchor constant
-**Status**: In Progress
+**Status**: Complete
 
 ## Stage 0b: Live captures (HCI snoop)
 **Goal**: snoop logs for fresh pairing, normal sync, sync after activity, sync after night, settings change
 **Success Criteria**: logs stored under `private/captures/` (git-ignored), scrubbed copies under `fixtures/`
 **Tests**: n/a
-**Status**: In Progress (snoop log enabled via Developer options UI 2026-11-19 09:41; first capture = BT restart reconnect + manual sync)
+**Status**: Partly complete. Done: CAP-1 reconnect + manual sync, CAP-2 activity sync, CAP-3 settings change (all decoded with 0 unknown frames). Open: sync after a night (live recorder running), fresh pairing (needs the owner). Scrubbed fixtures are synthetic, built in code.
 
 ## Stage 0c: /core framing + tools/decode
 **Goal**: sans-IO frame codec (COBS, CRC-16, message ids) in /core; CLI decodes snoop logs / live adb stream
 **Success Criteria**: decodes every capture with no unknown frames, or lists unknowns in OPEN-QUESTIONS.md
 **Tests**: codec unit tests; fixture replay integration test through the CLI entry point
-**Status**: In Progress
+**Status**: Complete
 
 ## Gate 0
-Report to owner. Do not start phase 1 unasked.
+**Status**: Reported to the owner 2026-11-19; phase 1 started at the owner's request while the night and pairing captures remain open.
 
 # Phase 1: server ingest and parsing (started 2026-11-19 at owner's request; phase 0 still awaits night + fresh-pairing captures)
 
@@ -200,6 +237,65 @@ Labels as in PROTOCOL.md: **seen** / **inferred** / **unknown**; **ours** = a fr
 
 ## Stage 2e: time duty, Devices and sync screen
 **Status**: Not Started
+
+## Stage 2f: further companion duties
+**Goal**: one at a time, each a user setting: GPS assist data (the only allowed Garmin call; off switch), weather, notifications
+**Success Criteria**: each duty verified live on the watch; each has a capture before code where PROTOCOL.md marks it unknown (Q-COMP-1..3, Q-SYNC-2)
+**Status**: Not Started
+
+## Gate 2
+A week of normal wear syncs with no manual steps and no lost or duplicated files; file counts and hashes compared against a USB copy of the watch (note: the watch cuts monitoring/metrics files per sync, so compare at the level of files the watch lists, plus a USB copy taken at the end of the week).
+
+# Phase 3: web interface
+
+Every page works at 390 px and at desktop width, uses the brief's design system (dark, Space Grotesk + Inter self-hosted, metric colours, 16 px card radius, 44 px touch targets, no colour-only meaning), and shows "unavailable" for missing metrics (hard rule 3).
+
+## Stage 3a: JSON API and auth
+**Goal**: read API over the derived tables (days, activities, sleep, trends), write API for strength-set edits and body measurements; web login with password and optional passkey; device tokens created and revoked in the web UI; API types generated from Rust (ts-rs or OpenAPI, chosen after verification), never written twice
+**Tests**: API integration tests through the router; auth tests; generated types compile in /web
+**Status**: Not Started
+
+## Stage 3b: web scaffold
+**Goal**: /web with Vite, React, TypeScript, TanStack Query; uPlot for series; MapLibre GL JS with self-hosted PMTiles (no third-party tile servers); PWA with service worker + IndexedDB cache; frontend embedded in the server binary; Docker image
+**Tests**: build in CI; Playwright smoke test against the real server binary
+**Status**: Not Started
+
+## Stages 3c–3m: pages (in the brief's order)
+3c Today · 3d Activities list + detail (map, stats, HR zones, laps) · 3e Strength session (edit sets, compare to previous) · 3f Sleep night (+ last 7 nights) · 3g Day view (HR, stress, energy; prev/next day) · 3h Health trends (HRV vs personal range, RHR, breathing, SpO2, sleep score; 7 d / 4 w / 3 m / 1 y) · 3i Movement · 3j Training (recovery time, 7-day load vs target, load by intensity, VO2 max as max MET × 3.5 labelled derived) · 3k Body (weight trend, manual measurements) · 3l Calendar · 3m Desktop extras (overview, activities table, strength progress, compare and reports, devices, storage and backups)
+**Tests per page**: renders from real synced data; "unavailable" states; keyboard reachable controls; labelled charts with text summaries; contrast ≥ 4.5:1
+**Status**: Not Started
+
+## Stage 3n: Android shell
+**Goal**: the app shows the web interface in an embedded web view with a native bottom bar; offline viewing from the PWA cache; Devices and sync stays native
+**Status**: Not Started
+
+## Gate 3
+Each page renders from real synced data, shows "unavailable" correctly for missing metrics, and passes an accessibility check.
+
+# Phase 4: writing to the watch and operations
+
+## Stage 4a: workouts
+**Goal**: workout builder (steps, repeat blocks) saved on the server, encoded with a new `fit::encode` (typed inputs; BaseType size/invalid/to_byte), sent to the watch through the phone
+**Success Criteria**: the workout appears and runs on the watch (verified on the watch before calling it done)
+**Needs first**: protocol evidence for uploads to the watch (5005/5003/5004 path, Q-SYNC-2) from a capture of Garmin Connect sending a workout
+**Status**: Not Started
+
+## Stage 4b: backups
+**Goal**: scheduled copy of the file store and database; documented restore test that rebuilds from the files with `reparse`
+**Status**: Not Started
+
+## Stage 4c: export
+**Goal**: all original files plus CSV per data type
+**Status**: Not Started
+
+## Stage 4d: runbook (`docs/`)
+**Goal**: install, upgrade, restore, re-pair the watch, firmware updates over USB
+**Status**: Not Started
+
+## Gate 4
+Final report: what works, what was verified and how, what is still unknown.
+
+# Appendix: contracts and advisor notes
 
 ### Advisor notes for stage 1d (parsers), recorded 2026-11-19
 - timestamp_16 / timestamp_min_8 (monitoring) and event_timestamp_12 (hr) accumulate against the last full timestamp; timestamps < 0x10000000 are device-relative, not UTC → show as unavailable.
