@@ -16,6 +16,7 @@ object FileKind {
         49 to "sleep",
         52 to "user_behavior_log",
         57 to "sports backup",
+        58 to "device",
         68 to "HRV status",
     )
 

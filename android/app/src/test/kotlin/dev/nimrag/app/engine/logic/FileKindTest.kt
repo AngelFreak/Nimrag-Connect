@@ -12,6 +12,7 @@ class FileKindTest {
         assertEquals("FIT 128/44 metrics", FileKind.label(128, 44))
         assertEquals("FIT 128/68 HRV status", FileKind.label(128, 68))
         assertEquals("FIT 128/41 changelog", FileKind.label(128, 41))
+        assertEquals("FIT 128/58 device", FileKind.label(128, 58))
     }
 
     @Test

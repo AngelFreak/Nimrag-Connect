@@ -10,6 +10,7 @@ data_type,sub_type,fit_file_type,contents,requested_in_normal_sync,evidence
 128,44,(Garmin) metrics,"Metrics file: VO2 max, training load, recovery time and similar (must-have)",yes if advertised (must-have),inferred: GB FileType METRICS; FIT 'file' enum value not anchored in the app's enum (names garbled by de-obfuscation)
 128,49,sleep (49),"Sleep: stages, score, overnight values (must-have)",yes if advertised (must-have),seen: j6h SLEEP_DATA(49)
 128,52,user_behavior_log (52),Usage log,unknown for Instinct 2,seen: j6h USER_BEHAVIOR_LOG(52)
+128,58,(Garmin) device,"Device file (FIT type 58); sent in every sync of the Instinct 2",yes (seen in every sync),"seen: CAP-1, CAP-2 and the first live sync (2026-11-19); name inferred: GB FileType DEVICE_58"
 128,68,(Garmin) hrv_status,"Overnight HRV and HRV status (must-have, if the Instinct 2 supports it)",unknown: depends on firmware; capture 5031,inferred: GB FileType HRV_STATUS
 128,57,(Garmin) sports backup,Sport profile backup,unknown for Instinct 2,inferred: GB FileType SPORTS_BACKUP
 255,244-248,(none),"Error reports, logs, KPI ('IQErrorReports', 'ErrorShutdownReports', 'ULFLogs', 'KPI')",no (not FIT; app sync filters FIT sub-types),inferred: GB FileType; app passes FIT sub-type filter (a7d / DeviceManager.getSupportedFitSubTypes)
