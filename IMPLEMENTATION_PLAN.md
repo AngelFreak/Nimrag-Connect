@@ -26,7 +26,7 @@ The finished product: an Android app that pairs with the Instinct 2 without Garm
 | | 2d | Phone storage, archive only after safe storage, upload queue | Built 2026-11-19; live test pending |
 | | 2e | Time duty + native Devices and sync screen + sync log | Built 2026-11-19; live test pending |
 | | 2f | Further companion duties, one at a time, ported from Gadgetbridge where it has them: GPS assist (setting, the only Garmin call), weather, notifications, music, find my phone | Not Started |
-| | 2g | Garmin Connect too, for owners who want both: **Alongside** (phone side, both apps share the watch, Nimrag copies, Connect archives) now; **Forward** (server uploads activities to Garmin Connect) later, after an owner decision | Alongside: In Progress; Forward: Not Started |
+| | 2g | Garmin Connect too, for owners who want both: **Alongside** (phone side, both apps share the watch, Nimrag copies, Connect archives) now; **Forward** (server uploads activities to Garmin Connect), approved, after 3a | Alongside: built, live test pending; Forward: Not Started |
 | | Gate 2 | A week of normal wear: no manual steps, no lost or duplicated files; counts and hashes against a USB copy | — |
 | 3 Web | 3a | JSON API, web login (password + optional passkey), device tokens created in the web UI, generated TS types | In Progress |
 | | 3b | Web scaffold: Vite/React/TS, TanStack Query, design system, PWA, embedded in the server binary, Docker image | In Progress |
@@ -382,7 +382,7 @@ Design (integrator, 2026-11-19): Jetpack Compose + Material 3 (dynamic colour, l
 **Goal**: owners who also want Garmin Connect keep it. Two routes, chosen in Settings → Garmin Connect:
 - **Off** (default, what 0.2.x does): Nimrag is the only sync app and archives each file after safe storage. Garmin Connect, if installed, has its Nearby devices permission turned off.
 - **Alongside** (phone side, no Garmin account): Garmin Connect keeps Bluetooth and does what it always does (archives files, uploads them to Garmin, all-day health included). The watch serves several apps at once over multi-link, each on its own characteristic pair (seen: CAP-2, Connect and Explore together), so Nimrag holds a pair of its own, copies every file to its storage and server, and **never archives**.
-- **Forward** (server side, later): nimrag-server uploads activity files (128/4) to the owner's Garmin Connect account. Not built until the owner decides: it needs a Garmin login against an unofficial web endpoint (can break, may conflict with Garmin's terms), stores tokens not the password, and Garmin only accepts activities this way (no all-day health, sleep or HRV).
+- **Forward** (server side): nimrag-server uploads activity files (128/4) to the owner's Garmin Connect account. **Owner approved 2026-11-19**, on these terms: activities only (Garmin's import takes no all-day health, sleep or HRV), an unofficial login (the mobile SSO flow; garth broke in March 2026 and is deprecated, so it can break again and may conflict with Garmin's terms), tokens stored, never the password. Built after 3a is merged (it lives in the server).
 
 **Alongside contract** (core, ffi, Android):
 - Core: `ClientConfig.archive: bool` (true keeps today's behaviour). False: after `FileStored` the file counts as copied, no 5008 is ever built (the archive rule's one place, `on_confirmation`, checks it), and the cycle moves on. `ClientConfig.skip: Vec<FileKey>` with `FileKey { data_type, sub_type, file_number, size, timestamp }` (all from the directory entry; the index is not stable): listed entries matching a key are not downloaded; each gives `Event::FileSkipped { entry }`, and `SyncFinished` gains `skipped: u32`. Keys only skip; they never cause an archive. Archive true + a skip list is allowed (the host does not do it).
@@ -392,11 +392,21 @@ Design (integrator, 2026-11-19): Jetpack Compose + Material 3 (dynamic colour, l
 - Watch tab: in Alongside, the "Garmin Connect is using the watch" warning and the log hint are replaced by an info line "Sharing the watch with Garmin Connect"; if Garmin Connect's Nearby devices is off, it says Connect will not get data until it is allowed again.
 - Sync tab: "Copied, left for Garmin Connect" count; the last result shows skipped files.
 
+**Forward contract** (server and web; Android only shows a hint):
+- `server/src/garmin/`: `auth` (email + password login, optional MFA code step, token store and refresh) and `upload` (POST one activity FIT; outcome `Uploaded { garmin_activity_id } | Duplicate | Rejected(reason) | AuthExpired | RateLimited | Transient`). The login flow is ported from the current python-garminconnect release (MIT; the version and file are cited in a comment); the builder checks that release before porting, not from memory.
+- Secrets: the password is used once and never stored or logged; tokens live in table `garmin_account` (one row), are never logged and never returned by the API.
+- Queue: table `garmin_uploads(file_sha256 PK, status, attempts, next_attempt_at, garmin_activity_id, last_error, created_at)`. Every activity file stored after Forward is switched on is queued; "also send the last N days" is an explicit backfill action (default none). Garmin's duplicate answer counts as done.
+- Backoff: transient errors 1 min doubling to 6 h; 429 honours Retry-After; an expired login pauses the queue and the web shows "Log in to Garmin again". No upload is retried more than 10 times without an owner action.
+- API (session auth and the `X-Nimrag: 1` header like the rest): `GET /api/garmin` (state `off | needs_login | needs_mfa | connected | paused`, queue counts, last error), `POST /api/garmin/login {email, password}` → `{mfa_required}`, `POST /api/garmin/mfa {code}`, `POST /api/garmin/logout`, `POST /api/garmin/retry`, `POST /api/garmin/backfill {days}`. Types via ts-rs.
+- Web: Settings → Garmin Connect section (state, log in, MFA, counts, retry, log out), wording that says activities only.
+- With Alongside on as well, Garmin gets the activity twice; the second is a duplicate and counts as done.
+- Tests: a fake Garmin (axum test server on a local port, base URL configurable) for login, MFA, refresh, upload, duplicate, 401, 429 and 5xx. No test calls Garmin. Live test by the owner.
+
 **Known risk, to measure live**: a file Garmin Connect fetches and archives before Nimrag lists it is never copied. Nimrag asks for a sync on every watch-initiated sync it sees and on its timer; the live test compares Nimrag's copies with Connect's synced list for a day. If misses are common, the fallback is Off mode plus Forward.
 
 **Success Criteria**: core tests: archive false never emits 5008 in any path (including retries and stale confirmations); skip keys suppress download and are counted; archive true unchanged (all existing tests pass untouched). Live: with Connect's permission on and Alongside set, both apps stay connected, Connect still shows new data, and Nimrag stores the same files.
 **Tests**: `core/tests/client_synthetic.rs` cases for archive false / skip; Android unit tests for the copied-key store and mode switch; live test by the owner.
-**Status**: In Progress (Alongside); Forward Not Started (owner decision)
+**Status**: Alongside built (0.3.0, live test pending); Forward Not Started (approved, after 3a)
 
 ## Gate 2
 A week of normal wear syncs with no manual steps and no lost or duplicated files; file counts and hashes compared against a USB copy of the watch (note: the watch cuts monitoring/metrics files per sync, so compare at the level of files the watch lists, plus a USB copy taken at the end of the week).
