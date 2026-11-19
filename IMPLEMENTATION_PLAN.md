@@ -52,6 +52,34 @@ Roles: main session orchestrates and integrates; Sonnet builders implement on di
 ## Stage 1e: Garmin export importer
 **Status**: Complete (FIT only; TCX/GPX/JSON counted, not stored — owner decision pending)
 ## Gate 1
+**Status**: Passed for Bluetooth-downloaded files (upload, parse, reparse identical; import identical). The USB copy is still needed: the watch hasn't been plugged in yet.
+
+### Owner decisions, 2026-11-19 ("do it all")
+- VO2 max may be shown as max MET × 3.5, labelled as derived from the watch's maximal_met (not Garmin's published value).
+- Oracle check against Garmin Connect: approved and done once, read-only (results: docs/protocol/OPEN-QUESTIONS.md Q-FIT-1/2; values in private/oracle/).
+- JSON wellness from the export: import approved in principle; the parser waits for a real export (formats must be seen, not guessed).
+- Project licence: still open.
+
+# Phase 2: Android sync
+Roles as phase 1. Order follows the brief: the core state machine passes the phase 0 captures on the desktop before anything runs on the phone.
+
+## Stage 2a: sans-IO protocol client in /core
+**Goal**: client state machine (multi-link register, MLR, GFDI handshake, directory, download with CRC check, archive after the caller confirms safe storage, time duty) as bytes-in/bytes-out plus events/commands, no IO
+**Success Criteria**: replaying each private capture's watch-to-phone traffic through the client produces the phone-to-watch messages the app sent (modulo documented free choices); synthetic committed fixtures cover the same paths
+**Tests**: synthetic session fixtures (committed), private capture replay (skips when absent)
+**Status**: Not Started
+
+## Stage 2b: Android build of /core (cargo-ndk, UniFFI, Gradle module) — needs Android SDK/NDK
+**Status**: Not Started
+
+## Stage 2c: Android foreground service, BLE link, pairing without the official app — needs owner (watch re-pairing)
+**Status**: Not Started
+
+## Stage 2d: sync to phone storage, mark synced only after safe storage; upload queue (persistent, backoff, Wi-Fi/VPN only, dedupe by hash)
+**Status**: Not Started
+
+## Stage 2e: time duty, Devices and sync screen
+**Status**: Not Started
 
 ### Advisor notes for stage 1d (parsers), recorded 2026-11-19
 - timestamp_16 / timestamp_min_8 (monitoring) and event_timestamp_12 (hr) accumulate against the last full timestamp; timestamps < 0x10000000 are device-relative, not UTC → show as unavailable.
