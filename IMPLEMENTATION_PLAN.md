@@ -61,6 +61,14 @@ Roles: main session orchestrates and integrates; Sonnet builders implement on di
 - Project licence: still open.
 
 # Phase 2: Android sync
+
+## Where work stopped (2026-11-19, owner paused)
+- Done and committed: phase 0 decoding, phase 1 (stages 1a–1e, gate 1 passed on a USB copy), stage 2a (protocol client, replays all five captured Connect sessions).
+- Next: stage 2b as defined below (FFI crate + Android Gradle project; toolchain already installed). Then 2c, which needs the owner: the watch has to be paired with our app instead of Garmin Connect, so ask first.
+- Still open from phase 0: the night-sync capture (sleep/HRV/SpO2 on real data) and the fresh-pairing capture (needs the owner).
+- Owner decisions still open: project licence; committing a scrubbed real transcript as a fixture; whether to import non-FIT export JSON once a real export exists.
+- Ignore the Samsung device on adb (not ours); the Pixel 9a is the phone.
+
 Roles as phase 1. Order follows the brief: the core state machine passes the phase 0 captures on the desktop before anything runs on the phone.
 
 ## Stage 2a: sans-IO protocol client in /core
@@ -182,7 +190,7 @@ Labels as in PROTOCOL.md: **seen** / **inferred** / **unknown**; **ours** = a fr
 **Goal**: `ffi/` crate `nimrag-ffi` (workspace member) exposing `nimrag_core::client` through UniFFI (proc-macros; `core` stays std-only); `android/` Gradle project with `:core` (Android library: generated Kotlin bindings + `.so` for arm64-v8a and x86_64 built by cargo-ndk from Gradle) and a minimal `:app` shell for 2c.
 **Success Criteria**: `./gradlew :core:assembleRelease :app:assembleDebug` builds from a clean checkout; the APK contains `libnimrag_ffi.so` for both ABIs and no FIT profile data (built with `NIMRAG_FIT_PROFILE=none`, enforced in the Gradle task); Kotlin can drive a `Client` end to end.
 **Tests**: Rust tests in `ffi/` for the conversion layer; a host JVM test (bindings + the x86_64-linux `.so` via JNA) that drives a `Client` through Kotlin with fake ids: Connected → close-all write; a scripted bring-up/handshake reaching `HandshakeDone`; a FileStored for a stale transfer id gives `StaleConfirmation`. Optional instrumented smoke test on the Pixel.
-**Status**: In Progress
+**Status**: Not Started (a builder was briefed and stopped before changing anything; owner paused work 2026-11-19)
 
 ## Stage 2c: Android foreground service, BLE link, pairing without the official app — needs owner (watch re-pairing)
 **Status**: Not Started
