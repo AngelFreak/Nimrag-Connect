@@ -9,18 +9,69 @@ pub mod activity;
 pub mod wellness;
 
 use anyhow::Result;
-use nimrag_core::derive::{derive, FileFacts};
-use nimrag_core::fit::{profile, Crc, Decoded};
+use nimrag_core::derive::{DeriveError, Derived, FileFacts};
+use nimrag_core::fit::{Crc, Decoded, FitFile};
 use sqlx::{Sqlite, Transaction};
+use std::panic::{catch_unwind, AssertUnwindSafe};
 
 /// Bump when the derivation or the stored representation changes.
 pub const DERIVE_VERSION: i64 = 1;
 
 /// Sample tables (natural key + `src`): cleared together at the start of a reparse.
-pub const SAMPLE_TABLES: &[&str] = wellness::SAMPLE_TABLES;
+/// Each module owns its list (`<module>::SAMPLE_TABLES`).
+fn sample_tables() -> impl Iterator<Item = &'static str> {
+    activity::SAMPLE_TABLES
+        .iter()
+        .chain(wellness::SAMPLE_TABLES)
+        .copied()
+}
+
 /// Entity tables (PK or leading key `sha256`): replaced per file.
-pub const ENTITY_TABLES: &[&str] = wellness::ENTITY_TABLES;
-// (activity::ENTITY_TABLES must be added here by the activity builder.)
+/// Each module owns its list (`<module>::ENTITY_TABLES`).
+fn entity_tables() -> impl Iterator<Item = &'static str> {
+    activity::ENTITY_TABLES
+        .iter()
+        .chain(wellness::ENTITY_TABLES)
+        .copied()
+}
+
+/// What running the core derivation over a file produced.
+#[derive(Debug)]
+pub enum DeriveOutcome {
+    /// One `Derived` per chain file (empty when the decoder found no files).
+    Derived(Vec<Derived>),
+    /// No generated FIT profile is compiled in.
+    NoProfile,
+    /// A derive returned an error or panicked; the message is stored.
+    Failed(String),
+}
+
+/// Signature of the core derivation; a seam so tests can inject a failing one.
+pub type DeriveFn = fn(&FitFile) -> Result<Derived, DeriveError>;
+
+fn panic_message(payload: Box<dyn std::any::Any + Send>) -> String {
+    payload
+        .downcast_ref::<&str>()
+        .map(|s| s.to_string())
+        .or_else(|| payload.downcast_ref::<String>().cloned())
+        .unwrap_or_else(|| "unknown panic".into())
+}
+
+/// Run `derive_fn` over every chain file without ever panicking. Call from the
+/// same blocking task as the FIT decode; the result goes to [`persist`].
+pub fn derive_all(decoded: &Decoded, derive_fn: DeriveFn) -> DeriveOutcome {
+    let mut out = Vec::with_capacity(decoded.files.len());
+    for f in &decoded.files {
+        match catch_unwind(AssertUnwindSafe(|| derive_fn(f))) {
+            Ok(Ok(d)) => out.push(d),
+            Ok(Err(DeriveError::ProfileUnavailable)) => return DeriveOutcome::NoProfile,
+            Err(p) => {
+                return DeriveOutcome::Failed(format!("derive panicked: {}", panic_message(p)))
+            }
+        }
+    }
+    DeriveOutcome::Derived(out)
+}
 
 /// src_id: first 8 bytes of the sha256, as a positive i64.
 pub fn src_id(sha256: &str) -> i64 {
@@ -38,11 +89,15 @@ pub fn rank_key(ok: bool, last_ts: Option<i64>, msg_count: u64) -> String {
 }
 
 /// SQL condition for an upsert: the incoming row (`excluded.src`) outranks the
-/// stored row (`<table>.src`). Ties go to the smaller src_id (sha256 asc).
+/// stored row (`<table>.src`). Final tie-break compares `sources.sha256`
+/// directly (asc). A stored row whose `sources` entry is gone has rank '' and
+/// loses to any present source.
 pub fn outranks_sql(table: &str) -> String {
     let new = "(SELECT rank_key FROM sources WHERE src_id = excluded.src)";
-    let old = format!("(SELECT rank_key FROM sources WHERE src_id = {table}.src)");
-    format!("{new} > {old} OR ({new} = {old} AND excluded.src < {table}.src)")
+    let old = format!("COALESCE((SELECT rank_key FROM sources WHERE src_id = {table}.src), '')");
+    let new_sha = "(SELECT sha256 FROM sources WHERE src_id = excluded.src)";
+    let old_sha = format!("(SELECT sha256 FROM sources WHERE src_id = {table}.src)");
+    format!("{new} > {old} OR ({new} = {old} AND {new_sha} < {old_sha})")
 }
 
 /// A bindable column value.
@@ -93,7 +148,7 @@ pub async fn upsert_samples(
 }
 
 pub async fn clear_samples(tx: &mut Transaction<'_, Sqlite>) -> Result<()> {
-    for t in SAMPLE_TABLES {
+    for t in sample_tables() {
         sqlx::query(sqlx::AssertSqlSafe(format!("DELETE FROM {t}")))
             .execute(&mut **tx)
             .await?;
@@ -103,7 +158,7 @@ pub async fn clear_samples(tx: &mut Transaction<'_, Sqlite>) -> Result<()> {
 
 /// Remove this file's entity rows, `sources` and `file_derive` rows.
 pub async fn clear_file(tx: &mut Transaction<'_, Sqlite>, sha256: &str) -> Result<()> {
-    for t in ENTITY_TABLES {
+    for t in entity_tables() {
         sqlx::query(sqlx::AssertSqlSafe(format!(
             "DELETE FROM {t} WHERE sha256 = ?"
         )))
@@ -120,38 +175,41 @@ pub async fn clear_file(tx: &mut Transaction<'_, Sqlite>, sha256: &str) -> Resul
     Ok(())
 }
 
-/// Derive and store everything for one decoded file. Caller has cleared nothing:
-/// this clears the file's own entity rows first.
+/// Store the derivation of one decoded file. Clears the file's own entity rows
+/// first. A failed derive is recorded as `file_derive.status = 'error'` and
+/// never fails the caller's transaction.
 pub async fn persist(
     tx: &mut Transaction<'_, Sqlite>,
     sha256: &str,
     decoded: &Decoded,
     parse_error: Option<&str>,
+    outcome: &DeriveOutcome,
 ) -> Result<()> {
     clear_file(tx, sha256).await?;
     if decoded.files.is_empty() {
         return Ok(()); // file_parse already records why
     }
-    let (mut status, mut error, mut skipped) = ("ok", parse_error.map(str::to_owned), 0u64);
+    let (mut status, error, mut skipped) = ("ok", parse_error.map(str::to_owned), 0u64);
     if error.is_some() || decoded.files.iter().any(|f| !f.complete) {
         status = "partial";
     }
-    if !profile::available() {
-        tracing::warn!(%sha256, "FIT profile unavailable: derived tables not filled");
-        (status, error) = (
-            "no_profile",
-            Some("no generated FIT profile compiled in".into()),
-        );
-        return write_file_derive(tx, sha256, status, error.as_deref(), 0).await;
-    }
+    let derived = match outcome {
+        DeriveOutcome::Derived(d) => d,
+        DeriveOutcome::NoProfile => {
+            tracing::warn!(%sha256, "FIT profile unavailable: derived tables not filled");
+            let msg = "no generated FIT profile compiled in";
+            return write_file_derive(tx, sha256, "no_profile", Some(msg), 0).await;
+        }
+        DeriveOutcome::Failed(msg) => {
+            tracing::error!(%sha256, error = %msg, "derive failed");
+            return write_file_derive(tx, sha256, "error", Some(msg), 0).await;
+        }
+    };
 
     let mut facts = FileFacts::default();
-    let mut derived = Vec::new();
-    for f in &decoded.files {
-        let d = derive(f).map_err(|e| anyhow::anyhow!("derive failed: {e:?}"))?;
+    for d in derived {
         facts.merge(&d.facts);
         skipped += d.skipped;
-        derived.push(d);
     }
     let ok = decoded.files.iter().all(|f| f.complete && f.crc == Crc::Ok);
     let src = src_id(sha256);
@@ -172,7 +230,7 @@ pub async fn persist(
     )
     .execute(&mut **tx)
     .await?;
-    for d in &derived {
+    for d in derived {
         wellness::write(tx, sha256, src, d).await?;
         activity::write(tx, sha256, d).await?;
     }

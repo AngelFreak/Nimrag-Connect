@@ -5,6 +5,7 @@
 //! parser, keyed by (sha256, chain_idx, msg_idx); JSON objects keep insertion
 //! (definition) order.
 
+use crate::derived::{derive_all, DeriveFn, DeriveOutcome};
 use anyhow::Result;
 use nimrag_core::fit::{self, BaseType, Crc, Decoded, Value};
 use serde_json::{json, Map, Value as Json};
@@ -28,14 +29,34 @@ pub struct Parsed {
     pub decoded: Decoded,
     /// Set when the decoder returned an error or panicked.
     pub error: Option<String>,
+    /// Core derivation over `decoded`, computed in the same blocking task.
+    pub derived: DeriveOutcome,
 }
 
-/// Decode without ever panicking.
+/// Decode and derive without ever panicking.
 pub fn parse(bytes: &[u8]) -> Parsed {
+    let f = DERIVE_OVERRIDE
+        .lock()
+        .ok()
+        .and_then(|g| *g)
+        .unwrap_or(nimrag_core::derive::derive);
+    parse_with(bytes, f)
+}
+
+/// Test seam: when set, `parse` (hence ingest and reparse) uses this derivation.
+pub static DERIVE_OVERRIDE: std::sync::Mutex<Option<DeriveFn>> = std::sync::Mutex::new(None);
+
+/// [`parse`] with an injectable derivation (tests).
+pub fn parse_with(bytes: &[u8], derive_fn: DeriveFn) -> Parsed {
     match catch_unwind(AssertUnwindSafe(|| fit::decode(bytes))) {
         Ok(decoded) => {
             let error = decoded.error.as_ref().map(|e| format!("{e:?}"));
-            Parsed { decoded, error }
+            let derived = derive_all(&decoded, derive_fn);
+            Parsed {
+                decoded,
+                error,
+                derived,
+            }
         }
         Err(payload) => {
             let msg = payload
@@ -49,6 +70,7 @@ pub fn parse(bytes: &[u8]) -> Parsed {
                     error: None,
                 },
                 error: Some(format!("decoder panicked: {msg}")),
+                derived: DeriveOutcome::Derived(vec![]),
             }
         }
     }
@@ -195,7 +217,14 @@ pub async fn write(tx: &mut Transaction<'_, Sqlite>, sha256: &str, parsed: &Pars
     )
     .execute(&mut **tx)
     .await?;
-    crate::derived::persist(tx, sha256, &parsed.decoded, parsed.error.as_deref()).await?;
+    crate::derived::persist(
+        tx,
+        sha256,
+        &parsed.decoded,
+        parsed.error.as_deref(),
+        &parsed.derived,
+    )
+    .await?;
     Ok(())
 }
 
@@ -323,8 +352,10 @@ async fn write_unreadable(
 }
 
 /// Rebuild every derived table from the file store. Files are processed in
-/// sha256 order, each in its own `BEGIN IMMEDIATE` transaction (delete by
-/// sha256, reinsert), so it can run while `serve` is up. A missing or corrupt
+/// sha256 order inside ONE `BEGIN IMMEDIATE` transaction (clear sample tables,
+/// delete by sha256, reinsert), so readers never see half-rebuilt sample
+/// tables and a failure rolls everything back. Writers (uploads) wait for the
+/// lock while it runs. A missing or corrupt
 /// blob is recorded as a `file_parse` error and the run continues; callers
 /// should treat `unreadable > 0` as failure.
 pub async fn reparse(pool: &SqlitePool, data_dir: &Path) -> Result<ReparseReport> {
@@ -341,10 +372,9 @@ pub async fn reparse(pool: &SqlitePool, data_dir: &Path) -> Result<ReparseReport
         .await?;
     // Sample tables are rebuilt from scratch: clear, then upsert every file in sha256 order.
     crate::derived::clear_samples(&mut tx).await?;
-    tx.commit().await?;
 
     let rows = sqlx::query!(r#"SELECT sha256 as "sha256!" FROM files ORDER BY sha256"#)
-        .fetch_all(pool)
+        .fetch_all(&mut *tx)
         .await?;
     let mut report = ReparseReport {
         files: rows.len() as u64,
@@ -357,7 +387,6 @@ pub async fn reparse(pool: &SqlitePool, data_dir: &Path) -> Result<ReparseReport
             Ok(looks_like_fit(&bytes).then(|| parse(&bytes)))
         })
         .await?;
-        let mut tx = pool.begin_with("BEGIN IMMEDIATE").await?;
         match read {
             Err(e) => {
                 report.unreadable += 1;
@@ -377,7 +406,7 @@ pub async fn reparse(pool: &SqlitePool, data_dir: &Path) -> Result<ReparseReport
                 write(&mut tx, &row.sha256, &parsed).await?;
             }
         }
-        tx.commit().await?;
     }
+    tx.commit().await?;
     Ok(report)
 }

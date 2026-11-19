@@ -1,6 +1,7 @@
 -- Shared by every derived parser. All values come from the file bytes.
 -- Rank "A outranks B": ok desc, last_ts desc, msg_count desc, sha256 asc. rank_key
--- encodes the first three; src_id (derived from the sha256 prefix) breaks ties.
+-- encodes the first three; ties compare sources.sha256 directly (src_id is only the
+-- compact reference stored in sample rows).
 CREATE TABLE sources (
     sha256       TEXT PRIMARY KEY REFERENCES files (sha256),
     src_id       INTEGER NOT NULL UNIQUE, -- first 8 bytes of sha256 as a positive i64

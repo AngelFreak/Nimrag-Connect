@@ -52,6 +52,12 @@ impl FileFacts {
     }
 }
 
+/// Convert a FIT `date_time` value (seconds since the FIT epoch) to unix seconds
+/// UTC. Values below `FIT_UTC_MIN` are device-relative (not UTC) and give `None`.
+pub(crate) fn fit_utc(v: f64) -> Option<i64> {
+    (v >= f64::from(crate::fit::interpret::FIT_UTC_MIN)).then(|| v as i64 + FIT_EPOCH_UNIX)
+}
+
 // ---- wellness row types (filled by monitoring/sleep/hrv/metrics) -----------
 
 #[derive(Debug, Clone, PartialEq)]
@@ -73,10 +79,10 @@ pub struct MonActivity {
 #[derive(Debug, Clone, PartialEq)]
 pub struct MonExtra {
     pub ts: i64,
-    pub ascent_m: Option<f64>,
-    pub descent_m: Option<f64>,
-    pub moderate_min: Option<f64>,
-    pub vigorous_min: Option<f64>,
+    pub ascent_total_m: Option<f64>,
+    pub descent_total_m: Option<f64>,
+    pub moderate_total_min: Option<f64>,
+    pub vigorous_total_min: Option<f64>,
 }
 #[derive(Debug, Clone, PartialEq)]
 pub struct Stress {
@@ -172,6 +178,19 @@ pub struct TrainingBalance {
     pub aerobic_low: Option<f64>,
     pub aerobic_high: Option<f64>,
     pub anaerobic: Option<f64>,
+    pub aerobic_low_target_min: Option<f64>,
+    pub aerobic_low_target_max: Option<f64>,
+    pub aerobic_high_target_min: Option<f64>,
+    pub aerobic_high_target_max: Option<f64>,
+    pub anaerobic_target_min: Option<f64>,
+    pub anaerobic_target_max: Option<f64>,
+}
+/// `maximal_met` as written by the watch (no MET x 3.5 conversion).
+#[derive(Debug, Clone, PartialEq)]
+pub struct Vo2max {
+    pub ts: i64,
+    pub maximal_met: f64,
+    pub sport: Option<i64>,
 }
 #[derive(Debug, Clone, PartialEq)]
 pub struct RecoveryTime {
@@ -202,6 +221,7 @@ pub struct Derived {
     pub training_status: Vec<TrainingStatus>,
     pub training_balance: Vec<TrainingBalance>,
     pub recovery_time: Vec<RecoveryTime>,
+    pub vo2max: Vec<Vo2max>,
 }
 
 pub fn derive(file: &FitFile) -> Result<Derived, DeriveError> {

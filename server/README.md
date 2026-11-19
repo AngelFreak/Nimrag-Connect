@@ -47,9 +47,12 @@ nimrag-server rebuild-ledger             # files/uploads rows from the sidecars
 
 `--data-dir` defaults to `$NIMRAG_DATA_DIR`, else `./data`. Logs go to stderr
 (`RUST_LOG` filter; `--log-json` for structured JSON). `reparse` processes files
-in sha256 order, one `BEGIN IMMEDIATE` transaction per file (delete by sha256,
-reinsert). `reparse` may run while `serve` is up: each file is rebuilt in its own write
-transaction. A missing or corrupt blob is recorded as a `file_parse` error, the
+in sha256 order inside a single `BEGIN IMMEDIATE` transaction (clear sample
+tables, delete by sha256, reinsert), so sample tables are never visible
+half-rebuilt. `reparse` may run while `serve` is up, but it holds the write lock
+for its whole run: an upload arriving mid-reparse can fail with 500 after the
+10 s busy_timeout, and the client must retry (the retry repairs via the sidecar
+path). A missing or corrupt blob is recorded as a `file_parse` error, the
 run continues, and the command exits non-zero with the count. `serve` removes
 leftovers in `files/.incoming/` at startup. `rebuild-ledger` adds missing `files` rows and replaces each file's
 `uploads` with its sidecar events; it never deletes other rows.
@@ -120,3 +123,6 @@ docker run --rm -v nimrag-data:/data nimrag-server token create --name phone --d
 
 Multi-stage build with `SQLX_OFFLINE=true`; the runtime image runs as a
 non-root user with `/data` as a volume.
+
+Testing note: `derive::DERIVE_OVERRIDE` is a test-only seam. Tests that set it
+must live in `tests/derive_shared.rs` and hold its lock.
