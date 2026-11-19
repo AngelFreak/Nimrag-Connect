@@ -426,6 +426,14 @@ Every page works at 390 px and at desktop width, uses the brief's design system 
 **Status**: In Progress
 
 ## Stages 3c–3m: pages (in the brief's order)
+**Today page structure (owner, 2026-11-19, from screenshots of their Garmin Connect home, kept in `private/design/garmin-home/`; structure only, in our design system and our words, no Garmin names such as "Body Battery"):**
+- **In focus**: a swipeable row of large cards with page dots; first Energy (value now, charged / drained, the day's energy line with stress bars below it and the wake time marked), then Sleep last night, then HRV.
+- **At a glance**: a two-column grid of small cards the owner can **choose, reorder and hide** (Heart rate with resting and day range, Stress, Sleep score + duration + stages, HRV status with 4-week strip, Training status, Training readiness when the watch provides it, Intensity minutes this week, Training load, Steps, Energy, Respiration, Blood oxygen, Recovery time, VO2 max, Body weight). A card whose data does not exist shows "unavailable" or is offered as hidden by default.
+- **Yesterday**: a list with one line per metric (energy +/−, steps, sleep score / duration, heart rate rest / high, stress, HRV 7-day average, intensity minutes).
+- **Last 7 days**: activities count by type, averages for steps, sleep score / duration, resting heart rate, stress.
+- **Edit home** button at the end: the card picker (show/hide toggles, drag and keyboard reorder, reset to default). The layout is stored on the server (setting `home_cards`: ordered list of card ids plus hidden ids) so phone and web match.
+- Garmin services (events, coach plans, challenges) are left out.
+
 3c Today · 3d Activities list + detail (map, stats, HR zones, laps) · 3e Strength session (edit sets, compare to previous) · 3f Sleep night (+ last 7 nights) · 3g Day view (HR, stress, energy; prev/next day) · 3h Health trends (HRV vs personal range, RHR, breathing, SpO2, sleep score; 7 d / 4 w / 3 m / 1 y) · 3i Movement · 3j Training (recovery time, 7-day load vs target, load by intensity, VO2 max as max MET × 3.5 labelled derived) · 3k Body (weight trend, manual measurements) · 3l Calendar · 3m Desktop extras (overview, activities table, strength progress, compare and reports, devices, storage and backups)
 **Tests per page**: renders from real synced data; "unavailable" states; keyboard reachable controls; labelled charts with text summaries; contrast ≥ 4.5:1
 **Status**: Not Started
