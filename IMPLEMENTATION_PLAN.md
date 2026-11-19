@@ -31,7 +31,7 @@ The finished product: an Android app that pairs with the Instinct 2 without Garm
 | 3 Web | 3a | JSON API, web login (password + optional passkey), device tokens created in the web UI, generated TS types | Done (7eb0ea7; passkeys later) |
 | | 3b | Web scaffold: Vite/React/TS, TanStack Query, design system, PWA, embedded in the server binary, Docker image | Done (7bf05e6; Docker build untested) |
 | | 3c–3m | Pages 1–11 of the brief (Today … Desktop extras) | In Progress (3c–3l building in parallel; 3m after) |
-| | 3n | Android shell: web view with native bottom bar, offline via PWA cache | Not Started |
+| | 3n | Android shell: web view with native bottom bar, offline via PWA cache | In Progress |
 | | Gate 3 | Every page from real data, "unavailable" shown correctly, accessibility check | — |
 | 4 Writing + ops | 4a | FIT encoder + workout builder, sent to the watch via the phone (encoder and upload path ported from Gadgetbridge) | Not Started |
 | | 4b | Scheduled backups + documented restore test | Not Started |
@@ -453,7 +453,13 @@ Every page works at 390 px and at desktop width, uses the brief's design system 
 
 ## Stage 3n: Android shell
 **Goal**: the app shows the web interface in an embedded web view with a native bottom bar; offline viewing from the PWA cache; Devices and sync stays native
-**Status**: Not Started
+**Bridge contract (integrator, 2026-11-19)**:
+- The app loads the saved server URL (Settings; blank → a native "Set your server" screen). Only that origin is loaded in the web view; other links open in the browser. No file access, no mixed content, cookies persist (session login happens in the web view).
+- Android exposes `NimragAppNative` (addJavascriptInterface, methods `syncNow()`, `status(): String` JSON `{link, lastSyncAt}`, `openWatch()`, `onRoute(path)`), and a document-start script restricted to the server origin (`WebViewCompat.addDocumentStartJavaScript`) defines `window.NimragApp = { native: true, syncNow, status (parsed), openWatch, onRoute }`. Every interface method also checks that the web view's current URL is on the server origin.
+- The app dispatches `nimrag:status` on `window` when the link state or last sync changes, and `nimrag:navigate` with `detail.path` when a native tab is tapped.
+- Web: with `NimragApp.native`, the web bottom bar is hidden (the native one shows Today · Activities · Health · Strength · Watch), the watch icon calls `openWatch()` instead of linking to /devices, the router follows `nimrag:navigate`, and route changes call `onRoute(path)` so the native bar highlights the right tab.
+- Watch tab = the existing native Watch, Sync and Settings screens, restyled to the canvas's Devices design and tokens.
+**Status**: In Progress
 
 ## Gate 3
 Each page renders from real synced data, shows "unavailable" correctly for missing metrics, and passes an accessibility check.
