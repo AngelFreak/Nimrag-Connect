@@ -7,7 +7,7 @@ use nimrag_core::capture::Direction;
 use nimrag_core::client::reliable::WINDOW;
 use nimrag_core::client::DstPair;
 use nimrag_core::client::{
-    AnomalyKind, CloseReason, Event, FileFailure, Input, Phase, SyncTrigger,
+    AnomalyKind, BatteryReport, CloseReason, Event, FileFailure, Input, Phase, SyncTrigger,
 };
 use nimrag_core::gfdi::Message;
 use nimrag_core::link::{Event as LinkEvent, LinkDecoder};
@@ -1688,4 +1688,767 @@ fn a_refused_pairing_event_is_reported_and_the_session_goes_on() {
         assert_eq!(sim.watch.archived_indices, vec![FILE_A]);
         assert!(sim.closed_reason().is_none());
     }
+}
+
+// ---- 5009 FileAvailable ------------------------------------------------------------------------------
+
+fn file_available_sim() -> Sim {
+    let mut sim = Sim::new();
+    sim.watch
+        .add_file(fake_entry(FILE_A, 32, 2000), lcg_bytes(1, 2000));
+    sim
+}
+
+/// Ids of the phone's own requests, without the 5000 answers.
+fn request_ids(sim: &Sim) -> Vec<u16> {
+    sim.phone_ids()
+        .into_iter()
+        .filter(|&id| id != 5000)
+        .collect()
+}
+
+fn sync_started(sim: &Sim) -> Vec<&Event> {
+    sim.events_of(|e| matches!(e, Event::SyncStarted { .. }))
+}
+
+fn downloaded_indices(sim: &Sim) -> Vec<u16> {
+    sim.downloaded().iter().map(|(_, e, _)| e.index).collect()
+}
+
+fn directory_events(sim: &Sim) -> Vec<&Event> {
+    sim.events_of(|e| matches!(e, Event::Directory { .. }))
+}
+
+fn finished(cycle: u32, downloaded: u32, archived: u32, failed: u32) -> Event {
+    Event::SyncFinished {
+        cycle,
+        downloaded,
+        archived,
+        failed,
+    }
+}
+
+#[test]
+fn a_5009_while_idle_is_acked_and_fetched_without_a_listing() {
+    let mut sim = file_available_sim();
+    sim.handshake();
+    sim.watch_sends(&sim.watch.file_available(FILE_A));
+    let acks = sim.phone_responses(5009);
+    assert_eq!(acks.len(), 1);
+    let ack = acks[0].as_response().unwrap();
+    assert_eq!(ack.status, nimrag_core::gfdi::Status::Ack);
+    assert!(ack.body.is_empty());
+    assert_eq!(
+        sync_started(&sim),
+        vec![&Event::SyncStarted {
+            cycle: 1,
+            trigger: SyncTrigger::FileAvailable
+        }]
+    );
+    assert_eq!(downloaded_indices(&sim), vec![FILE_A]);
+    assert!(
+        sim.phone_requests(5008).is_empty(),
+        "no archive before the file is stored"
+    );
+    assert_eq!(sim.client.phase(), Phase::Syncing);
+    store_everything(&mut sim);
+    assert_eq!(sim.watch.archived_indices, vec![FILE_A]);
+    assert_eq!(
+        request_ids(&sim),
+        vec![5050, 5031, 5030, 5002, 5008, 5030],
+        "no 5007, and 5002 only for the file, not for the directory"
+    );
+    assert_eq!(
+        sim.phone_requests(5002)[0].payload,
+        dl_request(FILE_A),
+        "the announced file's index"
+    );
+    assert_eq!(sim.phone_requests(5030).last().unwrap().payload, vec![0, 0]);
+    assert!(directory_events(&sim).is_empty());
+    assert!(sim.events.contains(&finished(1, 1, 1, 0)));
+    assert_eq!(sim.client.phase(), Phase::Ready);
+    assert!(sim.closed_reason().is_none());
+}
+
+#[test]
+fn a_5009_with_trailing_bytes_is_accepted() {
+    let mut sim = file_available_sim();
+    sim.handshake();
+    let mut payload = fake_entry(FILE_A, 32, 2000).encode();
+    payload.extend_from_slice(&[1, 0xFF]);
+    sim.watch_sends(&Message::new(5009, payload));
+    assert_eq!(downloaded_indices(&sim), vec![FILE_A]);
+}
+
+#[test]
+fn a_5009_for_a_non_fit_unreadable_or_index_zero_entry_is_acked_and_ignored() {
+    let mut sim = file_available_sim();
+    sim.handshake();
+    let good = fake_entry(FILE_A, 32, 2000);
+    let not_fit = DirEntry {
+        data_type: 4,
+        ..good.clone()
+    };
+    let unreadable = DirEntry {
+        flags: 0x20,
+        ..good.clone()
+    };
+    let index_zero = DirEntry { index: 0, ..good };
+    for entry in [not_fit, unreadable, index_zero] {
+        sim.watch_sends(&Message::new(5009, entry.encode()));
+    }
+    assert_eq!(sim.phone_responses(5009).len(), 3, "all acknowledged");
+    assert!(sync_started(&sim).is_empty());
+    assert_eq!(request_ids(&sim), vec![5050, 5031, 5030]);
+    assert_eq!(sim.client.phase(), Phase::Ready);
+    // Nothing was kept either: a later cycle fetches only what it lists.
+    sim.watch_sends(&sim.watch.sync_request(1));
+    assert_eq!(downloaded_indices(&sim), vec![FILE_A]);
+    assert_eq!(sync_started(&sim).len(), 1);
+}
+
+#[test]
+fn a_malformed_5009_is_a_bad_frame_without_a_reply() {
+    let mut sim = file_available_sim();
+    sim.handshake();
+    let before = sim.phone_writes.len();
+    sim.watch_sends(&Message::new(5009, vec![0; 15]));
+    assert!(sim.events.contains(&Event::Anomaly {
+        kind: AnomalyKind::BadFrame,
+        message_id: 5009
+    }));
+    assert!(sim.phone_responses(5009).is_empty());
+    assert_eq!(sim.phone_writes.len(), before, "nothing written at all");
+    assert!(sync_started(&sim).is_empty());
+}
+
+#[test]
+fn a_5009_for_a_file_not_in_the_listing_is_fetched_in_the_same_cycle() {
+    let mut sim = two_file_sim();
+    sim.handshake();
+    sim.watch_sends(&sim.watch.sync_request(2));
+    assert_eq!(
+        downloaded_indices(&sim),
+        vec![FILE_A],
+        "waiting for the caller"
+    );
+    // A new file appears after the listing was taken.
+    sim.watch
+        .add_file(fake_entry(73, 32, 500), lcg_bytes(3, 500));
+    sim.watch_sends(&sim.watch.file_available(73));
+    assert_eq!(sim.phone_responses(5009).len(), 1, "acked at once");
+    store_everything(&mut sim);
+    assert_eq!(downloaded_indices(&sim), vec![FILE_A, FILE_B, 73]);
+    assert_eq!(sim.watch.archived_indices, vec![FILE_A, FILE_B, 73]);
+    assert_eq!(sync_started(&sim).len(), 1, "no extra cycle");
+    assert_eq!(sim.phone_requests(5007).len(), 1);
+    assert_eq!(directory_events(&sim).len(), 1);
+    assert!(sim.events.contains(&finished(1, 3, 3, 0)));
+    assert_eq!(sim.phone_requests(5030).last().unwrap().payload, vec![0, 0]);
+    assert_eq!(sim.client.phase(), Phase::Ready);
+}
+
+#[test]
+fn a_5009_for_a_file_already_in_the_listing_is_fetched_once() {
+    let mut sim = two_file_sim();
+    sim.handshake();
+    sim.watch_sends(&sim.watch.sync_request(2));
+    // B is in the listing; the announcement carries other flags and is sent
+    // twice.
+    let mut entry = fake_entry(FILE_B, 4, 300);
+    entry.flags = 0x81;
+    sim.watch_sends(&Message::new(5009, entry.encode()));
+    sim.watch_sends(&Message::new(5009, entry.encode()));
+    // So is A, which is being waited on right now.
+    sim.watch_sends(&sim.watch.file_available(FILE_A));
+    store_everything(&mut sim);
+    assert_eq!(downloaded_indices(&sim), vec![FILE_A, FILE_B]);
+    let requested: Vec<Vec<u8>> = sim
+        .phone_requests(5002)
+        .iter()
+        .map(|msg| msg.payload.clone())
+        .collect();
+    assert_eq!(
+        requested,
+        vec![dl_request(0), dl_request(FILE_A), dl_request(FILE_B)]
+    );
+    assert_eq!(sync_started(&sim).len(), 1, "and no second cycle");
+    assert!(sim.events.contains(&finished(1, 2, 2, 0)));
+    assert_eq!(sim.phone_responses(5009).len(), 3);
+}
+
+#[test]
+fn a_5009_during_a_file_announced_cycle_joins_that_cycle() {
+    let mut sim = file_available_sim();
+    sim.watch
+        .add_file(fake_entry(FILE_B, 4, 300), lcg_bytes(2, 300));
+    sim.handshake();
+    sim.watch_sends(&sim.watch.file_available(FILE_A));
+    sim.watch_sends(&sim.watch.file_available(FILE_B));
+    store_everything(&mut sim);
+    assert_eq!(downloaded_indices(&sim), vec![FILE_A, FILE_B]);
+    assert_eq!(sync_started(&sim).len(), 1);
+    assert!(directory_events(&sim).is_empty());
+    assert!(sim.phone_requests(5007).is_empty());
+    assert!(sim.events.contains(&finished(1, 2, 2, 0)));
+}
+
+#[test]
+fn a_5009_while_the_sync_complete_is_outstanding_starts_one_more_cycle() {
+    let mut sim = file_available_sim();
+    sim.watch.silent_system_event = Some(0);
+    sim.handshake();
+    sim.watch_sends(&sim.watch.sync_request(2));
+    store_everything(&mut sim);
+    // SYNC_COMPLETE is out and unanswered: the 5009 is acked and kept.
+    sim.watch
+        .add_file(fake_entry(73, 32, 500), lcg_bytes(3, 500));
+    sim.watch_sends(&sim.watch.file_available(73));
+    assert_eq!(sim.phone_responses(5009).len(), 1);
+    assert_eq!(sync_started(&sim).len(), 1, "busy: only noted");
+    assert_eq!(sim.downloaded().len(), 1);
+    let complete = (*sim.phone_requests(5030).last().unwrap()).clone();
+    sim.watch.silent_system_event = None;
+    sim.watch_sends(&watch_response(&complete, 0, &[]));
+    assert!(sim.events.contains(&finished(1, 1, 1, 0)));
+    assert_eq!(
+        sync_started(&sim).last(),
+        Some(&&Event::SyncStarted {
+            cycle: 2,
+            trigger: SyncTrigger::FileAvailable
+        })
+    );
+    store_everything(&mut sim);
+    assert_eq!(downloaded_indices(&sim), vec![FILE_A, 73]);
+    assert!(sim.events.contains(&finished(2, 1, 1, 0)));
+    assert_eq!(sim.client.phase(), Phase::Ready);
+}
+
+#[test]
+fn a_5009_during_wait_grant_is_fetched_when_the_grant_times_out() {
+    let mut sim = file_available_sim();
+    sim.watch.grant_sync_on_protobuf = false;
+    sim.handshake();
+    sim.input(Input::StartSync);
+    sim.watch_sends(&sim.watch.file_available(FILE_A));
+    assert!(sync_started(&sim).is_empty(), "waiting for the grant");
+    assert!(sim.phone_requests(5002).is_empty());
+    sim.advance(30_000);
+    assert!(sim.events.contains(&Event::Anomaly {
+        kind: AnomalyKind::SyncNotGranted,
+        message_id: 5037
+    }));
+    assert_eq!(
+        sync_started(&sim),
+        vec![&Event::SyncStarted {
+            cycle: 1,
+            trigger: SyncTrigger::FileAvailable
+        }]
+    );
+    assert_eq!(downloaded_indices(&sim), vec![FILE_A]);
+}
+
+#[test]
+fn a_5009_before_the_handshake_starts_a_cycle_after_it() {
+    let mut sim = file_available_sim();
+    sim.connect();
+    sim.watch_sends(&sim.watch.file_available(FILE_A));
+    assert_eq!(sim.phone_responses(5009).len(), 1, "acked at once");
+    assert!(sync_started(&sim).is_empty());
+    let info = sim.watch.device_information();
+    sim.watch_sends(&info);
+    let done = sim
+        .events
+        .iter()
+        .position(|e| matches!(e, Event::HandshakeDone { .. }))
+        .expect("handshake done");
+    let started = sim
+        .events
+        .iter()
+        .position(|e| matches!(e, Event::SyncStarted { .. }))
+        .expect("cycle started");
+    assert!(started > done);
+    assert_eq!(
+        sim.events[started],
+        Event::SyncStarted {
+            cycle: 1,
+            trigger: SyncTrigger::FileAvailable
+        }
+    );
+    assert!(sim.phone_requests(5007).is_empty());
+    assert_eq!(downloaded_indices(&sim), vec![FILE_A]);
+    store_everything(&mut sim);
+    assert_eq!(sim.watch.archived_indices, vec![FILE_A]);
+}
+
+#[test]
+fn a_queued_sync_goes_before_a_5009_announced_before_the_handshake() {
+    for watch_asks in [false, true] {
+        let mut sim = file_available_sim();
+        sim.connect();
+        if watch_asks {
+            sim.watch_sends(&sim.watch.sync_request(2));
+        } else {
+            sim.input(Input::StartSync);
+        }
+        sim.watch_sends(&sim.watch.file_available(FILE_A));
+        let info = sim.watch.device_information();
+        sim.watch_sends(&info);
+        store_everything(&mut sim);
+        let trigger = if watch_asks {
+            SyncTrigger::Watch { option: 2 }
+        } else {
+            SyncTrigger::Caller
+        };
+        assert_eq!(
+            sync_started(&sim),
+            vec![&Event::SyncStarted { cycle: 1, trigger }],
+            "watch_asks {watch_asks}"
+        );
+        assert_eq!(sim.phone_requests(5007).len(), 1, "a listing was taken");
+        assert_eq!(downloaded_indices(&sim), vec![FILE_A], "fetched once");
+        assert_eq!(sim.watch.archived_indices, vec![FILE_A]);
+        assert!(sim.events.contains(&finished(1, 1, 1, 0)));
+        assert_eq!(sim.client.phase(), Phase::Ready, "no further cycle");
+    }
+}
+
+#[test]
+fn announced_files_are_capped_at_32_and_the_rest_wait_for_a_listing() {
+    let mut sim = file_available_sim();
+    sim.handshake();
+    sim.watch_sends(&sim.watch.sync_request(2));
+    for index in 100..140u16 {
+        sim.watch
+            .add_file(fake_entry(index, 32, 20), lcg_bytes(index as u32, 20));
+        sim.watch_sends(&sim.watch.file_available(index));
+    }
+    store_everything(&mut sim);
+    let got = downloaded_indices(&sim);
+    assert_eq!(
+        got.len(),
+        1 + 32,
+        "listing file plus the first 32 announced"
+    );
+    assert_eq!(got[0], FILE_A);
+    assert_eq!(got[1..], (100..132).collect::<Vec<u16>>()[..]);
+    assert_eq!(sync_started(&sim).len(), 1);
+    // The next full listing picks up the 8 that were dropped.
+    sim.watch_sends(&sim.watch.sync_request(1));
+    store_everything(&mut sim);
+    assert_eq!(downloaded_indices(&sim).len(), 1 + 32 + 8);
+    assert_eq!(sim.watch.pending_files().len(), 0);
+}
+
+// ---- 5023 BatteryStatus ----------------------------------------------------------------------------------
+
+fn battery_events(sim: &Sim) -> Vec<&Event> {
+    sim.events_of(|e| matches!(e, Event::Battery { .. }))
+}
+
+#[test]
+fn a_5023_is_acked_and_reported_as_a_status_battery() {
+    let mut sim = Sim::new();
+    sim.handshake();
+    sim.watch_sends(&battery_status_message(0x2A, 38, 87));
+    let acks = sim.phone_responses(5023);
+    assert_eq!(acks.len(), 1);
+    let ack = acks[0].as_response().unwrap();
+    assert_eq!(ack.status, nimrag_core::gfdi::Status::Ack);
+    assert!(ack.body.is_empty());
+    assert_eq!(
+        battery_events(&sim),
+        vec![&Event::Battery {
+            level_percent: 87,
+            report: BatteryReport::Status {
+                status: 2,
+                centivolts: 38
+            }
+        }]
+    );
+    assert!(sim
+        .events_of(|e| matches!(e, Event::Unsupported { .. }))
+        .is_empty());
+    // The bare minimum, 3 bytes, is enough.
+    sim.watch_sends(&Message::new(5023, vec![0x51, 41, 100]));
+    assert_eq!(sim.phone_responses(5023).len(), 2);
+    assert_eq!(
+        battery_events(&sim).last(),
+        Some(&&Event::Battery {
+            level_percent: 100,
+            report: BatteryReport::Status {
+                status: 5,
+                centivolts: 41
+            }
+        })
+    );
+}
+
+#[test]
+fn a_5023_with_status_invalid_is_acked_without_an_event() {
+    let mut sim = Sim::new();
+    sim.handshake();
+    sim.watch_sends(&Message::new(5023, vec![0x71, 41, 100]));
+    assert_eq!(sim.phone_responses(5023).len(), 1);
+    assert!(battery_events(&sim).is_empty());
+    assert!(sim
+        .events_of(|e| matches!(e, Event::Anomaly { .. }))
+        .is_empty());
+}
+
+#[test]
+fn a_5023_percent_above_100_is_acked_without_an_event() {
+    let mut sim = Sim::new();
+    sim.handshake();
+    sim.watch_sends(&battery_status_message(0x10, 40, 200));
+    assert_eq!(sim.phone_responses(5023).len(), 1);
+    assert!(battery_events(&sim).is_empty());
+    assert!(sim
+        .events_of(|e| matches!(e, Event::Anomaly { .. }))
+        .is_empty());
+}
+
+#[test]
+fn a_short_5023_is_a_bad_frame_without_a_reply() {
+    let mut sim = Sim::new();
+    sim.handshake();
+    sim.watch_sends(&Message::new(5023, vec![0x10, 40]));
+    assert!(sim.events.contains(&Event::Anomaly {
+        kind: AnomalyKind::BadFrame,
+        message_id: 5023
+    }));
+    assert!(sim.phone_responses(5023).is_empty());
+    assert!(battery_events(&sim).is_empty());
+}
+
+// ---- battery request (device_status protobuf) ----------------------------------------------------
+
+fn battery_requests(sim: &Sim) -> Vec<&Message> {
+    sim.phone_requests(5043)
+        .into_iter()
+        .filter(|msg| {
+            m::parse_protobuf(&msg.payload).is_some_and(|(_, b)| b == m::BATTERY_REQUEST_PROTOBUF)
+        })
+        .collect()
+}
+
+#[test]
+fn request_battery_sends_the_protobuf_and_reports_the_answer() {
+    let mut sim = Sim::new();
+    sim.handshake();
+    sim.input(Input::RequestBattery);
+    let sent = battery_requests(&sim);
+    assert_eq!(sent.len(), 1);
+    let (h, body) = m::parse_protobuf(&sent[0].payload).unwrap();
+    assert_eq!((h.request_id, h.offset, h.total, h.chunk), (0, 0, 4, 4));
+    assert_eq!(body, [0x42, 0x02, 0x12, 0x00]);
+    assert!(sent[0].txn.is_some());
+    // The watch's 5044 is acknowledged with the 8-byte protobuf ACK.
+    let acks = sim.phone_responses(5044);
+    assert_eq!(acks.len(), 1);
+    assert_eq!(
+        acks[0].as_response().unwrap().body,
+        m::build_protobuf_ack(0)
+    );
+    assert_eq!(
+        battery_events(&sim),
+        vec![&Event::Battery {
+            level_percent: 87,
+            report: BatteryReport::DeviceStatus {
+                battery_status: Some(1),
+                hours_remaining: Some(120)
+            }
+        }]
+    );
+    // It is a plain request: no sync was asked for or started.
+    assert!(sync_started(&sim).is_empty());
+    assert!(sim.phone_requests(5007).is_empty());
+    assert_eq!(sim.client.phase(), Phase::Ready);
+    // A second ask after the first was answered sends a second request.
+    sim.input(Input::RequestBattery);
+    assert_eq!(battery_requests(&sim).len(), 2);
+    assert_eq!(battery_events(&sim).len(), 2);
+}
+
+#[test]
+fn a_battery_answer_without_optional_fields_or_a_level_above_100() {
+    let mut sim = Sim::new();
+    sim.handshake();
+    sim.watch.battery_response = Some(battery_smart(5, None, None));
+    sim.input(Input::RequestBattery);
+    sim.watch.battery_response = Some(battery_smart(101, Some(1), None));
+    sim.input(Input::RequestBattery);
+    assert_eq!(
+        battery_events(&sim),
+        vec![&Event::Battery {
+            level_percent: 5,
+            report: BatteryReport::DeviceStatus {
+                battery_status: None,
+                hours_remaining: None
+            }
+        }]
+    );
+    assert_eq!(sim.phone_responses(5044).len(), 2, "both acknowledged");
+}
+
+#[test]
+fn a_battery_answer_arriving_as_a_watch_5043_is_read_too() {
+    let mut sim = Sim::new();
+    sim.handshake();
+    sim.watch_sends(&Message::new(
+        5043,
+        m::build_protobuf(0x0102, &battery_smart(33, Some(2), Some(7))),
+    ));
+    assert_eq!(
+        sim.phone_responses(5043)[0].as_response().unwrap().body,
+        m::build_protobuf_ack(0x0102)
+    );
+    assert_eq!(
+        battery_events(&sim),
+        vec![&Event::Battery {
+            level_percent: 33,
+            report: BatteryReport::DeviceStatus {
+                battery_status: Some(2),
+                hours_remaining: Some(7)
+            }
+        }]
+    );
+    // A chunked message is acknowledged as before but not decoded.
+    let body = battery_smart(44, None, None);
+    let mut payload = m::build_protobuf(9, &body);
+    payload[10..14].copy_from_slice(&(body.len() as u32 + 5).to_le_bytes()); // total > chunk
+    sim.watch_sends(&Message::new(5044, payload));
+    assert_eq!(battery_events(&sim).len(), 1);
+    assert!(sim.events.contains(&Event::Anomaly {
+        kind: AnomalyKind::ChunkedProtobuf,
+        message_id: 5044
+    }));
+    // Garbage and other services are ignored without an event.
+    sim.watch_sends(&Message::new(5044, m::build_protobuf(10, &[0xFF, 0xFF])));
+    sim.watch_sends(&Message::new(
+        5044,
+        m::build_protobuf(11, &[0x6A, 0x04, 0x12, 0x02, 0x08, 0x01]),
+    ));
+    assert_eq!(battery_events(&sim).len(), 1);
+}
+
+#[test]
+fn request_battery_before_the_handshake_goes_out_after_it_and_before_the_sync() {
+    let mut sim = Sim::new();
+    sim.connect();
+    sim.input(Input::RequestBattery);
+    sim.input(Input::RequestBattery);
+    sim.input(Input::StartSync);
+    assert!(
+        sim.phone_requests(5043).is_empty(),
+        "nothing before the handshake"
+    );
+    let info = sim.watch.device_information();
+    sim.watch_sends(&info);
+    assert_eq!(battery_requests(&sim).len(), 1, "two asks, one request");
+    let ids = request_ids(&sim);
+    assert_eq!(&ids[..5], [5050, 5031, 5030, 5043, 5043], "{ids:?}");
+    let first = sim.phone_requests(5043)[0];
+    assert_eq!(
+        m::parse_protobuf(&first.payload).unwrap().1,
+        m::BATTERY_REQUEST_PROTOBUF,
+        "the battery request comes first, then the sync request"
+    );
+    let done = sim
+        .events
+        .iter()
+        .position(|e| matches!(e, Event::HandshakeDone { .. }))
+        .unwrap();
+    let battery = sim
+        .events
+        .iter()
+        .position(|e| matches!(e, Event::Battery { .. }))
+        .expect("the answer was reported");
+    assert!(battery > done);
+    assert_eq!(battery_events(&sim).len(), 1);
+    assert_eq!(sync_started(&sim).len(), 1, "the queued sync still ran");
+    store_everything(&mut sim);
+    assert_eq!(sim.client.phase(), Phase::Ready);
+}
+
+#[test]
+fn request_battery_after_first_connect_events_keeps_them_in_front() {
+    let mut sim = first_connect_sim();
+    sim.connect();
+    sim.input(Input::RequestBattery);
+    let info = sim.watch.device_information();
+    sim.watch_sends(&info);
+    assert_eq!(battery_requests(&sim).len(), 1);
+    let ids = request_ids(&sim);
+    assert_eq!(
+        &ids[..7],
+        [5050, 5031, 5030, 5030, 5030, 5030, 5043],
+        "{ids:?}"
+    );
+}
+
+#[test]
+fn a_refused_battery_request_is_reported_and_the_session_goes_on() {
+    let mut sim = file_available_sim();
+    sim.watch.nak_battery_request = true;
+    sim.handshake();
+    sim.input(Input::RequestBattery);
+    assert!(sim.events.contains(&Event::Anomaly {
+        kind: AnomalyKind::BatteryRequestRefused,
+        message_id: 5043
+    }));
+    assert!(sim.closed_reason().is_none());
+    assert!(battery_events(&sim).is_empty());
+    assert_eq!(sim.client.phase(), Phase::Ready);
+    sim.watch_sends(&sim.watch.sync_request(2));
+    store_everything(&mut sim);
+    assert_eq!(sim.watch.archived_indices, vec![FILE_A]);
+    assert!(sim.closed_reason().is_none());
+}
+
+#[test]
+fn request_battery_while_a_download_is_waiting_for_the_caller_is_sent_and_answered() {
+    let mut sim = file_available_sim();
+    sim.handshake();
+    sim.watch_sends(&sim.watch.sync_request(2));
+    assert_eq!(sim.downloaded().len(), 1);
+    sim.input(Input::RequestBattery);
+    sim.input(Input::RequestBattery);
+    assert_eq!(
+        battery_requests(&sim).len(),
+        2,
+        "each ask was answered before the next"
+    );
+    assert_eq!(battery_events(&sim).len(), 2);
+    store_everything(&mut sim);
+    assert_eq!(sim.watch.archived_indices, vec![FILE_A]);
+}
+
+// ---- review fixes: 5009 identity, handled files, silent battery request ----------------------------
+
+#[test]
+fn a_5009_with_timestamp_zero_matches_the_listing_entry_and_is_fetched_once() {
+    let mut sim = two_file_sim();
+    sim.handshake();
+    sim.watch_sends(&sim.watch.sync_request(2));
+    let mut entry = fake_entry(FILE_B, 4, 300);
+    entry.timestamp = 0;
+    sim.watch_sends(&Message::new(5009, entry.encode()));
+    store_everything(&mut sim);
+    assert_eq!(downloaded_indices(&sim), vec![FILE_A, FILE_B]);
+    let for_b = sim
+        .phone_requests(5002)
+        .iter()
+        .filter(|msg| msg.payload == dl_request(FILE_B))
+        .count();
+    assert_eq!(for_b, 1);
+    assert_eq!(sync_started(&sim).len(), 1);
+}
+
+#[test]
+fn a_re_announced_archived_file_while_sync_complete_is_outstanding_starts_no_cycle() {
+    let mut sim = file_available_sim();
+    sim.watch.silent_system_event = Some(0);
+    sim.handshake();
+    sim.watch_sends(&sim.watch.sync_request(2));
+    store_everything(&mut sim);
+    sim.watch_sends(&sim.watch.file_available(FILE_A));
+    assert_eq!(sim.phone_responses(5009).len(), 1, "acked");
+    let complete = (*sim.phone_requests(5030).last().unwrap()).clone();
+    sim.watch.silent_system_event = None;
+    sim.watch_sends(&watch_response(&complete, 0, &[]));
+    assert!(sim.events.contains(&finished(1, 1, 1, 0)));
+    assert_eq!(sync_started(&sim).len(), 1, "no second cycle");
+    assert_eq!(sim.downloaded().len(), 1);
+    assert_eq!(sim.client.phase(), Phase::Ready);
+}
+
+#[test]
+fn a_refused_announced_file_is_not_announced_into_endless_cycles_but_a_listing_retries_it() {
+    let mut sim = file_available_sim();
+    sim.watch.nak_download = Some(FILE_A);
+    sim.handshake();
+    sim.watch_sends(&sim.watch.file_available(FILE_A));
+    assert!(matches!(
+        sim.events
+            .iter()
+            .find(|e| matches!(e, Event::FileFailed { .. })),
+        Some(Event::FileFailed {
+            reason: FileFailure::Refused { status: 1 },
+            will_retry: false,
+            ..
+        })
+    ));
+    assert!(sim.events.contains(&finished(1, 0, 0, 1)));
+    assert_eq!(sim.phone_requests(5030).last().unwrap().payload, vec![0, 0]);
+    // The watch announces it again: acked, nothing more happens.
+    sim.watch_sends(&sim.watch.file_available(FILE_A));
+    assert_eq!(sim.phone_responses(5009).len(), 2);
+    assert_eq!(sync_started(&sim).len(), 1);
+    assert_eq!(sim.phone_requests(5002).len(), 1);
+    // A full listing still asks for it.
+    sim.watch_sends(&sim.watch.sync_request(1));
+    assert_eq!(sync_started(&sim).len(), 2);
+    let for_a = sim
+        .phone_requests(5002)
+        .iter()
+        .filter(|msg| msg.payload == dl_request(FILE_A))
+        .count();
+    assert_eq!(for_a, 2, "requested again by the listing cycle");
+    assert!(sim.events.contains(&finished(2, 0, 0, 1)));
+}
+
+#[test]
+fn a_silent_battery_request_is_dropped_after_the_deadline_and_the_session_goes_on() {
+    let mut sim = file_available_sim();
+    sim.watch.silent_battery_request = true;
+    sim.handshake();
+    sim.input(Input::RequestBattery);
+    assert_eq!(battery_requests(&sim).len(), 1);
+    sim.advance(29_999);
+    assert!(sim
+        .events_of(|e| matches!(e, Event::Anomaly { .. }))
+        .is_empty());
+    sim.advance(1);
+    assert!(sim.events.contains(&Event::Anomaly {
+        kind: AnomalyKind::BatteryRequestRefused,
+        message_id: 5043
+    }));
+    assert!(sim.closed_reason().is_none());
+    assert_eq!(sim.client.phase(), Phase::Ready);
+    sim.advance(60_000);
+    assert!(sim.closed_reason().is_none(), "no later timeout either");
+    // A late answer is just an unexpected response.
+    let late = (*battery_requests(&sim)[0]).clone();
+    sim.watch_sends(&watch_response(&late, 0, &m::build_protobuf_ack(0)));
+    assert!(sim.events.contains(&Event::Anomaly {
+        kind: AnomalyKind::UnexpectedResponse,
+        message_id: 5043
+    }));
+    // A sync still works.
+    sim.watch.silent_battery_request = false;
+    sim.input(Input::StartSync);
+    store_everything(&mut sim);
+    assert_eq!(sim.watch.archived_indices, vec![FILE_A]);
+    assert!(sim.closed_reason().is_none());
+}
+
+#[test]
+fn request_battery_queued_behind_a_pending_request_adds_no_second_5043() {
+    let mut sim = file_available_sim();
+    sim.watch.silent_system_event = Some(0);
+    sim.handshake();
+    sim.watch_sends(&sim.watch.sync_request(2));
+    store_everything(&mut sim);
+    // SYNC_COMPLETE is unanswered, so both asks queue behind it.
+    sim.input(Input::RequestBattery);
+    sim.input(Input::RequestBattery);
+    assert!(battery_requests(&sim).is_empty(), "queued, not sent");
+    let complete = (*sim.phone_requests(5030).last().unwrap()).clone();
+    sim.watch.silent_system_event = None;
+    sim.watch_sends(&watch_response(&complete, 0, &[]));
+    assert_eq!(battery_requests(&sim).len(), 1, "one request for two asks");
+    assert_eq!(battery_events(&sim).len(), 1);
+    assert!(sim.events.contains(&finished(1, 1, 1, 0)));
+    assert_eq!(sim.client.phase(), Phase::Ready);
 }

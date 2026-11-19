@@ -8,13 +8,28 @@
 //! (`completeInitialization`, `connectFirstTime`). Copyright (C) 2024-2026
 //! Daniele Gobbetti, José Rebelo, kuhy, Thomas Kuehne and the other
 //! Gadgetbridge contributors. See docs/PORTED.md.
+//!
+//! The handling of FileAvailable (5009), BatteryStatus (5023) and the
+//! device_status battery request and answer is ported from the same commit:
+//! `.../garmin/messages/FileAvailableMessage.java`,
+//! `.../garmin/messages/BatteryStatusMessage.java` (both Copyright (C) 2026
+//! Thomas Kuehne and the other Gadgetbridge contributors),
+//! `.../garmin/FileTransferHandler.java` (`handle`; Copyright (C) 2024-2026
+//! Daniele Gobbetti, José Rebelo, Thomas Kuehne and the other Gadgetbridge
+//! contributors), `.../garmin/ProtocolBufferHandler.java`
+//! (`processProtobufDeviceStatusResponse`; no copyright line in the file;
+//! Gadgetbridge contributors) and `.../garmin/GarminSupport.java`
+//! (`requestBatteryUpdate`; Copyright (C) 2024-2026 Daniele Gobbetti, José
+//! Rebelo, kuhy, Thomas Kuehne and the other Gadgetbridge contributors).
+//! Those behaviours are *inferred (Gadgetbridge)*; what we do differently is
+//! marked [ours].
 
 use std::collections::VecDeque;
 
 use super::sync::{Ctx, SyncCycle};
 use super::transport::REPLY_DEADLINE_MS;
 use super::{
-    AnomalyKind, ClientConfig, CloseReason, DeviceInfo, Event, FileType, Now, Phase,
+    AnomalyKind, BatteryReport, ClientConfig, CloseReason, DeviceInfo, Event, FileType, Now, Phase,
     GARMIN_EPOCH_UNIX_S,
 };
 use crate::gfdi::{Message, Status, RESPONSE};
@@ -22,6 +37,9 @@ use crate::messages as m;
 
 /// Wall clocks before this (2020-01-01T00:00Z) are treated as unset.
 const MIN_VALID_UNIX_S: i64 = 1_577_836_800;
+
+/// Status 7 of a 5023: the watch marks the reading as invalid.
+const BATTERY_STATUS_INVALID: u8 = 7;
 
 /// "Unknown or not supported" status for requests we do not implement.
 const STATUS_UNSUPPORTED: u8 = 2;
@@ -48,6 +66,8 @@ pub enum Kind {
     Download,
     Archive,
     SyncComplete,
+    /// The protobuf battery request (5043, device_status 8).
+    BatteryRequest,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -130,6 +150,11 @@ impl Requests {
     pub fn is_pending(&self) -> bool {
         self.pending.is_some()
     }
+
+    /// A request of this kind is outstanding or queued.
+    pub fn has(&self, kind: Kind) -> bool {
+        self.pending.is_some_and(|p| p.kind == kind) || self.queue.iter().any(|q| q.kind == kind)
+    }
 }
 
 /// A 5000 response to a watch request, with the request's txn if it had one.
@@ -168,6 +193,9 @@ pub struct Session {
     file_types: Vec<FileType>,
     handshake_started: bool,
     ready: bool,
+    /// `Input::RequestBattery` arrived before the handshake was done: send
+    /// one request right after it.
+    battery_requested: bool,
     req: Requests,
     sync: SyncCycle,
     deadline: Option<u64>,
@@ -191,6 +219,7 @@ impl Session {
             file_types: Vec::new(),
             handshake_started: false,
             ready: false,
+            battery_requested: false,
             req: Requests::default(),
             sync: SyncCycle::new(config.connection_epoch),
             deadline: None,
@@ -228,10 +257,21 @@ impl Session {
         let mut out = Out::default();
         if self.deadline.is_some_and(|d| now.mono_ms >= d) {
             self.deadline = None;
-            out.close(CloseReason::Timeout {
-                phase: self.phase(),
-            });
-            return out;
+            let battery_pending = self
+                .req
+                .pending
+                .is_some_and(|p| p.kind == Kind::BatteryRequest);
+            if battery_pending && !self.sync.awaiting_chunks() {
+                // A silent battery request must not end the session: drop
+                // it and go on; a late answer is then unexpected. [ours]
+                self.req.pending = None;
+                out.anomaly(AnomalyKind::BatteryRequestRefused, m::PROTOBUF_REQUEST);
+            } else {
+                out.close(CloseReason::Timeout {
+                    phase: self.phase(),
+                });
+                return out;
+            }
         }
         self.sync.on_tick(&mut Ctx {
             now: now.mono_ms,
@@ -254,6 +294,34 @@ impl Session {
         );
         self.finish(now, &mut out, false);
         out
+    }
+
+    /// `Input::RequestBattery`. Before the handshake is done the request is
+    /// remembered (once) and goes out after it; afterwards it is queued
+    /// unless one is already queued or unanswered.
+    pub fn request_battery(&mut self, now: &Now) -> Out {
+        let mut out = Out::default();
+        if self.ready {
+            self.send_battery_request(&mut out);
+        } else {
+            self.battery_requested = true;
+        }
+        self.finish(now, &mut out, false);
+        out
+    }
+
+    fn send_battery_request(&mut self, out: &mut Out) {
+        self.battery_requested = false;
+        if self.req.has(Kind::BatteryRequest) {
+            return;
+        }
+        let id = self.req.next_protobuf_id();
+        self.req.send(
+            out,
+            m::PROTOBUF_REQUEST,
+            m::build_protobuf(id, &m::BATTERY_REQUEST_PROTOBUF),
+            Kind::BatteryRequest,
+        );
     }
 
     pub fn file_stored(&mut self, now: &Now, transfer_id: u64, stored: bool) -> Out {
@@ -331,6 +399,14 @@ impl Session {
             }
             return true;
         }
+        if pending.kind == Kind::BatteryRequest {
+            // Like the first-connection events, a refusal is not fatal: the
+            // battery is a convenience. [ours]
+            if r.status != Status::Ack {
+                out.anomaly(AnomalyKind::BatteryRequestRefused, m::PROTOBUF_REQUEST);
+            }
+            return true;
+        }
         if r.status != Status::Ack {
             if matches!(pending.kind, Kind::Download | Kind::Archive) {
                 // One file goes wrong; the cycle continues. [plan 10]
@@ -379,6 +455,9 @@ impl Session {
                 if self.first_connect {
                     self.first_connect = false;
                     self.send_first_connect_events(out);
+                }
+                if self.battery_requested {
+                    self.send_battery_request(out);
                 }
                 self.sync.on_ready(&mut Ctx {
                     now: now.mono_ms,
@@ -436,6 +515,44 @@ impl Session {
                                 out,
                             },
                         );
+                    }
+                    None => out.anomaly(AnomalyKind::BadFrame, msg.id),
+                }
+                false
+            }
+            m::FILE_AVAILABLE => {
+                match m::parse_file_available(&msg.payload) {
+                    Some(entry) => {
+                        out.msgs.push(response(msg, 0, &[]));
+                        self.sync.on_file_available(
+                            self.ready,
+                            entry,
+                            &mut Ctx {
+                                now: now.mono_ms,
+                                req: &mut self.req,
+                                out,
+                            },
+                        );
+                    }
+                    None => out.anomaly(AnomalyKind::BadFrame, msg.id),
+                }
+                false
+            }
+            m::BATTERY_STATUS => {
+                match m::parse_battery_status(&msg.payload) {
+                    Some(b) => {
+                        out.msgs.push(response(msg, 0, &[]));
+                        // A percentage above 100 is not a battery level, and
+                        // status 7 ("invalid") marks the reading as unusable.
+                        if b.percent <= 100 && b.status != BATTERY_STATUS_INVALID {
+                            out.events.push(Event::Battery {
+                                level_percent: b.percent,
+                                report: BatteryReport::Status {
+                                    status: b.status,
+                                    centivolts: b.centivolts,
+                                },
+                            });
+                        }
                     }
                     None => out.anomaly(AnomalyKind::BadFrame, msg.id),
                 }
@@ -568,9 +685,11 @@ impl Session {
     }
 
     /// Watch protobuf requests (5043) and answers to ours (5044) are
-    /// acknowledged with an 8-byte body; we never answer them (5044).
+    /// acknowledged with an 8-byte body; we never answer them (5044). Of the
+    /// content we read only the battery response (device_status 8), from
+    /// single-chunk messages; everything else is ignored.
     fn on_protobuf(&mut self, msg: &Message, out: &mut Out) {
-        let Some((header, _)) = m::parse_protobuf(&msg.payload) else {
+        let Some((header, body)) = m::parse_protobuf(&msg.payload) else {
             out.anomaly(AnomalyKind::BadFrame, msg.id);
             return;
         };
@@ -579,6 +698,17 @@ impl Session {
         }
         out.msgs
             .push(response(msg, 0, &m::build_protobuf_ack(header.request_id)));
+        if header.offset == 0 && header.chunk == header.total {
+            if let Some(b) = m::parse_battery_protobuf(body) {
+                out.events.push(Event::Battery {
+                    level_percent: b.level,
+                    report: BatteryReport::DeviceStatus {
+                        battery_status: b.battery_status,
+                        hours_remaining: b.hours_remaining,
+                    },
+                });
+            }
+        }
     }
 }
 

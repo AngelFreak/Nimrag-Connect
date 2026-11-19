@@ -146,6 +146,40 @@ pub fn close_all_response(client: u64, status: u8) -> Vec<u8> {
     v
 }
 
+fn push_varint(out: &mut Vec<u8>, mut v: u64) {
+    while v >= 0x80 {
+        out.push((v as u8 & 0x7F) | 0x80);
+        v >>= 7;
+    }
+    out.push(v as u8);
+}
+
+/// Smart.device_status_service(8) { remote_device_battery_status_response(3)
+/// { status = 1, current_battery_level = `level`, battery_status = `status`,
+/// estimated_hours_remaining = `hours` } } as the watch sends it.
+pub fn battery_smart(level: u64, status: Option<u64>, hours: Option<u64>) -> Vec<u8> {
+    let mut resp = vec![0x08, 0x01, 0x10];
+    push_varint(&mut resp, level);
+    for (key, value) in [(0x18, status), (0x20, hours)] {
+        if let Some(v) = value {
+            resp.push(key);
+            push_varint(&mut resp, v);
+        }
+    }
+    let mut service = vec![0x1A];
+    push_varint(&mut service, resp.len() as u64);
+    service.extend_from_slice(&resp);
+    let mut smart = vec![0x42];
+    push_varint(&mut smart, service.len() as u64);
+    smart.extend_from_slice(&service);
+    smart
+}
+
+/// 5023 BatteryStatus from the watch: `status` is the whole first byte.
+pub fn battery_status_message(status: u8, centivolts: u8, percent: u8) -> Message {
+    Message::new(5023, vec![status, centivolts, percent, 1, 2, 3, 4])
+}
+
 /// A watch response (5000) to a phone request, echoing its txn.
 pub fn watch_response(to: &Message, status: u8, body: &[u8]) -> Message {
     let mut payload = to.id.to_le_bytes().to_vec();
@@ -210,12 +244,22 @@ pub struct FakeWatch {
     /// Answer every 5030 carrying this system event with a NAK (0 also
     /// refuses the SYNC_COMPLETE at the end of each cycle).
     pub nak_system_event: Option<u8>,
+    /// Leave every 5030 carrying this system event unanswered (the test
+    /// answers it later with `watch_response`).
+    pub silent_system_event: Option<u8>,
     /// After acknowledging the 5030 carrying this system event, send a 5037.
     pub sync_after_system_event: Option<u8>,
     /// Answer the 5002 of this index with 5054 compressed data.
     pub compress_file: Option<u16>,
     /// Withhold file chunks once this many have been sent on this link.
     pub stall_after: Option<usize>,
+    /// Answer the phone's battery request (5043, device_status 8) with a NAK.
+    pub nak_battery_request: bool,
+    /// Do not answer the phone's battery request at all.
+    pub silent_battery_request: bool,
+    /// Smart bytes of the 5044 sent after the ACK of a battery request
+    /// (`None`: no 5044).
+    pub battery_response: Option<Vec<u8>>,
     /// What the phone sent on this link.
     pub phone_msgs: Vec<Message>,
     pub phone_raw: Vec<Vec<u8>>,
@@ -249,9 +293,13 @@ impl FakeWatch {
             nak_download: None,
             nak_archive: None,
             nak_system_event: None,
+            silent_system_event: None,
             sync_after_system_event: None,
             compress_file: None,
             stall_after: None,
+            nak_battery_request: false,
+            silent_battery_request: false,
+            battery_response: Some(battery_smart(87, Some(1), Some(120))),
             file_chunks_sent: 0,
             phone_msgs: Vec::new(),
             phone_raw: Vec::new(),
@@ -489,6 +537,11 @@ impl FakeWatch {
                 &m::build_supported_file_types(&self.file_types),
             )],
             5007 if self.nak_filter => vec![watch_response(msg, 1, &[])],
+            5030 if self.silent_system_event.is_some()
+                && msg.payload.first().copied() == self.silent_system_event =>
+            {
+                Vec::new()
+            }
             5030 if self.nak_system_event.is_some()
                 && msg.payload.first().copied() == self.nak_system_event =>
             {
@@ -515,7 +568,23 @@ impl FakeWatch {
                 vec![watch_response(msg, 0, &body)]
             }
             5043 => {
-                let (h, _) = m::parse_protobuf(&msg.payload).expect("protobuf");
+                let (h, body) = m::parse_protobuf(&msg.payload).expect("protobuf");
+                if body == m::BATTERY_REQUEST_PROTOBUF {
+                    if self.silent_battery_request {
+                        return Vec::new();
+                    }
+                    if self.nak_battery_request {
+                        return vec![watch_response(msg, 1, &[])];
+                    }
+                    let mut out =
+                        vec![watch_response(msg, 0, &m::build_protobuf_ack(h.request_id))];
+                    out.extend(
+                        self.battery_response
+                            .iter()
+                            .map(|b| Message::new(5044, m::build_protobuf(h.request_id, b))),
+                    );
+                    return out;
+                }
                 let mut out = vec![watch_response(msg, 0, &m::build_protobuf_ack(h.request_id))];
                 if self.grant_sync_on_protobuf {
                     // The watch's answer (5044) and then its 5037 MANUAL.
@@ -529,6 +598,16 @@ impl FakeWatch {
             }
             _ => vec![watch_response(msg, 0, &[])],
         }
+    }
+
+    /// 5009 FileAvailable for a file this watch holds: its directory entry.
+    pub fn file_available(&self, index: u16) -> Message {
+        let file = self
+            .files
+            .iter()
+            .find(|f| f.entry.index == index)
+            .expect("the watch holds this file");
+        Message::new(5009, file.entry.encode())
     }
 
     pub fn sync_request(&self, option: u8) -> Message {

@@ -34,12 +34,23 @@ pub struct DstPair {
 
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Enum)]
 pub enum Input {
-    Connected { att_mtu: u16 },
-    Notification { value: Vec<u8> },
+    Connected {
+        att_mtu: u16,
+    },
+    Notification {
+        value: Vec<u8>,
+    },
     Tick,
     StartSync,
-    FileStored { transfer_id: u64 },
-    FileStoreFailed { transfer_id: u64 },
+    FileStored {
+        transfer_id: u64,
+    },
+    FileStoreFailed {
+        transfer_id: u64,
+    },
+    /// Ask the watch for its battery level; the answer arrives as
+    /// `Event::Battery`.
+    RequestBattery,
     Disconnected,
 }
 
@@ -130,6 +141,10 @@ pub enum Event {
     Unsupported {
         message_id: u16,
     },
+    Battery {
+        level_percent: u8,
+        report: BatteryReport,
+    },
     Anomaly {
         kind: AnomalyKind,
         message_id: u16,
@@ -141,8 +156,27 @@ pub enum Event {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
 pub enum SyncTrigger {
-    Watch { option: u8 },
+    Watch {
+        option: u8,
+    },
     Caller,
+    /// The watch announced new file(s) (5009); no listing.
+    FileAvailable,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
+pub enum BatteryReport {
+    /// 5023: status bits 4-6 of byte 0 as sent (1 good, 2 ok, 3 low,
+    /// 4 critical, 5 new) and the voltage in 10 mV. Status 7 (invalid) is not
+    /// reported.
+    Status { status: u8, centivolts: u8 },
+    /// Answer to `Input::RequestBattery`; `battery_status` is the app's
+    /// battery status number (0 unknown, 1 normal, 2 low, 3 critical,
+    /// 4 charging, 5 fully charged, 6 error, 7 low pulse-ox) when present.
+    DeviceStatus {
+        battery_status: Option<u32>,
+        hours_remaining: Option<u32>,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
@@ -165,6 +199,7 @@ pub enum AnomalyKind {
     ChunkedProtobuf,
     SyncNotGranted,
     GfdiClosedByWatch,
+    BatteryRequestRefused,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]

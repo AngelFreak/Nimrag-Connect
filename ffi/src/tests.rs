@@ -75,6 +75,10 @@ fn every_input_variant_converts() {
         core::Input::Notification { value: vec![1, 2] }
     );
     assert_eq!(core::Input::from(Input::Tick), core::Input::Tick);
+    assert_eq!(
+        core::Input::from(Input::RequestBattery),
+        core::Input::RequestBattery
+    );
     assert_eq!(core::Input::from(Input::StartSync), core::Input::StartSync);
     assert_eq!(
         core::Input::from(Input::FileStored { transfer_id: 9 }),
@@ -123,6 +127,70 @@ fn downloaded_event_keeps_entry_and_data() {
                 timestamp: 1_000_071,
             },
             data: vec![7, 8, 9],
+        }
+    );
+}
+
+#[test]
+fn battery_and_file_available_variants_convert() {
+    let e: Event = core::Event::Battery {
+        level_percent: 87,
+        report: core::BatteryReport::Status {
+            status: 2,
+            centivolts: 38,
+        },
+    }
+    .into();
+    assert_eq!(
+        e,
+        Event::Battery {
+            level_percent: 87,
+            report: BatteryReport::Status {
+                status: 2,
+                centivolts: 38
+            }
+        }
+    );
+    let e: Event = core::Event::Battery {
+        level_percent: 5,
+        report: core::BatteryReport::DeviceStatus {
+            battery_status: Some(2),
+            hours_remaining: None,
+        },
+    }
+    .into();
+    assert_eq!(
+        e,
+        Event::Battery {
+            level_percent: 5,
+            report: BatteryReport::DeviceStatus {
+                battery_status: Some(2),
+                hours_remaining: None
+            }
+        }
+    );
+    let e: Event = core::Event::SyncStarted {
+        cycle: 3,
+        trigger: core::SyncTrigger::FileAvailable,
+    }
+    .into();
+    assert_eq!(
+        e,
+        Event::SyncStarted {
+            cycle: 3,
+            trigger: SyncTrigger::FileAvailable
+        }
+    );
+    let e: Event = core::Event::Anomaly {
+        kind: core::AnomalyKind::BatteryRequestRefused,
+        message_id: 5043,
+    }
+    .into();
+    assert_eq!(
+        e,
+        Event::Anomaly {
+            kind: AnomalyKind::BatteryRequestRefused,
+            message_id: 5043
         }
     );
 }

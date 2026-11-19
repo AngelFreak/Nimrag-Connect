@@ -107,6 +107,15 @@ pub enum Input {
     FileStored { transfer_id: u64 },
     /// Storing failed; the file stays pending on the watch.
     FileStoreFailed { transfer_id: u64 },
+    /// Ask the watch for its battery level; the answer arrives as
+    /// `Event::Battery` with `BatteryReport::DeviceStatus`. Sends one
+    /// protobuf request (5043, device_status 8) once the handshake is done;
+    /// a call before that is remembered and sent right after it. Calls while
+    /// a request is still queued or unanswered add no second request. The
+    /// client never asks by itself: Gadgetbridge requests the battery after
+    /// every handshake, but our bring-up sequence is verified against our own
+    /// captures and stays as it is, so the host decides when to ask. [ours]
+    RequestBattery,
     /// The GATT link is gone. Terminal.
     Disconnected,
 }
@@ -180,6 +189,14 @@ pub enum Event {
     Unsupported {
         message_id: u16,
     },
+    /// The watch's battery level, 0-100. Either pushed by the watch (5023) or
+    /// the answer to `Input::RequestBattery`; `report` says which and carries
+    /// the extra fields of that message. Levels above 100 and 5023 readings
+    /// with status 7 (invalid) are dropped.
+    Battery {
+        level_percent: u8,
+        report: BatteryReport,
+    },
     /// Something unexpected that did not end the session.
     Anomaly {
         kind: AnomalyKind,
@@ -209,11 +226,31 @@ pub struct DeviceInfo {
 pub use crate::messages::FileType;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BatteryReport {
+    /// 5023: status bits 4-6 of byte 0 as sent (1 good, 2 ok, 3 low,
+    /// 4 critical, 5 new) and the voltage in 10 mV. Status 7 (invalid) is
+    /// acknowledged but not reported. *inferred (Gadgetbridge)*
+    Status { status: u8, centivolts: u8 },
+    /// Answer to `Input::RequestBattery` (device_status 8). `battery_status`
+    /// is the app's battery status number (0 unknown, 1 normal, 2 low,
+    /// 3 critical, 4 charging, 5 fully charged, 6 error, 7 low pulse-ox) when
+    /// present.
+    DeviceStatus {
+        battery_status: Option<u32>,
+        hours_remaining: Option<u32>,
+    },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SyncTrigger {
     /// SyncRequest (5037) from the watch; `option` as received.
     Watch { option: u8 },
     /// `Input::StartSync` (the watch still sends 5037 before the listing).
     Caller,
+    /// The watch announced new file(s) with FileAvailable (5009): the cycle
+    /// goes straight to the announced files, with no filter, no listing and
+    /// no `Event::Directory`.
+    FileAvailable,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -255,6 +292,10 @@ pub enum AnomalyKind {
     /// Frames sent meanwhile go out on the new handle; a 5024 from the watch
     /// afterwards restarts the handshake.
     GfdiClosedByWatch,
+    /// The battery request (5043 from `Input::RequestBattery`) was refused
+    /// with a non-ACK status, or not answered within the reply deadline (it
+    /// is then dropped). Not fatal; the session goes on.
+    BatteryRequestRefused,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -397,6 +438,10 @@ impl Client {
             Input::Tick => {}
             Input::StartSync => {
                 let out = self.session.start_sync(now);
+                self.apply_session(now, out, step);
+            }
+            Input::RequestBattery => {
+                let out = self.session.request_battery(now);
                 self.apply_session(now, out, step);
             }
             Input::FileStored { transfer_id } => {

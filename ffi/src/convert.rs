@@ -45,6 +45,7 @@ impl From<Input> for core::Input {
             Input::StartSync => core::Input::StartSync,
             Input::FileStored { transfer_id } => core::Input::FileStored { transfer_id },
             Input::FileStoreFailed { transfer_id } => core::Input::FileStoreFailed { transfer_id },
+            Input::RequestBattery => core::Input::RequestBattery,
             Input::Disconnected => core::Input::Disconnected,
         }
     }
@@ -159,6 +160,13 @@ impl From<core::Event> for Event {
                 failed,
             },
             core::Event::Unsupported { message_id } => Event::Unsupported { message_id },
+            core::Event::Battery {
+                level_percent,
+                report,
+            } => Event::Battery {
+                level_percent,
+                report: report.into(),
+            },
             core::Event::Anomaly { kind, message_id } => Event::Anomaly {
                 kind: kind.into(),
                 message_id,
@@ -175,6 +183,24 @@ impl From<core::SyncTrigger> for SyncTrigger {
         match t {
             core::SyncTrigger::Watch { option } => SyncTrigger::Watch { option },
             core::SyncTrigger::Caller => SyncTrigger::Caller,
+            core::SyncTrigger::FileAvailable => SyncTrigger::FileAvailable,
+        }
+    }
+}
+
+impl From<core::BatteryReport> for BatteryReport {
+    fn from(r: core::BatteryReport) -> Self {
+        match r {
+            core::BatteryReport::Status { status, centivolts } => {
+                BatteryReport::Status { status, centivolts }
+            }
+            core::BatteryReport::DeviceStatus {
+                battery_status,
+                hours_remaining,
+            } => BatteryReport::DeviceStatus {
+                battery_status,
+                hours_remaining,
+            },
         }
     }
 }
@@ -203,6 +229,7 @@ impl From<core::AnomalyKind> for AnomalyKind {
             core::AnomalyKind::ChunkedProtobuf => AnomalyKind::ChunkedProtobuf,
             core::AnomalyKind::SyncNotGranted => AnomalyKind::SyncNotGranted,
             core::AnomalyKind::GfdiClosedByWatch => AnomalyKind::GfdiClosedByWatch,
+            core::AnomalyKind::BatteryRequestRefused => AnomalyKind::BatteryRequestRefused,
         }
     }
 }

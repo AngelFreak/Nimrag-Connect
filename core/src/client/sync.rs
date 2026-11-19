@@ -8,6 +8,21 @@
 //!
 //! Archive rule: 5008 is built in exactly one place, `on_confirmation`,
 //! and only from `State::WaitStore` with a matching transfer id.
+//!
+//! FileAvailable (5009): the watch announces one new file. Handling is ported
+//! from Gadgetbridge commit 7257742b (AGPL-3.0-or-later),
+//! `app/src/main/java/nodomain/freeyourgadget/gadgetbridge/service/devices/garmin/FileTransferHandler.java`
+//! (`handle`, `conditionallyDownload`), Copyright (C) 2024-2026 Daniele
+//! Gobbetti, José Rebelo, Thomas Kuehne and the other Gadgetbridge
+//! contributors, and `.../garmin/messages/FileAvailableMessage.java`,
+//! Copyright (C) 2026 Thomas Kuehne and the other Gadgetbridge contributors:
+//! Gadgetbridge downloads the announced entry directly, without a listing.
+//! That is *inferred (Gadgetbridge)*. The rest is ours [ours]: announced files
+//! are kept in a short list (`announced`), so an announcement that arrives
+//! while the session is busy is fetched in the running cycle or in one of
+//! its own right after, and a file that is also in a listing is fetched once.
+
+use std::collections::VecDeque;
 
 use super::session::{response, Kind, Out, Requests};
 use super::transport::REPLY_DEADLINE_MS;
@@ -15,6 +30,13 @@ use super::{AnomalyKind, Event, FileFailure, SyncTrigger};
 use crate::crc;
 use crate::gfdi::Message;
 use crate::messages::{self as m, DirEntry};
+
+/// Most announced files kept while the session is busy. Further ones are
+/// dropped; the watch keeps them pending, so the next full listing has them.
+/// [ours]
+const MAX_ANNOUNCED: usize = 32;
+/// Most files remembered in `handled` (the oldest are forgotten first). [ours]
+const MAX_HANDLED: usize = 256;
 
 /// Retry delay and count for a "not ready" (status 3) download reply.
 const NOT_READY_DELAY_MS: u64 = 1_000;
@@ -98,6 +120,17 @@ pub struct SyncCycle {
     next_transfer: u64,
     /// A trigger that arrived while busy (at most one).
     queued: Option<SyncTrigger>,
+    /// Files announced by 5009 that no cycle has taken yet (at most
+    /// `MAX_ANNOUNCED`, no two the same file). They join the end of the
+    /// running cycle's file list, or start a `SyncTrigger::FileAvailable`
+    /// cycle when nothing else is queued.
+    announced: Vec<DirEntry>,
+    /// Files a cycle of this connection has finished with: archived, or
+    /// failed for any reason. A 5009 for one of them is ignored, so a
+    /// re-announcement never starts a cycle that only repeats it, and a file
+    /// that keeps failing cannot cause cycle after cycle. Full listing cycles
+    /// do not look here: they still retry failed files. [ours]
+    handled: VecDeque<DirEntry>,
     entries: Vec<DirEntry>,
     next_entry: usize,
     downloaded: u32,
@@ -114,6 +147,8 @@ impl SyncCycle {
             cycle: 0,
             next_transfer: (connection_epoch as u64) << 32,
             queued: None,
+            announced: Vec::new(),
+            handled: VecDeque::new(),
             entries: Vec::new(),
             next_entry: 0,
             downloaded: 0,
@@ -181,6 +216,27 @@ impl SyncCycle {
         }
     }
 
+    /// Watch 5009 (already acknowledged by the caller): one new file.
+    pub fn on_file_available(&mut self, ready: bool, entry: DirEntry, cx: &mut Ctx) {
+        if entry.index == 0 || !is_readable_fit(&entry) {
+            return;
+        }
+        let running = !matches!(self.state, State::Idle);
+        if self.handled.iter().any(|e| same_file(e, &entry))
+            || (running && self.entries.iter().any(|e| same_file(e, &entry)))
+        {
+            return;
+        }
+        if self.announced.len() < MAX_ANNOUNCED
+            && !self.announced.iter().any(|e| same_file(e, &entry))
+        {
+            self.announced.push(entry);
+        }
+        if ready && matches!(self.state, State::Idle) {
+            self.start_queued(cx);
+        }
+    }
+
     fn send_sync_now(&mut self, cx: &mut Ctx) {
         let id = cx.req.next_protobuf_id();
         cx.req.send(
@@ -201,11 +257,28 @@ impl SyncCycle {
                 self.begin_cycle(SyncTrigger::Watch { option }, cx)
             }
             Some(SyncTrigger::Caller) => self.send_sync_now(cx),
+            Some(SyncTrigger::FileAvailable) => {}
+            None if !self.announced.is_empty() => {
+                // No filter, no listing: straight to the announced files.
+                self.reset_cycle(SyncTrigger::FileAvailable, cx);
+                self.next_file(cx);
+            }
             None => {}
         }
     }
 
     fn begin_cycle(&mut self, trigger: SyncTrigger, cx: &mut Ctx) {
+        self.reset_cycle(trigger, cx);
+        self.state = State::Filter;
+        cx.req.send(
+            cx.out,
+            m::DIRECTORY_FILTER,
+            vec![m::FILTER_PENDING],
+            Kind::Filter,
+        );
+    }
+
+    fn reset_cycle(&mut self, trigger: SyncTrigger, cx: &mut Ctx) {
         self.cycle += 1;
         self.downloaded = 0;
         self.archived = 0;
@@ -217,13 +290,6 @@ impl SyncCycle {
             cycle: self.cycle,
             trigger,
         });
-        self.state = State::Filter;
-        cx.req.send(
-            cx.out,
-            m::DIRECTORY_FILTER,
-            vec![m::FILTER_PENDING],
-            Kind::Filter,
-        );
     }
 
     // ---- answers to our requests (status already checked: ACK) --------------
@@ -239,6 +305,7 @@ impl SyncCycle {
                 if let State::Archive { id, entry } = self.state.clone() {
                     if body.first() == Some(&0) {
                         self.archived += 1;
+                        self.mark_handled(&entry);
                         cx.out.events.push(Event::FileArchived { transfer_id: id });
                     } else {
                         self.file_failed(entry, FileFailure::ArchiveRefused, false, cx);
@@ -263,7 +330,11 @@ impl SyncCycle {
                     };
                 }
             }
-            Kind::Config | Kind::FileTypes | Kind::HandshakeComplete | Kind::FirstConnect(_) => {}
+            Kind::Config
+            | Kind::FileTypes
+            | Kind::HandshakeComplete
+            | Kind::FirstConnect(_)
+            | Kind::BatteryRequest => {}
         }
     }
 
@@ -456,6 +527,7 @@ impl SyncCycle {
         cx: &mut Ctx,
     ) {
         self.failed += 1;
+        self.mark_handled(&entry);
         cx.out.events.push(Event::FileFailed {
             entry,
             reason,
@@ -466,17 +538,43 @@ impl SyncCycle {
     // ---- moving through the listing ---------------------------------------------
 
     fn next_file(&mut self, cx: &mut Ctx) {
-        while let Some(entry) = self.entries.get(self.next_entry).cloned() {
-            self.next_entry += 1;
-            if entry.data_type != DATA_TYPE_FIT || entry.flags & m::FLAG_READ == 0 {
-                self.file_failed(entry, FileFailure::Skipped, false, cx);
-                continue;
+        loop {
+            while let Some(entry) = self.entries.get(self.next_entry).cloned() {
+                self.next_entry += 1;
+                if !is_readable_fit(&entry) {
+                    self.file_failed(entry, FileFailure::Skipped, false, cx);
+                    continue;
+                }
+                self.dl = Some(Download::new(Some(entry)));
+                self.request_download(cx);
+                return;
             }
-            self.dl = Some(Download::new(Some(entry)));
-            self.request_download(cx);
-            return;
+            if !self.take_announced() {
+                break;
+            }
         }
         self.complete(cx);
+    }
+
+    fn mark_handled(&mut self, entry: &DirEntry) {
+        self.handled.retain(|e| !same_file(e, entry));
+        if self.handled.len() >= MAX_HANDLED {
+            self.handled.pop_front();
+        }
+        self.handled.push_back(entry.clone());
+    }
+
+    /// The list is used up: append the announced files that are not in it
+    /// yet (processed or not) and empty `announced`. True when that added
+    /// anything.
+    fn take_announced(&mut self) -> bool {
+        let before = self.entries.len();
+        for entry in std::mem::take(&mut self.announced) {
+            if !self.entries.iter().any(|e| same_file(e, &entry)) {
+                self.entries.push(entry);
+            }
+        }
+        self.entries.len() > before
     }
 
     fn complete(&mut self, cx: &mut Ctx) {
@@ -519,4 +617,18 @@ impl SyncCycle {
             self.next_file(cx);
         }
     }
+}
+
+/// The test `next_file` and `on_file_available` share: a readable FIT file.
+fn is_readable_fit(e: &DirEntry) -> bool {
+    e.data_type == DATA_TYPE_FIT && e.flags & m::FLAG_READ != 0
+}
+
+/// Two entries name the same file when index, type, sub type and file number
+/// agree. Flags and size may differ (they change as the watch marks and grows
+/// a file), and so may the timestamp: a 5009 can carry 0 where the listing
+/// has the real one (Gadgetbridge allows for that). [ours]
+fn same_file(a: &DirEntry, b: &DirEntry) -> bool {
+    (a.index, a.data_type, a.sub_type, a.file_number)
+        == (b.index, b.data_type, b.sub_type, b.file_number)
 }

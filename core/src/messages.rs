@@ -4,12 +4,28 @@
 //! returns `None` on short or malformed input and never panics; this is the
 //! one implementation of each layout, shared by the client, `describe` and
 //! `link`.
+//!
+//! The FileAvailable (5009) and BatteryStatus (5023) layouts are ported from
+//! Gadgetbridge commit 7257742b (AGPL-3.0-or-later),
+//! `app/src/main/java/nodomain/freeyourgadget/gadgetbridge/service/devices/garmin/messages/FileAvailableMessage.java`
+//! and `.../messages/BatteryStatusMessage.java`. Copyright (C) 2026 Thomas
+//! Kuehne and the other Gadgetbridge contributors. The battery request and
+//! response bodies (`BATTERY_REQUEST_PROTOBUF`, `parse_battery_protobuf`) follow
+//! the behaviour of `GarminSupport.java` (`requestBatteryUpdate`; Copyright
+//! (C) 2024-2026 Daniele Gobbetti, José Rebelo, kuhy, Thomas Kuehne and the
+//! other Gadgetbridge contributors) and of `ProtocolBufferHandler.java`
+//! (`processProtobufDeviceStatusResponse`; no copyright line in the file;
+//! Gadgetbridge contributors), written against our own schema
+//! (`docs/protocol/proto/gdi_device_status.proto`). All of it is *inferred
+//! (Gadgetbridge)*. See docs/PORTED.md.
 
 pub const DOWNLOAD_FILE: u16 = 5002;
 pub const FILE_DATA: u16 = 5004;
 pub const COMPRESSED_FILE_DATA: u16 = 5054;
 pub const DIRECTORY_FILTER: u16 = 5007;
 pub const SET_FILE_FLAGS: u16 = 5008;
+pub const FILE_AVAILABLE: u16 = 5009;
+pub const BATTERY_STATUS: u16 = 5023;
 pub const DEVICE_INFORMATION: u16 = 5024;
 pub const SYSTEM_EVENT: u16 = 5030;
 pub const SUPPORTED_FILE_TYPES: u16 = 5031;
@@ -127,6 +143,37 @@ pub fn build_directory(entries: &[DirEntry]) -> Vec<u8> {
         v.extend_from_slice(&e.encode());
     }
     v
+}
+
+/// 5009 FileAvailable (watch to phone): the watch announces one new file. The
+/// payload is one directory entry; bytes after the 16th (Gadgetbridge notes a
+/// 0/1 flag of unknown meaning) are ignored. *inferred (Gadgetbridge)*
+pub fn parse_file_available(p: &[u8]) -> Option<DirEntry> {
+    DirEntry::parse(p)
+}
+
+// ---- 5023 BatteryStatus -----------------------------------------------------
+
+/// 5023 BatteryStatus (watch to phone). *inferred (Gadgetbridge)*
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct BatteryStatus {
+    /// Bits 4-6 of the first byte: 1 good, 2 ok, 3 low, 4 critical, 5 new,
+    /// 7 invalid.
+    pub status: u8,
+    /// Voltage in units of 10 mV.
+    pub centivolts: u8,
+    /// Charge in percent as sent; not range-checked here.
+    pub percent: u8,
+}
+
+/// `u8 status, u8 voltage (10 mV), u8 percent`, then bytes of unknown
+/// meaning that are ignored.
+pub fn parse_battery_status(p: &[u8]) -> Option<BatteryStatus> {
+    Some(BatteryStatus {
+        status: (*p.first()? >> 4) & 0x07,
+        centivolts: *p.get(1)?,
+        percent: *p.get(2)?,
+    })
 }
 
 // ---- 5024 DeviceInformation and the host reply ----------------------------
@@ -496,6 +543,123 @@ pub fn build_protobuf_ack(request_id: u16) -> Vec<u8> {
 /// Smart.core(13) { 1 { 1 = 0 } }: the app's "sync now" request.
 pub const SYNC_NOW_PROTOBUF: [u8; 6] = [0x6A, 0x04, 0x0A, 0x02, 0x08, 0x00];
 
+/// Smart.device_status_service(8) { remote_device_battery_status_request(2)
+/// {} }: asks the watch for its battery level. The Garmin app and
+/// Gadgetbridge send it (the latter after every handshake and sync).
+pub const BATTERY_REQUEST_PROTOBUF: [u8; 4] = [0x42, 0x02, 0x12, 0x00];
+
+/// Read one base-128 varint at `*i`. `None` on a truncated or over-long
+/// value; never panics.
+pub fn read_varint(b: &[u8], i: &mut usize) -> Option<u64> {
+    let mut v = 0u64;
+    for shift in (0..64).step_by(7) {
+        let byte = *b.get(*i)?;
+        *i += 1;
+        v |= ((byte & 0x7F) as u64) << shift;
+        if byte & 0x80 == 0 {
+            return Some(v);
+        }
+    }
+    None
+}
+
+/// One decoded protobuf field: varints and length-delimited values are
+/// kept, fixed-width values are skipped.
+enum Wire<'a> {
+    Varint(u64),
+    Bytes(&'a [u8]),
+    Skipped,
+}
+
+/// Next `(field number, value)` at `*i`, or `None` when the bytes are
+/// malformed (truncated value, field 0, group or unknown wire type).
+fn next_field<'a>(b: &'a [u8], i: &mut usize) -> Option<(u64, Wire<'a>)> {
+    let key = read_varint(b, i)?;
+    let field = key >> 3;
+    if field == 0 {
+        return None;
+    }
+    let value = match key & 7 {
+        0 => Wire::Varint(read_varint(b, i)?),
+        1 | 5 => {
+            let n = if key & 7 == 1 { 8 } else { 4 };
+            b.get(*i..i.checked_add(n)?)?;
+            *i += n;
+            Wire::Skipped
+        }
+        2 => {
+            let n = usize::try_from(read_varint(b, i)?).ok()?;
+            let s = b.get(*i..i.checked_add(n)?)?;
+            *i += n;
+            Wire::Bytes(s)
+        }
+        _ => return None,
+    };
+    Some((field, value))
+}
+
+/// The answer to `BATTERY_REQUEST_PROTOBUF`, as far as we read it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct BatteryResponse {
+    /// `current_battery_level`, 0-100.
+    pub level: u8,
+    /// `battery_status` (the app's enum number), when present.
+    pub battery_status: Option<u32>,
+    /// `estimated_hours_remaining`, when present.
+    pub hours_remaining: Option<u32>,
+}
+
+/// Decode the Smart bytes of a protobuf message from the watch (5043 or
+/// 5044) and return the battery response in `device_status_service(8)`
+/// field 3 (`remote_device_battery_status_response`), if there is one with a
+/// `current_battery_level` (field 2) of at most 100. Everything else,
+/// including notifications (field 1) and malformed bytes, gives `None`; the
+/// first response in the message wins. Never panics. *inferred
+/// (Gadgetbridge)* for which fields carry the battery; the field numbers are
+/// from our own schema.
+pub fn parse_battery_protobuf(body: &[u8]) -> Option<BatteryResponse> {
+    let mut i = 0;
+    while i < body.len() {
+        if let (8, Wire::Bytes(service)) = next_field(body, &mut i)? {
+            if let Some(r) = battery_in_device_status(service)? {
+                return Some(r);
+            }
+        }
+    }
+    None
+}
+
+/// The outer `None` means malformed bytes; `Some(None)` means no usable
+/// response in this service.
+fn battery_in_device_status(b: &[u8]) -> Option<Option<BatteryResponse>> {
+    let mut i = 0;
+    while i < b.len() {
+        if let (3, Wire::Bytes(resp)) = next_field(b, &mut i)? {
+            return battery_response(resp);
+        }
+    }
+    Some(None)
+}
+
+/// Same convention: outer `None` malformed, `Some(None)` no level (or above 100).
+fn battery_response(b: &[u8]) -> Option<Option<BatteryResponse>> {
+    let (mut level, mut status, mut hours) = (None, None, None);
+    let mut i = 0;
+    while i < b.len() {
+        match next_field(b, &mut i)? {
+            (2, Wire::Varint(v)) => level = Some(v),
+            (3, Wire::Varint(v)) => status = u32::try_from(v).ok(),
+            (4, Wire::Varint(v)) => hours = u32::try_from(v).ok(),
+            _ => {}
+        }
+    }
+    Some(level.filter(|&l| l <= 100).map(|l| BatteryResponse {
+        level: l as u8,
+        battery_status: status,
+        hours_remaining: hours,
+    }))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -625,5 +789,140 @@ mod tests {
         assert_eq!((h.request_id, h.offset, h.total, h.chunk), (3, 0, 6, 6));
         assert_eq!(body, &SYNC_NOW_PROTOBUF);
         assert_eq!(build_protobuf_ack(0x22e4), [0xe4, 0x22, 0, 0, 0, 0, 0, 0]);
+    }
+
+    #[test]
+    fn file_available_is_one_entry_and_ignores_trailing_bytes() {
+        let mut p = entry().encode();
+        assert_eq!(parse_file_available(&p), Some(entry()));
+        p.push(1);
+        assert_eq!(parse_file_available(&p), Some(entry()));
+        assert_eq!(parse_file_available(&p[..15]), None);
+    }
+
+    #[test]
+    fn battery_status_reads_bits_4_to_6_of_the_first_byte() {
+        let b = parse_battery_status(&[0x2A, 38, 87, 9, 9, 9, 9]).unwrap();
+        assert_eq!((b.status, b.centivolts, b.percent), (2, 38, 87));
+        // Bit 7 and the low nibble do not leak into the status.
+        assert_eq!(parse_battery_status(&[0xF3, 0, 0]).unwrap().status, 7);
+        assert_eq!(parse_battery_status(&[0x10, 41]), None);
+        assert_eq!(parse_battery_status(&[]), None);
+    }
+
+    /// Smart { 8 { 3 { 1 = 1, 2 = 87, 3 = 1, 4 = 120 } } }
+    const GOOD: [u8; 12] = [
+        0x42, 0x0A, 0x1A, 0x08, 0x08, 0x01, 0x10, 0x57, 0x18, 0x01, 0x20, 0x78,
+    ];
+
+    #[test]
+    fn battery_request_bytes() {
+        let payload = build_protobuf(1, &BATTERY_REQUEST_PROTOBUF);
+        let (_, body) = parse_protobuf(&payload).unwrap();
+        assert_eq!(body, [0x42, 0x02, 0x12, 0x00]);
+    }
+
+    #[test]
+    fn battery_protobuf_good_message() {
+        assert_eq!(
+            parse_battery_protobuf(&GOOD),
+            Some(BatteryResponse {
+                level: 87,
+                battery_status: Some(1),
+                hours_remaining: Some(120),
+            })
+        );
+    }
+
+    #[test]
+    fn battery_protobuf_without_status_and_hours() {
+        // Smart { 8 { 3 { 1 = 1, 2 = 0 } } }
+        let b = [0x42, 0x06, 0x1A, 0x04, 0x08, 0x01, 0x10, 0x00];
+        assert_eq!(
+            parse_battery_protobuf(&b),
+            Some(BatteryResponse {
+                level: 0,
+                battery_status: None,
+                hours_remaining: None,
+            })
+        );
+    }
+
+    #[test]
+    fn battery_protobuf_missing_level_gives_none() {
+        // Smart { 8 { 3 { 1 = 2 } } }
+        assert_eq!(
+            parse_battery_protobuf(&[0x42, 0x04, 0x1A, 0x02, 0x08, 0x02]),
+            None
+        );
+    }
+
+    #[test]
+    fn battery_protobuf_level_above_100_gives_none() {
+        let mut b = GOOD;
+        b[7] = 100;
+        assert_eq!(parse_battery_protobuf(&b).map(|r| r.level), Some(100));
+        b[7] = 101;
+        assert_eq!(parse_battery_protobuf(&b), None);
+    }
+
+    #[test]
+    fn battery_protobuf_truncated_or_malformed_gives_none() {
+        for n in 0..GOOD.len() {
+            // No prefix of a valid message may panic; only whole ones decode.
+            assert_eq!(parse_battery_protobuf(&GOOD[..n]), None, "prefix {n}");
+        }
+        // Truncated varint inside the response: level 0x80 ... then the end.
+        assert_eq!(
+            parse_battery_protobuf(&[0x42, 0x04, 0x1A, 0x02, 0x10, 0x80]),
+            None
+        );
+        // Length that overflows usize / exceeds the buffer.
+        let huge = [
+            0x42, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x01,
+        ];
+        assert_eq!(parse_battery_protobuf(&huge), None);
+        // Field number 0 and an unsupported wire type.
+        assert_eq!(parse_battery_protobuf(&[0x00, 0x01]), None);
+        assert_eq!(parse_battery_protobuf(&[0x43]), None);
+    }
+
+    #[test]
+    fn battery_protobuf_skips_unknown_fields_and_other_services() {
+        // Smart { 1 = 5, 13 { 1 { 1 = 0 } }, 8 { 1 { 1 = 3 }, 9(fixed32),
+        //   3 { 5(fixed64), 2 = 55, 6 = "x", 3 = 4 } }, 20(fixed32) }
+        let mut b = vec![0x08, 0x05];
+        b.extend_from_slice(&SYNC_NOW_PROTOBUF);
+        let resp: Vec<u8> = [
+            &[0x29][..],
+            &[1, 2, 3, 4, 5, 6, 7, 8],
+            &[0x10, 55, 0x32, 0x01, b'x', 0x18, 0x04],
+        ]
+        .concat();
+        let mut svc = vec![0x0A, 0x02, 0x08, 0x03, 0x4D, 9, 9, 9, 9];
+        svc.extend_from_slice(&[0x1A, resp.len() as u8]);
+        svc.extend_from_slice(&resp);
+        b.extend_from_slice(&[0x42, svc.len() as u8]);
+        b.extend_from_slice(&svc);
+        b.extend_from_slice(&[0xA5, 0x01, 1, 2, 3, 4]);
+        assert_eq!(
+            parse_battery_protobuf(&b),
+            Some(BatteryResponse {
+                level: 55,
+                battery_status: Some(4),
+                hours_remaining: None,
+            })
+        );
+    }
+
+    #[test]
+    fn battery_protobuf_ignores_notifications_and_other_responses() {
+        // Smart { 8 { 1 { 1 = 3 } } }: a change notification, not a level.
+        assert_eq!(
+            parse_battery_protobuf(&[0x42, 0x04, 0x0A, 0x02, 0x08, 0x03]),
+            None
+        );
+        assert_eq!(parse_battery_protobuf(&SYNC_NOW_PROTOBUF), None);
+        assert_eq!(parse_battery_protobuf(&[]), None);
     }
 }

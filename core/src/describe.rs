@@ -114,18 +114,7 @@ pub fn file_type_name(data_type: u8, sub_type: u8) -> &'static str {
 
 /// Generic protobuf wire-format dump (no schema): `field:type=value` list.
 pub fn protobuf_wire(b: &[u8], depth: usize) -> Option<String> {
-    fn varint(b: &[u8], i: &mut usize) -> Option<u64> {
-        let mut v = 0u64;
-        for shift in (0..64).step_by(7) {
-            let byte = *b.get(*i)?;
-            *i += 1;
-            v |= ((byte & 0x7F) as u64) << shift;
-            if byte & 0x80 == 0 {
-                return Some(v);
-            }
-        }
-        None
-    }
+    use messages::read_varint as varint;
     let mut i = 0;
     let mut parts = Vec::new();
     while i < b.len() {
@@ -147,8 +136,8 @@ pub fn protobuf_wire(b: &[u8], depth: usize) -> Option<String> {
                 parts.push(format!("{field}=0x{v:08x}"));
             }
             2 => {
-                let n = varint(b, &mut i)? as usize;
-                let s = b.get(i..i + n)?;
+                let n = usize::try_from(varint(b, &mut i)?).ok()?;
+                let s = b.get(i..i.checked_add(n)?)?;
                 i += n;
                 let printable = !s.is_empty() && s.iter().all(|c| (0x20..0x7F).contains(c));
                 let nested = if depth < 6 && !printable {
