@@ -109,6 +109,28 @@ fn timestamp_16_rollover_against_last_full_timestamp() {
 }
 
 #[test]
+fn timestamp_16_reference_ignores_other_messages_event_ahead_of_sample() {
+    // Real-data pattern: an event stamped T+60 precedes a monitoring sample whose
+    // timestamp_16 is low16(T). Must resolve to T, not ~18 h in the future.
+    let t = 0x3000_1234u32;
+    let mut b = def(0, 55, &[(253, 4, 0x86)], &[]);
+    b.extend(data(0, &t.to_le_bytes()));
+    b.extend(def(1, 21, &[(253, 4, 0x86)], &[]));
+    b.extend(data(1, &(t + 60).to_le_bytes()));
+    b.extend(def(2, 55, &[(26, 2, 0x84)], &[]));
+    b.extend(data(2, &((t & 0xFFFF) as u16).to_le_bytes()));
+    b.extend(data(2, &(((t + 60) & 0xFFFF) as u16).to_le_bytes()));
+    let (_, i) = run(&b);
+    assert_eq!(
+        i[1].timestamp,
+        Some(t + 60),
+        "event keeps its own timestamp"
+    );
+    assert_eq!(i[2].timestamp, Some(t));
+    assert_eq!(i[3].timestamp, Some(t + 60));
+}
+
+#[test]
 fn timestamp_16_without_reference_is_unresolved() {
     let mut b = def(0, 55, &[(26, 2, 0x84)], &[]);
     b.extend(data(0, &5u16.to_le_bytes()));
@@ -390,6 +412,7 @@ fn private_real_files_interpret_without_panic_and_monitoring_time_is_monotonic()
                 files += 1;
                 msgs += out.len();
                 let mut last = 0u32;
+                let max_full = ff.messages.iter().filter_map(|m| m.timestamp()).max();
                 for x in &out {
                     named += usize::from(x.message_name.is_some());
                     if let Some(t) = x.timestamp {
@@ -397,6 +420,12 @@ fn private_real_files_interpret_without_panic_and_monitoring_time_is_monotonic()
                         if name.contains("_128_32_") {
                             assert!(t >= last, "monitoring timestamps must not go backwards");
                             last = t;
+                        }
+                        if let Some(m) = max_full {
+                            assert!(
+                                t <= m + 3600,
+                                "interpreted timestamp far beyond any full timestamp"
+                            );
                         }
                     }
                 }

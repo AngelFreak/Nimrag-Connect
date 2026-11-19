@@ -40,6 +40,19 @@ mod with_profile {
     }
 
     #[test]
+    fn timestamp_16_behind_an_event_does_not_push_last_ts_into_the_future() {
+        let t = T + 0x1234;
+        let d = run(FitBuilder::new()
+            .message(55, &[(253, Fv::U32(t)), (27, Fv::U8(50))])
+            .message(21, &[(253, Fv::U32(t + 60))])
+            .message(55, &[(26, Fv::U16((t & 0xFFFF) as u16)), (27, Fv::U8(51))]))
+        .unwrap();
+        assert_eq!(d.facts.last_ts, Some(unix(t + 60)));
+        let ts: Vec<i64> = d.mon_hr.iter().map(|r| r.ts).collect();
+        assert_eq!(ts, vec![unix(t), unix(t)]);
+    }
+
+    #[test]
     fn timestamp_16_extends_and_rolls_over() {
         let base = (T & !0xFFFF) | 0xFFF0; // low 16 bits just below rollover
         let d = run(FitBuilder::new()

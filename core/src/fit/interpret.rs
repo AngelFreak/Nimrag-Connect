@@ -18,7 +18,10 @@
 //!   `bits`-wide rollover. The state is seeded whenever the target field appears
 //!   directly (profile `accumulate` flag). State resets per file.
 //! - Timestamps: `timestamp_16` (monitoring field 26, built in by number) is
-//!   extended against the last full timestamp and emitted as a `Component`
+//!   extended against a monitoring-only reference (last valid full timestamp of
+//!   a global-55 message, updated by each resolved `timestamp_16`; inferred from
+//!   real data, see `resolve_relative`: other messages' timestamps are never the
+//!   reference, because events may be stamped ahead of the samples) and emitted as a `Component`
 //!   value for field 253. `timestamp_min_8` is NOT resolved (semantics
 //!   unconfirmed, see `relative_timestamp`). Profile component targets of field 253 accumulate
 //!   against the last full timestamp; with no reference the component value is
@@ -143,6 +146,8 @@ impl Interpreted {
 #[derive(Default)]
 struct State {
     last_full: Option<u32>,
+    /// Reference for monitoring (global 55) relative timestamps only.
+    monitoring_ref: Option<u32>,
     accum: HashMap<(u16, u8), u64>,
 }
 
@@ -389,6 +394,9 @@ fn interpret_message(
     let own = m.timestamp();
     if let Some(t) = own.filter(|&t| t >= FIT_UTC_MIN) {
         st.last_full = Some(t);
+        if m.global == GLOBAL_MONITORING {
+            st.monitoring_ref = Some(t);
+        }
     }
     let timestamp = own.or(resolved_ts).filter(|&t| t >= FIT_UTC_MIN);
     Interpreted {
@@ -415,11 +423,19 @@ fn relative_timestamp(global: u16, num: u8) -> Option<usize> {
     (global == GLOBAL_MONITORING && num == FIELD_TIMESTAMP_16).then_some(16)
 }
 
-/// Extend a 16-bit timestamp against the last full timestamp; the result
-/// becomes the new reference.
+/// Extend a 16-bit monitoring timestamp against the monitoring-only reference
+/// (last valid full timestamp of a global-55 message, updated by each resolved
+/// `timestamp_16`); the result becomes the new reference.
+///
+/// Inferred from data, not from a spec: in real files the watch writes an event
+/// (global 21) stamped T, then a monitoring sample whose `timestamp_16` is
+/// 60 s *earlier*. Forward-only extension against an any-message reference turns
+/// that into +65476 s. Across all five real monitoring files, against this
+/// reference no `timestamp_16` is behind it (largest forward gap 120 s).
 fn resolve_relative(st: &mut State, raw: u64, bits: usize) -> Option<u32> {
-    let last = u64::from(st.last_full?);
+    let last = u64::from(st.monitoring_ref?);
     let ts = u32::try_from(last + (raw.wrapping_sub(last & mask(bits)) & mask(bits))).ok()?;
+    st.monitoring_ref = Some(ts);
     st.last_full = Some(ts);
     Some(ts)
 }

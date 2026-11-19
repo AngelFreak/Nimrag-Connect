@@ -15,7 +15,7 @@ use sqlx::{Sqlite, Transaction};
 use std::panic::{catch_unwind, AssertUnwindSafe};
 
 /// Bump when the derivation or the stored representation changes.
-pub const DERIVE_VERSION: i64 = 1;
+pub const DERIVE_VERSION: i64 = 2;
 
 /// Sample tables (natural key + `src`): cleared together at the start of a reparse.
 /// Each module owns its list (`<module>::SAMPLE_TABLES`).

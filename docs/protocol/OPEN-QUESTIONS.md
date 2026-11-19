@@ -42,6 +42,15 @@ Each entry lists what is unknown, whether our client needs the answer to pair, l
 | Q-SYNC-5 | Contents of FIT sub-types 38, 58, 70, 72 and 74 (Gadgetbridge names: SCORE?, DEVICE_58, HSA, FBT_BACKUP, FBT_PTD_BACKUP) | no; phase 1 parsers decide | Decode the extracted files with the FIT decoder (phase 1). CAP-1 already holds two 128/58 files. |
 | Q-SYNC-6 | Chunk size of files over `max_packet` (4000): CAP-2 has a 5157-byte activity in several 5004 chunks, all decoded; the exact rule for chunk length is not yet derived | no | Measure chunk sizes in CAP-2 and the overnight capture |
 
+## FIT data (from the oracle check, 2026-11-19)
+
+The owner approved one read-only comparison of a morning's derived data against their Garmin Connect account. Values, timestamps and account data stay in `private/oracle/`.
+
+| Id | Question | Blocking? | How to settle |
+| --- | --- | --- | --- |
+| Q-FIT-1 | Garmin's server time series (heart rate every 2 min, stress every 3 min, respiration every 2 min) are not the mean of the per-minute values in the monitoring file: 17 of 21 HR windows agree, stress and respiration often differ by 1–9. Values the watch writes as totals (resting HR, body battery, cumulative steps) match exactly. Does the server use other data, e.g. the undecoded global message 233 the watch writes every minute? | no; we show the watch's own samples and must not claim to reproduce Garmin's charts | Decode message 233 (layout unknown); compare once more after a night sync |
+| Q-FIT-2 | Monitoring `timestamp_16`: the watch wrote one sample 60 s behind a preceding event message's full timestamp. Resolving against the last *monitoring* timestamp (instead of any message) gives no backwards sample in all five captured files (inferred, not documented) | was a bug (a sample resolved to +18 h); fixed by that rule | Re-check on every new capture via the private replay test |
+
 ## Companion duties
 
 | Id | Question | Blocking? | How to settle |
