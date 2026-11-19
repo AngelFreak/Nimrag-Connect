@@ -28,8 +28,8 @@ The finished product: an Android app that pairs with the Instinct 2 without Garm
 | | 2f | Further companion duties, one at a time, ported from Gadgetbridge where it has them: GPS assist (setting, the only Garmin call), weather, notifications, music, find my phone | Not Started |
 | | 2g | Garmin Connect too, for owners who want both: **Alongside** (phone side, both apps share the watch, Nimrag copies, Connect archives) now; **Forward** (server uploads activities to Garmin Connect) later, after an owner decision | Alongside: In Progress; Forward: Not Started |
 | | Gate 2 | A week of normal wear: no manual steps, no lost or duplicated files; counts and hashes against a USB copy | — |
-| 3 Web | 3a | JSON API, web login (password + optional passkey), device tokens created in the web UI, generated TS types | Not Started |
-| | 3b | Web scaffold: Vite/React/TS, TanStack Query, design system, PWA, embedded in the server binary, Docker image | Not Started |
+| 3 Web | 3a | JSON API, web login (password + optional passkey), device tokens created in the web UI, generated TS types | In Progress |
+| | 3b | Web scaffold: Vite/React/TS, TanStack Query, design system, PWA, embedded in the server binary, Docker image | In Progress |
 | | 3c–3m | Pages 1–11 of the brief (Today … Desktop extras) | Not Started |
 | | 3n | Android shell: web view with native bottom bar, offline via PWA cache | Not Started |
 | | Gate 3 | Every page from real data, "unavailable" shown correctly, accessibility check | — |
@@ -404,15 +404,26 @@ A week of normal wear syncs with no manual steps and no lost or duplicated files
 
 Every page works at 390 px and at desktop width, uses the brief's design system (dark, Space Grotesk + Inter self-hosted, metric colours, 16 px card radius, 44 px touch targets, no colour-only meaning), and shows "unavailable" for missing metrics (hard rule 3).
 
+**UI source (owner, 2026-11-19):** the design canvas "Self-hosted fitness app: phone and web" (claude.ai artifact), copied to `docs/design/artifact/project/*.dc.html`: 13 phone screens at 390 px (Today, Sleep, Strength session, Activities, Activity detail, Day, Health trends, Movement, Training, Body, Calendar, Workout builder, Devices and sync) and the web dashboard. Build the pages to match them: layout, colours, type, copy. Their numbers are sample values; the "Sample data" chip shows only when the API says the data is sample data.
+
 ## Stage 3a: JSON API and auth
 **Goal**: read API over the derived tables (days, activities, sleep, trends), write API for strength-set edits and body measurements; web login with password and optional passkey; device tokens created and revoked in the web UI; API types generated from Rust (ts-rs or OpenAPI, chosen after verification), never written twice
+**Contract (integrator, 2026-11-19)**:
+- One owner account. `nimrag-server user set-password` (password from stdin, argon2id hash in the database). `POST /api/login {password}` sets an HttpOnly, SameSite=Strict session cookie (30 days, `Secure` unless `--insecure-cookies`); `POST /api/logout`. Login attempts are rate-limited. Passkeys come later in this stage, after the pages work.
+- Every `/api` read needs the session cookie; uploads keep using device tokens (a device token cannot read). Requests that change something also need the header `X-Nimrag: 1` (CSRF guard with SameSite).
+- Endpoints (all JSON, metric units in field names, every metric nullable: `null` is "unavailable", never 0): `GET /api/me`; `GET/POST/DELETE /api/tokens`; `GET /api/today`; `GET /api/days/{date}`; `GET /api/activities?type&before&limit`; `GET /api/activities/{id}` (stats, laps, zones, series); `GET /api/activities/{id}/track`; `GET/PATCH /api/activities/{id}/strength`; `GET /api/sleep/{date}` and `GET /api/sleep?nights=7|14|30`; `GET /api/trends?range=7d|4w|3m|1y`; `GET /api/movement/{date}`; `GET /api/training`; `GET/POST/DELETE /api/body`; `GET /api/calendar/{yyyy-mm}`; `GET /api/devices`; `GET /api/storage`; `GET/PATCH /api/settings` (timezone, step goal, intensity goal).
+- Days are local days in the owner's timezone (setting `timezone`, IANA name; default the server's local zone).
+- Responses carry `sample: true` when they come from seeded sample data.
+- Types: Rust structs are the only definition; ts-rs writes them to `web/src/api/generated/`, and a test fails when the committed files are stale.
+- `nimrag-server dev-seed --data-dir DIR` fills an empty data directory with 120 days of plausible sample rows in the derived tables (marked sample) for development, screenshots and the Playwright test; it refuses a directory that holds any uploaded file.
 **Tests**: API integration tests through the router; auth tests; generated types compile in /web
-**Status**: Not Started
+**Status**: In Progress
 
 ## Stage 3b: web scaffold
 **Goal**: /web with Vite, React, TypeScript, TanStack Query; uPlot for series; MapLibre GL JS with self-hosted PMTiles (no third-party tile servers); PWA with service worker + IndexedDB cache; frontend embedded in the server binary; Docker image
+**Contract**: tokens from the design canvas (background #0F1417, card #171E22, raised #12181C, line #243037/#2A353B, text #E8EDEE / #9AA7AC, link #7DBBFF, metric colours: energy #4FD1B5, sleep #A594FF, heart #FF6B6B, steps #F2D45C, stress/warn #FFB066, zones #5B8DBE/#4FD1B5/#F2D45C/#FFA24D/#FF6B6B), Inter + Space Grotesk self-hosted (no Google Fonts at runtime), components (card, stat tile, ring, series chart on uPlot, zone bars, chips, segmented control, top bars with back / previous / next, bottom nav Today · Activities · Health · Strength, desktop sidebar layout from the web dashboard), a component gallery route for review, the login page, routing for every page as a stub. The server embeds `web/dist` (rust-embed) and serves it with an SPA fallback; the Dockerfile builds the web app first.
 **Tests**: build in CI; Playwright smoke test against the real server binary
-**Status**: Not Started
+**Status**: In Progress
 
 ## Stages 3c–3m: pages (in the brief's order)
 3c Today · 3d Activities list + detail (map, stats, HR zones, laps) · 3e Strength session (edit sets, compare to previous) · 3f Sleep night (+ last 7 nights) · 3g Day view (HR, stress, energy; prev/next day) · 3h Health trends (HRV vs personal range, RHR, breathing, SpO2, sleep score; 7 d / 4 w / 3 m / 1 y) · 3i Movement · 3j Training (recovery time, 7-day load vs target, load by intensity, VO2 max as max MET × 3.5 labelled derived) · 3k Body (weight trend, manual measurements) · 3l Calendar · 3m Desktop extras (overview, activities table, strength progress, compare and reports, devices, storage and backups)

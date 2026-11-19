@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Phone · Workout builder</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600&display=swap">
+<style>
+body{margin:0}
+a{color:#7DBBFF}a:hover{color:#A9D2FF}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; box-sizing: border-box; display: flex; flex-direction: column; background: #0F1417; color: #E8EDEE; font-family: Inter, sans-serif">
+<header style="padding: 12px 12px 8px; display: flex; align-items: center; gap: 4px">
+<button type="button" aria-label="Back" style="width: 44px; height: 44px; background: none; border: 0; color: #E8EDEE; display: flex; align-items: center; justify-content: center">
+<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"></path></svg>
+</button>
+<div style="flex: 1; display: flex; flex-direction: column; gap: 2px">
+<h1 style="margin: 0; font-family: 'Space Grotesk', sans-serif; font-size: 22px; font-weight: 600">Workout</h1>
+<span style="font-size: 13px; color: #9AA7AC">Strength · about 40 min</span>
+</div>
+<span style="font-size: 12px; color: #9AA7AC; border: 1px solid #2A353B; border-radius: 999px; padding: 4px 10px; margin-right: 8px">Sample data</span>
+</header>
+<main style="flex: 1; overflow: auto; padding: 8px 20px 12px; display: flex; flex-direction: column; gap: 10px">
+<div style="display: flex; flex-direction: column; gap: 6px">
+<label for="wname" style="font-size: 13px; color: #9AA7AC">Name</label>
+<input id="wname" type="text" value="Upper body A" style="min-height: 48px; box-sizing: border-box; border-radius: 12px; border: 1px solid #2A353B; background: #171E22; color: #E8EDEE; padding: 0 14px; font: 500 16px Inter, sans-serif">
+</div>
+<h2 style="margin: 6px 0 0; font-size: 13px; font-weight: 500; color: #9AA7AC">Steps</h2>
+<section style="background: #171E22; border-radius: 14px; padding: 12px 14px; display: flex; justify-content: space-between; align-items: center">
+<div style="display: flex; flex-direction: column; gap: 3px"><span style="font-size: 15px; font-weight: 500">Warm-up</span><span style="font-size: 13px; color: #9AA7AC">5 min, easy</span></div>
+<button type="button" aria-label="Edit warm-up" style="width: 44px; height: 44px; background: none; border: 0; color: #9AA7AC"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M5 12h.01M12 12h.01M19 12h.01"></path></svg></button>
+</section>
+<section style="background: #171E22; border-radius: 14px; padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; border: 1px solid #2F5C8A">
+<div style="display: flex; justify-content: space-between; align-items: center">
+<span style="font-size: 13px; color: #7DBBFF">Repeat 3 times</span>
+<button type="button" aria-label="Edit repeat block" style="width: 44px; height: 44px; background: none; border: 0; color: #9AA7AC"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M5 12h.01M12 12h.01M19 12h.01"></path></svg></button>
+</div>
+<div style="display: flex; justify-content: space-between; font-size: 15px"><span style="font-weight: 500">Dumbbell bench press</span><span>10 reps · 22 kg</span></div>
+<div style="display: flex; justify-content: space-between; font-size: 14px; color: #9AA7AC"><span>Rest</span><span>90 s</span></div>
+</section>
+<section style="background: #171E22; border-radius: 14px; padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; border: 1px solid #2F5C8A">
+<div style="display: flex; justify-content: space-between; align-items: center">
+<span style="font-size: 13px; color: #7DBBFF">Repeat 3 times</span>
+<button type="button" aria-label="Edit repeat block" style="width: 44px; height: 44px; background: none; border: 0; color: #9AA7AC"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M5 12h.01M12 12h.01M19 12h.01"></path></svg></button>
+</div>
+<div style="display: flex; justify-content: space-between; font-size: 15px"><span style="font-weight: 500">Bent-over row</span><span>10 reps · 20 kg</span></div>
+<div style="display: flex; justify-content: space-between; font-size: 14px; color: #9AA7AC"><span>Rest</span><span>90 s</span></div>
+</section>
+<section style="background: #171E22; border-radius: 14px; padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; border: 1px solid #2F5C8A">
+<div style="display: flex; justify-content: space-between; align-items: center">
+<span style="font-size: 13px; color: #7DBBFF">Repeat 3 times</span>
+<button type="button" aria-label="Edit repeat block" style="width: 44px; height: 44px; background: none; border: 0; color: #9AA7AC"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M5 12h.01M12 12h.01M19 12h.01"></path></svg></button>
+</div>
+<div style="display: flex; justify-content: space-between; font-size: 15px"><span style="font-weight: 500">Overhead press</span><span>8 reps · 14 kg</span></div>
+<div style="display: flex; justify-content: space-between; font-size: 14px; color: #9AA7AC"><span>Rest</span><span>90 s</span></div>
+</section>
+<section style="background: #171E22; border-radius: 14px; padding: 12px 14px; display: flex; justify-content: space-between; align-items: center">
+<div style="display: flex; flex-direction: column; gap: 3px"><span style="font-size: 15px; font-weight: 500">Cool-down</span><span style="font-size: 13px; color: #9AA7AC">5 min, easy</span></div>
+<button type="button" aria-label="Edit cool-down" style="width: 44px; height: 44px; background: none; border: 0; color: #9AA7AC"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M5 12h.01M12 12h.01M19 12h.01"></path></svg></button>
+</section>
+<button type="button" style="min-height: 48px; border-radius: 12px; border: 1px dashed #2A353B; background: none; color: #7DBBFF; font: 500 15px Inter, sans-serif">Add step</button>
+</main>
+<footer style="padding: 12px 20px 20px; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; border-top: 1px solid #243037; background: #12181C">
+<button type="button" style="min-height: 48px; border-radius: 12px; border: 1px solid #2A353B; background: none; color: #E8EDEE; font: 500 15px Inter, sans-serif">Save</button>
+<button type="button" style="min-height: 48px; border-radius: 12px; border: 0; background: #7DBBFF; color: #0F1417; font: 600 15px Inter, sans-serif">Send to watch</button>
+</footer>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

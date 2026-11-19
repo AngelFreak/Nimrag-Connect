@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Phone · Activity detail</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600&display=swap">
+<style>
+body{margin:0}
+a{color:#7DBBFF}a:hover{color:#A9D2FF}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; box-sizing: border-box; display: flex; flex-direction: column; background: #0F1417; color: #E8EDEE; font-family: Inter, sans-serif">
+<header style="padding: 12px 12px 8px; display: flex; align-items: center; gap: 4px">
+<button type="button" aria-label="Back" style="width: 44px; height: 44px; background: none; border: 0; color: #E8EDEE; display: flex; align-items: center; justify-content: center">
+<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"></path></svg>
+</button>
+<div style="flex: 1; display: flex; flex-direction: column; gap: 2px">
+<h1 style="margin: 0; font-family: 'Space Grotesk', sans-serif; font-size: 22px; font-weight: 600">Run</h1>
+<span style="font-size: 13px; color: #9AA7AC">Mon 16 Nov · 17:40</span>
+</div>
+<span style="font-size: 12px; color: #9AA7AC; border: 1px solid #2A353B; border-radius: 999px; padding: 4px 10px; margin-right: 8px">Sample data</span>
+</header>
+<main style="flex: 1; overflow: auto; padding: 8px 20px 20px; display: flex; flex-direction: column; gap: 12px">
+<section style="background: #171E22; border-radius: 16px; overflow: hidden">
+<svg width="100%" height="150" viewBox="0 0 350 150" preserveAspectRatio="none" role="img" aria-label="Route map placeholder: a loop route drawn on self-hosted map tiles">
+<rect width="350" height="150" fill="#141B1F"></rect>
+<path d="M0 40H350M0 80H350M0 120H350M60 0V150M130 0V150M200 0V150M270 0V150" stroke="#1F292E" stroke-width="1"></path>
+<path d="M40 110C70 60 110 40 150 52S220 30 262 44S318 92 286 112S190 128 150 118S70 132 40 110Z" fill="none" stroke="#7DBBFF" stroke-width="3" stroke-linejoin="round"></path>
+<circle cx="40" cy="110" r="5" fill="#FFB066"></circle>
+</svg>
+<p style="margin: 0; padding: 8px 16px 12px; font-size: 12px; color: #9AA7AC">Map placeholder. Tiles served from your own server.</p>
+</section>
+<div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px">
+<section style="background: #171E22; border-radius: 16px; padding: 12px; display: flex; flex-direction: column; gap: 4px"><span style="font-size: 12px; color: #9AA7AC">Distance</span><span style="font-family: 'Space Grotesk', sans-serif; font-size: 20px; font-weight: 600">6.4 km</span></section>
+<section style="background: #171E22; border-radius: 16px; padding: 12px; display: flex; flex-direction: column; gap: 4px"><span style="font-size: 12px; color: #9AA7AC">Time</span><span style="font-family: 'Space Grotesk', sans-serif; font-size: 20px; font-weight: 600">38:00</span></section>
+<section style="background: #171E22; border-radius: 16px; padding: 12px; display: flex; flex-direction: column; gap: 4px"><span style="font-size: 12px; color: #9AA7AC">Pace</span><span style="font-family: 'Space Grotesk', sans-serif; font-size: 20px; font-weight: 600">5:56 /km</span></section>
+<section style="background: #171E22; border-radius: 16px; padding: 12px; display: flex; flex-direction: column; gap: 4px"><span style="font-size: 12px; color: #9AA7AC">Avg HR</span><span style="font-family: 'Space Grotesk', sans-serif; font-size: 20px; font-weight: 600">151 bpm</span></section>
+<section style="background: #171E22; border-radius: 16px; padding: 12px; display: flex; flex-direction: column; gap: 4px"><span style="font-size: 12px; color: #9AA7AC">Climb</span><span style="font-family: 'Space Grotesk', sans-serif; font-size: 20px; font-weight: 600">42 m</span></section>
+<section style="background: #171E22; border-radius: 16px; padding: 12px; display: flex; flex-direction: column; gap: 4px"><span style="font-size: 12px; color: #9AA7AC">Energy</span><span style="font-family: 'Space Grotesk', sans-serif; font-size: 20px; font-weight: 600">468 kcal</span></section>
+</div>
+<section style="background: #171E22; border-radius: 16px; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px">
+<h2 style="margin: 0; font-size: 13px; font-weight: 500; color: #9AA7AC">Time in heart rate zones</h2>
+<div style="display: grid; grid-template-columns: 56px 1fr 44px; gap: 8px 10px; align-items: center; font-size: 13px">
+<span>Zone 5</span><div style="height: 10px; border-radius: 5px; background: #243037"><div style="width: 3%; height: 10px; border-radius: 5px; background: #FF6B6B"></div></div><span style="text-align: right">1 min</span>
+<span>Zone 4</span><div style="height: 10px; border-radius: 5px; background: #243037"><div style="width: 21%; height: 10px; border-radius: 5px; background: #FFA24D"></div></div><span style="text-align: right">8 min</span>
+<span>Zone 3</span><div style="height: 10px; border-radius: 5px; background: #243037"><div style="width: 47%; height: 10px; border-radius: 5px; background: #F2D45C"></div></div><span style="text-align: right">18 min</span>
+<span>Zone 2</span><div style="height: 10px; border-radius: 5px; background: #243037"><div style="width: 24%; height: 10px; border-radius: 5px; background: #4FD1B5"></div></div><span style="text-align: right">9 min</span>
+<span>Zone 1</span><div style="height: 10px; border-radius: 5px; background: #243037"><div style="width: 5%; height: 10px; border-radius: 5px; background: #5B8DBE"></div></div><span style="text-align: right">2 min</span>
+</div>
+</section>
+<section style="background: #171E22; border-radius: 16px; padding: 14px 16px; display: flex; flex-direction: column; gap: 6px">
+<h2 style="margin: 0 0 4px; font-size: 13px; font-weight: 500; color: #9AA7AC">Laps</h2>
+<table style="width: 100%; border-collapse: collapse; font-size: 14px">
+<thead><tr style="text-align: left; color: #9AA7AC"><th scope="col" style="font-weight: 500; padding: 6px 0">Lap</th><th scope="col" style="font-weight: 500; padding: 6px 0">Distance</th><th scope="col" style="font-weight: 500; padding: 6px 0">Pace</th><th scope="col" style="font-weight: 500; padding: 6px 0; text-align: right">HR</th></tr></thead>
+<tbody>
+<tr><td style="padding: 7px 0; border-top: 1px solid #243037">1</td><td style="padding: 7px 0; border-top: 1px solid #243037">1.00 km</td><td style="padding: 7px 0; border-top: 1px solid #243037">6:05</td><td style="padding: 7px 0; border-top: 1px solid #243037; text-align: right">138</td></tr>
+<tr><td style="padding: 7px 0; border-top: 1px solid #243037">2</td><td style="padding: 7px 0; border-top: 1px solid #243037">1.00 km</td><td style="padding: 7px 0; border-top: 1px solid #243037">5:58</td><td style="padding: 7px 0; border-top: 1px solid #243037; text-align: right">147</td></tr>
+<tr><td style="padding: 7px 0; border-top: 1px solid #243037">3</td><td style="padding: 7px 0; border-top: 1px solid #243037">1.00 km</td><td style="padding: 7px 0; border-top: 1px solid #243037">5:52</td><td style="padding: 7px 0; border-top: 1px solid #243037; text-align: right">152</td></tr>
+<tr><td style="padding: 7px 0; border-top: 1px solid #243037">4</td><td style="padding: 7px 0; border-top: 1px solid #243037">1.00 km</td><td style="padding: 7px 0; border-top: 1px solid #243037">5:55</td><td style="padding: 7px 0; border-top: 1px solid #243037; text-align: right">154</td></tr>
+<tr><td style="padding: 7px 0; border-top: 1px solid #243037">5</td><td style="padding: 7px 0; border-top: 1px solid #243037">1.00 km</td><td style="padding: 7px 0; border-top: 1px solid #243037">5:49</td><td style="padding: 7px 0; border-top: 1px solid #243037; text-align: right">157</td></tr>
+<tr><td style="padding: 7px 0; border-top: 1px solid #243037">6</td><td style="padding: 7px 0; border-top: 1px solid #243037">1.00 km</td><td style="padding: 7px 0; border-top: 1px solid #243037">5:57</td><td style="padding: 7px 0; border-top: 1px solid #243037; text-align: right">156</td></tr>
+<tr><td style="padding: 7px 0; border-top: 1px solid #243037">7</td><td style="padding: 7px 0; border-top: 1px solid #243037">0.40 km</td><td style="padding: 7px 0; border-top: 1px solid #243037">6:00</td><td style="padding: 7px 0; border-top: 1px solid #243037; text-align: right">155</td></tr>
+</tbody>
+</table>
+</section>
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Phone · Health trends</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600&display=swap">
+<style>
+body{margin:0}
+a{color:#7DBBFF}a:hover{color:#A9D2FF}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; box-sizing: border-box; display: flex; flex-direction: column; background: #0F1417; color: #E8EDEE; font-family: Inter, sans-serif">
+<header style="padding: 20px 20px 12px; display: flex; justify-content: space-between; align-items: flex-end">
+<h1 style="margin: 0; font-family: 'Space Grotesk', sans-serif; font-size: 30px; font-weight: 600">Health</h1>
+<span style="font-size: 12px; color: #9AA7AC; border: 1px solid #2A353B; border-radius: 999px; padding: 4px 10px">Sample data</span>
+</header>
+<div role="group" aria-label="Time range" style="margin: 0 20px 12px; display: grid; grid-template-columns: repeat(4, 1fr); border: 1px solid #2A353B; border-radius: 10px; overflow: hidden">
+<button type="button" style="min-height: 44px; border: 0; background: none; color: #9AA7AC; font: 500 14px Inter, sans-serif">7 days</button>
+<button type="button" aria-pressed="true" style="min-height: 44px; border: 0; background: #243037; color: #E8EDEE; font: 600 14px Inter, sans-serif">4 weeks</button>
+<button type="button" style="min-height: 44px; border: 0; background: none; color: #9AA7AC; font: 500 14px Inter, sans-serif">3 months</button>
+<button type="button" style="min-height: 44px; border: 0; background: none; color: #9AA7AC; font: 500 14px Inter, sans-serif">1 year</button>
+</div>
+<main style="flex: 1; overflow: auto; padding: 0 20px 16px; display: flex; flex-direction: column; gap: 12px">
+<section style="background: #171E22; border-radius: 16px; padding: 14px 16px; display: flex; flex-direction: column; gap: 8px">
+<div style="display: flex; justify-content: space-between; align-items: baseline">
+<h2 style="margin: 0; font-size: 15px; font-weight: 600">Overnight HRV</h2>
+<span style="font-size: 13px; color: #9AA7AC">Avg 61 ms · range 55 to 70</span>
+</div>
+<svg width="100%" height="90" viewBox="0 0 320 90" preserveAspectRatio="none" role="img" aria-label="Overnight HRV over 4 weeks, mostly inside the usual range with one dip in the third week">
+<rect x="0" y="24" width="320" height="34" fill="#1D3144"></rect>
+<polyline fill="none" stroke="#7DBBFF" stroke-width="2.5" stroke-linejoin="round" points="0,42 12,38 24,46 36,40 48,34 60,44 72,50 84,40 96,36 108,44 120,50 132,38 144,34 156,42 168,48 180,40 192,38 204,46 216,58 228,74 240,66 252,52 264,42 276,38 288,46 300,40 312,34 320,42"></polyline>
+</svg>
+</section>
+<section style="background: #171E22; border-radius: 16px; padding: 14px 16px; display: flex; flex-direction: column; gap: 8px">
+<div style="display: flex; justify-content: space-between; align-items: baseline">
+<h2 style="margin: 0; font-size: 15px; font-weight: 600">Resting heart rate</h2>
+<span style="font-size: 13px; color: #9AA7AC">Avg 52 bpm · 50 to 56</span>
+</div>
+<svg width="100%" height="80" viewBox="0 0 320 80" preserveAspectRatio="none" role="img" aria-label="Resting heart rate over 4 weeks, steady around 52 with a rise to 56 in the third week">
+<polyline fill="none" stroke="#FF6B6B" stroke-width="2.5" stroke-linejoin="round" points="0,50 12,52 24,48 36,50 48,54 60,50 72,46 84,50 96,52 108,48 120,46 132,50 144,54 156,50 168,48 180,50 192,52 204,44 216,30 228,16 240,24 252,38 264,48 276,52 288,50 300,54 312,56 320,54"></polyline>
+</svg>
+</section>
+<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px">
+<section style="background: #171E22; border-radius: 16px; padding: 14px; display: flex; flex-direction: column; gap: 6px">
+<h2 style="margin: 0; font-size: 13px; font-weight: 500; color: #9AA7AC">Breathing rate</h2>
+<span style="font-family: 'Space Grotesk', sans-serif; font-size: 22px; font-weight: 600">13.4 /min</span>
+<span style="font-size: 13px; color: #9AA7AC">Asleep · awake 14.8</span>
+<svg width="100%" height="36" viewBox="0 0 150 36" preserveAspectRatio="none" role="img" aria-label="Breathing rate over 4 weeks, flat"><polyline fill="none" stroke="#7DBBFF" stroke-width="2" points="0,18 15,20 30,17 45,19 60,18 75,16 90,19 105,22 120,18 135,17 150,18"></polyline></svg>
+</section>
+<section style="background: #171E22; border-radius: 16px; padding: 14px; display: flex; flex-direction: column; gap: 6px">
+<h2 style="margin: 0; font-size: 13px; font-weight: 500; color: #9AA7AC">Blood oxygen</h2>
+<span style="font-family: 'Space Grotesk', sans-serif; font-size: 22px; font-weight: 600">95%</span>
+<span style="font-size: 13px; color: #9AA7AC">Overnight avg · low 91%</span>
+<svg width="100%" height="36" viewBox="0 0 150 36" preserveAspectRatio="none" role="img" aria-label="Overnight blood oxygen over 4 weeks, between 94 and 96 percent"><polyline fill="none" stroke="#7DBBFF" stroke-width="2" points="0,16 15,14 30,18 45,16 60,20 75,16 90,14 105,18 120,22 135,16 150,14"></polyline></svg>
+</section>
+</div>
+<section style="background: #171E22; border-radius: 16px; padding: 14px 16px; display: flex; flex-direction: column; gap: 8px">
+<div style="display: flex; justify-content: space-between; align-items: baseline">
+<h2 style="margin: 0; font-size: 15px; font-weight: 600">Sleep score</h2>
+<span style="font-size: 13px; color: #9AA7AC">Avg 78</span>
+</div>
+<svg width="100%" height="70" viewBox="0 0 320 70" preserveAspectRatio="none" role="img" aria-label="Sleep score over 4 weeks, between 64 and 88">
+<polyline fill="none" stroke="#A594FF" stroke-width="2.5" stroke-linejoin="round" points="0,30 12,24 24,36 36,28 48,20 60,32 72,40 84,26 96,22 108,34 120,44 132,28 144,18 156,30 168,38 180,26 192,24 204,36 216,50 228,58 240,46 252,34 264,26 276,22 288,32 300,24 312,18 320,22"></polyline>
+</svg>
+</section>
+</main>
+<nav aria-label="Main" style="display: grid; grid-template-columns: repeat(4, 1fr); border-top: 1px solid #243037; background: #12181C; padding: 6px 8px 14px">
+<button type="button" style="min-height: 52px; background: none; border: 0; color: #9AA7AC; font: 500 12px Inter, sans-serif">Today</button>
+<button type="button" style="min-height: 52px; background: none; border: 0; color: #9AA7AC; font: 500 12px Inter, sans-serif">Activities</button>
+<button type="button" style="min-height: 52px; background: none; border: 0; color: #7DBBFF; font: 600 12px Inter, sans-serif">Health</button>
+<button type="button" style="min-height: 52px; background: none; border: 0; color: #9AA7AC; font: 500 12px Inter, sans-serif">Strength</button>
+</nav>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

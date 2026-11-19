@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Phone · Day view</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600&display=swap">
+<style>
+body{margin:0}
+a{color:#7DBBFF}a:hover{color:#A9D2FF}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; box-sizing: border-box; display: flex; flex-direction: column; background: #0F1417; color: #E8EDEE; font-family: Inter, sans-serif">
+<header style="padding: 12px 12px 8px; display: flex; align-items: center; gap: 4px">
+<button type="button" aria-label="Previous day" style="width: 44px; height: 44px; background: none; border: 0; color: #E8EDEE; display: flex; align-items: center; justify-content: center">
+<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"></path></svg>
+</button>
+<div style="flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px">
+<h1 style="margin: 0; font-family: 'Space Grotesk', sans-serif; font-size: 20px; font-weight: 600">Wed 18 Nov</h1>
+<span style="font-size: 12px; color: #9AA7AC">Day view · sample data</span>
+</div>
+<button type="button" aria-label="Next day" style="width: 44px; height: 44px; background: none; border: 0; color: #E8EDEE; display: flex; align-items: center; justify-content: center">
+<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 5l7 7-7 7"></path></svg>
+</button>
+</header>
+<main style="flex: 1; overflow: auto; padding: 8px 20px 20px; display: flex; flex-direction: column; gap: 12px">
+<section style="background: #171E22; border-radius: 16px; padding: 14px 16px; display: flex; flex-direction: column; gap: 8px">
+<div style="display: flex; justify-content: space-between; align-items: baseline">
+<h2 style="margin: 0; font-size: 15px; font-weight: 600">Heart rate</h2>
+<span style="font-size: 13px; color: #9AA7AC">Resting 51 · High 148</span>
+</div>
+<svg width="100%" height="110" viewBox="0 0 320 110" preserveAspectRatio="none" role="img" aria-label="Heart rate across the day: lowest overnight, a peak of 148 during the evening strength session">
+<path d="M0 36H320M0 72H320" stroke="#243037" stroke-width="1"></path>
+<polyline fill="none" stroke="#FF6B6B" stroke-width="2" stroke-linejoin="round" points="0,88 16,92 32,95 48,96 64,94 80,90 92,78 104,70 120,74 136,66 152,72 168,64 184,70 200,62 216,68 232,60 240,30 248,14 256,26 264,40 276,62 292,70 308,76 320,82"></polyline>
+</svg>
+<div style="display: flex; justify-content: space-between; font-size: 12px; color: #9AA7AC"><span>00</span><span>06</span><span>12</span><span>18</span><span>24</span></div>
+</section>
+<section style="background: #171E22; border-radius: 16px; padding: 14px 16px; display: flex; flex-direction: column; gap: 8px">
+<div style="display: flex; justify-content: space-between; align-items: baseline">
+<h2 style="margin: 0; font-size: 15px; font-weight: 600">Stress</h2>
+<span style="font-size: 13px; color: #9AA7AC">Average 28 · mostly low</span>
+</div>
+<svg width="100%" height="90" viewBox="0 0 320 90" preserveAspectRatio="none" role="img" aria-label="Stress level across the day: resting overnight, low through the morning, a medium stretch mid-afternoon">
+<rect x="0" y="80" width="92" height="10" fill="#2F5C8A"></rect>
+<rect x="92" y="62" width="14" height="28" fill="#5B8DBE"></rect>
+<rect x="106" y="54" width="14" height="36" fill="#5B8DBE"></rect>
+<rect x="120" y="66" width="14" height="24" fill="#5B8DBE"></rect>
+<rect x="134" y="58" width="14" height="32" fill="#5B8DBE"></rect>
+<rect x="148" y="48" width="14" height="42" fill="#5B8DBE"></rect>
+<rect x="162" y="60" width="14" height="30" fill="#5B8DBE"></rect>
+<rect x="176" y="34" width="14" height="56" fill="#FFB066"></rect>
+<rect x="190" y="26" width="14" height="64" fill="#FFB066"></rect>
+<rect x="204" y="40" width="14" height="50" fill="#FFB066"></rect>
+<rect x="218" y="60" width="14" height="30" fill="#5B8DBE"></rect>
+<rect x="232" y="0" width="30" height="90" fill="#1F292E"></rect>
+<rect x="262" y="56" width="14" height="34" fill="#5B8DBE"></rect>
+<rect x="276" y="68" width="14" height="22" fill="#5B8DBE"></rect>
+<rect x="290" y="74" width="30" height="16" fill="#2F5C8A"></rect>
+</svg>
+<div style="display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12px; color: #9AA7AC">
+<span style="display: flex; align-items: center; gap: 6px"><span style="width: 10px; height: 10px; border-radius: 2px; background: #2F5C8A"></span>Rest 9h 10m</span>
+<span style="display: flex; align-items: center; gap: 6px"><span style="width: 10px; height: 10px; border-radius: 2px; background: #5B8DBE"></span>Low 10h 30m</span>
+<span style="display: flex; align-items: center; gap: 6px"><span style="width: 10px; height: 10px; border-radius: 2px; background: #FFB066"></span>Medium 2h 10m</span>
+<span style="display: flex; align-items: center; gap: 6px"><span style="width: 10px; height: 10px; border-radius: 2px; background: #1F292E; border: 1px solid #2A353B"></span>Activity</span>
+</div>
+</section>
+<section style="background: #171E22; border-radius: 16px; padding: 14px 16px; display: flex; flex-direction: column; gap: 8px">
+<div style="display: flex; justify-content: space-between; align-items: baseline">
+<h2 style="margin: 0; font-size: 15px; font-weight: 600">Energy</h2>
+<span style="font-size: 13px; color: #9AA7AC">High 94 · Low 38</span>
+</div>
+<svg width="100%" height="100" viewBox="0 0 320 100" preserveAspectRatio="none" role="img" aria-label="Energy across the day: charges overnight to 94, drains through the day to 38 after the evening workout">
+<path d="M0 50H320" stroke="#243037" stroke-width="1"></path>
+<polygon fill="#173A36" points="0,58 30,40 60,22 90,8 110,6 140,16 170,26 200,36 230,44 250,58 262,62 290,60 320,56 320,100 0,100"></polygon>
+<polyline fill="none" stroke="#4FD1B5" stroke-width="2.5" stroke-linejoin="round" points="0,58 30,40 60,22 90,8 110,6 140,16 170,26 200,36 230,44 250,58 262,62 290,60 320,56"></polyline>
+</svg>
+<div style="display: flex; justify-content: space-between; font-size: 13px">
+<span style="color: #4FD1B5">+52 charged</span>
+<span style="color: #FFB066">-56 drained</span>
+</div>
+</section>
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

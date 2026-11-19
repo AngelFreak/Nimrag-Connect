@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Phone · Training</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600&display=swap">
+<style>
+body{margin:0}
+a{color:#7DBBFF}a:hover{color:#A9D2FF}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; box-sizing: border-box; display: flex; flex-direction: column; background: #0F1417; color: #E8EDEE; font-family: Inter, sans-serif">
+<header style="padding: 12px 12px 8px; display: flex; align-items: center; gap: 4px">
+<button type="button" aria-label="Back" style="width: 44px; height: 44px; background: none; border: 0; color: #E8EDEE; display: flex; align-items: center; justify-content: center">
+<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"></path></svg>
+</button>
+<div style="flex: 1; display: flex; flex-direction: column; gap: 2px">
+<h1 style="margin: 0; font-family: 'Space Grotesk', sans-serif; font-size: 22px; font-weight: 600">Training</h1>
+<span style="font-size: 13px; color: #9AA7AC">As of Thu 19 Nov</span>
+</div>
+<span style="font-size: 12px; color: #9AA7AC; border: 1px solid #2A353B; border-radius: 999px; padding: 4px 10px; margin-right: 8px">Sample data</span>
+</header>
+<main style="flex: 1; overflow: auto; padding: 8px 20px 20px; display: flex; flex-direction: column; gap: 12px">
+<section style="background: #171E22; border-radius: 16px; padding: 16px; display: flex; justify-content: space-between; align-items: center; gap: 12px">
+<div style="display: flex; flex-direction: column; gap: 4px">
+<h2 style="margin: 0; font-size: 13px; font-weight: 500; color: #9AA7AC">Recovery time left</h2>
+<span style="font-family: 'Space Grotesk', sans-serif; font-size: 34px; font-weight: 600">14 h</span>
+<span style="font-size: 13px; color: #7DBBFF">Ready for a hard session Fri 09:00</span>
+</div>
+<svg width="72" height="72" viewBox="0 0 72 72" role="img" aria-label="Recovery 61 percent complete">
+<circle cx="36" cy="36" r="30" fill="none" stroke="#243037" stroke-width="8"></circle>
+<circle cx="36" cy="36" r="30" fill="none" stroke="#7DBBFF" stroke-width="8" stroke-linecap="round" stroke-dasharray="115 189" transform="rotate(-90 36 36)"></circle>
+</svg>
+</section>
+<section style="background: #171E22; border-radius: 16px; padding: 16px; display: flex; flex-direction: column; gap: 10px">
+<div style="display: flex; justify-content: space-between; align-items: baseline">
+<h2 style="margin: 0; font-size: 15px; font-weight: 600">7-day load</h2>
+<span style="font-size: 13px; color: #9AA7AC">Target range 240 to 420</span>
+</div>
+<span style="font-family: 'Space Grotesk', sans-serif; font-size: 28px; font-weight: 600">312</span>
+<div style="position: relative; height: 12px; border-radius: 6px; background: #243037" role="img" aria-label="Load of 312 sits inside the target range of 240 to 420">
+<div style="position: absolute; left: 40%; width: 30%; height: 12px; background: #1D3144; border-left: 2px solid #5B8DBE; border-right: 2px solid #5B8DBE; box-sizing: border-box"></div>
+<div style="position: absolute; left: 52%; top: -4px; width: 4px; height: 20px; border-radius: 2px; background: #7DBBFF"></div>
+</div>
+<svg width="100%" height="64" viewBox="0 0 320 64" preserveAspectRatio="none" role="img" aria-label="Load over the last 4 weeks, steady between 280 and 340">
+<polyline fill="none" stroke="#7DBBFF" stroke-width="2.5" stroke-linejoin="round" points="0,36 24,32 48,40 72,30 96,26 120,34 144,42 168,36 192,28 216,24 240,32 264,38 288,30 320,32"></polyline>
+</svg>
+<span style="font-size: 13px; color: #9AA7AC">Steady for 4 weeks</span>
+</section>
+<section style="background: #171E22; border-radius: 16px; padding: 16px; display: flex; flex-direction: column; gap: 10px">
+<h2 style="margin: 0; font-size: 15px; font-weight: 600">Load by intensity, 4 weeks</h2>
+<div style="display: grid; grid-template-columns: 96px 1fr 40px; gap: 10px; align-items: center; font-size: 13px">
+<span>Easy aerobic</span><div style="height: 10px; border-radius: 5px; background: #243037"><div style="width: 46%; height: 10px; border-radius: 5px; background: #2F5C8A"></div></div><span style="text-align: right">412</span>
+<span>Hard aerobic</span><div style="height: 10px; border-radius: 5px; background: #243037"><div style="width: 62%; height: 10px; border-radius: 5px; background: #7DBBFF"></div></div><span style="text-align: right">556</span>
+<span>Anaerobic</span><div style="height: 10px; border-radius: 5px; background: #243037"><div style="width: 14%; height: 10px; border-radius: 5px; background: #FFB066"></div></div><span style="text-align: right">128</span>
+</div>
+</section>
+<section style="background: #171E22; border-radius: 16px; padding: 16px; display: flex; flex-direction: column; gap: 8px">
+<div style="display: flex; justify-content: space-between; align-items: baseline">
+<h2 style="margin: 0; font-size: 15px; font-weight: 600">VO2 max</h2>
+<span style="font-size: 13px; color: #7DBBFF">+1 in 3 months</span>
+</div>
+<span style="font-family: 'Space Grotesk', sans-serif; font-size: 28px; font-weight: 600">46</span>
+<svg width="100%" height="56" viewBox="0 0 320 56" preserveAspectRatio="none" role="img" aria-label="VO2 max over the last 3 months, rising from 45 to 46">
+<polyline fill="none" stroke="#A9D2FF" stroke-width="2.5" stroke-linejoin="round" points="0,40 40,40 80,40 120,36 160,40 200,24 240,24 280,24 320,24"></polyline>
+</svg>
+</section>
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

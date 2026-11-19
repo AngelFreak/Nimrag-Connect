@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Phone · Body</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600&display=swap">
+<style>
+body{margin:0}
+a{color:#7DBBFF}a:hover{color:#A9D2FF}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; box-sizing: border-box; display: flex; flex-direction: column; background: #0F1417; color: #E8EDEE; font-family: Inter, sans-serif">
+<header style="padding: 12px 12px 8px; display: flex; align-items: center; gap: 4px">
+<button type="button" aria-label="Back" style="width: 44px; height: 44px; background: none; border: 0; color: #E8EDEE; display: flex; align-items: center; justify-content: center">
+<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"></path></svg>
+</button>
+<div style="flex: 1; display: flex; flex-direction: column; gap: 2px">
+<h1 style="margin: 0; font-family: 'Space Grotesk', sans-serif; font-size: 22px; font-weight: 600">Body</h1>
+<span style="font-size: 13px; color: #9AA7AC">Weight and measurements</span>
+</div>
+<span style="font-size: 12px; color: #9AA7AC; border: 1px solid #2A353B; border-radius: 999px; padding: 4px 10px; margin-right: 8px">Sample data</span>
+</header>
+<main style="flex: 1; overflow: auto; padding: 8px 20px 12px; display: flex; flex-direction: column; gap: 12px">
+<section style="background: #171E22; border-radius: 16px; padding: 16px; display: flex; flex-direction: column; gap: 10px">
+<div style="display: flex; justify-content: space-between; align-items: flex-end">
+<div style="display: flex; flex-direction: column; gap: 4px">
+<h2 style="margin: 0; font-size: 13px; font-weight: 500; color: #9AA7AC">Weight · Tue 17 Nov</h2>
+<span style="font-family: 'Space Grotesk', sans-serif; font-size: 34px; font-weight: 600">[YOUR WEIGHT] kg</span>
+</div>
+<span style="font-size: 13px; color: #9AA7AC">30-day change shown here</span>
+</div>
+<svg width="100%" height="120" viewBox="0 0 320 120" preserveAspectRatio="none" role="img" aria-label="Weight trend over 90 days: individual weigh-ins as dots with a smoothed trend line">
+<path d="M0 30H320M0 60H320M0 90H320" stroke="#243037" stroke-width="1"></path>
+<polyline fill="none" stroke="#7DBBFF" stroke-width="2.5" stroke-linejoin="round" points="0,40 40,44 80,50 120,54 160,60 200,66 240,70 280,76 320,80"></polyline>
+<g fill="#A9D2FF"><circle cx="8" cy="36" r="3"></circle><circle cx="44" cy="48" r="3"></circle><circle cx="78" cy="46" r="3"></circle><circle cx="118" cy="58" r="3"></circle><circle cx="156" cy="56" r="3"></circle><circle cx="196" cy="70" r="3"></circle><circle cx="238" cy="66" r="3"></circle><circle cx="276" cy="80" r="3"></circle><circle cx="312" cy="78" r="3"></circle></g>
+</svg>
+<div style="display: flex; justify-content: space-between; font-size: 12px; color: #9AA7AC"><span>21 Aug</span><span>5 Oct</span><span>17 Nov</span></div>
+</section>
+<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px">
+<section style="background: #171E22; border-radius: 16px; padding: 14px; display: flex; flex-direction: column; gap: 4px"><h2 style="margin: 0; font-size: 13px; font-weight: 500; color: #9AA7AC">Body fat</h2><span style="font-family: 'Space Grotesk', sans-serif; font-size: 20px; font-weight: 600">[VALUE] %</span><span style="font-size: 13px; color: #9AA7AC">Manual or scale entry</span></section>
+<section style="background: #171E22; border-radius: 16px; padding: 14px; display: flex; flex-direction: column; gap: 4px"><h2 style="margin: 0; font-size: 13px; font-weight: 500; color: #9AA7AC">Waist</h2><span style="font-family: 'Space Grotesk', sans-serif; font-size: 20px; font-weight: 600">[VALUE] cm</span><span style="font-size: 13px; color: #9AA7AC">Manual entry</span></section>
+</div>
+<section style="background: #171E22; border-radius: 16px; padding: 6px 16px; display: flex; flex-direction: column">
+<h2 style="margin: 0; padding: 10px 0 6px; font-size: 13px; font-weight: 500; color: #9AA7AC">Entries</h2>
+<div style="display: flex; justify-content: space-between; padding: 12px 0; border-top: 1px solid #243037; font-size: 14px"><span>Tue 17 Nov · 07:10</span><span style="color: #9AA7AC">Weight</span></div>
+<div style="display: flex; justify-content: space-between; padding: 12px 0; border-top: 1px solid #243037; font-size: 14px"><span>Tue 10 Nov · 07:05</span><span style="color: #9AA7AC">Weight</span></div>
+<div style="display: flex; justify-content: space-between; padding: 12px 0; border-top: 1px solid #243037; font-size: 14px"><span>Tue 3 Nov · 07:20</span><span style="color: #9AA7AC">Weight, waist</span></div>
+<div style="display: flex; justify-content: space-between; padding: 12px 0; border-top: 1px solid #243037; font-size: 14px"><span>Tue 27 Oct · 07:15</span><span style="color: #9AA7AC">Weight</span></div>
+</section>
+</main>
+<footer style="padding: 12px 20px 20px; border-top: 1px solid #243037; background: #12181C">
+<button type="button" style="width: 100%; min-height: 48px; border-radius: 12px; border: 0; background: #7DBBFF; color: #0F1417; font: 600 15px Inter, sans-serif">Add entry</button>
+</footer>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

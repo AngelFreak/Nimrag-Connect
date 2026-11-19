@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Phone · Devices and sync</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600&display=swap">
+<style>
+body{margin:0}
+a{color:#7DBBFF}a:hover{color:#A9D2FF}
+input[type=checkbox]{width:22px;height:22px;accent-color:#7DBBFF}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; box-sizing: border-box; display: flex; flex-direction: column; background: #0F1417; color: #E8EDEE; font-family: Inter, sans-serif">
+<header style="padding: 12px 12px 8px; display: flex; align-items: center; gap: 4px">
+<button type="button" aria-label="Back" style="width: 44px; height: 44px; background: none; border: 0; color: #E8EDEE; display: flex; align-items: center; justify-content: center">
+<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"></path></svg>
+</button>
+<div style="flex: 1; display: flex; flex-direction: column; gap: 2px">
+<h1 style="margin: 0; font-family: 'Space Grotesk', sans-serif; font-size: 22px; font-weight: 600">Devices and sync</h1>
+<span style="font-size: 13px; color: #9AA7AC">Watch, phone and your server</span>
+</div>
+<span style="font-size: 12px; color: #9AA7AC; border: 1px solid #2A353B; border-radius: 999px; padding: 4px 10px; margin-right: 8px">Sample data</span>
+</header>
+<main style="flex: 1; overflow: auto; padding: 8px 20px 20px; display: flex; flex-direction: column; gap: 12px">
+<section style="background: #171E22; border-radius: 16px; padding: 16px; display: flex; flex-direction: column; gap: 12px">
+<div style="display: flex; justify-content: space-between; align-items: center">
+<div style="display: flex; flex-direction: column; gap: 3px">
+<h2 style="margin: 0; font-size: 17px; font-weight: 600">Instinct 2</h2>
+<span style="font-size: 13px; color: #7DBBFF">Connected over Bluetooth</span>
+</div>
+<span style="font-family: 'Space Grotesk', sans-serif; font-size: 22px; font-weight: 600">74%</span>
+</div>
+<dl style="margin: 0; display: grid; grid-template-columns: 1fr auto; gap: 8px 16px; font-size: 14px">
+<dt style="color: #9AA7AC">Last sync</dt><dd style="margin: 0">Today 07:42</dd>
+<dt style="color: #9AA7AC">Files pulled</dt><dd style="margin: 0">5 new</dd>
+<dt style="color: #9AA7AC">Firmware</dt><dd style="margin: 0">[FIRMWARE VERSION]</dd>
+</dl>
+<button type="button" style="min-height: 48px; border-radius: 12px; border: 0; background: #7DBBFF; color: #0F1417; font: 600 15px Inter, sans-serif">Sync now</button>
+</section>
+<section style="background: #171E22; border-radius: 16px; padding: 16px; display: flex; flex-direction: column; gap: 10px">
+<h2 style="margin: 0; font-size: 15px; font-weight: 600">Your server</h2>
+<dl style="margin: 0; display: grid; grid-template-columns: 1fr auto; gap: 8px 16px; font-size: 14px">
+<dt style="color: #9AA7AC">Address</dt><dd style="margin: 0">[YOUR SERVER ADDRESS]</dd>
+<dt style="color: #9AA7AC">Status</dt><dd style="margin: 0; color: #7DBBFF">Reachable</dd>
+<dt style="color: #9AA7AC">Waiting to upload</dt><dd style="margin: 0">0 files</dd>
+<dt style="color: #9AA7AC">Upload over</dt><dd style="margin: 0">Wi-Fi and VPN only</dd>
+</dl>
+</section>
+<section style="background: #171E22; border-radius: 16px; padding: 6px 16px; display: flex; flex-direction: column">
+<h2 style="margin: 0; padding: 10px 0 4px; font-size: 15px; font-weight: 600">Phone sends to watch</h2>
+<label style="display: flex; justify-content: space-between; align-items: center; min-height: 48px; border-top: 1px solid #243037; font-size: 14px">Time and time zone<input type="checkbox" checked></label>
+<label style="display: flex; justify-content: space-between; align-items: center; min-height: 48px; border-top: 1px solid #243037; font-size: 14px">GPS assist data<input type="checkbox" checked></label>
+<label style="display: flex; justify-content: space-between; align-items: center; min-height: 48px; border-top: 1px solid #243037; font-size: 14px">Weather<input type="checkbox"></label>
+<label style="display: flex; justify-content: space-between; align-items: center; min-height: 48px; border-top: 1px solid #243037; font-size: 14px">Notifications<input type="checkbox" checked></label>
+</section>
+<section style="background: #171E22; border-radius: 16px; padding: 6px 16px; display: flex; flex-direction: column">
+<h2 style="margin: 0; padding: 10px 0 4px; font-size: 15px; font-weight: 600">Data</h2>
+<a href="#" style="display: flex; justify-content: space-between; align-items: center; min-height: 48px; border-top: 1px solid #243037; font-size: 14px; text-decoration: none; color: #E8EDEE">Export all data<span style="color: #9AA7AC">Original files and CSV</span></a>
+<a href="#" style="display: flex; justify-content: space-between; align-items: center; min-height: 48px; border-top: 1px solid #243037; font-size: 14px; text-decoration: none; color: #E8EDEE">Import history<span style="color: #9AA7AC">From an export archive</span></a>
+<a href="#" style="display: flex; justify-content: space-between; align-items: center; min-height: 48px; border-top: 1px solid #243037; font-size: 14px; text-decoration: none; color: #E8EDEE">Units<span style="color: #9AA7AC">Metric</span></a>
+</section>
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>
