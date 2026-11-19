@@ -3,21 +3,24 @@
 use super::{ApiJson, Ctx};
 use crate::api::{ApiError, AppState};
 use crate::auth::{self, Owner};
+use crate::auth::{ClientIp, Verdict};
 use crate::{settings, tokens};
 use axum::{
-    extract::{ConnectInfo, FromRequest, Path, Request, State},
-    http::{header, HeaderValue, StatusCode},
+    extract::{DefaultBodyLimit, Path, State},
+    http::{header, HeaderMap, HeaderValue, StatusCode},
     response::{IntoResponse, Response},
     routing::{delete, get, post},
     Json, Router,
 };
 use serde::{Deserialize, Serialize};
-use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use ts_rs::TS;
 
 pub fn routes() -> Router<AppState> {
     Router::new()
-        .route("/api/login", post(login))
+        .route(
+            "/api/login",
+            post(login).layer(DefaultBodyLimit::max(crate::api::MAX_LOGIN_BYTES)),
+        )
         .route("/api/logout", post(logout))
         .route("/api/me", get(me))
         .route("/api/tokens", get(list_tokens).post(create_token))
@@ -45,36 +48,43 @@ fn with_cookie(mut resp: Response, cookie: &str) -> Response {
     resp
 }
 
-async fn login(State(state): State<AppState>, req: Request) -> Result<Response, ApiError> {
-    let ip: IpAddr = req
-        .extensions()
-        .get::<ConnectInfo<SocketAddr>>()
-        .map_or(IpAddr::V4(Ipv4Addr::UNSPECIFIED), |c| c.0.ip());
-    let ApiJson(body) = ApiJson::<LoginRequest>::from_request(req, &state).await?;
-    let now = state.now();
-    if let Err(wait) = state.limiter.check(ip, now) {
-        let mut resp =
-            ApiError::new(StatusCode::TOO_MANY_REQUESTS, "too many attempts").into_response();
-        if let Ok(v) = HeaderValue::from_str(&wait.to_string()) {
-            resp.headers_mut().insert(header::RETRY_AFTER, v);
+fn too_many_attempts(wait: i64) -> Response {
+    let mut resp =
+        ApiError::new(StatusCode::TOO_MANY_REQUESTS, "too many attempts").into_response();
+    if let Ok(v) = HeaderValue::from_str(&wait.to_string()) {
+        resp.headers_mut().insert(header::RETRY_AFTER, v);
+    }
+    resp
+}
+
+/// Maps a failed password check to its response; `None` when the password was right.
+fn password_refusal(verdict: Verdict) -> Option<Response> {
+    match verdict {
+        Verdict::Correct => None,
+        Verdict::Wrong => {
+            Some(ApiError::new(StatusCode::UNAUTHORIZED, "wrong password").into_response())
         }
-        return Ok(resp);
+        Verdict::Locked(wait) => Some(too_many_attempts(wait)),
+        Verdict::NoOwner => Some(
+            ApiError::new(
+                StatusCode::CONFLICT,
+                "no password set; run `nimrag-server user set-password`",
+            )
+            .into_response(),
+        ),
     }
-    let Some(hash) = auth::owner_hash(&state.pool).await? else {
-        return Err(ApiError::new(
-            StatusCode::CONFLICT,
-            "no password set; run `nimrag-server user set-password`",
-        ));
-    };
-    let password = body.password;
-    let ok = tokio::task::spawn_blocking(move || auth::verify_password(&password, &hash))
-        .await
-        .map_err(anyhow::Error::from)?;
-    if !ok {
-        state.limiter.failure(ip, now);
-        return Err(ApiError::new(StatusCode::UNAUTHORIZED, "wrong password"));
+}
+
+async fn login(
+    State(state): State<AppState>,
+    ClientIp(ip): ClientIp,
+    ApiJson(body): ApiJson<LoginRequest>,
+) -> Result<Response, ApiError> {
+    let verdict = auth::verify_owner_password(&state, ip, body.password).await?;
+    if let Some(refusal) = password_refusal(verdict) {
+        return Ok(refusal);
     }
-    state.limiter.success(ip);
+    let now = state.now();
     let id = auth::create_session(&state.pool, now).await?;
     let ctx = Ctx::new(&state).await?;
     let me = Me {
@@ -88,20 +98,8 @@ async fn login(State(state): State<AppState>, req: Request) -> Result<Response, 
     ))
 }
 
-async fn logout(
-    State(state): State<AppState>,
-    parts: axum::http::HeaderMap,
-) -> Result<Response, ApiError> {
-    let raw = parts
-        .get(header::COOKIE)
-        .and_then(|v| v.to_str().ok())
-        .and_then(|h| {
-            h.split(';').find_map(|kv| {
-                let (k, v) = kv.trim().split_once('=')?;
-                (k == auth::COOKIE_NAME).then(|| v.to_owned())
-            })
-        });
-    if let Some(raw) = raw {
+async fn logout(State(state): State<AppState>, headers: HeaderMap) -> Result<Response, ApiError> {
+    if let Some(raw) = auth::session_cookie(&headers, state.insecure_cookies) {
         auth::delete_session(&state.pool, &raw).await?;
     }
     Ok(with_cookie(
@@ -138,9 +136,12 @@ pub struct TokenList {
     pub tokens: Vec<TokenInfo>,
 }
 
-#[derive(Debug, Serialize, Deserialize, TS)]
+/// Creating a token needs the owner's password again (a stolen session must not be
+/// enough to mint a long-lived upload credential).
+#[derive(Serialize, Deserialize, TS)]
 pub struct NewToken {
     pub name: String,
+    pub password: String,
 }
 
 /// The only time the token itself is returned.
@@ -172,18 +173,39 @@ async fn list_tokens(_: Owner, State(state): State<AppState>) -> Result<Json<Tok
 async fn create_token(
     _: Owner,
     State(state): State<AppState>,
+    ClientIp(ip): ClientIp,
     ApiJson(body): ApiJson<NewToken>,
-) -> Result<(StatusCode, Json<NewTokenResponse>), ApiError> {
+) -> Result<Response, ApiError> {
     let name = body.name.trim().to_owned();
     if name.is_empty() || name.chars().count() > 64 {
         return Err(ApiError::bad_request("name must have 1 to 64 characters"));
     }
-    let (id, token) = tokens::create(&state.pool, &name).await?;
+    // Same limiter and one-at-a-time argon2 gate as login; a wrong password leaves the
+    // session alone.
+    let verdict = auth::verify_owner_password(&state, ip, body.password).await?;
+    if matches!(verdict, Verdict::Wrong) {
+        // 403, not 401: the session is fine, so the page must not be sent to /login.
+        return Err(ApiError::new(StatusCode::FORBIDDEN, "wrong password"));
+    }
+    if let Some(refusal) = password_refusal(verdict) {
+        return Ok(refusal);
+    }
+    let Some((id, token)) = tokens::create_capped(&state.pool, &name, tokens::MAX_ACTIVE).await?
+    else {
+        return Err(ApiError::new(
+            StatusCode::CONFLICT,
+            format!(
+                "at most {} active device tokens; revoke one first",
+                tokens::MAX_ACTIVE
+            ),
+        ));
+    };
     tracing::info!(device_id = id, "device token created");
     Ok((
         StatusCode::CREATED,
         Json(NewTokenResponse { id, name, token }),
-    ))
+    )
+        .into_response())
 }
 
 async fn revoke_token(

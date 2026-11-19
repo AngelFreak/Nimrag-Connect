@@ -1,0 +1,66 @@
+/* Page-local helpers for Sleep, Day and Health (the shared stylesheets belong to the design system). */
+.chart-summary {
+  margin: 0;
+  font-size: var(--fs-sm);
+  color: var(--text-2);
+}
+
+/* A segmented control inside a card: left aligned, not stretched. */
+.card .segmented {
+  align-self: flex-start;
+  max-width: 100%;
+}
+.card .segmented button {
+  padding: 0 14px;
+}
+
+.range-bar {
+  display: flex;
+}
+.range-bar > .segmented--grid {
+  flex: 1;
+}
+.range-bar .segmented--grid button {
+  padding: 0 4px;
+  white-space: nowrap;
+}
+@media (min-width: 1024px) {
+  .range-bar {
+    margin-bottom: 12px;
+  }
+}
+
+/* Small chart inside a tile: full tile width. */
+.spark {
+  align-self: stretch;
+  width: 100%;
+}
+
+/* Two tiles side by side on a phone; separate grid items on the desktop grid. */
+.tile-pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--gap);
+}
+@media (min-width: 1024px) {
+  .tile-pair {
+    display: contents;
+  }
+}
+
+.hub-links {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--gap);
+}
+@media (min-width: 560px) {
+  .hub-links {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+@media (min-width: 1024px) {
+  .hub-links {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+  }
+}

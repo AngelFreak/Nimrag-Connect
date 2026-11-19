@@ -1,11 +1,14 @@
 //! Device tokens: 32 random bytes shown once; only the SHA-256 is stored.
-//! Created from the CLI only; there is no bootstrap HTTP endpoint.
+//! Created from the CLI (`token create`) or from the web UI (`POST /api/tokens`, which
+//! needs a session and re-checks the owner's password; at most [`MAX_ACTIVE`] active).
 
 use anyhow::Result;
 use sha2::{Digest, Sha256};
 use sqlx::SqlitePool;
 
 pub const TOKEN_PREFIX: &str = "nrg_";
+/// Active tokens the web UI will create (the CLI is not capped).
+pub const MAX_ACTIVE: i64 = 20;
 
 pub fn hash_token(token: &str) -> String {
     crate::hex(&Sha256::digest(token.as_bytes()))
@@ -22,6 +25,28 @@ pub async fn create(pool: &SqlitePool, name: &str) -> Result<(i64, String)> {
         .await?
         .last_insert_rowid();
     Ok((id, token))
+}
+
+/// Like [`create`], but `None` (nothing inserted) when `max_active` tokens are already
+/// active. The check and the insert are one statement, so parallel requests cannot overshoot.
+pub async fn create_capped(
+    pool: &SqlitePool,
+    name: &str,
+    max_active: i64,
+) -> Result<Option<(i64, String)>> {
+    let mut raw = [0u8; 32];
+    getrandom::fill(&mut raw).map_err(|e| anyhow::anyhow!("no randomness: {e}"))?;
+    let token = format!("{TOKEN_PREFIX}{}", crate::hex(&raw));
+    let res = sqlx::query(
+        "INSERT INTO tokens (name, hash)
+         SELECT ?, ? WHERE (SELECT COUNT(*) FROM tokens WHERE revoked_at IS NULL) < ?",
+    )
+    .bind(name)
+    .bind(hash_token(&token))
+    .bind(max_active)
+    .execute(pool)
+    .await?;
+    Ok((res.rows_affected() == 1).then(|| (res.last_insert_rowid(), token)))
 }
 
 pub async fn revoke(pool: &SqlitePool, id: i64) -> Result<bool> {

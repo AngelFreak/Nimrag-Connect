@@ -1,0 +1,241 @@
+import { useState, type CSSProperties } from 'react';
+import { Link, Navigate } from 'react-router-dom';
+import {
+  BackIcon,
+  BarSeries,
+  Card,
+  CardHeader,
+  DataList,
+  EmptyState,
+  Legend,
+  NextIcon,
+  SampleDataChip,
+  SegmentedControl,
+  Skeleton,
+  StageTimeline,
+  StatTile,
+  TopBar,
+} from '../../components';
+import type { SleepNight } from '../../api/generated/SleepNight';
+import type { SleepNightsResponse } from '../../api/generated/SleepNightsResponse';
+import { addDays, browserToday, fmtShortDay } from '../../lib/dates';
+import { fmtFixed, fmtInt, withUnit } from '../../lib/format';
+import { usePageTitle, useIsDesktop } from '../../lib/hooks';
+import { axisDates, fmtSeconds, nightBars, nightsSummary, scoreLabel, sleepTicks, stageSpans, stageSummary } from './model';
+import { CardSkeleton, ChartSummary, LoadError } from './parts';
+import { useSleepNight, useSleepNights, type NightCount } from './queries';
+import { clock } from './time';
+
+const COUNTS = [
+  { value: '7', label: '7 nights' },
+  { value: '14', label: '14 nights' },
+  { value: '30', label: '30 nights' },
+] as const;
+
+/** `/sleep` without a date: go to the latest night the server has. */
+export function LatestNight() {
+  usePageTitle('Sleep');
+  const list = useSleepNights(7);
+  const latest = list.data?.nights.at(-1)?.date;
+  if (latest) return <Navigate to={`/sleep/${latest}`} replace />;
+  return (
+    <>
+      <TopBar variant="back" backTo="/health" title="Sleep" aside={<SampleDataChip sample={list.data?.sample} />} />
+      <div className="page" aria-busy={list.isPending}>
+        {list.isPending ? <CardSkeleton lines={3} height={28} /> : null}
+        {list.isError ? <LoadError what="sleep" error={list.error} onRetry={() => void list.refetch()} /> : null}
+        {list.data ? <EmptyState title="No sleep recorded yet">Nights appear here after the watch has synced.</EmptyState> : null}
+      </div>
+    </>
+  );
+}
+
+export function SleepView({ date }: { date: string }) {
+  const title = `Sleep · ${fmtShortDay(date)}`;
+  usePageTitle(title);
+  const [count, setCount] = useState<NightCount>(7);
+  const night = useSleepNight(date);
+  const list = useSleepNights(count);
+
+  const latest = list.data?.nights.at(-1)?.date ?? null;
+  const yesterday = addDays(browserToday(), -1);
+  const hasNext = latest !== null ? date < latest : date < yesterday;
+  const sample = night.data?.sample ?? list.data?.sample;
+  const desktop = useIsDesktop();
+
+  return (
+    <>
+      <TopBar
+        variant="back"
+        backTo="/health"
+        backLabel="Back to Health"
+        title="Sleep"
+        subtitle={`Night of ${fmtShortDay(date)}`}
+        aside={
+          <>
+            {desktop ? <SampleDataChip sample={sample} /> : null}
+            <Link to={`/sleep/${addDays(date, -1)}`} className="icon-btn" aria-label="Previous night">
+              <BackIcon />
+            </Link>
+            {hasNext ? (
+              <Link to={`/sleep/${addDays(date, 1)}`} className="icon-btn" aria-label="Next night">
+                <NextIcon />
+              </Link>
+            ) : (
+              <span className="icon-btn" data-disabled="true" aria-hidden="true">
+                <NextIcon />
+              </span>
+            )}
+          </>
+        }
+      />
+      <div className="page" aria-busy={night.isPending}>
+        {!desktop && sample ? (
+          <div>
+            <SampleDataChip sample={sample} />
+          </div>
+        ) : null}
+        <div className="grid-panels" style={{ alignItems: 'start' }}>
+          {night.isPending ? (
+            <>
+              <CardSkeleton lines={2} height={28} />
+              <CardSkeleton lines={4} height={20} />
+            </>
+          ) : night.isError ? (
+            <div style={{ gridColumn: '1 / -1' }}>
+              <LoadError what="this night" error={night.error} onRetry={() => void night.refetch()} />
+            </div>
+          ) : night.data.night === null ? (
+            <div style={{ gridColumn: '1 / -1' }}>
+              <EmptyState title="No sleep recorded for this night">The watch did not record sleep that night. Try the previous or next night.</EmptyState>
+            </div>
+          ) : (
+            <NightCards night={night.data.night} />
+          )}
+          <LastNights count={count} onCount={setCount} data={list.data} pending={list.isPending} error={list.isError ? list.error : null} onRetry={() => void list.refetch()} />
+        </div>
+      </div>
+    </>
+  );
+}
+
+function NightCards({ night }: { night: SleepNight }) {
+  const desktop = useIsDesktop();
+  const { spans, totalMinutes } = stageSpans(night);
+  const label = scoreLabel(night.score_label);
+  const spo2 = night.spo2_avg_percent;
+  const vitalCols = desktop ? (spo2 === null ? 3 : 4) : spo2 === null ? 3 : 2;
+  // Desktop: score left, the stage chart on the right over two rows, vitals across the full width.
+  const at = (col: string, row: string): CSSProperties | undefined => (desktop ? { gridColumn: col, gridRow: row } : undefined);
+  return (
+    <>
+      <div style={at('1', '1')}>
+        <Card padding="lg" row>
+          <div className="stat stat--lg">
+            <span className="stat__label">Time asleep</span>
+            <span className="stat__value">{fmtSeconds(night.duration_s) ?? <span className="unavailable">unavailable</span>}</span>
+            <span className="stat__sub">
+              {clock(night.start)} to {clock(night.end)}
+            </span>
+          </div>
+          <div className="stat stat--lg" style={{ alignItems: 'flex-end' }}>
+            <span className="stat__label">Score</span>
+            <span className="stat__value tone-sleep">{night.score === null ? <span className="unavailable">unavailable</span> : fmtInt(night.score)}</span>
+            {label ? <span className="stat__sub tone-sleep">{label}</span> : null}
+          </div>
+        </Card>
+      </div>
+
+      <div style={at('2', '1 / span 2')}>
+        <Card padding="lg">
+          <CardHeader title="Stages through the night" tone="muted" />
+          {night.stages_available && spans.length > 0 ? (
+            <StageTimeline spans={spans} totalMinutes={totalMinutes} label="Sleep stages through the night" ticks={sleepTicks(night)} />
+          ) : (
+            <p className="stat__sub">Stages were not recorded for this night.</p>
+          )}
+          <ChartSummary>{stageSummary(night)}</ChartSummary>
+          <Legend
+            grid
+            items={[
+              { key: 'deep', label: 'Deep', color: 'var(--stage-deep)', value: fmtSeconds(night.deep_s), hasValue: true },
+              { key: 'light', label: 'Light', color: 'var(--stage-light)', value: fmtSeconds(night.light_s), hasValue: true },
+              { key: 'rem', label: 'REM', color: 'var(--stage-rem)', value: fmtSeconds(night.rem_s), hasValue: true },
+              { key: 'awake', label: 'Awake', color: 'var(--stage-awake)', value: fmtSeconds(night.awake_s), hasValue: true },
+            ]}
+          />
+        </Card>
+      </div>
+
+      <div style={{ display: 'grid', gap: 'var(--gap)', gridTemplateColumns: `repeat(${vitalCols}, minmax(0, 1fr))`, ...(desktop ? { gridColumn: '1 / -1', gridRow: '3' } : {}) }}>
+        <StatTile size="sm" label="HRV" value={withUnit(fmtInt(night.hrv_ms), 'ms')} />
+        <StatTile size="sm" label="Lowest HR" value={withUnit(fmtInt(night.lowest_hr_bpm), 'bpm')} />
+        <StatTile size="sm" label="Breathing" value={withUnit(fmtFixed(night.breathing_brpm, 1), '/min')} />
+        {spo2 !== null ? (
+          <StatTile size="sm" label="Blood oxygen" value={`${fmtInt(spo2)}%`} sub={night.spo2_low_percent === null ? undefined : `Low ${fmtInt(night.spo2_low_percent)}%`} />
+        ) : null}
+      </div>
+
+      <div style={at('1', '2')}>
+        <Card padding="lg" className="night-details">
+          <CardHeader title="Night details" tone="muted" />
+          <DataList
+            items={[
+              { label: 'Time in bed', value: fmtSeconds(night.time_in_bed_s) },
+              { label: 'Awakenings', value: fmtInt(night.awakenings) },
+              { label: 'Average stress', value: fmtInt(night.avg_stress) },
+              { label: 'Quality score', value: fmtInt(night.scores.quality) },
+              { label: 'Duration score', value: fmtInt(night.scores.duration) },
+              { label: 'Recovery score', value: fmtInt(night.scores.recovery) },
+            ]}
+          />
+        </Card>
+      </div>
+    </>
+  );
+}
+
+function LastNights({
+  count,
+  onCount,
+  data,
+  pending,
+  error,
+  onRetry,
+}: {
+  count: NightCount;
+  onCount: (c: NightCount) => void;
+  data: SleepNightsResponse | undefined;
+  pending: boolean;
+  error: unknown;
+  onRetry: () => void;
+}) {
+  const bars = data ? nightBars(data.nights, count) : null;
+  const avg = data ? fmtSeconds(data.average_duration_s) : null;
+  const summary = data ? nightsSummary(data.nights, count, data.average_score) : null;
+  return (
+    <div style={{ gridColumn: '1 / -1' }}>
+      <Card padding="lg" className="last-nights">
+        <CardHeader title={`Last ${count} nights`} tone="muted" aside={avg ? `Average ${avg}` : undefined} />
+        <SegmentedControl label="Number of nights" options={COUNTS} value={String(count) as '7' | '14' | '30'} onChange={(v) => onCount(Number(v) as NightCount)} />
+        {pending ? <Skeleton height={84} /> : null}
+        {error && !data ? <LoadError what="the last nights" error={error} onRetry={onRetry} /> : null}
+        {bars && bars.dates.length > 0 ? (
+          <>
+            <BarSeries
+              values={bars.values}
+              labels={bars.labels}
+              axisLabels={count === 7 ? undefined : axisDates(bars.dates)}
+              label={`Sleep duration for the last ${count} nights`}
+              color="var(--stage-deep)"
+              highlightLast="var(--sleep)"
+              height={count === 7 ? 84 : 96}
+            />
+            {summary ? <ChartSummary>{summary}</ChartSummary> : null}
+          </>
+        ) : null}
+        {data && bars && bars.dates.length === 0 ? <p className="stat__sub">No nights recorded yet.</p> : null}
+      </Card>
+    </div>
+  );
+}

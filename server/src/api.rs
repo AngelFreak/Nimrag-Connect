@@ -19,6 +19,10 @@ use std::sync::Arc;
 
 /// Default upload size limit.
 pub const MAX_BODY_BYTES: usize = 64 * 1024 * 1024;
+/// Largest JSON body on the owner API (everything but the device upload).
+pub const MAX_JSON_BYTES: usize = 64 * 1024;
+/// `POST /api/login` carries one password.
+pub const MAX_LOGIN_BYTES: usize = 4 * 1024;
 
 #[derive(Clone)]
 pub struct AppState {
@@ -30,6 +34,10 @@ pub struct AppState {
     /// Session cookies without `Secure` (plain-http LAN use; `--insecure-cookies`).
     pub insecure_cookies: bool,
     pub limiter: Arc<crate::auth::LoginLimiter>,
+    /// One permit: password checks (argon2, 19 MiB each) run one at a time.
+    pub(crate) login_gate: Arc<tokio::sync::Semaphore>,
+    /// Networks whose `X-Forwarded-For` is believed (`--trusted-proxy`); empty by default.
+    pub(crate) trusted_proxies: Arc<Vec<crate::auth::Cidr>>,
     clock: Arc<dyn Fn() -> i64 + Send + Sync>,
 }
 
@@ -42,12 +50,20 @@ impl AppState {
             ledger_lock: Default::default(),
             insecure_cookies: false,
             limiter: Default::default(),
+            login_gate: Arc::new(tokio::sync::Semaphore::new(1)),
+            trusted_proxies: Default::default(),
             clock: Arc::new(system_now),
         }
     }
 
     pub fn with_insecure_cookies(mut self, insecure: bool) -> Self {
         self.insecure_cookies = insecure;
+        self
+    }
+
+    /// Believe `X-Forwarded-For` from these peers when naming the login client.
+    pub fn with_trusted_proxies(mut self, nets: Vec<crate::auth::Cidr>) -> Self {
+        self.trusted_proxies = Arc::new(nets);
         self
     }
 
@@ -73,12 +89,17 @@ pub fn router(state: AppState) -> Router {
     let max_body = state.max_body;
     Router::new()
         .route("/api/health", get(health))
-        .route("/api/files", post(upload))
+        // The device upload is the only large body; a route-level limit wins over the global one.
+        .route(
+            "/api/files",
+            post(upload).layer(DefaultBodyLimit::max(max_body)),
+        )
         .route("/api/files/{sha256}", get(file_info))
         .merge(crate::web_api::router())
         .fallback(crate::web::handler) // the web app (SPA); /api/* misses stay 404
-        .layer(DefaultBodyLimit::max(max_body))
+        .layer(DefaultBodyLimit::max(MAX_JSON_BYTES))
         .layer(axum::middleware::from_fn(crate::auth::csrf_guard))
+        .layer(axum::middleware::from_fn(crate::auth::api_headers))
         .with_state(state)
 }
 

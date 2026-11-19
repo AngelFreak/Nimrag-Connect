@@ -8,6 +8,7 @@ use std::path::PathBuf;
 const USAGE: &str = "\
 usage:
   nimrag-server serve [--data-dir DIR] [--listen ADDR] [--log-json] [--insecure-cookies]
+                      [--trusted-proxy CIDR[,CIDR...]]
   nimrag-server user set-password [--data-dir DIR]  read the owner password from stdin
   nimrag-server dev-seed [--data-dir DIR]          fill an empty data dir with 120 days of sample data
   nimrag-server export-types [--out DIR]           write the API's TypeScript types (default web/src/api/generated)
@@ -19,13 +20,18 @@ usage:
                       [--max-depth N] [--max-entries N] [--max-total-bytes N] <archive.zip | extracted-dir>
   nimrag-server rebuild-ledger [--data-dir DIR]   recreate files/uploads rows from sidecars
 --data-dir defaults to $NIMRAG_DATA_DIR or ./data; --listen to 127.0.0.1:8080.
---insecure-cookies drops the Secure flag from the session cookie (plain-http LAN use only).";
+--insecure-cookies drops the Secure flag from the session cookie (plain-http LAN use only) and
+  uses the cookie name nimrag_session instead of __Host-nimrag_session.
+--trusted-proxy (repeatable, or comma-separated) names the reverse-proxy networks whose
+  X-Forwarded-For is believed for login rate limiting: only when the TCP peer is inside one, the
+  rightmost entry outside all of them is the client. Without it the peer address is used.";
 
 struct Opts {
     data_dir: PathBuf,
     listen: String,
     log_json: bool,
     insecure_cookies: bool,
+    trusted_proxies: Vec<nimrag_server::auth::Cidr>,
     out: Option<PathBuf>,
     list_skipped: bool,
     limits: import::Limits,
@@ -44,6 +50,7 @@ fn parse_opts(args: &[String]) -> Result<Opts> {
         listen: "127.0.0.1:8080".into(),
         log_json: false,
         insecure_cookies: false,
+        trusted_proxies: vec![],
         out: None,
         list_skipped: false,
         limits: import::Limits::default(),
@@ -63,6 +70,10 @@ fn parse_opts(args: &[String]) -> Result<Opts> {
             "--name" => o.name = Some(value("--name")?),
             "--log-json" => o.log_json = true,
             "--insecure-cookies" => o.insecure_cookies = true,
+            "--trusted-proxy" => o.trusted_proxies.extend(
+                nimrag_server::auth::parse_cidr_list(&value("--trusted-proxy")?)
+                    .context("--trusted-proxy")?,
+            ),
             "--out" => o.out = Some(value("--out")?.into()),
             "--list-skipped" => o.list_skipped = true,
             "--max-depth" => o.limits.max_depth = number(&value("--max-depth")?)?,
@@ -249,8 +260,15 @@ async fn serve(o: Opts) -> Result<()> {
     }
     let app = api::router(
         api::AppState::new(pool, o.data_dir, api::MAX_BODY_BYTES)
-            .with_insecure_cookies(o.insecure_cookies),
+            .with_insecure_cookies(o.insecure_cookies)
+            .with_trusted_proxies(o.trusted_proxies.clone()),
     );
+    if !o.trusted_proxies.is_empty() {
+        tracing::info!(
+            networks = o.trusted_proxies.len(),
+            "trusting X-Forwarded-For from the configured proxy networks"
+        );
+    }
     if o.insecure_cookies {
         tracing::warn!(
             "session cookies are sent without the Secure flag; use only on a trusted plain-http network"

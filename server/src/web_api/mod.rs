@@ -106,7 +106,12 @@ where
         Json::<T>::from_request(req, state)
             .await
             .map(|Json(v)| Self(v))
-            .map_err(|e| ApiError::bad_request(e.body_text()))
+            .map_err(|e| match e.status() {
+                axum::http::StatusCode::PAYLOAD_TOO_LARGE => {
+                    ApiError::new(axum::http::StatusCode::PAYLOAD_TOO_LARGE, "body too large")
+                }
+                _ => ApiError::bad_request(e.body_text()),
+            })
     }
 }
 

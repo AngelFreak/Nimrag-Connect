@@ -38,6 +38,7 @@ instead of appending, in both the sidecar and `uploads`.
 
 ```
 nimrag-server serve [--data-dir DIR] [--listen 127.0.0.1:8080] [--log-json]
+                    [--insecure-cookies] [--trusted-proxy CIDR[,CIDR...]]
 nimrag-server token create --name NAME   # prints the token once on stdout
 nimrag-server token list
 nimrag-server token revoke ID
@@ -48,7 +49,7 @@ nimrag-server dev-seed                   # 120 days of sample data into an empty
 nimrag-server export-types [--out DIR]   # TypeScript for the JSON API (default web/src/api/generated)
 ```
 
-`serve` also takes `--insecure-cookies` (see "Owner API"). Set the password
+`serve` also takes `--insecure-cookies` and `--trusted-proxy` (see "Owner API"). Set the password
 without echoing it, e.g. `printf '%s\n' "$PW" | nimrag-server user set-password`
 or `nimrag-server user set-password < pwfile` (at least 10 characters, one line,
 at most 4096 bytes). Setting it again replaces it and signs every session out.
@@ -81,17 +82,33 @@ The web app reads and edits through a second, owner-facing JSON API in the same
 router. Authentication is separate from the device tokens:
 
 - `POST /api/login` `{password}` checks the argon2id hash and sets the cookie
-  `nimrag_session`: a random 32-byte id, of which only the SHA-256 is stored
-  (`sessions`). Flags: `HttpOnly; SameSite=Strict; Path=/; Max-Age=2592000` (30
-  days) and `Secure`, unless the server runs with `--insecure-cookies`.
+  `__Host-nimrag_session`: a random 32-byte id, of which only the SHA-256 is
+  stored (`sessions`). Flags: `HttpOnly; SameSite=Strict; Path=/; Max-Age=2592000`
+  (30 days) and `Secure`. With `--insecure-cookies` the `Secure` flag is dropped
+  and the name is plain `nimrag_session` (the `__Host-` prefix is invalid
+  without `Secure`); only the name matching the mode is accepted.
   **Serve it over HTTPS** (the reverse proxy or tailnet terminates TLS): browsers
   do not send a `Secure` cookie over plain HTTP, so without TLS only
   `--insecure-cookies` (local development) works.
 - Failed logins are backed off per client address, in memory: the first four are
   free, the fifth starts a lock-out of 2 s that doubles per further failure up to
-  300 s (`429` with `Retry-After`); a success resets it. Behind a reverse proxy
-  every request has the proxy's address, so the limit is then global, which is
-  acceptable for a single owner.
+  300 s (`429` with `Retry-After`); a success resets it, and so do 15 minutes
+  without a failure. On top of that, more than 20 failures within a minute across
+  all addresses make every login wait 1 s (fixed) after each further failure. Password
+  checks run one at a time and re-check the limiter when their turn comes, so a
+  burst of parallel guesses cannot all slip through.
+- **Behind a reverse proxy** the TCP peer is the proxy, so by default all clients
+  share one limit. `serve --trusted-proxy CIDR` (repeatable, or comma-separated,
+  e.g. `--trusted-proxy 127.0.0.1/32,172.16.0.0/12`) opts in to
+  `X-Forwarded-For`: only when the TCP peer is inside a trusted network, the
+  rightmost entry that is not itself trusted is the client address (entries further
+  left are client-supplied and ignored). From any other peer the header is ignored.
+  Trust only networks your proxy really sits in, and make the proxy append the
+  address it saw rather than pass a client's header through unchecked.
+- Body limits: `POST /api/login` 4 KiB, every other JSON route 64 KiB (`413`),
+  `POST /api/files` (device upload) the large upload limit.
+- Every response under `/api` carries `Cache-Control: no-store`,
+  `X-Content-Type-Options: nosniff` and `Vary: Cookie`.
 - Every `POST`, `PATCH` and `DELETE` under `/api` except `/api/files` and
   `/api/login` must carry `X-Nimrag: 1` (`403` otherwise), so a cross-site form
   cannot change anything even if a cookie were attached.
@@ -114,7 +131,7 @@ duplicates and appends cards missing from `order`).
 | endpoint | what |
 |---|---|
 | `POST /api/login`, `POST /api/logout`, `GET /api/me` | session |
-| `GET /api/tokens`, `POST /api/tokens` `{name}`, `DELETE /api/tokens/{id}` | device tokens for the web UI: the secret is returned once on create, never listed; delete revokes |
+| `GET /api/tokens`, `POST /api/tokens` `{name, password}`, `DELETE /api/tokens/{id}` | device tokens for the web UI: create re-checks the owner's password (same limiter as login; wrong gives 401 and keeps the session) and allows at most 20 active tokens (409 beyond); the secret is returned once on create, never listed; delete revokes |
 | `GET /api/today` | the Today page: In focus (energy, last night, HRV), every At a glance card, last activity, training this week, `yesterday`, `last_7_days` |
 | `GET /api/days/{date}` | one day: heart rate, stress, energy, steps, intensity, the night that began that day, activities |
 | `GET /api/activities?type=&before=&limit=` | newest first, `type` is all, run, walk, hike, cycle, swim, strength, training, other; `next_before` is the cursor |

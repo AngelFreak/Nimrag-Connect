@@ -4,7 +4,7 @@
 // - same-origin cookies (the session cookie is HttpOnly, the page never sees it)
 // - `X-Nimrag: 1` on every request that changes something (CSRF guard next to SameSite)
 // - typed errors, so callers can tell "wrong password" from "server down"
-// - 401 on a session-protected call sends the user to /login
+// - 401 on a session-protected call clears the offline API cache and sends the user to /login
 
 export class ApiError extends Error {
   readonly status: number;
@@ -102,7 +102,11 @@ export async function apiFetch<T = unknown>(path: string, options: RequestOption
   if (res.ok) return data as T;
 
   if (res.status === 401) {
-    if (options.redirectOn401 !== false) onUnauthorized();
+    if (options.redirectOn401 !== false) {
+      // The session is gone: do not leave the last signed-in user's data readable offline.
+      await clearOfflineApiCache();
+      onUnauthorized();
+    }
     throw new UnauthorizedError(errorMessage(data, 'Not logged in'), data);
   }
   throw new ApiError(res.status, errorMessage(data, res.statusText || `HTTP ${res.status}`), data);
