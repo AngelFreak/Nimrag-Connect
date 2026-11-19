@@ -44,9 +44,11 @@
     <string name="scan_found_title">Watches nearby</string>
     <string name="scan_none_found">No watch found. Check that it is in pairing mode and close by, then scan again.</string>
     <string name="cannot_sync_yet">Can\'t sync yet: %1$s</string>
-    <string name="garmin_connect_title">Garmin Connect is on this phone</string>
-    <string name="garmin_connect_body">Only one app can talk to the watch at a time. While Garmin Connect runs, it holds the watch and Nimrag cannot pair or sync.</string>
-    <string name="garmin_connect_test">To try Nimrag and keep Garmin Connect: open its app info, tap Force stop, then pair here. Nimrag reuses the phone\'s existing Bluetooth pairing and leaves it in place. Opening Garmin Connect again takes the watch back.</string>
+    <string name="garmin_connect_title">Garmin Connect is using the watch</string>
+    <string name="garmin_connect_body">Only one app can talk to the watch at a time. Force stop does not help: Android restarts Garmin Connect whenever the watch is near.</string>
+    <string name="garmin_connect_test">To try Nimrag and keep Garmin Connect: open its app info, then Permissions → Nearby devices → Don\'t allow. Come back and pair here. Nimrag reuses the phone\'s existing Bluetooth pairing and leaves it in place. Allowing the permission again gives the watch back to Garmin Connect.</string>
+    <string name="garmin_connect_off_title">Garmin Connect is kept away from the watch</string>
+    <string name="garmin_connect_off_body">Its Nearby devices permission is off, so Nimrag can talk to the watch. To use Garmin Connect again, allow that permission in its app info.</string>
     <string name="garmin_connect_switch">To switch for good: remove the watch in Garmin Connect (Devices), forget it in the phone\'s Bluetooth settings, then pair it here.</string>
     <string name="garmin_connect_open">Open Garmin Connect app info</string>
     <string name="pairing_failed_title">Pairing did not finish</string>

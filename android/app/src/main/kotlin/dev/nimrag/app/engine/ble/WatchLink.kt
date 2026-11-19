@@ -26,6 +26,7 @@ import dev.nimrag.app.engine.logic.FileKind
 import dev.nimrag.app.engine.logic.GattPair
 import dev.nimrag.app.engine.logic.LinkRules
 import dev.nimrag.app.engine.logic.WriteQueue
+import dev.nimrag.app.model.GarminConnect
 import dev.nimrag.app.model.LinkState
 import dev.nimrag.app.model.SyncResult
 import dev.nimrag.app.model.SyncState
@@ -172,8 +173,11 @@ class WatchLink(private val hub: Hub, private val scanner: BleScanner) {
         bondLost = false
         otherAppHinted = false
         hub.update { it.copy(watch = WatchState.Pairing(address, name), pairingError = null) }
-        if (hub.garminConnectInstalled()) {
-            log.warn("Garmin Connect is installed. If it is running it holds the watch, and Nimrag cannot talk to it at the same time")
+        when (hub.garminConnect()) {
+            GarminConnect.HasBluetooth ->
+                log.warn("Garmin Connect has Bluetooth access. While it runs it holds the watch, and Nimrag cannot talk to it at the same time")
+            GarminConnect.BluetoothOff -> log.info("Garmin Connect's Bluetooth access is off")
+            GarminConnect.Absent -> Unit
         }
         // Started now, while the UI is in the foreground; the service keeps the process alive.
         running = true
@@ -825,9 +829,9 @@ class WatchLink(private val hub: Hub, private val scanner: BleScanner) {
 
     /** A link that will not come up while Garmin Connect is installed is most likely its doing. */
     private fun hintOtherApp() {
-        if (otherAppHinted || !hub.garminConnectInstalled()) return
+        if (otherAppHinted || hub.garminConnect() != GarminConnect.HasBluetooth) return
         otherAppHinted = true
-        log.warn("Garmin Connect probably holds the watch. Force-stop it (Watch tab, Garmin Connect card) and Nimrag will reconnect")
+        log.warn("Garmin Connect probably holds the watch. Turn off its Nearby devices permission (Watch tab, Garmin Connect card) and Nimrag will reconnect")
     }
 
     /** Drop the client and the GATT object; the next connection starts from scratch. */

@@ -49,6 +49,7 @@ import androidx.compose.ui.unit.dp
 import dev.nimrag.app.R
 import dev.nimrag.app.model.AppState
 import dev.nimrag.app.model.FoundDevice
+import dev.nimrag.app.model.GarminConnect
 import dev.nimrag.app.model.LinkState
 import dev.nimrag.app.model.WatchController
 import dev.nimrag.app.model.WatchState
@@ -122,8 +123,9 @@ fun WatchScreen(
             BluetoothOffCard(onEnable = { enableBluetoothLauncher.launch(Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE)) })
         }
         val watchReady = (state.watch as? WatchState.Paired)?.link == LinkState.Ready
-        if (state.garminConnectInstalled && !watchReady) {
+        if (state.garminConnect != GarminConnect.Absent && !watchReady) {
             GarminConnectCard(
+                bluetoothOff = state.garminConnect == GarminConnect.BluetoothOff,
                 onOpenAppInfo = {
                     context.startActivity(
                         Intent(
@@ -199,16 +201,35 @@ internal fun BluetoothOffCard(onEnable: () -> Unit, modifier: Modifier = Modifie
 
 private const val GARMIN_CONNECT_PACKAGE = "com.garmin.android.apps.connectmobile"
 
-/** Garmin Connect holds the watch's session whenever it runs; only one app can talk to the watch. */
+/**
+ * Garmin Connect holds the watch's session whenever it runs, and the system restarts it when the
+ * watch is in range, so Force stop does not last. Revoking its "Nearby devices" permission does.
+ */
 @Composable
-internal fun GarminConnectCard(onOpenAppInfo: () -> Unit, modifier: Modifier = Modifier) {
+internal fun GarminConnectCard(bluetoothOff: Boolean, onOpenAppInfo: () -> Unit, modifier: Modifier = Modifier) {
+    val open: @Composable () -> Unit = {
+        Button(onClick = onOpenAppInfo) { Text(stringResource(R.string.garmin_connect_open)) }
+    }
+    if (bluetoothOff) {
+        MessageCard(
+            icon = Icons.Filled.Info,
+            title = stringResource(R.string.garmin_connect_off_title),
+            containerColor = MaterialTheme.colorScheme.secondaryContainer,
+            contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+            modifier = modifier,
+            actions = open,
+        ) {
+            Text(stringResource(R.string.garmin_connect_off_body), style = MaterialTheme.typography.bodyMedium)
+        }
+        return
+    }
     MessageCard(
-        icon = Icons.Filled.Info,
+        icon = Icons.Filled.Warning,
         title = stringResource(R.string.garmin_connect_title),
         containerColor = MaterialTheme.status.warnContainer,
         contentColor = MaterialTheme.status.onWarnContainer,
         modifier = modifier,
-        actions = { Button(onClick = onOpenAppInfo) { Text(stringResource(R.string.garmin_connect_open)) } },
+        actions = open,
     ) {
         Text(stringResource(R.string.garmin_connect_body), style = MaterialTheme.typography.bodyMedium)
         Text(stringResource(R.string.garmin_connect_test), style = MaterialTheme.typography.bodyMedium)

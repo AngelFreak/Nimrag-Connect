@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Themed-icon layer: the foreground's shapes in one colour (the system tints it). -->
+<!-- Themed-icon layer: wordmark and sync arrow in one colour (the system tints it). -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
@@ -8,26 +8,19 @@
     <group
         android:pivotX="60"
         android:pivotY="60"
-        android:scaleX="0.68"
-        android:scaleY="0.68"
+        android:scaleX="0.52"
+        android:scaleY="0.52"
         android:translateX="-6"
         android:translateY="-6">
         <path
+            android:fillColor="#000000"
+            android:pathData="M12.47 33.01 10.44 30.47 10.38 30.48 12.6 40.1 9.67 40.77 6.38 26.49 9.77 25.71 15.24 31.56 17.27 34.1 17.33 34.09 15.11 24.47 18.04 23.8 21.34 38.08 17.94 38.86ZM24.91 37.25 24.34 34.78 26.18 34.35 24.03 25.02 22.18 25.45 21.61 22.97 28.41 21.4 28.98 23.88 27.14 24.3 29.29 33.64 31.13 33.21 31.7 35.69ZM43.79 23.02 43.73 23.04 43.17 25.37 41.55 31.06 37.67 26.66 36.07 24.66 36.01 24.67 38.2 34.19 35.28 34.86 31.98 20.58 35.27 19.82 40.32 25.7 40.36 25.69 42.27 18.2 45.59 17.44 48.88 31.72 45.96 32.4ZM56.12 30.05 53.01 30.77 49.71 16.48 56.48 14.92Q57.47 14.69 58.34 14.84Q59.21 14.98 59.92 15.45Q60.62 15.93 61.12 16.7Q61.62 17.46 61.86 18.49Q62.19 19.94 61.8 21.17Q61.4 22.41 60.21 23.2L64.3 28.16L60.85 28.96L57.14 24.3L54.91 24.81ZM57.58 21.44Q58.27 21.28 58.59 20.83Q58.91 20.37 58.75 19.68L58.54 18.78Q58.38 18.08 57.9 17.82Q57.41 17.55 56.72 17.71L53.45 18.47L54.31 22.19ZM76.57 25.33 74.77 22.17 70 23.27 69.76 26.9 66.61 27.63 68.02 12.26 71.86 11.37 79.81 24.58ZM70.55 14.65 70.45 14.67 70.13 20.46 73.4 19.7ZM91.31 19.53 91.2 19.56Q91.29 20.68 90.51 21.61Q89.74 22.55 88.12 22.92Q86.89 23.2 85.72 22.98Q84.55 22.75 83.54 22.02Q82.53 21.28 81.76 20.01Q80.99 18.75 80.58 16.95Q80.16 15.14 80.31 13.64Q80.46 12.14 81.09 11.01Q81.73 9.87 82.8 9.1Q83.87 8.34 85.32 8Q87.25 7.56 88.83 8.07Q90.41 8.58 91.59 10.05L89.39 12.09Q88.87 11.32 88.04 10.9Q87.21 10.48 85.96 10.77Q84.51 11.1 83.84 12.14Q83.18 13.18 83.59 14.98L84.12 17.27Q84.53 19.05 85.59 19.7Q86.64 20.35 88.1 20.02Q88.67 19.88 89.15 19.63Q89.63 19.38 89.96 19.01Q90.28 18.65 90.41 18.21Q90.53 17.77 90.41 17.24L90.24 16.52L87.58 17.14L86.98 14.54L92.61 13.24L94.45 21.2L91.83 21.8Z" />
+        <path
             android:strokeColor="#000000"
-            android:strokeWidth="7"
-            android:strokeLineCap="round"
-            android:pathData="M87.58,36.86 A36,36 0 1 1 53.75,24.55" />
+            android:strokeWidth="13"
+            android:pathData="M76.13 73.55 A20 20 0 1 1 58 62" />
         <path
             android:fillColor="#000000"
-            android:strokeColor="#000000"
-            android:strokeWidth="2"
-            android:strokeLineJoin="round"
-            android:pathData="M65.2,23.0 L52.0,16.6 L55.3,32.2 Z" />
-        <path
-            android:strokeColor="#000000"
-            android:strokeWidth="5.5"
-            android:strokeLineCap="round"
-            android:strokeLineJoin="round"
-            android:pathData="M33,62 H45 L51.5,47 L60,77 L67.5,53 L72.5,62 H87" />
+            android:pathData="M58 48.35 L74.25 62 L58 75.65 Z" />
     </group>
 </vector>

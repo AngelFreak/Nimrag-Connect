@@ -22,11 +22,22 @@ data class AppState(
     /** Why the last pairing attempt failed, shown on the Watch screen; cleared by the next scan or pairing. */
     val pairingError: String? = null,
     /**
-     * Garmin Connect is installed. Only one app can hold the watch's protocol session, so the
+     * Garmin Connect on this phone. Only one app can hold the watch's protocol session, so the
      * Watch screen explains how to keep it out of the way.
      */
-    val garminConnectInstalled: Boolean = false,
+    val garminConnect: GarminConnect = GarminConnect.Absent,
 )
+
+enum class GarminConnect {
+    /** Not installed. */
+    Absent,
+
+    /** Installed with Bluetooth access ("Nearby devices"): it takes the watch whenever it runs. */
+    HasBluetooth,
+
+    /** Installed, Bluetooth access turned off: it cannot reach the watch, Nimrag can. */
+    BluetoothOff,
+}
 
 /** Runtime permissions the engine needs; the UI asks for the missing ones. */
 data class Permissions(
