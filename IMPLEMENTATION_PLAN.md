@@ -64,10 +64,110 @@ Roles: main session orchestrates and integrates; Sonnet builders implement on di
 Roles as phase 1. Order follows the brief: the core state machine passes the phase 0 captures on the desktop before anything runs on the phone.
 
 ## Stage 2a: sans-IO protocol client in /core
-**Goal**: client state machine (multi-link register, MLR, GFDI handshake, directory, download with CRC check, archive after the caller confirms safe storage, time duty) as bytes-in/bytes-out plus events/commands, no IO
-**Success Criteria**: replaying each private capture's watch-to-phone traffic through the client produces the phone-to-watch messages the app sent (modulo documented free choices); synthetic committed fixtures cover the same paths
-**Tests**: synthetic session fixtures (committed), private capture replay (skips when absent)
-**Status**: Not Started
+**Goal**: `nimrag_core::client::Client`, our side of the watch link as a pure state machine: multi-link bring-up, MLR, GFDI handshake, time duty, pending-file listing, download with CRC check, archive only after the caller confirms safe storage. Bytes and caller decisions in; GATT writes, events and one deadline out.
+**Success Criteria**: (1) the committed synthetic session tests pass through `Client::handle` only; (2) for every session in the three private captures, the replay harness below reports zero differences outside the allowed list; (3) no 5008 is ever emitted without a matching `FileStored`; (4) `core` stays std-only; `cargo clippy` and `cargo fmt --check` clean.
+**Tests**: `core/tests/client_synthetic.rs` (committed, fake ids), `core/tests/client_replay_private.rs` (skips with a printed notice when `private/captures` is absent; fails instead when `NIMRAG_REQUIRE_PRIVATE=1`), unit tests per module.
+**Status**: In Progress (contract accepted by orchestrator)
+
+### Stage 2a contract
+
+Labels as in PROTOCOL.md: **seen** / **inferred** / **unknown**; **ours** = a free choice of this client. CAP-1 = `2026-11-19-reconnect-sync`, CAP-2 = `…-activity-sync`, CAP-3 = `…-settings-timeformat`; `t=` is seconds in `nimrag-decode --verbose` output. Connect is client `c1`, Explore the other client.
+
+#### 1. API (fixed in `core/src/client/mod.rs`; change it only via the orchestrator)
+- One `Client` per GATT connection and per characteristic pair; created at connect, dropped at disconnect. The caller picks the pair (notify `6A4E281x`, write `6A4E282x`), bonds, exchanges MTU, enables the CCCD, then sends `Input::Connected { att_mtu }`. All writes go to that pair's write characteristic as write-without-response, in order. [seen: PROTOCOL §1.1]
+- `handle(now, input) -> Step { writes, events, wake_at_mono_ms }`. No IO, no clock reads, no panics on peer data. After `Closed`, every input returns an empty `Step`.
+- Time: `Now.mono_ms` drives every timer; the wall fields are used only for the 5052 reply. All timers (MLR ack delay, MLR retransmit, reply deadlines, retry delays) collapse into the single `wake_at_mono_ms`; the caller arms one timer and sends `Input::Tick`. A late Tick is fine; an early one is a no-op.
+- Caller decisions: `StartSync`, `FileStored { transfer_id }`, `FileStoreFailed { transfer_id }`. No SHA-256 crosses the boundary: `core` has no hash and could not check it; hashing belongs to the store (2d).
+- `ClientConfig` has no defaults in `core` (client id, host strings, app version, capability mask). Tests take them from the capture or use fake values.
+
+#### 2. Transport and MLR (`client/transport.rs`, `client/reliable.rs`)
+- Bring-up, strictly request → reply: close-all (any reply status accepted; status 1 seen, meaning unknown Q-ML-1) → register REGISTRATION(4) mode 0 → info pages 0–4 as `[handle, page]` → register GFDI(1) mode 2 → register KEEP_ALIVE(22) mode 0 → write `[ka_handle, 01 19 00 00 00]`. [seen: CAP-1 t=0.86–1.89, both apps; keep-alive payload meaning inferred]. Keep-alive values from the watch (`02 00`, counters) are consumed silently.
+- Register replies: status 0 → continue; status 2 PENDING_AUTH → keep waiting [seen APK]; status 3 → `Closed(ChannelInUse)`; other → `Closed(RegisterRejected)`. GFDI without the reliable flag → `Closed(ReliableNotGranted)` (plain mode is Q-MLR-3, not built).
+- `MlrEndpoint` (symmetric; the test fake watch uses the same type): header via `mlr::{parse, build}`, receive via `mlr::ReceiveWindow`. Payload per packet `att_mtu − 5`. Each GFDI frame (`cobs::encode_frame`) starts a new packet. Start seq 0 / ack 0. [seen: PROTOCOL §1.4]
+- Receive: Accept → deliver, Duplicate / OutOfOrder → drop [seen]; all three schedule an ack [inferred for the two drop cases]. Ack policy: ACK-only packet (2 bytes, seq 0) after 5 unacknowledged data packets or 10 ms after the first; any outgoing data packet carries the ack and cancels it. [seen]
+- Send: window fixed at 32 unacknowledged packets [ours; the app grows it to 63]; retransmit timer 2000 ms from the oldest unacknowledged packet, doubling per timeout to 20000 ms, reset to 2000 ms on ack progress; a timeout resends every unacknowledged packet with the current ack; retries never give up [seen, minus the RTT estimator, whose floor is 2000 ms anyway — ours].
+- A value on an unknown handle, a malformed control message, control type 4 or 0xFF → `Anomaly(BadTransport)`, nothing sent.
+
+#### 3. GFDI session (`client/session.rs`)
+- Our requests use compact ids with a txn counter 0..31, +1 per request, wrapping [seen: CAP-1 t=55.43 wrap]. One request outstanding at a time [ours]. Replies to watch requests are sent at once, in arrival order, with the request's txn if it had one (none seen). A reply deadline of 30 s applies to every awaited answer in every phase; expiry → `Closed(Timeout)` [ours]. A non-ACK status to one of our requests → `Closed(RequestFailed)`.
+- Handshake order: wait 5024 → ACK with host info (PROTOCOL §3 step 2; protocol 150) → wait 5050 → bare ACK → our 5050 (`config.capabilities`) → 5031 → 5030 `08 00` HANDSHAKE_COMPLETE → on its ACK emit `HandshakeDone`. [seen: CAP-1 t=2.62–4.77, Explore's order]. Protocol < 150 in 5024 → `Closed(ProtocolTooOld)`.
+
+| Watch → phone | Our answer | Label, evidence |
+| --- | --- | --- |
+| 5024 | ACK + host info | seen CAP-1 t=2.68 |
+| 5050 | bare ACK | seen t=3.76 |
+| 5052 | ACK `ref, unix_s − 631065600, utc_offset_s, next_dst, following_dst` (Garmin epoch); emit `TimeSent`. `unix_s` before 2020-01-01 → no reply, `Anomaly(ClockInvalid)` (never set the watch to a bad time) | seen t=5.11, 43.68, 62.67; guard ours |
+| 5037 (any option, any bitmask) | bare ACK, then one sync cycle (queued if not `Ready`; at most one queued) | seen t=43.86, 53.50, 62.81; CAP-2 t=1044.68 |
+| 5004 | ACK `status, u32 total bytes received` per chunk | seen CAP-2 t=1081.99 (3969), 1082.85 (5157) |
+| 5043 | ACK body `u16 request_id` + six zero bytes; no 5044 follows. Several chunks → same ACK + `Anomaly(ChunkedProtobuf)` | seen for requests the app leaves unanswered (CAP-1 t=4.92→5.21); inferred for the rest |
+| 5044 (answer to our sync request) | ACK body as above | seen t=62.89 |
+| 5101 | nothing; `Closed(AuthRequested)` | seen APK `rq50` |
+| any other request (5036, 5042, 5014, 5034, 5009, 5011/5012, 5022, 5023, 5027, 5054, …) | 5000 `id, status 2`, no body; emit `Unsupported` | inferred (APK auto-reply; status value never seen on the wire, Q-GFDI-5) |
+| 5000 matching no request; bad COBS / length / CRC | `Anomaly`, nothing sent | ours |
+
+- Deliberately not sent (each is on the allowed-differences list): info page 5; NFC and real-time service registrations; 5043 FeatureCapabilitiesRequest; 5026 settings 6/7/8 (Explore omits it too); 5030 HOST_DID_ENTER_FOREGROUND; 5033/5035/5049; every 5044 answer to a watch protobuf request, including the cloud HTTP proxy; the 255/19 upload (5005/5003/5004); weather 5011/5012.
+
+#### 4. Sync cycle and safety (`client/sync.rs`)
+- Trigger: a watch 5037, or `StartSync`, which sends 5043 with `Smart.core(13){1{1=0}}` (header `request_id, offset 0, total 6, chunk 6`; request ids count from 0) and then waits for the watch's 5037 [seen: CAP-1 t=62.56–62.71]. No 5037 within 30 s → `Anomaly(SyncNotGranted)`, back to `Ready`, no listing.
+- Cycle: 5007 `03` → 5002 index 0 (`index, offset 0, type 1, crc_seed 0, max_size 0, flags 01`) → parse directory (16-byte header skipped; `DirEntry`) → emit `Directory` → for each entry in directory order: download → wait for the caller → archive → next → finally 5030 `00 00` SYNC_COMPLETE, also after failures and for an empty listing → `SyncFinished`. [seen: CAP-1 t=44.04–57.40; CAP-2 t=1076.54–1098.20; failure case inferred]
+- Download policy: only entries with `data_type == 128` and flag READ (0x80); others → `FileFailed(Skipped)` [inferred from "FIT sub-types only", PROTOCOL §5.6]. 5002 reply status 3 → retry after 1 s, 5 times [seen APK]; other non-zero → `FileFailed(Refused)`.
+- Check per chunk: `offset == bytes so far` and `crc::update(running, data) == chunk crc`; at the end `total == size from the 5002 reply`. Good chunk → ACK status 0. CRC or size mismatch → ACK status 3; offset mismatch → ACK status 2; then the partial data is dropped and the file is requested again from offset 0, once per cycle [statuses seen APK `yw40`, never on the wire; retry count ours]. Second failure → `FileFailed { will_retry: false }`, no archive; the file stays pending for the next sync.
+- **Archive rule.** 5008 `index, 10` is sent only when all hold: the file was delivered by `FileDownloaded` in this cycle of this `Client`; the client is waiting on exactly that `transfer_id`; the caller sent `FileStored` for it. While waiting, the file lane is frozen (no other 5002/5008, no timeout: the caller owns that deadline) but watch requests are still answered. `FileStoreFailed` → `FileFailed(StoreFailed)`, next file. Any other `transfer_id` → `StaleConfirmation`, nothing sent. The directory is never archived. 5008 reply: ACK with first body byte 0 → `FileArchived`; else `FileFailed(ArchiveRefused)` (rest of the body is unknown, Q-GFDI-2).
+- Disconnect: `Closed(Disconnected)`; partial downloads are discarded and never delivered; pending confirmations become void. No resume at an offset [seen: the app never does]. Idempotence across reconnects comes from the watch re-listing unarchived files (inferred; Q-SYNC-3) and the store deduplicating by content hash (2d); indices are reused by the watch (index 89 held file numbers 144, 145, 146 in CAP-1/2), so an index is never carried from one connection to the next.
+
+#### 5. Replay harness = "passes the phase 0 fixtures"
+`core/tests/support/` holds `FakeWatch` (scripted peer: `MlrEndpoint` + public codecs) and `transcript.rs`. Both test files drive only `Client::handle`.
+1. Decode a capture with `capture::{parse_btsnoop, L2capReassembler, parse_att}` and `link::LinkDecoder`; split by `Link`; one replay per Connect session found (a session starts at each close-all; CAP-2 has a second one from t≈698). Config = that session's client id, host strings, app version and 5050 bytes.
+2. Transcript = that link's ordered items (control, info page, service data, GFDI message) with capture timestamps. Each watch → phone item is a **reply** to an app item (register response ↔ register by service; info page ↔ page; 5000 ↔ request id + txn; 5004 chunks ↔ their 5002; keep-alive `02 00` ↔ `01 19…`; 5044 ↔ protobuf request id) or **unsolicited**.
+3. Drive with the capture's clock. Unsolicited items are delivered at their timestamp. A reply is delivered once the client has emitted the matching request, after the captured latency, with txn and protobuf request id rewritten to the client's. Replies to app requests the client never makes are dropped; that request must be on the not-sent list of §3, else fail. A client request with no reply in the transcript → fail. The app's manual-sync 5043 becomes `Input::StartSync` at its timestamp. `FileDownloaded` is answered at once with `FileStored`. The fake watch re-frames everything through its own `MlrEndpoint` (the captured MLR seq/ack numbers belong to the app's traffic and cannot be replayed raw).
+4. Compare, per lane, the client's phone → watch items with the app's, as exact sequences of (id, payload) after normalising txn and protobuf request id:
+   - **bring-up**: control and info writes, byte-exact; GFDI/KEEP_ALIVE register order free;
+   - **handshake**: ACK(5024), ACK(5050), 5050, 5031, 5030 HANDSHAKE_COMPLETE;
+   - **time**: one reply per 5052; reference, offset and DST fields equal; time within ±2 s of the app's;
+   - **sync**: ACK(5037), 5007, 5002, ACK(5004), 5008, 5030 SYNC_COMPLETE; and every downloaded file byte-identical to `LinkDecoder`'s `FileDownloaded`;
+   - **protobuf**: the manual-sync 5043; one ACK per watch 5043 and per 5044.
+5. Allowed differences, complete list (the test encodes it as data and prints which were used): the not-sent list of §3; txn and protobuf request ids; time within ±2 s; order between lanes; order of the GFDI and KEEP_ALIVE registrations; the last two bytes of a protobuf ACK body where the app sent non-zero (Q-GFDI-3, CAP-1 t=5.42); `Unsupported` replies (status 2, no body) where the app ACKed 5036 / 5042 / 5014 / 5034 with a body; watch 5037s that followed the app's foreground event are still delivered. Anything else is a failure; the builder does not extend this list.
+- Synthetic fixture: the same harness over a transcript built in code with fake ids (unit id, names, client id), one multi-chunk file larger than `max_packet` at MTU 23 (more than 64 MLR packets, so seq wraps). Nothing derived from private captures is committed except protocol constants already in PROTOCOL.md.
+
+#### 6. Tests (all through `Client::handle` unless marked unit)
+1. Happy path: bring-up → handshake → 5037 → two files → stored → archived → SYNC_COMPLETE → 5037 INVISIBLE → empty listing → SYNC_COMPLETE; the full phone → watch GFDI sequence equals a golden list.
+2. Seam check: the whole synthetic exchange (both directions) fed to `LinkDecoder` gives no `Unknown`, `GfdiError` or `MlrOutOfOrder`, and its files equal the client's.
+3. No 5008 before `FileStored`: confirmation withheld while time advances and a 5052 is answered; then `FileStoreFailed` → next file, still no 5008 for it.
+4. `StaleConfirmation`: unknown id, repeated id, id from before a disconnect (new `Client`) → no write.
+5. CRC mismatch once → ACK status 3, second attempt archived; twice → `FileFailed`, no 5008, SYNC_COMPLETE still sent. Offset mismatch → status 2. Size mismatch.
+6. Disconnect mid-download → `Closed`, no `FileDownloaded`; a new `Client` starts at seq 0 / txn 0, lists and downloads the file again.
+7. Time: reply fields; `ClockInvalid` sends nothing.
+8. Unsupported and auth: 5036 / 5014 / an unlisted id → status 2; 5101 → `Closed`, no write.
+9. `StartSync`: protobuf bytes, 5037 MANUAL, ACK of 5044; no 5037 → `SyncNotGranted`.
+10. MLR (unit + through the client): lost phone → watch packet retransmitted at 2 s, 4 s, … capped at 20 s with the current ack; gap from the watch delivers nothing until retransmission; ACK-only after 5 packets and after 10 ms; window of 32; seq wrap.
+11. Failures: register status 3, GFDI without reliable flag, 30 s silence in each phase, NAK to 5007.
+12. Robustness: 10 000 pseudo-random notification values (fixed-seed LCG) in each phase never panic.
+13. Private replay (§5) for all sessions of CAP-1/2/3.
+
+#### 7. Layout, reuse, scope
+- New: `core/src/client/{mod,transport,reliable,session,sync}.rs`, `core/src/messages.rs` (typed build/parse for 5024, host info, 5031 reply, 5037, 5052, 5002 + reply, 5004 + ACK, 5008, 5043/5044 header). Where `describe.rs` or `link.rs` already parse one of these, move the parser into `messages.rs` and call it from there: one implementation per layer. `DirEntry` moves the same way (re-export from `describe`).
+- Reuse unchanged: `crc`, `cobs::{encode_frame, FrameDecoder}`, `gfdi::{Message, Status}`, `multilink::{parse_control, register_request, close_all_request, Control}`, `mlr::{Header, parse, build, ReceiveWindow}`; `capture` and `link::LinkDecoder` in tests only.
+- Not in 2a: BLE, GATT discovery, bonding, pairing (Q-PAIR-1), Android, UniFFI bindings, storage, hashing, upload queue, notifications, weather, GPS assist, settings, Garmin Auth, plain (non-MLR) GFDI, 5054 decompression, uploads to the watch, changes to `tools/decode` output.
+- Licence: implement from PROTOCOL.md and the captures only; do not open Gadgetbridge.
+
+#### 8. Stop and report; do not guess
+1. Any replay difference outside §5's list, or a transcript item the harness cannot classify.
+2. A register status, flag or control type this contract does not name, in a capture.
+3. 5054, a chunked protobuf, a non-ACK status, or a 5008 reply body that breaks the "index − 1" pattern, in a capture.
+4. 5052 for a zone without DST transitions (encoding unknown): `Now` requires both fields; do not invent a sentinel.
+5. Need for a default capability mask, client id or app version in `core`.
+6. Anything that would require copying capture bytes containing ids, names, notification text or cloud answers into a committed file.
+7. A conflict between this contract and PROTOCOL.md: PROTOCOL.md and the captures win; report it.
+
+#### 9. Orchestrator decisions on the advisor's open points (2026-11-19)
+- Capability mask, client id, app version, host strings: config only, no defaults in `core`. 2c starts with Explore's 5050 set (seen working; weather 5014 then gets status 2) and confirms it live.
+- 5043 FeatureCapabilitiesRequest: not sent in 2a. 2c checks live whether the watch needs it; if so, Explore's body (no account GUID).
+- Unhandled watch requests → 5000 status 2 (inferred, Q-GFDI-5); watch protobuf requests → 8-byte ACK, no 5044.
+- 5002 flags 0x01 as the app sends; a 5054 reply → `FileFailed`, no archive.
+- No SHA-256 in `FileStored`: the store (2d) owns hashing and its own audit log.
+- 5052 without DST transitions: out of scope (owner's zone has DST); stop rule 4 stands.
+- MLR: fixed window 32, no RTT estimator, 30 s reply deadline closes the session.
+- Committing a scrubbed message-level transcript of a real capture: owner decision, not now.
 
 ## Stage 2b: Android build of /core (cargo-ndk, UniFFI, Gradle module) — needs Android SDK/NDK
 **Status**: Not Started

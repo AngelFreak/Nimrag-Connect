@@ -5,6 +5,7 @@
 //! This crate is original code; see docs/LICENSING.md.
 
 pub mod capture;
+pub mod client;
 pub mod cobs;
 pub mod crc;
 pub mod derive;
