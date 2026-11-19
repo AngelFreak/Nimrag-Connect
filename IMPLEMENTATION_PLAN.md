@@ -20,8 +20,8 @@ The finished product: an Android app that pairs with the Instinct 2 without Garm
 | | 1e | Garmin export importer | Complete (FIT only) |
 | | Gate 1 | USB copy uploads, parses, reparses identically | **Passed** 2026-11-19 |
 | 2 Android sync | 2a | sans-IO protocol client + capture replay | Complete |
-| | 2p | Port Gadgetbridge's Garmin work: survey, device catalogue (≈197 models), protocol diff against our captures | Not Started |
-| | 2b | FFI crate (UniFFI) + Android Gradle project | Not Started (brief ready) |
+| | 2p | Port Gadgetbridge's Garmin work: survey, device catalogue (≈197 models), protocol diff against our captures | Mostly done: port list, protocol diff, catalogue (193 models + sync status), battery; sleep stages wait for the night capture |
+| | 2b | FFI crate (UniFFI) + Android Gradle project | Complete |
 | | 2c | Foreground service, BLE link, pairing without Garmin Connect | Not Started (needs owner) |
 | | 2d | Phone storage, archive only after safe storage, upload queue | Not Started |
 | | 2e | Time duty + native Devices and sync screen + sync log | Not Started |
@@ -102,14 +102,12 @@ Workflow as described at the top of this file.
 
 # Phase 2: Android sync
 
-## Where work stopped (2026-11-19, owner paused)
-- Done and committed: phase 0 decoding, phase 1 (stages 1a–1e, gate 1 passed on a USB copy), stage 2a (protocol client, replays all five captured Connect sessions).
-- Next: stage 2p (port Gadgetbridge's Garmin work: survey, device catalogue, protocol diff) and stage 2b (FFI crate + Android Gradle project; toolchain already installed). They touch different paths and can run in parallel. Then 2c, which needs the owner: the watch has to be paired with our app instead of Garmin Connect, so ask first.
-- Still open from phase 0: the night-sync capture (sleep/HRV/SpO2 on real data) and the fresh-pairing capture (needs the owner).
-- Owner decisions still open: committing a scrubbed real transcript as a fixture; whether to import non-FIT export JSON once a real export exists.
+## Where work stopped (2026-11-19, end of day)
+- Done and committed: phase 0 decoding, phase 1 (gate 1 passed on a USB copy), stage 2a (protocol client), 2b (Android build of core), most of 2p (Gadgetbridge port list, protocol diff, device catalogue with sync status, battery parser), the 5052 DST fix (Q-TIME-2), every sleep summary kept.
+- Next: stage 2c (foreground service, BLE link, pairing). It needs the owner: the watch has to be paired with our app instead of Garmin Connect, so ask first. Port row 16 (Gadgetbridge's first-connect sequence) before that re-pairing.
+- Waiting for data: the night-sync capture (sleep stages, port-list row 42; the live recorder was left running) and the fresh-pairing capture.
+- Owner decisions still open: committing a scrubbed real transcript as a fixture; importing non-FIT export JSON once a real export exists; for 2f, who fetches GPS-assist data, which weather source, and confirming the skipped features.
 - Ignore the Samsung device on adb (not ours); the Pixel 9a is the phone.
-
-Roles as phase 1. Order follows the brief: the core state machine passes the phase 0 captures on the desktop before anything runs on the phone.
 
 ## Stage 2a: sans-IO protocol client in /core
 **Goal**: `nimrag_core::client::Client`, our side of the watch link as a pure state machine: multi-link bring-up, MLR, GFDI handshake, time duty, pending-file listing, download with CRC check, archive only after the caller confirms safe storage. Bytes and caller decisions in; GATT writes, events and one deadline out.
@@ -325,7 +323,10 @@ Owner decisions, needed by stage 2f (not blocking now): who fetches GPS-assist d
 **Goal**: `ffi/` crate `nimrag-ffi` (workspace member) exposing `nimrag_core::client` through UniFFI (proc-macros; `core` stays std-only); `android/` Gradle project with `:core` (Android library: generated Kotlin bindings + `.so` for arm64-v8a and x86_64 built by cargo-ndk from Gradle) and a minimal `:app` shell for 2c.
 **Success Criteria**: `./gradlew :core:assembleRelease :app:assembleDebug` builds from a clean checkout; the APK contains `libnimrag_ffi.so` for both ABIs and no FIT profile data (built with `NIMRAG_FIT_PROFILE=none`, enforced in the Gradle task); Kotlin can drive a `Client` end to end.
 **Tests**: Rust tests in `ffi/` for the conversion layer; a host JVM test (bindings + the x86_64-linux `.so` via JNA) that drives a `Client` through Kotlin with fake ids: Connected → close-all write; a scripted bring-up/handshake reaching `HandshakeDone`; a FileStored for a stale transfer id gives `StaleConfirmation`. Optional instrumented smoke test on the Pixel.
-**Status**: In Progress (started 2026-11-19, in parallel with 2p)
+**Status**: Complete 2026-11-19. UniFFI 0.32.2, Gradle 9.8.2 (checksum-verified wrapper, dependency verification metadata), AGP 9.5.0, NDK 30 and Rust 1.100.0 pinned; APK 4.5 MB with arm64-v8a and x86_64 only. Guards, each tested by trying the forbidden build: core refuses an Android build with a FIT profile; the fake-watch test fixtures refuse to compile for Android; the Gradle task fails if a .so holds the profile marker, fixture symbols or a /home/ path. A JVM host test drives the client through the generated Kotlin bindings and the real .so, and reruns when the library changes.
+
+### Before the APK is handed to anyone but the owner (AGPL and dependency notices)
+From the 2b review: an in-app licence screen with the AGPL source offer (§6), the MPL-2.0 notice for UniFFI, the Apache-2.0 notice for JNA, and MIT/Apache attributions for every linked Rust crate (generated, e.g. with `cargo about`). Not needed while the APK stays on the owner's devices; required in whichever stage first distributes it.
 
 ## Stage 2c: Android foreground service, BLE link, pairing without the official app — needs owner (watch re-pairing)
 **Status**: Not Started

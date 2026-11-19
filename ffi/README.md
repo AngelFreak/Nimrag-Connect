@@ -1,0 +1,48 @@
+# nimrag-ffi
+
+UniFFI (proc-macro, no UDL) bindings over `nimrag_core::client`, for the Android
+app. `core` stays std-only; this crate is the only place `uniffi` appears.
+
+## API
+
+- `NimragClient(config)`: one per GATT connection (an `Arc<Mutex<Client>>`).
+  `handle(now, input) -> Step` and `phase()`.
+- Records and enums mirror the core types one to one: `ClientConfig`, `Now`,
+  `Input`, `Step`, `Event`, `DeviceInfo`, `FileType`, `DirEntry`, `SyncTrigger`,
+  `FileFailure`, `AnomalyKind`, `Phase`, `CloseReason`. Conversions are in
+  `src/convert.rs`, exhaustive matches only, so a new core variant fails to
+  compile here.
+- `ffi_version()`, `fit_profile_compiled_in()`.
+- FIT parsing is not exposed.
+
+## Licence rule: no FIT profile on Android
+
+The locally generated FIT profile is Garmin data and is never redistributed.
+`build.rs` panics for any `android` target unless `NIMRAG_FIT_PROFILE=none` (core's does the same for any profile); the
+Gradle tasks in `android/buildSrc` set it for every cargo call and then read
+cargo's build-script output to prove core's `cfg(fit_profile)` is off.
+
+## Features
+
+- `bindgen`: builds the `uniffi-bindgen` binary (host tool, used by Gradle).
+- `test-fixtures`: `ScriptedWatch`, a fake watch (bring-up and handshake, fake
+  ids) for host tests through the real bindings. Enabled for `cargo test` through
+  a self dev-dependency and for the Gradle host test library, never for the
+  Android `.so` (`compile_error!` on Android, and the Gradle task greps the `.so`).
+
+## Tests
+
+`cargo test -p nimrag-ffi`: conversion tests, plus the real client driven through
+the FFI object (close-all write, scripted handshake to `HandshakeDone`, stale
+`FileStored`). The same three scenarios run from Kotlin in `android/hosttest`.
+
+## Dependencies
+
+| Crate | Version | Licence | Why |
+|---|---|---|---|
+| nimrag-core | path | AGPL-3.0-or-later | the client |
+| uniffi | =0.32.2 (2026-09-23) | MPL-2.0 | proc-macro bindings, scaffolding |
+| uniffi (feature `cli`, only with `bindgen`) | same | MPL-2.0 | Kotlin generator; pulls askama (MIT/Apache-2.0), goblin (MIT), clap, cargo_metadata, toml (all MIT or Apache-2.0) |
+
+Transitive crates of the library build are MIT, Apache-2.0 or MPL-2.0 (and
+Unlicense/Zlib/Unicode-3.0 for a few small ones); none is GPL-only.

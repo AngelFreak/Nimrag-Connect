@@ -22,3 +22,19 @@ __pycache__/
 .swarm/
 .claude-flow/
 .hive-mind/
+
+# Android (gradle/wrapper/gradle-wrapper.jar IS committed)
+/android/.gradle/
+/android/.kotlin/
+/android/build/
+/android/*/build/
+/android/buildSrc/build/
+/android/buildSrc/.gradle/
+/android/local.properties
+/android/.idea/
+/android/**/*.iml
+/android/captures/
+# Generated UniFFI Kotlin bindings and cargo-ndk libraries (also under build/, listed for clarity)
+/android/**/generated/
+/android/**/jniLibs/
+/android/buildSrc/.kotlin/
