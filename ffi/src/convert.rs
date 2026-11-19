@@ -17,6 +17,7 @@ impl From<ClientConfig> for core::ClientConfig {
             host_model: c.host_model,
             app_version: c.app_version,
             capabilities: c.capabilities,
+            first_connect: c.first_connect,
         }
     }
 }
@@ -108,6 +109,7 @@ impl From<core::Event> for Event {
                 device: device.into(),
                 file_types: file_types.into_iter().map(FileType::from).collect(),
             },
+            core::Event::PairingCompleted { all_acked } => Event::PairingCompleted { all_acked },
             core::Event::TimeSent {
                 garmin_time,
                 utc_offset_s,

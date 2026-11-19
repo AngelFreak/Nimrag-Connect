@@ -36,8 +36,10 @@ pub struct Ctx<'a> {
 enum State {
     #[default]
     Idle,
-    /// 5043 "sync now" sent; waiting for the watch's 5037.
-    WaitGrant { until: u64 },
+    /// 5043 "sync now" queued or sent; waiting for the watch's 5037. The
+    /// grant deadline starts when the watch acknowledges the 5043 (`None`
+    /// before), so time spent queued behind other requests does not count.
+    WaitGrant { until: Option<u64> },
     /// 5007 outstanding.
     Filter,
     /// 5002 outstanding, or receiving its chunks (`dl` is set).
@@ -132,7 +134,7 @@ impl SyncCycle {
 
     pub fn next_wake(&self) -> Option<u64> {
         match self.state {
-            State::WaitGrant { until } => Some(until),
+            State::WaitGrant { until } => until,
             State::Retry { at } => Some(at),
             _ => None,
         }
@@ -140,7 +142,7 @@ impl SyncCycle {
 
     pub fn on_tick(&mut self, cx: &mut Ctx) {
         match self.state {
-            State::WaitGrant { until } if cx.now >= until => {
+            State::WaitGrant { until: Some(until) } if cx.now >= until => {
                 self.state = State::Idle;
                 cx.out.anomaly(AnomalyKind::SyncNotGranted, m::SYNC_REQUEST);
                 self.start_queued(cx);
@@ -187,9 +189,7 @@ impl SyncCycle {
             m::build_protobuf(id, &m::SYNC_NOW_PROTOBUF),
             Kind::SyncNow,
         );
-        self.state = State::WaitGrant {
-            until: cx.now.saturating_add(REPLY_DEADLINE_MS),
-        };
+        self.state = State::WaitGrant { until: None };
     }
 
     fn start_queued(&mut self, cx: &mut Ctx) {
@@ -256,7 +256,14 @@ impl SyncCycle {
                 self.state = State::Idle;
                 self.start_queued(cx);
             }
-            Kind::SyncNow | Kind::Config | Kind::FileTypes | Kind::HandshakeComplete => {}
+            Kind::SyncNow => {
+                if let State::WaitGrant { until: None } = self.state {
+                    self.state = State::WaitGrant {
+                        until: Some(cx.now.saturating_add(REPLY_DEADLINE_MS)),
+                    };
+                }
+            }
+            Kind::Config | Kind::FileTypes | Kind::HandshakeComplete | Kind::FirstConnect(_) => {}
         }
     }
 

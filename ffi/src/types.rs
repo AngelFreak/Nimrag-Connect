@@ -11,6 +11,7 @@ pub struct ClientConfig {
     pub host_model: String,
     pub app_version: u16,
     pub capabilities: Vec<u8>,
+    pub first_connect: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Record)]
@@ -88,6 +89,9 @@ pub enum Event {
     HandshakeDone {
         device: DeviceInfo,
         file_types: Vec<FileType>,
+    },
+    PairingCompleted {
+        all_acked: bool,
     },
     TimeSent {
         garmin_time: u32,

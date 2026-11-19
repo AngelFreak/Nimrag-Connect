@@ -1,6 +1,13 @@
 //! GFDI session: handshake, time duty, answers to watch requests, and the
 //! request bookkeeping (one outstanding request, txn counter, 30 s deadline).
 //! The file sync cycle lives in `sync.rs`.
+//!
+//! The first-connection events (`ClientConfig::first_connect`) are ported
+//! from Gadgetbridge commit 7257742b (AGPL-3.0-or-later),
+//! `app/src/main/java/nodomain/freeyourgadget/gadgetbridge/service/devices/garmin/GarminSupport.java`
+//! (`completeInitialization`, `connectFirstTime`). Copyright (C) 2024-2026
+//! Daniele Gobbetti, José Rebelo, kuhy, Thomas Kuehne and the other
+//! Gadgetbridge contributors. See docs/PORTED.md.
 
 use std::collections::VecDeque;
 
@@ -19,12 +26,23 @@ const MIN_VALID_UNIX_S: i64 = 1_577_836_800;
 /// "Unknown or not supported" status for requests we do not implement.
 const STATUS_UNSUPPORTED: u8 = 2;
 
+/// System events of a first connection, in Gadgetbridge's order
+/// (`completeInitialization`; PAIR_START and TUTORIAL_COMPLETE are commented
+/// out there). *inferred (Gadgetbridge)*
+const FIRST_CONNECT_EVENTS: [u8; 3] = [
+    m::EVENT_PAIR_COMPLETE,
+    m::EVENT_SYNC_COMPLETE,
+    m::EVENT_SETUP_WIZARD_COMPLETE,
+];
+
 /// What a request is for, so its answer reaches the right handler.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Kind {
     Config,
     FileTypes,
     HandshakeComplete,
+    /// A first-connection system event (5030); carries the event number.
+    FirstConnect(u8),
     SyncNow,
     Filter,
     Download,
@@ -142,6 +160,9 @@ fn status_byte(s: Status) -> u8 {
 pub struct Session {
     host: m::HostInfo,
     capabilities: Vec<u8>,
+    first_connect: bool,
+    /// Every first-connection event answered so far was an ACK.
+    first_connect_acked: bool,
     device: Option<DeviceInfo>,
     watch_capabilities: Option<Vec<u8>>,
     file_types: Vec<FileType>,
@@ -163,6 +184,8 @@ impl Session {
                 model: config.host_model.clone(),
             },
             capabilities: config.capabilities.clone(),
+            first_connect: config.first_connect,
+            first_connect_acked: true,
             device: None,
             watch_capabilities: None,
             file_types: Vec::new(),
@@ -290,6 +313,19 @@ impl Session {
             }
         };
         self.req.pending = None;
+        if let Kind::FirstConnect(event) = pending.kind {
+            // Gadgetbridge ignores these replies; a refusal must not keep a
+            // freshly paired watch from ever syncing. [ours]
+            if r.status != Status::Ack {
+                self.first_connect_acked = false;
+            }
+            if Some(&event) == FIRST_CONNECT_EVENTS.last() {
+                out.events.push(Event::PairingCompleted {
+                    all_acked: self.first_connect_acked,
+                });
+            }
+            return true;
+        }
         if r.status != Status::Ack {
             if matches!(pending.kind, Kind::Download | Kind::Archive) {
                 // One file goes wrong; the cycle continues. [plan 10]
@@ -335,6 +371,9 @@ impl Session {
                         file_types: self.file_types.clone(),
                     });
                 }
+                if self.first_connect {
+                    self.send_first_connect_events(out);
+                }
                 self.sync.on_ready(&mut Ctx {
                     now: now.mono_ms,
                     req: &mut self.req,
@@ -352,6 +391,20 @@ impl Session {
             ),
         }
         true
+    }
+
+    /// Gadgetbridge sends these after SYNC_READY (our event 8), with its
+    /// battery and installed-apps requests in between, which we do not send.
+    /// Ours: queued after the ACK of event 8, before any sync request.
+    fn send_first_connect_events(&mut self, out: &mut Out) {
+        for event in FIRST_CONNECT_EVENTS {
+            self.req.send(
+                out,
+                m::SYSTEM_EVENT,
+                m::build_system_event(event, 0),
+                Kind::FirstConnect(event),
+            );
+        }
     }
 
     // ---- watch requests -----------------------------------------------------

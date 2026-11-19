@@ -15,6 +15,7 @@ fn config() -> ClientConfig {
         host_model: "T-1".into(),
         app_version: 1234,
         capabilities: vec![0x11, 0x22],
+        first_connect: false,
     }
 }
 
@@ -40,6 +41,7 @@ fn config_converts_every_field() {
     assert_eq!(c.host_model, "T-1");
     assert_eq!(c.app_version, 1234);
     assert_eq!(c.capabilities, vec![0x11, 0x22]);
+    assert!(!c.first_connect);
 }
 
 #[test]

@@ -25,6 +25,7 @@ private fun config() = ClientConfig(
     hostModel = "T-1",
     appVersion = 1234u,
     capabilities = byteArrayOf(0x11, 0x22),
+    firstConnect = false,
 )
 
 private fun now(monoMs: ULong) = Now(

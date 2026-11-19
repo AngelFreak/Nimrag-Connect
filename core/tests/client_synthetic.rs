@@ -1369,3 +1369,129 @@ fn watch_directory_entries_are_reported_without_the_placeholder() {
         .unwrap();
     assert_eq!(entries, vec![fake_entry(FILE_A, 32, 10)]);
 }
+
+// ---- first connection (port-list row 16, inferred from Gadgetbridge) ---------------------------------------
+
+fn first_connect_sim() -> Sim {
+    let mut config = test_config();
+    config.first_connect = true;
+    let mut sim = Sim::with(nimrag_core::client::Client::new(config), FakeWatch::new());
+    sim.watch
+        .add_file(fake_entry(FILE_A, 32, 2000), lcg_bytes(1, 2000));
+    sim
+}
+
+fn system_events(sim: &Sim) -> Vec<u8> {
+    sim.phone_requests(5030)
+        .iter()
+        .map(|msg| msg.payload[0])
+        .collect()
+}
+
+/// Position in `phone_ids` of the first 5030 that carries `event`.
+fn event_position(sim: &Sim, event: u8) -> usize {
+    sim.watch
+        .phone_msgs
+        .iter()
+        .position(|msg| msg.id == 5030 && msg.payload.first() == Some(&event))
+        .expect("event sent")
+}
+
+fn pairing_events(sim: &Sim) -> Vec<&Event> {
+    sim.events_of(|e| matches!(e, Event::PairingCompleted { .. }))
+}
+
+#[test]
+fn first_connect_announces_pairing_after_the_handshake_then_syncs() {
+    let mut sim = first_connect_sim();
+    sim.handshake();
+    assert_eq!(system_events(&sim), vec![8, 4, 0, 14]);
+    for msg in sim.phone_requests(5030) {
+        assert_eq!(msg.payload, vec![msg.payload[0], 0], "value byte is 0");
+    }
+    let done = sim
+        .events
+        .iter()
+        .position(|e| matches!(e, Event::HandshakeDone { .. }))
+        .expect("handshake done");
+    let paired: Vec<usize> = (0..sim.events.len())
+        .filter(|&i| matches!(sim.events[i], Event::PairingCompleted { .. }))
+        .collect();
+    assert_eq!(paired.len(), 1, "announced once");
+    assert!(paired[0] > done, "after HandshakeDone");
+    assert_eq!(
+        sim.events[paired[0]],
+        Event::PairingCompleted { all_acked: true }
+    );
+
+    sim.watch_sends(&sim.watch.sync_request(2));
+    store_everything(&mut sim);
+    assert_eq!(sim.watch.archived_indices, vec![FILE_A]);
+    assert_eq!(system_events(&sim), vec![8, 4, 0, 14, 0]);
+}
+
+#[test]
+fn first_connect_events_go_before_a_sync_the_caller_asked_for_early() {
+    let mut sim = first_connect_sim();
+    sim.connect();
+    sim.input(Input::StartSync);
+    let info = sim.watch.device_information();
+    sim.watch_sends(&info);
+    assert_eq!(sim.client.phase(), Phase::Syncing, "the queued sync ran");
+    let ids = sim.phone_ids();
+    let first_sync = ids.iter().position(|&id| id == 5043).expect("sync asked");
+    assert!(event_position(&sim, 14) < first_sync, "{ids:?}");
+    assert_eq!(system_events(&sim)[..4], [8, 4, 0, 14]);
+}
+
+#[test]
+fn a_5037_while_the_events_are_outstanding_is_acked_at_once_and_runs_after_them() {
+    let mut sim = first_connect_sim();
+    sim.watch.sync_after_system_event = Some(4);
+    sim.connect();
+    let info = sim.watch.device_information();
+    sim.watch_sends(&info);
+    let msgs = &sim.watch.phone_msgs;
+    let sync_ack = msgs
+        .iter()
+        .position(|msg| msg.as_response().is_some_and(|r| r.request_id == 5037))
+        .expect("5037 acknowledged");
+    assert!(
+        sync_ack < event_position(&sim, 14),
+        "ACKed on arrival, not after the events"
+    );
+    let filter = msgs.iter().position(|msg| msg.id == 5007).expect("listing");
+    assert!(
+        filter > event_position(&sim, 14),
+        "listing after the last event"
+    );
+    assert_eq!(pairing_events(&sim).len(), 1);
+    store_everything(&mut sim);
+    assert_eq!(sim.watch.archived_indices, vec![FILE_A]);
+}
+
+#[test]
+fn a_normal_connection_sends_no_pairing_events() {
+    let mut sim = two_file_sim();
+    sim.handshake();
+    assert_eq!(system_events(&sim), vec![8]);
+    assert!(pairing_events(&sim).is_empty());
+}
+
+#[test]
+fn a_refused_pairing_event_is_reported_and_the_session_goes_on() {
+    for refused in [4u8, 14] {
+        let mut sim = first_connect_sim();
+        sim.watch.nak_system_event = Some(refused);
+        sim.handshake();
+        assert_eq!(system_events(&sim), vec![8, 4, 0, 14], "refused {refused}");
+        assert_eq!(
+            pairing_events(&sim),
+            vec![&Event::PairingCompleted { all_acked: false }]
+        );
+        sim.watch_sends(&sim.watch.sync_request(2));
+        store_everything(&mut sim);
+        assert_eq!(sim.watch.archived_indices, vec![FILE_A]);
+        assert!(sim.closed_reason().is_none());
+    }
+}

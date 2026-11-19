@@ -568,6 +568,7 @@ fn host_config(s: &SessionTranscript) -> Result<ClientConfig, String> {
         host_model: host.model,
         app_version: host.app_version,
         capabilities: caps,
+        first_connect: false,
     })
 }
 

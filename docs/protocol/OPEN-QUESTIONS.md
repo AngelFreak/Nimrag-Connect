@@ -87,7 +87,7 @@ What Gadgetbridge at `7257742b` says about the questions above. Each answer is *
 | Q-GFDI-3 | The two bytes are `chunk status` (0 kept, 1 discarded) and a status code (0, 100–103, 200, 201). `01 c9` = discarded, 201 "unknown". | answered as *inferred*; which watch message the app rejected can be read from CAP-1 t=5.42 |
 | Q-GFDI-4 | 6 = auto upload enabled, 7 = weather conditions enabled, 8 = weather alerts enabled; it sends the same three values as Connect. | answered as *inferred*; the diff capture is still the proof |
 | Q-GFDI-5 | It stays silent on unhandled requests on all its devices, and sends status 2 only to refuse 5052 when time sync is off. | open; both silence and status 2 are evidently tolerated, so our status 2 reply is low risk |
-| Q-PAIR-1 | On a first connection it sends system events 4, 0 and 14 (pair complete, sync complete, setup wizard complete) after the normal handshake; bonding is left to Android. | open; 2c starts from this sequence and the capture must confirm it |
+| Q-PAIR-1 | On a first connection it sends system events 4, 0 and 14 (pair complete, sync complete, setup wizard complete) after the normal handshake; bonding is left to Android. | open; ported (row 16): `ClientConfig::first_connect` sends this sequence and reports `Event::PairingCompleted { all_acked }`; the capture must confirm it |
 | Q-AUTH-1 | It answers 5101 by echoing it with "guess ok" and implements nothing further, which only works if watches do not insist on Garmin Auth. | open |
 | Q-TIME-1 | Nothing: it always answers, or refuses with status 2. | open |
 | Q-SYNC-1 | Names for bits 0–6, 8–32, 36 and 39 (PROTOCOL §9.4). | answered as *inferred*; the bit-by-bit captures are still the proof |

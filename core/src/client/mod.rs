@@ -1,9 +1,9 @@
 //! Sans-IO protocol client: our side of the watch link (stage 2a).
 //!
-//! CONTRACT SKELETON. Signatures are fixed by the "Stage 2a contract" in
-//! IMPLEMENTATION_PLAN.md; bodies are not implemented yet. Protocol facts
-//! come from docs/protocol/PROTOCOL.md and our own captures only (see
-//! docs/LICENSING.md).
+//! Signatures are fixed by the "Stage 2a contract" in IMPLEMENTATION_PLAN.md.
+//! Protocol facts come from docs/protocol/PROTOCOL.md and our own captures;
+//! behaviour ported from Gadgetbridge is labelled *inferred (Gadgetbridge)*
+//! and listed in docs/PORTED.md (see docs/LICENSING.md).
 //!
 //! One `Client` value serves one GATT connection on one multi-link
 //! characteristic pair (notify 6A4E281x / write 6A4E282x, chosen by the
@@ -54,6 +54,15 @@ pub struct ClientConfig {
     pub app_version: u16,
     /// Our Configuration (5050) capability bitmask, sent as `u8 n` + bytes.
     pub capabilities: Vec<u8>,
+    /// First connection after a fresh bonding: after the handshake the
+    /// client also announces pair complete, sync complete and setup wizard
+    /// complete (5030 events 4, 0, 14, value 0). Events, order and values are
+    /// *inferred (Gadgetbridge)*, to be confirmed by Q-PAIR-1; sending them
+    /// one at a time after the ACK of event 8 is ours. A refusal does not end
+    /// the session. Set it for the first connection after bonding only;
+    /// clear it once `Event::PairingCompleted` arrives, and after at most one
+    /// more connection that ends without it (Gadgetbridge sends them once).
+    pub first_connect: bool,
 }
 
 /// The caller's clocks at the moment of the call.
@@ -118,6 +127,12 @@ pub enum Event {
     HandshakeDone {
         device: DeviceInfo,
         file_types: Vec<FileType>,
+    },
+    /// The watch answered all first-connection events
+    /// (`ClientConfig::first_connect`); record the watch as paired.
+    /// `all_acked` is false when it refused at least one of them.
+    PairingCompleted {
+        all_acked: bool,
     },
     /// A CurrentTime (5052) request was answered with this Garmin time.
     TimeSent {

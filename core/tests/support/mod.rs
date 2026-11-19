@@ -44,6 +44,7 @@ pub fn test_config_epoch(connection_epoch: u32) -> ClientConfig {
         host_model: "T-1".into(),
         app_version: 1234,
         capabilities: vec![0x11, 0x22, 0x33],
+        first_connect: false,
     }
 }
 
@@ -204,6 +205,11 @@ pub struct FakeWatch {
     /// Answer the 5002 / 5008 of this index with a NAK.
     pub nak_download: Option<u16>,
     pub nak_archive: Option<u16>,
+    /// Answer every 5030 carrying this system event with a NAK (0 also
+    /// refuses the SYNC_COMPLETE at the end of each cycle).
+    pub nak_system_event: Option<u8>,
+    /// After acknowledging the 5030 carrying this system event, send a 5037.
+    pub sync_after_system_event: Option<u8>,
     /// Answer the 5002 of this index with 5054 compressed data.
     pub compress_file: Option<u16>,
     /// Withhold file chunks once this many have been sent on this link.
@@ -238,6 +244,8 @@ impl FakeWatch {
             nak_filter: false,
             nak_download: None,
             nak_archive: None,
+            nak_system_event: None,
+            sync_after_system_event: None,
             compress_file: None,
             stall_after: None,
             file_chunks_sent: 0,
@@ -449,6 +457,16 @@ impl FakeWatch {
                 &m::build_supported_file_types(&self.file_types),
             )],
             5007 if self.nak_filter => vec![watch_response(msg, 1, &[])],
+            5030 if self.nak_system_event.is_some()
+                && msg.payload.first().copied() == self.nak_system_event =>
+            {
+                vec![watch_response(msg, 1, &[])]
+            }
+            5030 if self.sync_after_system_event.is_some()
+                && msg.payload.first().copied() == self.sync_after_system_event =>
+            {
+                vec![watch_response(msg, 0, &[]), self.sync_request(1)]
+            }
             5007 => vec![watch_response(msg, 0, &[0])],
             5008 => {
                 let (index, flags) = m::parse_set_file_flags(&msg.payload).expect("5008 payload");

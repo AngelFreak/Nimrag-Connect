@@ -25,7 +25,12 @@ pub const PROTOCOL_VERSION: u16 = 150;
 
 /// System event numbers carried by 5030.
 pub const EVENT_SYNC_COMPLETE: u8 = 0;
+/// First connection only. Event numbers: PROTOCOL.md §9 (Gadgetbridge
+/// `SystemEventMessage`, *inferred*).
+pub const EVENT_PAIR_COMPLETE: u8 = 4;
 pub const EVENT_HANDSHAKE_COMPLETE: u8 = 8;
+/// First connection only (see `EVENT_PAIR_COMPLETE`).
+pub const EVENT_SETUP_WIZARD_COMPLETE: u8 = 14;
 
 /// Directory entry flag: the file may be read.
 pub const FLAG_READ: u8 = 0x80;
