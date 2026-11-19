@@ -33,6 +33,11 @@ The owner has not chosen a licence yet. Crates declare `LicenseRef-nimrag-pendin
 
 - APKs, decompiled sources and raw captures stay in `private/`, which git ignores, and are not redistributed.
 - The recovered `.proto` schemas describe a wire format and exist for interoperability with the owner's own device. Remove them from any public branch if the owner decides they should not be published.
-- FIT profile (owner decision, 2026-11-19):
-  - `core/src/fit/profile_data.rs` is generated from Garmin's **public** FIT SDK (npm `@garmin/fitsdk`) under that SDK's licence. The package version and licence are recorded in the file header.
-  - `core/src/fit/profile_overlay.rs` holds only the messages, fields and enum values the public profile lacks, extracted from the FIT SDK copy inside the Garmin Connect app. It is governed by the app's terms rather than the FIT SDK licence. It is kept separate so that it can be replaced by an empty table on any public branch.
+- FIT profile (owner decision, 2026-11-19, revised the same day):
+  - Garmin's public FIT SDK (npm `@garmin/fitsdk` 21.222.0) ships under the "FIT Protocol License Agreement". That licence treats the SDK as confidential and forbids distributing it or anything derived from it (§2(c), §4). The table extracted from the app is Garmin's work too.
+  - Decision: **profile tables are generated locally and never committed.** Only the generator (`tools/fit-profile/`) and the lookup API (`core/src/fit/profile.rs`) are in the repository.
+  - The generated data goes to `core/src/fit/generated/`, which git ignores. It is produced from the owner's own copy of the Garmin Connect app, or optionally from the FIT SDK for personal use under its licence.
+  - Without the generated file, `core` builds with an empty profile. Raw decoding works and names are unavailable.
+  - `NIMRAG_FIT_PROFILE=none` forces the empty profile, which is the configuration that gets committed and tested.
+  - Binaries and Docker images built with a generated profile contain it. Do not push or share them.
+  - Code and tests may name individual standard FIT messages, fields and enum values (for example `record.heart_rate`) where they are needed for interoperability. Tables of profile data may not be committed. This rule was proposed by the advisor and follows the owner's decision; the owner can tighten it.

@@ -16,3 +16,4 @@ dist/
 
 # Locally generated FIT profile tables (Garmin material; never commit)
 /core/src/fit/generated/
+__pycache__/
