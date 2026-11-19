@@ -26,6 +26,7 @@ The finished product: an Android app that pairs with the Instinct 2 without Garm
 | | 2d | Phone storage, archive only after safe storage, upload queue | Built 2026-11-19; live test pending |
 | | 2e | Time duty + native Devices and sync screen + sync log | Built 2026-11-19; live test pending |
 | | 2f | Further companion duties, one at a time, ported from Gadgetbridge where it has them: GPS assist (setting, the only Garmin call), weather, notifications, music, find my phone | Not Started |
+| | 2g | Garmin Connect too, for owners who want both: **Alongside** (phone side, both apps share the watch, Nimrag copies, Connect archives) now; **Forward** (server uploads activities to Garmin Connect) later, after an owner decision | Alongside: In Progress; Forward: Not Started |
 | | Gate 2 | A week of normal wear: no manual steps, no lost or duplicated files; counts and hashes against a USB copy | — |
 | 3 Web | 3a | JSON API, web login (password + optional passkey), device tokens created in the web UI, generated TS types | Not Started |
 | | 3b | Web scaffold: Vite/React/TS, TanStack Query, design system, PWA, embedded in the server binary, Docker image | Not Started |
@@ -375,6 +376,26 @@ Design (integrator, 2026-11-19): Jetpack Compose + Material 3 (dynamic colour, l
 **Goal**: one at a time, each a user setting: GPS assist data (the only allowed Garmin call; off switch), weather, notifications, music control, find my phone. Port Gadgetbridge's implementation of each (`agps`, `NotificationsHandler`, weather, music handlers) instead of decoding from scratch.
 **Success Criteria**: each duty verified live on the watch; where PROTOCOL.md marks it unknown (Q-COMP-1..3, Q-SYNC-2), the ported behaviour is confirmed by a capture before it is marked verified
 **Status**: Not Started
+
+## Stage 2g: Garmin Connect too (owner request, 2026-11-19)
+**Goal**: owners who also want Garmin Connect keep it. Two routes, chosen in Settings → Garmin Connect:
+- **Off** (default, what 0.2.x does): Nimrag is the only sync app and archives each file after safe storage. Garmin Connect, if installed, has its Nearby devices permission turned off.
+- **Alongside** (phone side, no Garmin account): Garmin Connect keeps Bluetooth and does what it always does (archives files, uploads them to Garmin, all-day health included). The watch serves several apps at once over multi-link, each on its own characteristic pair (seen: CAP-2, Connect and Explore together), so Nimrag holds a pair of its own, copies every file to its storage and server, and **never archives**.
+- **Forward** (server side, later): nimrag-server uploads activity files (128/4) to the owner's Garmin Connect account. Not built until the owner decides: it needs a Garmin login against an unofficial web endpoint (can break, may conflict with Garmin's terms), stores tokens not the password, and Garmin only accepts activities this way (no all-day health, sleep or HRV).
+
+**Alongside contract** (core, ffi, Android):
+- Core: `ClientConfig.archive: bool` (true keeps today's behaviour). False: after `FileStored` the file counts as copied, no 5008 is ever built (the archive rule's one place, `on_confirmation`, checks it), and the cycle moves on. `ClientConfig.skip: Vec<FileKey>` with `FileKey { data_type, sub_type, file_number, size, timestamp }` (all from the directory entry; the index is not stable): listed entries matching a key are not downloaded; each gives `Event::FileSkipped { entry }`, and `SyncFinished` gains `skipped: u32`. Keys only skip; they never cause an archive. Archive true + a skip list is allowed (the host does not do it).
+- Alongside sends no `first_connect` events (Garmin Connect owns the pairing) and keeps answering time requests (harmless when both answer).
+- Android: setting `garminConnectMode` (Off | Alongside), persisted; table `copied(data_type, sub_type, file_number, size, timestamp, sha256, copied_at)`, filled on `FileStored` while Alongside; at connect, Alongside passes `archive = false` and every key from `copied` newer than 60 days. Off passes `archive = true`, empty skip list (files copied but never archived are re-listed then; the store dedupes them by hash and archives them).
+- Mode changes take effect on the next connection; the Settings screen says so and reconnects.
+- Watch tab: in Alongside, the "Garmin Connect is using the watch" warning and the log hint are replaced by an info line "Sharing the watch with Garmin Connect"; if Garmin Connect's Nearby devices is off, it says Connect will not get data until it is allowed again.
+- Sync tab: "Copied, left for Garmin Connect" count; the last result shows skipped files.
+
+**Known risk, to measure live**: a file Garmin Connect fetches and archives before Nimrag lists it is never copied. Nimrag asks for a sync on every watch-initiated sync it sees and on its timer; the live test compares Nimrag's copies with Connect's synced list for a day. If misses are common, the fallback is Off mode plus Forward.
+
+**Success Criteria**: core tests: archive false never emits 5008 in any path (including retries and stale confirmations); skip keys suppress download and are counted; archive true unchanged (all existing tests pass untouched). Live: with Connect's permission on and Alongside set, both apps stay connected, Connect still shows new data, and Nimrag stores the same files.
+**Tests**: `core/tests/client_synthetic.rs` cases for archive false / skip; Android unit tests for the copied-key store and mode switch; live test by the owner.
+**Status**: In Progress (Alongside); Forward Not Started (owner decision)
 
 ## Gate 2
 A week of normal wear syncs with no manual steps and no lost or duplicated files; file counts and hashes compared against a USB copy of the watch (note: the watch cuts monitoring/metrics files per sync, so compare at the level of files the watch lists, plus a USB copy taken at the end of the week).
