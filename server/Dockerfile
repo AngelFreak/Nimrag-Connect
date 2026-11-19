@@ -1,4 +1,12 @@
 # Build from the workspace root: docker build -f server/Dockerfile -t nimrag-server .
+# Stage 1 builds the web interface; stage 2 embeds web/dist into the server binary (rust-embed).
+FROM node:24-bookworm-slim AS web
+WORKDIR /src/web
+COPY web/package.json web/package-lock.json ./
+RUN npm ci --no-audit --no-fund
+COPY web ./
+RUN npm run build
+
 FROM rust:1-bookworm AS build
 RUN apt-get update && apt-get install -y --no-install-recommends build-essential && rm -rf /var/lib/apt/lists/*
 WORKDIR /src
@@ -6,6 +14,7 @@ COPY Cargo.toml Cargo.lock ./
 COPY core ./core
 COPY server ./server
 COPY tools ./tools
+COPY --from=web /src/web/dist ./web/dist
 ENV SQLX_OFFLINE=true
 RUN cargo build --release --locked -p nimrag-server
 

@@ -45,6 +45,7 @@ pub fn router(state: AppState) -> Router {
         .route("/api/health", get(health))
         .route("/api/files", post(upload))
         .route("/api/files/{sha256}", get(file_info))
+        .fallback(crate::web::handler) // the web app (SPA); /api/* misses stay 404
         .layer(DefaultBodyLimit::max(max_body))
         .with_state(state)
 }

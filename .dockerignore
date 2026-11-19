@@ -4,3 +4,7 @@ server/dev.db*
 data/
 .git/
 node_modules/
+**/node_modules
+web/dist
+web/screenshots
+web/test-results

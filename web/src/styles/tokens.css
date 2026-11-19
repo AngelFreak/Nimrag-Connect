@@ -1,0 +1,84 @@
+/* Design tokens, taken from the design canvas (docs/design/artifact/project/*.dc.html).
+   Every colour, size and radius used by the components comes from here. */
+:root {
+  color-scheme: dark;
+
+  /* Surfaces */
+  --bg: #0f1417;
+  --card: #171e22;
+  --raised: #12181c;
+  --line: #243037;
+  --line-strong: #2a353b;
+  --track: #243037;
+  --band: #1d3144;
+
+  /* Text */
+  --text: #e8edee;
+  --text-2: #9aa7ac;
+  --link: #7dbbff;
+  --link-hover: #a9d2ff;
+  --on-accent: #0f1417;
+  --accent: #7dbbff;
+
+  /* Metric colours */
+  --energy: #4fd1b5;
+  --energy-fill: #173a36;
+  --sleep: #a594ff;
+  --heart: #ff6b6b;
+  --steps: #f2d45c;
+  --steps-dim: #9c8a3c;
+  --warn: #ffb066;
+
+  /* Heart-rate zones 1..5 */
+  --zone-1: #5b8dbe;
+  --zone-2: #4fd1b5;
+  --zone-3: #f2d45c;
+  --zone-4: #ffa24d;
+  --zone-5: #ff6b6b;
+
+  /* Sleep stages */
+  --stage-deep: #5b4fcf;
+  --stage-light: #8f82f0;
+  --stage-rem: #c9c1ff;
+  --stage-awake: #ffb066;
+
+  /* Stress buckets */
+  --stress-rest: #2f5c8a;
+  --stress-low: #5b8dbe;
+  --stress-medium: #ffb066;
+  --stress-activity: #1f292e;
+
+  /* Map */
+  --map-bg: #141b1f;
+  --map-grid: #1f292e;
+
+  /* Type */
+  --font-body: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-display: 'Space Grotesk', 'Inter', system-ui, sans-serif;
+  --fs-xs: 12px;
+  --fs-sm: 13px;
+  --fs-base: 14px;
+  --fs-md: 15px;
+  --fs-lg: 16px;
+  --fs-xl: 17px;
+  --fs-title-sm: 20px;
+  --fs-title: 22px;
+  --fs-title-lg: 30px;
+  --fs-title-xl: 32px;
+  --fs-stat-sm: 20px;
+  --fs-stat: 24px;
+  --fs-stat-lg: 34px;
+  --fs-stat-xl: 30px;
+
+  /* Shape and spacing */
+  --radius-card: 16px;
+  --radius-card-sm: 14px;
+  --radius-control: 12px;
+  --radius-segment: 10px;
+  --radius-pill: 999px;
+  --touch: 44px;
+  --touch-lg: 48px;
+  --gap: 12px;
+  --gutter: 20px;
+  --focus: #a9d2ff;
+}

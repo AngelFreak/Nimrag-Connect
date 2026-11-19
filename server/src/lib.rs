@@ -10,6 +10,7 @@ pub mod ingest;
 pub mod ledger;
 pub mod store;
 pub mod tokens;
+pub mod web;
 
 use sha2::{Digest, Sha256};
 
