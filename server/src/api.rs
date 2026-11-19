@@ -1,4 +1,5 @@
-//! HTTP API: POST /api/files, GET /api/files/{sha256}, GET /api/health.
+//! HTTP API: device upload (POST /api/files, GET /api/files/{sha256}), GET /api/health,
+//! and the owner's JSON API (`web_api`).
 
 use crate::ingest;
 use crate::ledger::Meta;
@@ -26,6 +27,10 @@ pub struct AppState {
     pub max_body: usize,
     /// Serialises sidecar read-modify-write.
     pub(crate) ledger_lock: Arc<tokio::sync::Mutex<()>>,
+    /// Session cookies without `Secure` (plain-http LAN use; `--insecure-cookies`).
+    pub insecure_cookies: bool,
+    pub limiter: Arc<crate::auth::LoginLimiter>,
+    clock: Arc<dyn Fn() -> i64 + Send + Sync>,
 }
 
 impl AppState {
@@ -35,8 +40,33 @@ impl AppState {
             data_dir: Arc::new(data_dir),
             max_body,
             ledger_lock: Default::default(),
+            insecure_cookies: false,
+            limiter: Default::default(),
+            clock: Arc::new(system_now),
         }
     }
+
+    pub fn with_insecure_cookies(mut self, insecure: bool) -> Self {
+        self.insecure_cookies = insecure;
+        self
+    }
+
+    /// Replace the clock (unix seconds); tests use it to pin "today".
+    pub fn with_clock(mut self, clock: impl Fn() -> i64 + Send + Sync + 'static) -> Self {
+        self.clock = Arc::new(clock);
+        self
+    }
+
+    /// Current unix time in seconds.
+    pub fn now(&self) -> i64 {
+        (self.clock)()
+    }
+}
+
+fn system_now() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.as_secs() as i64)
 }
 
 pub fn router(state: AppState) -> Router {
@@ -45,8 +75,10 @@ pub fn router(state: AppState) -> Router {
         .route("/api/health", get(health))
         .route("/api/files", post(upload))
         .route("/api/files/{sha256}", get(file_info))
+        .merge(crate::web_api::router())
         .fallback(crate::web::handler) // the web app (SPA); /api/* misses stay 404
         .layer(DefaultBodyLimit::max(max_body))
+        .layer(axum::middleware::from_fn(crate::auth::csrf_guard))
         .with_state(state)
 }
 
@@ -55,8 +87,14 @@ pub fn router(state: AppState) -> Router {
 pub struct ApiError(StatusCode, String);
 
 impl ApiError {
-    fn bad_request(msg: impl Into<String>) -> Self {
+    pub fn new(status: StatusCode, msg: impl Into<String>) -> Self {
+        Self(status, msg.into())
+    }
+    pub fn bad_request(msg: impl Into<String>) -> Self {
         Self(StatusCode::BAD_REQUEST, msg.into())
+    }
+    pub fn not_found(msg: impl Into<String>) -> Self {
+        Self(StatusCode::NOT_FOUND, msg.into())
     }
 }
 

@@ -10,7 +10,7 @@ Current state: phase 0 decoded (night and fresh-pairing captures still open), ph
 | `tools/decode/` | `nimrag-decode`: CLI over `core` (snoop logs, stdin, TCP, `fit` subcommand) | done |
 | `tools/proto-recover/` | recovers `.proto` schemas from the app's compiled descriptors | done |
 | `tools/fit-profile/` | generator for the local, never-committed FIT profile | done |
-| `server/` | `nimrag-server`: axum + sqlx SQLite (WAL); SHA-256 file store with sidecars; device tokens; `POST /api/files`; `reparse`, `rebuild-ledger`, `import-export`; data-dir lock | phase 1 done; JSON read API and auth are phase 3 |
+| `server/` | `nimrag-server`: axum + sqlx SQLite (WAL); SHA-256 file store with sidecars; device tokens; `POST /api/files`; `reparse`, `rebuild-ledger`, `import-export`; data-dir lock; owner JSON API (cookie sessions, argon2id, CSRF header, per-IP login backoff) for the web app, strength and body edits in tables `reparse` leaves alone, `dev-seed`, ts-rs generated types in `web/src/api/generated/` | phase 1 done; stage 3a (JSON API and auth) done |
 | `docs/protocol/` | protocol map (`PROTOCOL.md`, CSV tables, `proto/`, `HOOKS.md`, `OPEN-QUESTIONS.md`, `PROVENANCE.md`) | done for static analysis + CAP-1..3 |
 | `ffi/`, `android/` | UniFFI bindings and the Kotlin app: `engine/` (BLE link, foreground service, companion association, file store, upload worker), `ui/` (Compose screens), `model/AppState.kt` (their contract) | 2b done; 2c–2e built, live test pending |
 | `web/` | React frontend | phase 3 |
@@ -58,7 +58,10 @@ Library choices so far (versions pinned; see `server/README.md` for licences):
 | axum 0.8, tokio 1 | server | per the brief; maintained |
 | sqlx 0.9 (SQLite, offline `.sqlx` cache committed) | server | compile-time checked queries per the brief |
 | sha2, getrandom | server | content addressing, token generation |
+| argon2 0.6 | server | owner password hash (argon2id) |
+| chrono 0.4, chrono-tz 0.10, iana-time-zone | server | local days in the owner's IANA zone, DST-safe |
+| ts-rs 12 | server | TypeScript types generated from the API structs (chosen over OpenAPI: no schema layer to maintain, the Rust structs are the contract) |
 | zip 9.6 (deflate only) | server | export import; `enclosed_name` path checks; caps enforced on bytes read |
 | own FIT decoder | core | see the decision above |
 
-Still to evaluate when their phase starts: UniFFI and the Android stack (2b), React/Vite/TanStack Query, uPlot, MapLibre + PMTiles, ts-rs vs OpenAPI (3a/3b).
+Still to evaluate when their phase starts: UniFFI and the Android stack (2b), React/Vite/TanStack Query, uPlot, MapLibre + PMTiles (3b).

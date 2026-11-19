@@ -7,3 +7,9 @@ edition = "2021"
 rust-version = "1.80"
 license = "AGPL-3.0-or-later"
 publish = false
+
+# Password hashing is slow unoptimised; keep dev and test builds usable.
+[profile.dev.package.argon2]
+opt-level = 3
+[profile.dev.package.blake2]
+opt-level = 3

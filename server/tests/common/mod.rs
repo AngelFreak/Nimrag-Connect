@@ -158,3 +158,118 @@ pub fn stored_path(dir: &Path, sha: &str) -> std::path::PathBuf {
         .join(&sha[2..4])
         .join(sha)
 }
+
+// ---- owner API helpers -------------------------------------------------------------
+
+pub const PASSWORD: &str = "correct horse battery";
+
+/// An environment whose clock is pinned to `now` (unix seconds).
+pub async fn env_at(now: i64) -> Env {
+    let dir = tempfile::tempdir().unwrap();
+    let pool = db::open(dir.path()).await.unwrap();
+    let (_, token) = tokens::create(&pool, "test-device").await.unwrap();
+    let app = api::router(
+        api::AppState::new(pool.clone(), dir.path().to_path_buf(), api::MAX_BODY_BYTES)
+            .with_clock(move || now),
+    );
+    Env {
+        dir,
+        pool,
+        app,
+        token,
+    }
+}
+
+/// Unix seconds of a local wall-clock time in `Europe/Copenhagen`.
+pub fn cph(y: i32, m: u32, d: u32, h: u32, mi: u32) -> i64 {
+    use chrono::TimeZone;
+    chrono_tz::Europe::Copenhagen
+        .with_ymd_and_hms(y, m, d, h, mi, 0)
+        .earliest()
+        .unwrap()
+        .timestamp()
+}
+
+impl Env {
+    /// Any request: returns status, headers and the JSON body (Null when empty).
+    pub async fn call(
+        &self,
+        method: Method,
+        uri: &str,
+        cookie: Option<&str>,
+        csrf: bool,
+        body: Option<serde_json::Value>,
+    ) -> (StatusCode, axum::http::HeaderMap, serde_json::Value) {
+        let mut req = Request::builder().method(method).uri(uri);
+        if let Some(c) = cookie {
+            req = req.header(header::COOKIE, c);
+        }
+        if csrf {
+            req = req.header("x-nimrag", "1");
+        }
+        let body = match body {
+            Some(b) => {
+                req = req.header(header::CONTENT_TYPE, "application/json");
+                Body::from(b.to_string())
+            }
+            None => Body::empty(),
+        };
+        let resp = self
+            .app
+            .clone()
+            .oneshot(req.body(body).unwrap())
+            .await
+            .unwrap();
+        let (status, headers) = (resp.status(), resp.headers().clone());
+        let bytes = resp.into_body().collect().await.unwrap().to_bytes();
+        (
+            status,
+            headers,
+            serde_json::from_slice(&bytes).unwrap_or(serde_json::Value::Null),
+        )
+    }
+
+    /// Set the owner password and sign in; returns the `Cookie` header value.
+    pub async fn login(&self) -> String {
+        nimrag_server::auth::set_password(&self.pool, PASSWORD, 0)
+            .await
+            .unwrap();
+        let (s, h, _) = self
+            .call(
+                Method::POST,
+                "/api/login",
+                None,
+                false,
+                Some(serde_json::json!({ "password": PASSWORD })),
+            )
+            .await;
+        assert_eq!(s, StatusCode::OK);
+        let set = h.get(header::SET_COOKIE).unwrap().to_str().unwrap();
+        set.split(';').next().unwrap().to_owned()
+    }
+
+    pub async fn get(&self, cookie: &str, uri: &str) -> serde_json::Value {
+        let (s, _, j) = self.call(Method::GET, uri, Some(cookie), false, None).await;
+        assert_eq!(s, StatusCode::OK, "GET {uri}: {j}");
+        j
+    }
+
+    /// A state-changing request with the CSRF header.
+    pub async fn send(
+        &self,
+        cookie: &str,
+        method: Method,
+        uri: &str,
+        body: serde_json::Value,
+    ) -> (StatusCode, serde_json::Value) {
+        let (s, _, j) = self.call(method, uri, Some(cookie), true, Some(body)).await;
+        (s, j)
+    }
+
+    pub async fn exec(&self, sql: &str) {
+        sqlx::query(sqlx::AssertSqlSafe(sql.to_owned()))
+            .execute(&self.pool)
+            .await
+            .unwrap();
+    }
+}

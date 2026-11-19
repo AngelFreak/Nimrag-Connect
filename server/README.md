@@ -43,7 +43,16 @@ nimrag-server token list
 nimrag-server token revoke ID
 nimrag-server reparse                    # derived tables from the blobs
 nimrag-server rebuild-ledger             # files/uploads rows from the sidecars
+nimrag-server user set-password          # owner password from stdin (first line), argon2id
+nimrag-server dev-seed                   # 120 days of sample data into an empty data dir
+nimrag-server export-types [--out DIR]   # TypeScript for the JSON API (default web/src/api/generated)
 ```
+
+`serve` also takes `--insecure-cookies` (see "Owner API"). Set the password
+without echoing it, e.g. `printf '%s\n' "$PW" | nimrag-server user set-password`
+or `nimrag-server user set-password < pwfile` (at least 10 characters, one line,
+at most 4096 bytes). Setting it again replaces it and signs every session out.
+`user set-password` does not take the data-dir lock; `dev-seed` does.
 
 `--data-dir` defaults to `$NIMRAG_DATA_DIR`, else `./data`. Logs go to stderr
 (`RUST_LOG` filter; `--log-json` for structured JSON). `reparse` processes files
@@ -66,9 +75,82 @@ API (all but health need `Authorization: Bearer <token>`):
 - `GET /api/files/<sha256>`: metadata plus FIT summary.
 - `GET /api/health`.
 
+## Owner API (stage 3a)
+
+The web app reads and edits through a second, owner-facing JSON API in the same
+router. Authentication is separate from the device tokens:
+
+- `POST /api/login` `{password}` checks the argon2id hash and sets the cookie
+  `nimrag_session`: a random 32-byte id, of which only the SHA-256 is stored
+  (`sessions`). Flags: `HttpOnly; SameSite=Strict; Path=/; Max-Age=2592000` (30
+  days) and `Secure`, unless the server runs with `--insecure-cookies`.
+  **Serve it over HTTPS** (the reverse proxy or tailnet terminates TLS): browsers
+  do not send a `Secure` cookie over plain HTTP, so without TLS only
+  `--insecure-cookies` (local development) works.
+- Failed logins are backed off per client address, in memory: the first four are
+  free, the fifth starts a lock-out of 2 s that doubles per further failure up to
+  300 s (`429` with `Retry-After`); a success resets it. Behind a reverse proxy
+  every request has the proxy's address, so the limit is then global, which is
+  acceptable for a single owner.
+- Every `POST`, `PATCH` and `DELETE` under `/api` except `/api/files` and
+  `/api/login` must carry `X-Nimrag: 1` (`403` otherwise), so a cross-site form
+  cannot change anything even if a cookie were attached.
+- Device tokens only upload (`/api/files`, `/api/health`, file metadata). They
+  are rejected on every endpoint below, and a session cookie is rejected on the
+  device endpoints.
+- Errors are JSON `{"error": "..."}`; malformed bodies are 400 as well.
+
+Conventions: JSON field names are snake_case with the unit as a suffix
+(`duration_s`, `distance_m`, `weight_kg`, `avg_hr_bpm`); timestamps are RFC 3339
+with the offset of the owner's time zone; dates are `YYYY-MM-DD` local days.
+Missing data is `null`, never `0`. `sample: true` marks seeded data.
+Settings: `timezone` (IANA name, default the system zone), `step_goal` (8000),
+`intensity_goal_min` (150), `home_cards` (`{order, hidden}` of card ids, default
+order energy, heart_rate, stress, sleep, hrv, training_status, intensity_minutes,
+training_load, steps, recovery_time, vo2_max, respiration, spo2, weight,
+training_readiness; the last four start hidden; PATCH rejects unknown ids and
+duplicates and appends cards missing from `order`).
+
+| endpoint | what |
+|---|---|
+| `POST /api/login`, `POST /api/logout`, `GET /api/me` | session |
+| `GET /api/tokens`, `POST /api/tokens` `{name}`, `DELETE /api/tokens/{id}` | device tokens for the web UI: the secret is returned once on create, never listed; delete revokes |
+| `GET /api/today` | the Today page: In focus (energy, last night, HRV), every At a glance card, last activity, training this week, `yesterday`, `last_7_days` |
+| `GET /api/days/{date}` | one day: heart rate, stress, energy, steps, intensity, the night that began that day, activities |
+| `GET /api/activities?type=&before=&limit=` | newest first, `type` is all, run, walk, hike, cycle, swim, strength, training, other; `next_before` is the cursor |
+| `GET /api/activities/{id}` | detail with laps, HR zones and a thinned columnar series; `id` is the file sha256 |
+| `GET /api/activities/{id}/track` | GPS points (at most 1500) with bounds |
+| `GET /api/activities/{id}/strength`, `PATCH` | sets grouped by exercise; PATCH `{sets:[{idx, reps?, weight_kg?, exercise?, reset?}]}` stores edits in `strength_set_overrides`, keyed by the activity, so they survive `reparse` and new files of the same activity |
+| `GET /api/sleep/{date}`, `GET /api/sleep?nights=7\|14\|30` | a night with stages and vitals; a list of nights |
+| `GET /api/trends?range=7d\|4w\|3m\|1y` | HRV with baseline, resting HR, breathing, SpO2, sleep score and duration |
+| `GET /api/movement/{date}` | steps, distance, week of steps, intensity week, calories |
+| `GET /api/training` | training status, load, load balance, recovery, VO2 max |
+| `GET /api/body`, `POST /api/body`, `DELETE /api/body/{id}` | manual weight, body fat and waist entries with the trend |
+| `GET /api/calendar/{yyyy-mm}` | per day activities and summary values, month totals |
+| `GET /api/devices`, `GET /api/storage` | watch battery, last data and sync; file and parse counts |
+| `GET /api/settings`, `PATCH /api/settings` | see above |
+
+Owner data (`owner`, `sessions`, `settings`, `strength_set_overrides`,
+`body_measurements`, migration 0008) lives in tables `reparse` never touches.
+Interpretation rules that are not obvious from the watch data (cumulative step
+counters, weekly intensity totals, night date, VO2 max from MET) are documented
+at the top of `src/web_api/daily.rs` and `src/web_api/training.rs`.
+
+TypeScript types for every request and response are generated by ts-rs into
+`web/src/api/generated/` (`nimrag-server export-types`). `tests/types.rs` fails
+when the committed files differ from a fresh generation.
+
+`dev-seed` writes 120 days of deterministic sample data (GPS runs around a
+neutral location, strength sessions with sets, walks, heart rate, steps, stress,
+energy, sleep with stages, HRV, resting HR, breathing, SpO2, training load, VO2
+max, recovery, battery) and sets `settings.sample_data`, which makes every
+response say `sample: true`. It refuses a data dir that holds uploaded files or
+was seeded already.
+
 ## Building (sqlx offline)
 
-Queries are checked at compile time. The checked query data lives in
+Queries in the ingest and parse code are checked at compile time (the owner API
+uses runtime queries, covered by tests instead, and does not touch `.sqlx/`). The checked query data lives in
 `server/.sqlx/` and is committed, so normal builds need no database:
 
 ```
@@ -109,9 +191,13 @@ Versions verified on crates.io on 2026-11-19 (latest stable, not yanked).
 | anyhow | 1.0.104 | error context in a binary-style app |
 | getrandom | 0.4.3 | OS randomness for 256-bit device tokens (avoids the larger `rand` tree) |
 | zip | =9.6.1 (default-features off, `deflate` only) | read the Garmin export archive and the zips nested in it. Maintained (zip-rs/zip2, ~350M downloads, releases through 2026-11-19; 9.7.x was hours old at selection so 9.6.1 is pinned), `enclosed_name()` path-traversal protection built in. Server crate only; core stays std-only |
+| argon2 | 0.6.0 | owner password hash (argon2id, RustCrypto); built with opt-level 3 in dev profiles so tests stay fast |
+| chrono / chrono-tz | 0.4.45 (std, now) / 0.10.4 | local days and DST-safe day bounds in the owner's IANA time zone |
+| iana-time-zone | 0.1.65 | default `timezone` from the system |
+| ts-rs | 12.0.1 (no-serde-warnings) | TypeScript types generated from the API structs |
 | dev: tower 0.5.3, http-body-util 0.1.5, tempfile 3.27.0 | | drive the real router with `oneshot`, read bodies, temp data dirs |
 
-CLI is hand-rolled (no clap): five fixed subcommands and three flags; one fewer
+CLI is hand-rolled (no clap): a handful of fixed subcommands and flags; one fewer
 dependency tree to audit.
 
 ## Docker
@@ -157,7 +243,7 @@ as `origin` on the sidecar upload event and in the `uploads.origin` column.
   Garmin-computed cloud data, not watch files; the owner decides later whether to
   import them.
 
-`serve`, `import-export`, `reparse` and `rebuild-ledger` take an exclusive lock on
+`serve`, `import-export`, `reparse`, `rebuild-ledger` and `dev-seed` take an exclusive lock on
 `<data>/.lock`; a second one fails fast with "data dir ... in use by `<command>`".
-(`token` does not lock.) This needs Rust 1.89 for `File::try_lock`, so the server
+(`token` and `user` do not lock.) This needs Rust 1.89 for `File::try_lock`, so the server
 crate sets `rust-version = "1.89"`; core stays at 1.80.

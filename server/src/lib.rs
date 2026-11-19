@@ -2,15 +2,19 @@
 //! disk); the SQLite database is a derived view that `reparse` can rebuild.
 
 pub mod api;
+pub mod auth;
 pub mod db;
 pub mod derive;
 pub mod derived;
 pub mod import;
 pub mod ingest;
 pub mod ledger;
+pub mod seed;
+pub mod settings;
 pub mod store;
 pub mod tokens;
 pub mod web;
+pub mod web_api;
 
 use sha2::{Digest, Sha256};
 

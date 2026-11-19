@@ -7,7 +7,10 @@ use std::path::PathBuf;
 
 const USAGE: &str = "\
 usage:
-  nimrag-server serve [--data-dir DIR] [--listen ADDR] [--log-json]
+  nimrag-server serve [--data-dir DIR] [--listen ADDR] [--log-json] [--insecure-cookies]
+  nimrag-server user set-password [--data-dir DIR]  read the owner password from stdin
+  nimrag-server dev-seed [--data-dir DIR]          fill an empty data dir with 120 days of sample data
+  nimrag-server export-types [--out DIR]           write the API's TypeScript types (default web/src/api/generated)
   nimrag-server token create --name NAME [--data-dir DIR]
   nimrag-server token list [--data-dir DIR]
   nimrag-server token revoke ID [--data-dir DIR]
@@ -15,12 +18,15 @@ usage:
   nimrag-server import-export [--data-dir DIR] [--list-skipped]
                       [--max-depth N] [--max-entries N] [--max-total-bytes N] <archive.zip | extracted-dir>
   nimrag-server rebuild-ledger [--data-dir DIR]   recreate files/uploads rows from sidecars
---data-dir defaults to $NIMRAG_DATA_DIR or ./data; --listen to 127.0.0.1:8080";
+--data-dir defaults to $NIMRAG_DATA_DIR or ./data; --listen to 127.0.0.1:8080.
+--insecure-cookies drops the Secure flag from the session cookie (plain-http LAN use only).";
 
 struct Opts {
     data_dir: PathBuf,
     listen: String,
     log_json: bool,
+    insecure_cookies: bool,
+    out: Option<PathBuf>,
     list_skipped: bool,
     limits: import::Limits,
     name: Option<String>,
@@ -37,6 +43,8 @@ fn parse_opts(args: &[String]) -> Result<Opts> {
         data_dir: std::env::var_os("NIMRAG_DATA_DIR").map_or_else(|| "data".into(), Into::into),
         listen: "127.0.0.1:8080".into(),
         log_json: false,
+        insecure_cookies: false,
+        out: None,
         list_skipped: false,
         limits: import::Limits::default(),
         name: None,
@@ -54,6 +62,8 @@ fn parse_opts(args: &[String]) -> Result<Opts> {
             "--listen" => o.listen = value("--listen")?,
             "--name" => o.name = Some(value("--name")?),
             "--log-json" => o.log_json = true,
+            "--insecure-cookies" => o.insecure_cookies = true,
+            "--out" => o.out = Some(value("--out")?.into()),
             "--list-skipped" => o.list_skipped = true,
             "--max-depth" => o.limits.max_depth = number(&value("--max-depth")?)?,
             "--max-entries" => o.limits.max_entries = number(&value("--max-entries")?)?,
@@ -78,7 +88,7 @@ async fn main() -> Result<()> {
     // Hold for the whole process: one writer per data dir.
     let _lock = if matches!(
         cmd.as_str(),
-        "serve" | "import-export" | "reparse" | "rebuild-ledger"
+        "serve" | "import-export" | "reparse" | "rebuild-ledger" | "dev-seed"
     ) {
         Some(db::lock_data_dir(&o.data_dir, cmd)?)
     } else {
@@ -116,6 +126,33 @@ async fn main() -> Result<()> {
         }
         "import-export" => import_export(o).await,
         "token" => token(o).await,
+        "user" => user(o).await,
+        "dev-seed" => {
+            let pool = db::open(&o.data_dir).await?;
+            let r = nimrag_server::seed::run(
+                &pool,
+                &o.data_dir,
+                nimrag_server::seed::SeedOptions::today(),
+            )
+            .await?;
+            println!(
+                "seeded {} days ({} to {}), {} activities, in {}",
+                r.days,
+                r.first_date,
+                r.last_date,
+                r.activities,
+                o.data_dir.display()
+            );
+            Ok(())
+        }
+        "export-types" => {
+            let dir = o
+                .out
+                .unwrap_or_else(|| PathBuf::from("web/src/api/generated"));
+            nimrag_server::web_api::export_types(&dir)?;
+            println!("TypeScript types written to {}", dir.display());
+            Ok(())
+        }
         _ => bail!("unknown command {cmd}\n{USAGE}"),
     }
 }
@@ -180,22 +217,57 @@ async fn token(o: Opts) -> Result<()> {
     Ok(())
 }
 
+/// `user set-password`: the password is read from stdin (first line), never from argv.
+async fn user(o: Opts) -> Result<()> {
+    use std::io::{IsTerminal, Read};
+    if o.positional.first().map(String::as_str) != Some("set-password") {
+        bail!("{USAGE}");
+    }
+    let mut input = String::new();
+    if std::io::stdin().is_terminal() {
+        eprint!(
+            "New password (typed text is visible; at least {} characters): ",
+            nimrag_server::auth::MIN_PASSWORD_LEN
+        );
+    }
+    std::io::stdin().take(4096).read_to_string(&mut input)?;
+    let password = input.lines().next().unwrap_or("");
+    let pool = db::open(&o.data_dir).await?;
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.as_secs() as i64);
+    nimrag_server::auth::set_password(&pool, password, now).await?;
+    eprintln!("owner password set; existing sessions were signed out");
+    Ok(())
+}
+
 async fn serve(o: Opts) -> Result<()> {
     let pool = db::open(&o.data_dir).await?;
     let swept = nimrag_server::store::sweep_incoming(&o.data_dir)?;
     if swept > 0 {
         tracing::warn!(swept, "removed leftovers of interrupted uploads");
     }
-    let app = api::router(api::AppState::new(pool, o.data_dir, api::MAX_BODY_BYTES));
+    let app = api::router(
+        api::AppState::new(pool, o.data_dir, api::MAX_BODY_BYTES)
+            .with_insecure_cookies(o.insecure_cookies),
+    );
+    if o.insecure_cookies {
+        tracing::warn!(
+            "session cookies are sent without the Secure flag; use only on a trusted plain-http network"
+        );
+    }
     let listener = tokio::net::TcpListener::bind(&o.listen)
         .await
         .with_context(|| format!("binding {}", o.listen))?;
     tracing::info!(listen = %o.listen, "serving");
-    axum::serve(listener, app)
-        .with_graceful_shutdown(async {
-            let _ = tokio::signal::ctrl_c().await;
-        })
-        .await?;
+    axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<std::net::SocketAddr>(),
+    )
+    .with_graceful_shutdown(async {
+        let _ = tokio::signal::ctrl_c().await;
+    })
+    .await?;
     Ok(())
 }
 
