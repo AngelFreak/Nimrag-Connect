@@ -1,11 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!--
-      Window theme: only what shows before Compose draws (splash and window background). DayNight
-      follows the system dark mode. Everything on screen is themed by NimragTheme in Compose.
+      Window theme: only what shows before Compose draws (splash and window background). The app is
+      dark only, with the design canvas's background. Everything on screen is themed by
+      NimragTheme in Compose.
     -->
-    <style name="Theme.Nimrag" parent="android:Theme.DeviceDefault.DayNight">
+    <style name="Theme.Nimrag" parent="android:Theme.DeviceDefault">
         <item name="android:windowActionBar">false</item>
         <item name="android:windowNoTitle">true</item>
+        <item name="android:windowBackground">@color/nimrag_background</item>
+        <item name="android:colorBackground">@color/nimrag_background</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
     </style>
 </resources>

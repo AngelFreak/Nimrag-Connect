@@ -13,15 +13,15 @@ android {
         applicationId = "dev.nimrag.app"
         minSdk = 31
         targetSdk = 37
-        versionCode = 6
-        versionName = "0.3.0"
+        versionCode = 7
+        versionName = "0.4.0"
         // Only the ABIs the Rust library is built for (this also drops JNA's other ABIs).
         ndk { abiFilters += listOf("arm64-v8a", "x86_64") }
     }
     buildTypes {
         release {
             isMinifyEnabled = true
-            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"))
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }
     buildFeatures { compose = true }
@@ -46,6 +46,7 @@ dependencies {
     implementation(libs.activity.compose)
     implementation(libs.lifecycle.runtime.compose)
     implementation(libs.kotlinx.coroutines.android)
+    implementation(libs.webkit)
     debugImplementation(libs.compose.ui.tooling)
     testImplementation(libs.junit.jupiter)
     testRuntimeOnly(libs.junit.platform.launcher)

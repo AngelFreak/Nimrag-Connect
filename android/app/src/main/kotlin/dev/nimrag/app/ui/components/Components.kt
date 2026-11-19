@@ -8,16 +8,23 @@ import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -219,3 +226,42 @@ fun SignalBars(rssi: Int, modifier: Modifier = Modifier) {
 
 /** Hides decoration from TalkBack. */
 fun Modifier.decorative(): Modifier = clearAndSetSemantics { }
+
+/** The canvas's primary button: 12 dp corners, at least 48 dp tall (44 dp touch target rule). */
+@Composable
+fun NimragButton(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    content: @Composable RowScope.() -> Unit,
+) {
+    Button(
+        onClick = onClick,
+        modifier = modifier.heightIn(min = 48.dp),
+        enabled = enabled,
+        shape = RoundedCornerShape(12.dp),
+        contentPadding = PaddingValues(horizontal = 20.dp, vertical = 10.dp),
+        content = content,
+    )
+}
+
+/** Secondary button: same shape, outlined with the canvas's line colour. */
+@Composable
+fun NimragOutlinedButton(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    colors: androidx.compose.material3.ButtonColors = ButtonDefaults.outlinedButtonColors(),
+    content: @Composable RowScope.() -> Unit,
+) {
+    OutlinedButton(
+        onClick = onClick,
+        modifier = modifier.heightIn(min = 48.dp),
+        enabled = enabled,
+        shape = RoundedCornerShape(12.dp),
+        colors = colors,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+        contentPadding = PaddingValues(horizontal = 20.dp, vertical = 10.dp),
+        content = content,
+    )
+}

@@ -1,11 +1,13 @@
 package dev.nimrag.app
 
 import android.app.Activity
+import android.graphics.Color
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.compose.setContent
+import androidx.activity.SystemBarStyle
 import androidx.activity.enableEdgeToEdge
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
@@ -30,7 +32,11 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         // Licence rule: the FIT profile (Garmin data) must never be in an Android build.
         check(!fitProfileCompiledIn()) { "FIT profile compiled into the Android library" }
-        enableEdgeToEdge()
+        // Dark only: light system bar icons on transparent bars, like the web interface.
+        enableEdgeToEdge(
+            statusBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
+            navigationBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
+        )
 
         // The Application class (engine) sets AppGraph.controller. Without it (a UI-only build)
         // the shell still opens, on a scripted demo controller.

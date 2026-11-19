@@ -33,7 +33,7 @@ fun LicencesScreen(contentPadding: PaddingValues, modifier: Modifier = Modifier)
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
             .padding(contentPadding)
-            .padding(horizontal = 16.dp, vertical = 8.dp),
+            .padding(horizontal = 20.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         Text(
@@ -43,6 +43,7 @@ fun LicencesScreen(contentPadding: PaddingValues, modifier: Modifier = Modifier)
         )
         ComponentSection(stringResource(R.string.licences_app), listOf(NimragComponent))
         ComponentSection(stringResource(R.string.licences_libraries), BundledLibraries)
+        ComponentSection(stringResource(R.string.licences_fonts), BundledFonts)
         ComponentSection(stringResource(R.string.licences_rust, RustCrates.size), RustCrates)
     }
 }

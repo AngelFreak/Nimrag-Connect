@@ -23,14 +23,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -56,6 +54,8 @@ import dev.nimrag.app.model.WatchController
 import dev.nimrag.app.model.WatchState
 import dev.nimrag.app.ui.components.BatteryIndicator
 import dev.nimrag.app.ui.components.CardTitle
+import dev.nimrag.app.ui.components.NimragButton
+import dev.nimrag.app.ui.components.NimragOutlinedButton
 import dev.nimrag.app.ui.components.DetailRow
 import dev.nimrag.app.ui.components.SectionCard
 import dev.nimrag.app.ui.components.SignalBars
@@ -104,7 +104,7 @@ fun WatchScreen(
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
             .padding(contentPadding)
-            .padding(horizontal = 16.dp, vertical = 8.dp),
+            .padding(horizontal = 20.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         if (!permissions.bluetooth || !permissions.notifications) {
@@ -177,7 +177,7 @@ internal fun PermissionCard(
         contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
         modifier = modifier,
         actions = {
-            Button(onClick = onGrant) { Text(stringResource(R.string.permissions_grant)) }
+            NimragButton(onClick = onGrant) { Text(stringResource(R.string.permissions_grant)) }
             if (askedOnce) {
                 TextButton(onClick = onOpenSettings) { Text(stringResource(R.string.permissions_open_settings)) }
             }
@@ -203,7 +203,7 @@ internal fun BluetoothOffCard(onEnable: () -> Unit, modifier: Modifier = Modifie
         containerColor = MaterialTheme.status.warnContainer,
         contentColor = MaterialTheme.status.onWarnContainer,
         modifier = modifier,
-        actions = { Button(onClick = onEnable) { Text(stringResource(R.string.bluetooth_turn_on)) } },
+        actions = { NimragButton(onClick = onEnable) { Text(stringResource(R.string.bluetooth_turn_on)) } },
     ) {
         Text(stringResource(R.string.bluetooth_off_body), style = MaterialTheme.typography.bodyMedium)
     }
@@ -218,7 +218,7 @@ private const val GARMIN_CONNECT_PACKAGE = "com.garmin.android.apps.connectmobil
 @Composable
 internal fun GarminConnectCard(bluetoothOff: Boolean, onOpenAppInfo: () -> Unit, modifier: Modifier = Modifier) {
     val open: @Composable () -> Unit = {
-        Button(onClick = onOpenAppInfo) { Text(stringResource(R.string.garmin_connect_open)) }
+        NimragButton(onClick = onOpenAppInfo) { Text(stringResource(R.string.garmin_connect_open)) }
     }
     if (bluetoothOff) {
         MessageCard(
@@ -257,7 +257,7 @@ internal fun AlongsideCard(bluetoothOff: Boolean, onOpenAppInfo: () -> Unit, mod
         contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
         modifier = modifier,
         actions = if (bluetoothOff) {
-            { Button(onClick = onOpenAppInfo) { Text(stringResource(R.string.garmin_connect_open)) } }
+            { NimragButton(onClick = onOpenAppInfo) { Text(stringResource(R.string.garmin_connect_open)) } }
         } else {
             null
         },
@@ -354,10 +354,10 @@ internal fun NotPairedContent(
                     modifier = Modifier.weight(1f),
                     style = MaterialTheme.typography.bodyMedium,
                 )
-                OutlinedButton(onClick = onStop) { Text(stringResource(R.string.scan_stop)) }
+                NimragOutlinedButton(onClick = onStop) { Text(stringResource(R.string.scan_stop)) }
             }
         } else {
-            Button(onClick = onScan, enabled = canScan, modifier = Modifier.fillMaxWidth()) {
+            NimragButton(onClick = onScan, enabled = canScan, modifier = Modifier.fillMaxWidth()) {
                 Text(stringResource(if (scannedOnce) R.string.scan_again else R.string.scan_start))
             }
             if (!canScan) {
@@ -562,15 +562,15 @@ internal fun PairedCardContent(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             if (watch.link == LinkState.BondLost) {
-                Button(onClick = onPairAgain, modifier = Modifier.weight(1f)) {
+                NimragButton(onClick = onPairAgain, modifier = Modifier.weight(1f)) {
                     Text(stringResource(R.string.pair_again))
                 }
             } else {
-                Button(onClick = onSync, enabled = canSync, modifier = Modifier.weight(1f)) {
+                NimragButton(onClick = onSync, enabled = canSync, modifier = Modifier.weight(1f)) {
                     Text(stringResource(if (syncRunning) R.string.sync_running_button else R.string.sync_now))
                 }
             }
-            OutlinedButton(
+            NimragOutlinedButton(
                 onClick = onForget,
                 modifier = Modifier.weight(1f),
                 colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),

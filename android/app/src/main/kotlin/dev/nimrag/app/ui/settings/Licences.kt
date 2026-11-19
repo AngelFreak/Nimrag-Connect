@@ -15,8 +15,18 @@ val BundledLibraries: List<Component> = listOf(
     Component("UniFFI (Kotlin bindings and runtime)", "0.32.2", "MPL-2.0"),
     Component("JNA", "5.19.1", "Apache-2.0 OR LGPL-2.1-or-later"),
     Component("AndroidX and Jetpack Compose (BOM 2026.09.00)", "", "Apache-2.0"),
+    Component("AndroidX WebKit", "1.18.0", "Apache-2.0"),
     Component("kotlinx.coroutines", "1.11.0", "Apache-2.0"),
     Component("Kotlin standard library", "2.4.20", "Apache-2.0"),
+)
+
+/**
+ * Fonts bundled in the APK (res/font, converted from the web fonts of @fontsource 5.3.0). Both are
+ * under the SIL Open Font License 1.1; the licence texts ship in assets/licences/.
+ */
+val BundledFonts: List<Component> = listOf(
+    Component("Inter (Copyright 2016 The Inter Project Authors)", "5.3.0", "OFL-1.1"),
+    Component("Space Grotesk (Copyright 2020 The Space Grotesk Project Authors)", "5.3.0", "OFL-1.1"),
 )
 
 /**

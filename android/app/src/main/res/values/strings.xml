@@ -179,4 +179,22 @@
     <string name="licences_app">This app</string>
     <string name="licences_libraries">Libraries</string>
     <string name="licences_rust">Rust crates in libnimrag_ffi.so (%1$d)</string>
+
+    <!-- Bottom bar and web shell (stage 3n) -->
+    <string name="tab_today">Today</string>
+    <string name="tab_activities">Activities</string>
+    <string name="tab_health">Health</string>
+    <string name="tab_strength">Strength</string>
+    <string name="devices_title">Devices and sync</string>
+    <string name="devices_subtitle">Watch, phone and your server</string>
+    <string name="server_needed_title">Set your server</string>
+    <string name="server_needed_body">Today, Activities, Health and Strength show your data from your own Nimrag server. Enter its address in Settings.</string>
+    <string name="server_needed_invalid">The saved server address is not valid: %1$s. Enter a URL starting with http:// or https:// in Settings.</string>
+    <string name="server_needed_open">Open Settings</string>
+    <string name="server_unreachable_title">Server unreachable</string>
+    <string name="server_unreachable_body">Nimrag could not reach your server, and there is no saved copy of this page on the phone yet. Check the connection (and the VPN, if the server is on your tailnet), then try again.</string>
+    <string name="server_unreachable_retry">Retry</string>
+    <string name="server_unreachable_retrying">Trying again…</string>
+    <string name="web_preview_placeholder">Web view (not shown in previews)</string>
+    <string name="licences_fonts">Fonts</string>
 </resources>

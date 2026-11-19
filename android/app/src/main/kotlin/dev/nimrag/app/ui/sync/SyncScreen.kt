@@ -23,7 +23,6 @@ import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Warning
-import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -58,6 +57,8 @@ import dev.nimrag.app.model.UploadState
 import dev.nimrag.app.model.WatchController
 import dev.nimrag.app.model.WatchState
 import dev.nimrag.app.ui.components.CardTitle
+import dev.nimrag.app.ui.components.NimragButton
+import dev.nimrag.app.ui.components.NimragOutlinedButton
 import dev.nimrag.app.ui.components.SectionCard
 import dev.nimrag.app.ui.components.WithAbsoluteTime
 import dev.nimrag.app.ui.components.absoluteDateTime
@@ -83,8 +84,8 @@ fun SyncScreen(
     LazyColumn(
         modifier = modifier,
         contentPadding = PaddingValues(
-            start = 16.dp,
-            end = 16.dp,
+            start = 20.dp,
+            end = 20.dp,
             top = contentPadding.calculateTopPadding() + 8.dp,
             bottom = contentPadding.calculateBottomPadding() + 16.dp,
         ),
@@ -284,7 +285,7 @@ internal fun UploadsCard(
                 color = MaterialTheme.colorScheme.error,
             )
         }
-        Button(onClick = onUploadNow, enabled = uploads.pending > 0) {
+        NimragButton(onClick = onUploadNow, enabled = uploads.pending > 0) {
             Text(stringResource(R.string.uploads_now))
         }
     }

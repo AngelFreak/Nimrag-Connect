@@ -50,6 +50,17 @@ does not expose FIT parsing.
 | Kotlin Gradle plugin (JVM) | 2.4.20 (2026-10-08) | Apache-2.0 | `:hosttest` (AGP 9 has built-in Kotlin for the Android modules) |
 | JNA | 5.19.1 (2026-06-12) | Apache-2.0 OR LGPL-2.1-or-later | UniFFI's Kotlin loads the library through it (aar on Android, jar in `:hosttest`) |
 | JUnit Jupiter / Platform Launcher | 6.1.3 (2026-08-07) | EPL-2.0 | `:hosttest` only; not shipped. EPL-2.0 is a test-time dependency, never linked into the app |
+| AndroidX WebKit | 1.18.0 | Apache-2.0 | `WebViewCompat.addDocumentStartJavaScript` for the web shell (stage 3n) |
+| Inter, Space Grotesk (fonts) | 5.3.0 (@fontsource) | OFL-1.1 | `app/src/main/res/font` (TrueType rebuilt from the latin WOFF files of `@fontsource/inter` and `@fontsource/space-grotesk`); licence texts in `app/src/main/assets/licences/` and in the app's Open-source licences screen |
 | UniFFI (Rust) | 0.32.2 | MPL-2.0 | see `ffi/README.md` |
 
-No AndroidX or Compose in the app yet: the shell is a plain `Activity`.
+AndroidX and Compose are used for the UI (versions in `gradle/libs.versions.toml`).
+
+## Web shell (stage 3n)
+
+The app is a native bottom bar (Today, Activities, Health, Strength, Watch). The first four show one
+`WebView` (`ui/shell/ServerWebView.kt`) that loads the saved server address and keeps running while
+the Watch tab (the native Watch, Sync and Settings screens) is on screen. The web page talks to the
+app through `window.NimragApp` (document-start script, server origin only) over the
+`NimragAppNative` JavaScript interface; the pure rules (origin checks, URL validation, route to tab,
+status JSON) live in `ui/shell/logic` with unit tests. See IMPLEMENTATION_PLAN.md, stage 3n.

@@ -22,12 +22,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
-import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Switch
@@ -58,6 +56,8 @@ import dev.nimrag.app.model.ServerTest
 import dev.nimrag.app.model.Settings
 import dev.nimrag.app.model.WatchController
 import dev.nimrag.app.ui.components.CardTitle
+import dev.nimrag.app.ui.components.NimragButton
+import dev.nimrag.app.ui.components.NimragOutlinedButton
 import dev.nimrag.app.ui.components.DetailRow
 import dev.nimrag.app.ui.components.SectionCard
 import dev.nimrag.app.ui.theme.status
@@ -84,7 +84,7 @@ fun SettingsScreen(
             .consumeWindowInsets(contentPadding)
             .imePadding()
             .verticalScroll(rememberScrollState())
-            .padding(horizontal = 16.dp, vertical = 8.dp),
+            .padding(horizontal = 20.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         ServerCard(state.settings, controller)
@@ -168,7 +168,7 @@ internal fun ServerCard(settings: Settings, controller: WatchController, modifie
             Switch(checked = allowMobile, onCheckedChange = null)
         }
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Button(
+            NimragButton(
                 onClick = {
                     controller.saveServer(trimmed, token.ifEmpty { null }, allowMobile)
                     token = ""
@@ -177,7 +177,7 @@ internal fun ServerCard(settings: Settings, controller: WatchController, modifie
                 },
                 enabled = dirty && urlValid,
             ) { Text(stringResource(R.string.save)) }
-            OutlinedButton(
+            NimragOutlinedButton(
                 onClick = {
                     scope.launch {
                         testing = true
@@ -367,7 +367,7 @@ internal fun AdvancedCard(capabilitiesHex: String, onSave: (String) -> Boolean, 
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Ascii, autoCorrectEnabled = false),
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Button(
+                    NimragButton(
                         onClick = {
                             val ok = onSave(hex.trim())
                             error = !ok
