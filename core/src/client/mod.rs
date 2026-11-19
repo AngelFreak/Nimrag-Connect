@@ -63,6 +63,40 @@ pub struct ClientConfig {
     /// clear it once `Event::PairingCompleted` arrives, and after at most one
     /// more connection that ends without it (Gadgetbridge sends them once).
     pub first_connect: bool,
+    /// True: after `FileStored` the client archives the file on the watch
+    /// (5008), as before. False ("alongside" another sync app, stage 2g): the
+    /// client never builds 5008; a stored file counts as copied and is left
+    /// pending on the watch for the other app.
+    pub archive: bool,
+    /// Files to leave alone: a listed (or announced) entry whose `FileKey` is
+    /// in this list is not downloaded and gives `Event::FileSkipped`. Keys
+    /// only skip; they never cause an archive. The host passes the files it
+    /// copied on earlier connections when `archive` is false.
+    pub skip: Vec<FileKey>,
+}
+
+/// What names a file on the watch across connections: the directory entry's
+/// type, sub type, file number, size and timestamp. The index is not part of
+/// it because the watch reuses indices.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct FileKey {
+    pub data_type: u8,
+    pub sub_type: u8,
+    pub file_number: u16,
+    pub size: u32,
+    pub timestamp: u32,
+}
+
+impl FileKey {
+    pub fn of(entry: &DirEntry) -> FileKey {
+        FileKey {
+            data_type: entry.data_type,
+            sub_type: entry.sub_type,
+            file_number: entry.file_number,
+            size: entry.size,
+            timestamp: entry.timestamp,
+        }
+    }
 }
 
 /// The caller's clocks at the moment of the call.
@@ -171,6 +205,12 @@ pub enum Event {
         reason: FileFailure,
         will_retry: bool,
     },
+    /// The entry's `FileKey` is in `ClientConfig::skip` (or the file was
+    /// stored earlier on this connection with `archive` false): not
+    /// downloaded, not archived.
+    FileSkipped {
+        entry: DirEntry,
+    },
     /// The watch acknowledged the archive flag for this transfer.
     FileArchived {
         transfer_id: u64,
@@ -184,6 +224,8 @@ pub enum Event {
         downloaded: u32,
         archived: u32,
         failed: u32,
+        /// Files left alone because of `ClientConfig::skip`.
+        skipped: u32,
     },
     /// A watch request we do not implement; answered "not supported".
     Unsupported {

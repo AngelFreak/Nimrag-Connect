@@ -1,6 +1,7 @@
 package dev.nimrag.app.ui.preview
 
 import dev.nimrag.app.model.AppState
+import dev.nimrag.app.model.GarminConnectMode
 import dev.nimrag.app.model.LinkState
 import dev.nimrag.app.model.LogLine
 import dev.nimrag.app.model.ServerTest
@@ -88,7 +89,14 @@ class FakeController(initial: AppState = PreviewData.notPaired()) : WatchControl
             val now = System.currentTimeMillis()
             mutable.update {
                 it.copy(
-                    sync = SyncState(lastResult = SyncResult(now, downloaded = total, archived = total, failed = 0)),
+                    sync = if (it.settings.garminConnectMode == GarminConnectMode.Alongside) {
+                        SyncState(
+                            lastResult = SyncResult(now, downloaded = total, archived = 0, failed = 0),
+                            leftForGarminConnect = it.sync.leftForGarminConnect + total,
+                        )
+                    } else {
+                        SyncState(lastResult = SyncResult(now, downloaded = total, archived = total, failed = 0))
+                    },
                     uploads = it.uploads.copy(pending = it.uploads.pending + total, storedTotal = it.uploads.storedTotal + total),
                 )
             }
@@ -149,6 +157,11 @@ class FakeController(initial: AppState = PreviewData.notPaired()) : WatchControl
         val valid = hex.isNotEmpty() && hex.length % 2 == 0 && hex.all { it in '0'..'9' || it in 'a'..'f' || it in 'A'..'F' }
         if (valid) mutable.update { it.copy(settings = it.settings.copy(capabilitiesHex = hex)) }
         return valid
+    }
+
+    override fun setGarminConnectMode(mode: GarminConnectMode) {
+        mutable.update { it.copy(settings = it.settings.copy(garminConnectMode = mode)) }
+        log(LogLine.Level.Info, "Demo: Garmin Connect mode ${mode.name}")
     }
 
     companion object {

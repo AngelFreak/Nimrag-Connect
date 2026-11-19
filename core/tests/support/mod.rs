@@ -47,6 +47,8 @@ pub fn test_config_epoch(connection_epoch: u32) -> ClientConfig {
         app_version: 1234,
         capabilities: vec![0x11, 0x22, 0x33],
         first_connect: false,
+        archive: true,
+        skip: vec![],
     }
 }
 

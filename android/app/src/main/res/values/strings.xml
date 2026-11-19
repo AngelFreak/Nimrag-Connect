@@ -51,6 +51,9 @@
     <string name="garmin_connect_off_body">Its Nearby devices permission is off, so Nimrag can talk to the watch. To use Garmin Connect again, allow that permission in its app info.</string>
     <string name="garmin_connect_switch">To switch for good: remove the watch in Garmin Connect (Devices), forget it in the phone\'s Bluetooth settings, then pair it here.</string>
     <string name="garmin_connect_open">Open Garmin Connect app info</string>
+    <string name="garmin_alongside_title">Sharing the watch with Garmin Connect</string>
+    <string name="garmin_alongside_body">Both apps stay connected. Nimrag copies every file and leaves it on the watch, so Garmin Connect still gets everything and does the archiving.</string>
+    <string name="garmin_alongside_off_body">Garmin Connect\'s Nearby devices permission is off, so it gets no data from the watch until you allow that permission again.</string>
     <string name="pairing_failed_title">Pairing did not finish</string>
     <string name="pairing_failed_hint">The Sync tab\'s log has the details. Share log sends it.</string>
     <string name="pair_confirm_title">Pair with %1$s?</string>
@@ -95,6 +98,10 @@
     <string name="sync_bytes_of">%1$s of %2$s</string>
     <string name="sync_progress_description">Current file progress: %1$d%%</string>
     <string name="sync_result">Downloaded %1$d, archived %2$d, failed %3$d</string>
+    <string name="sync_result_skipped">Downloaded %1$d, archived %2$d, failed %3$d, skipped %4$d</string>
+    <string name="sync_result_alongside">Copied %1$d, failed %2$d</string>
+    <string name="sync_result_alongside_skipped">Copied %1$d, failed %2$d, skipped %3$d</string>
+    <string name="sync_left_for_connect">Copied while sharing, last 60 days: %1$d</string>
     <string name="sync_none_yet">No sync yet. Tap Sync now on the Watch tab.</string>
     <string name="sync_pair_first">Pair a watch on the Watch tab to start syncing.</string>
 
@@ -151,6 +158,13 @@
     <string name="interval_minutes">%1$d min</string>
     <string name="auto_sync_hint">While the watch is connected, the phone asks it to sync this often.</string>
     <string name="auto_sync_off_hint">Off: the phone only syncs when you tap Sync now or the watch asks.</string>
+    <string name="settings_garmin_connect">Garmin Connect</string>
+    <string name="garmin_mode_off">Nimrag only</string>
+    <string name="garmin_mode_off_hint">Nimrag is the only sync app. It archives each file on the watch after storing it.</string>
+    <string name="garmin_mode_alongside">Alongside</string>
+    <string name="garmin_mode_alongside_hint">Keep using Garmin Connect too. Nimrag copies files and leaves them for Connect.</string>
+    <string name="garmin_mode_note">A change takes effect on the next connection, and the app reconnects right away.</string>
+    <string name="garmin_mode_alongside_note">In Alongside, Garmin Connect\'s Nearby devices permission must stay on. Without it Connect cannot reach the watch.</string>
     <string name="settings_advanced">Advanced</string>
     <string name="capabilities_label">Capability mask (hex)</string>
     <string name="capabilities_hint">Takes effect on the next connection.</string>

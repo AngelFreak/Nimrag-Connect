@@ -14,6 +14,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -27,6 +29,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -50,6 +53,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import dev.nimrag.app.R
 import dev.nimrag.app.model.AppState
+import dev.nimrag.app.model.GarminConnectMode
 import dev.nimrag.app.model.ServerTest
 import dev.nimrag.app.model.Settings
 import dev.nimrag.app.model.WatchController
@@ -85,6 +89,7 @@ fun SettingsScreen(
     ) {
         ServerCard(state.settings, controller)
         SyncIntervalCard(state.settings.autoSyncMinutes, controller::setAutoSyncMinutes)
+        GarminConnectModeCard(state.settings.garminConnectMode, controller::setGarminConnectMode)
         AdvancedCard(state.settings.capabilitiesHex, controller::setCapabilitiesHex)
         AboutCard(onOpenLicences)
     }
@@ -256,6 +261,67 @@ internal fun SyncIntervalCard(minutes: Int, onSelect: (Int) -> Unit, modifier: M
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+    }
+}
+
+// ---------------------------------------------------------------- Garmin Connect
+
+@Composable
+internal fun GarminConnectModeCard(
+    mode: GarminConnectMode,
+    onSelect: (GarminConnectMode) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    SectionCard(modifier) {
+        CardTitle(stringResource(R.string.settings_garmin_connect))
+        Column(Modifier.selectableGroup(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            ModeOption(
+                selected = mode == GarminConnectMode.Off,
+                title = stringResource(R.string.garmin_mode_off),
+                hint = stringResource(R.string.garmin_mode_off_hint),
+                onClick = { onSelect(GarminConnectMode.Off) },
+            )
+            ModeOption(
+                selected = mode == GarminConnectMode.Alongside,
+                title = stringResource(R.string.garmin_mode_alongside),
+                hint = stringResource(R.string.garmin_mode_alongside_hint),
+                onClick = { onSelect(GarminConnectMode.Alongside) },
+            )
+        }
+        Text(
+            stringResource(R.string.garmin_mode_note),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        if (mode == GarminConnectMode.Alongside) {
+            Text(
+                stringResource(R.string.garmin_mode_alongside_note),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+@Composable
+private fun ModeOption(selected: Boolean, title: String, hint: String, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .selectable(selected = selected, onClick = onClick, role = Role.RadioButton)
+            .padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        RadioButton(selected = selected, onClick = null)
+        Column(Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.bodyLarge)
+            Text(
+                hint,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
     }
 }
 

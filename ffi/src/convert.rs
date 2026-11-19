@@ -18,6 +18,20 @@ impl From<ClientConfig> for core::ClientConfig {
             app_version: c.app_version,
             capabilities: c.capabilities,
             first_connect: c.first_connect,
+            archive: c.archive,
+            skip: c.skip.into_iter().map(core::FileKey::from).collect(),
+        }
+    }
+}
+
+impl From<FileKey> for core::FileKey {
+    fn from(k: FileKey) -> Self {
+        core::FileKey {
+            data_type: k.data_type,
+            sub_type: k.sub_type,
+            file_number: k.file_number,
+            size: k.size,
+            timestamp: k.timestamp,
         }
     }
 }
@@ -144,6 +158,9 @@ impl From<core::Event> for Event {
                 reason: reason.into(),
                 will_retry,
             },
+            core::Event::FileSkipped { entry } => Event::FileSkipped {
+                entry: entry.into(),
+            },
             core::Event::FileArchived { transfer_id } => Event::FileArchived { transfer_id },
             core::Event::StaleConfirmation { transfer_id } => {
                 Event::StaleConfirmation { transfer_id }
@@ -153,11 +170,13 @@ impl From<core::Event> for Event {
                 downloaded,
                 archived,
                 failed,
+                skipped,
             } => Event::SyncFinished {
                 cycle,
                 downloaded,
                 archived,
                 failed,
+                skipped,
             },
             core::Event::Unsupported { message_id } => Event::Unsupported { message_id },
             core::Event::Battery {

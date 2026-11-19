@@ -16,6 +16,14 @@ fn config() -> ClientConfig {
         app_version: 1234,
         capabilities: vec![0x11, 0x22],
         first_connect: false,
+        archive: false,
+        skip: vec![FileKey {
+            data_type: 128,
+            sub_type: 32,
+            file_number: 1071,
+            size: 3,
+            timestamp: 1_000_071,
+        }],
     }
 }
 
@@ -42,6 +50,51 @@ fn config_converts_every_field() {
     assert_eq!(c.app_version, 1234);
     assert_eq!(c.capabilities, vec![0x11, 0x22]);
     assert!(!c.first_connect);
+    assert!(!c.archive);
+    assert_eq!(
+        c.skip,
+        vec![core::FileKey {
+            data_type: 128,
+            sub_type: 32,
+            file_number: 1071,
+            size: 3,
+            timestamp: 1_000_071,
+        }]
+    );
+}
+
+#[test]
+fn skipped_event_and_the_skipped_count_convert() {
+    let entry = nimrag_core::messages::DirEntry {
+        index: 71,
+        data_type: 128,
+        sub_type: 32,
+        file_number: 1071,
+        specific_flags: 1,
+        flags: 0xA0,
+        size: 3,
+        timestamp: 1_000_071,
+    };
+    let e: Event = core::Event::FileSkipped { entry }.into();
+    assert!(matches!(e, Event::FileSkipped { entry } if entry.index == 71 && entry.size == 3));
+    let e: Event = core::Event::SyncFinished {
+        cycle: 2,
+        downloaded: 1,
+        archived: 0,
+        failed: 0,
+        skipped: 5,
+    }
+    .into();
+    assert_eq!(
+        e,
+        Event::SyncFinished {
+            cycle: 2,
+            downloaded: 1,
+            archived: 0,
+            failed: 0,
+            skipped: 5,
+        }
+    );
 }
 
 #[test]

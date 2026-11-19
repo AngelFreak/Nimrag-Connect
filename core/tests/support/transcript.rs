@@ -569,6 +569,8 @@ fn host_config(s: &SessionTranscript) -> Result<ClientConfig, String> {
         app_version: host.app_version,
         capabilities: caps,
         first_connect: false,
+        archive: true,
+        skip: vec![],
     })
 }
 

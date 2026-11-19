@@ -1,7 +1,9 @@
 package dev.nimrag.app.engine
 
 import android.content.Context
+import dev.nimrag.app.engine.logic.AlongsideRules
 import dev.nimrag.app.engine.logic.CapabilityHex
+import dev.nimrag.app.model.GarminConnectMode
 import dev.nimrag.app.model.Settings
 import dev.nimrag.app.model.SyncResult
 import java.security.SecureRandom
@@ -50,6 +52,10 @@ class EngineSettings(context: Context) {
     var capabilitiesHex: String
         get() = prefs.getString(CAPABILITIES, null)?.let { CapabilityHex.normalize(it) } ?: CapabilityHex.DEFAULT
         set(value) = prefs.edit().putString(CAPABILITIES, value).apply()
+
+    var garminConnectMode: GarminConnectMode
+        get() = AlongsideRules.modeFromStored(prefs.getString(GARMIN_CONNECT_MODE, null))
+        set(value) = prefs.edit().putString(GARMIN_CONNECT_MODE, value.name).apply()
 
     /** Multi-link client id: random, chosen once per install. */
     val clientId: Long
@@ -116,6 +122,7 @@ class EngineSettings(context: Context) {
                 downloaded = prefs.getInt(SYNC_DOWNLOADED, 0),
                 archived = prefs.getInt(SYNC_ARCHIVED, 0),
                 failed = prefs.getInt(SYNC_FAILED, 0),
+                skipped = prefs.getInt(SYNC_SKIPPED, 0),
             )
         }
         set(value) {
@@ -127,6 +134,7 @@ class EngineSettings(context: Context) {
                     .putInt(SYNC_DOWNLOADED, value.downloaded)
                     .putInt(SYNC_ARCHIVED, value.archived)
                     .putInt(SYNC_FAILED, value.failed)
+                    .putInt(SYNC_SKIPPED, value.skipped)
             }
             edit.apply()
         }
@@ -138,6 +146,7 @@ class EngineSettings(context: Context) {
         allowMobileData = allowMobileData,
         autoSyncMinutes = autoSyncMinutes,
         capabilitiesHex = capabilitiesHex,
+        garminConnectMode = garminConnectMode,
     )
 
     private companion object {
@@ -146,6 +155,7 @@ class EngineSettings(context: Context) {
         const val ALLOW_MOBILE = "allow_mobile_data"
         const val AUTO_SYNC = "auto_sync_minutes"
         const val CAPABILITIES = "capabilities_hex"
+        const val GARMIN_CONNECT_MODE = "garmin_connect_mode"
         const val CLIENT_ID = "client_id"
         const val WATCH_ADDRESS = "watch_address"
         const val WATCH_NAME = "watch_name"
@@ -159,5 +169,6 @@ class EngineSettings(context: Context) {
         const val SYNC_DOWNLOADED = "last_sync_downloaded"
         const val SYNC_ARCHIVED = "last_sync_archived"
         const val SYNC_FAILED = "last_sync_failed"
+        const val SYNC_SKIPPED = "last_sync_skipped"
     }
 }

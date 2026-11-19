@@ -7,7 +7,17 @@
 //! SYNC_COMPLETE, also after failures and for an empty listing.
 //!
 //! Archive rule: 5008 is built in exactly one place, `on_confirmation`,
-//! and only from `State::WaitStore` with a matching transfer id.
+//! and only from `State::WaitStore` with a matching transfer id, and only
+//! when `ClientConfig::archive` is true. With it false (stage 2g, another sync
+//! app archives) the stored file counts as copied, no 5008 is built anywhere,
+//! and the cycle moves on.
+//!
+//! Skip list: an entry whose `FileKey` is in `ClientConfig::skip`, or was
+//! stored earlier on this connection with `archive` false, is not downloaded
+//! (`Event::FileSkipped`, counted in `SyncFinished::skipped`). A 5009 that
+//! carries timestamp 0 does not match a key made from the listing and is
+//! downloaded; the host's store deduplicates it. A 5009 for a skip-listed file
+//! is ignored without an event and starts no cycle.
 //!
 //! FileAvailable (5009): the watch announces one new file. Handling is ported
 //! from Gadgetbridge commit 7257742b (AGPL-3.0-or-later),
@@ -22,11 +32,11 @@
 //! while the session is busy is fetched in the running cycle or in one of
 //! its own right after, and a file that is also in a listing is fetched once.
 
-use std::collections::VecDeque;
+use std::collections::{HashSet, VecDeque};
 
 use super::session::{response, Kind, Out, Requests};
 use super::transport::REPLY_DEADLINE_MS;
-use super::{AnomalyKind, Event, FileFailure, SyncTrigger};
+use super::{AnomalyKind, ClientConfig, Event, FileFailure, FileKey, SyncTrigger};
 use crate::crc;
 use crate::gfdi::Message;
 use crate::messages::{self as m, DirEntry};
@@ -136,16 +146,21 @@ pub struct SyncCycle {
     downloaded: u32,
     archived: u32,
     failed: u32,
+    skipped: u32,
     dl: Option<Download>,
+    /// `ClientConfig::archive`.
+    archive: bool,
+    /// `ClientConfig::skip`, plus (archive false) the keys of files stored on
+    /// this connection, so a later cycle does not fetch them again.
+    skip: HashSet<FileKey>,
 }
 
 impl SyncCycle {
-    /// A cycle is in progress (listing, downloading, waiting, archiving).
-    pub fn new(connection_epoch: u32) -> Self {
+    pub fn new(config: &ClientConfig) -> Self {
         Self {
             state: State::Idle,
             cycle: 0,
-            next_transfer: (connection_epoch as u64) << 32,
+            next_transfer: (config.connection_epoch as u64) << 32,
             queued: None,
             announced: Vec::new(),
             handled: VecDeque::new(),
@@ -154,10 +169,14 @@ impl SyncCycle {
             downloaded: 0,
             archived: 0,
             failed: 0,
+            skipped: 0,
             dl: None,
+            archive: config.archive,
+            skip: config.skip.iter().copied().collect(),
         }
     }
 
+    /// A cycle is in progress (listing, downloading, waiting, archiving).
     pub fn running(&self) -> bool {
         !matches!(self.state, State::Idle | State::WaitGrant { .. })
     }
@@ -222,7 +241,9 @@ impl SyncCycle {
             return;
         }
         let running = !matches!(self.state, State::Idle);
-        if self.handled.iter().any(|e| same_file(e, &entry))
+        // A file to leave alone needs no cycle of its own: no event, no sync.
+        if self.skip.contains(&FileKey::of(&entry))
+            || self.handled.iter().any(|e| same_file(e, &entry))
             || (running && self.entries.iter().any(|e| same_file(e, &entry)))
         {
             return;
@@ -283,6 +304,7 @@ impl SyncCycle {
         self.downloaded = 0;
         self.archived = 0;
         self.failed = 0;
+        self.skipped = 0;
         self.entries.clear();
         self.next_entry = 0;
         self.dl = None;
@@ -319,6 +341,7 @@ impl SyncCycle {
                     downloaded: self.downloaded,
                     archived: self.archived,
                     failed: self.failed,
+                    skipped: self.skipped,
                 });
                 self.state = State::Idle;
                 self.start_queued(cx);
@@ -545,6 +568,12 @@ impl SyncCycle {
                     self.file_failed(entry, FileFailure::Skipped, false, cx);
                     continue;
                 }
+                if self.skip.contains(&FileKey::of(&entry)) {
+                    self.skipped += 1;
+                    self.mark_handled(&entry);
+                    cx.out.events.push(Event::FileSkipped { entry });
+                    continue;
+                }
                 self.dl = Some(Download::new(Some(entry)));
                 self.request_download(cx);
                 return;
@@ -591,7 +620,7 @@ impl SyncCycle {
     // ---- the caller's answer -------------------------------------------------------
 
     /// `FileStored` (`stored`) or `FileStoreFailed`. The only place that can
-    /// build the archive request.
+    /// build the archive request, and only with `archive` set.
     pub fn on_confirmation(&mut self, transfer_id: u64, stored: bool, cx: &mut Ctx) {
         let waiting = match &self.state {
             State::WaitStore { id, entry } if *id == transfer_id => Some(entry.clone()),
@@ -601,7 +630,13 @@ impl SyncCycle {
             cx.out.events.push(Event::StaleConfirmation { transfer_id });
             return;
         };
-        if stored {
+        if stored && !self.archive {
+            // Alongside another sync app: copied, never archived. Remember
+            // the key so a later cycle of this connection leaves it alone.
+            self.skip.insert(FileKey::of(&entry));
+            self.mark_handled(&entry);
+            self.next_file(cx);
+        } else if stored {
             cx.req.send(
                 cx.out,
                 m::SET_FILE_FLAGS,

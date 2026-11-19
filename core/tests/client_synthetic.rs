@@ -7,7 +7,8 @@ use nimrag_core::capture::Direction;
 use nimrag_core::client::reliable::WINDOW;
 use nimrag_core::client::DstPair;
 use nimrag_core::client::{
-    AnomalyKind, BatteryReport, CloseReason, Event, FileFailure, Input, Phase, SyncTrigger,
+    AnomalyKind, BatteryReport, Client, CloseReason, Event, FileFailure, FileKey, Input, Phase,
+    SyncTrigger,
 };
 use nimrag_core::gfdi::Message;
 use nimrag_core::link::{Event as LinkEvent, LinkDecoder};
@@ -153,6 +154,7 @@ fn happy_path_two_files_then_empty_listing_matches_golden_sequence() {
                 downloaded,
                 archived,
                 failed,
+                ..
             } => Some((*cycle, *downloaded, *archived, *failed)),
             _ => None,
         })
@@ -1725,6 +1727,7 @@ fn finished(cycle: u32, downloaded: u32, archived: u32, failed: u32) -> Event {
         downloaded,
         archived,
         failed,
+        skipped: 0,
     }
 }
 
@@ -2451,4 +2454,291 @@ fn request_battery_queued_behind_a_pending_request_adds_no_second_5043() {
     assert_eq!(battery_events(&sim).len(), 1);
     assert!(sim.events.contains(&finished(1, 1, 1, 0)));
     assert_eq!(sim.client.phase(), Phase::Ready);
+}
+
+// ---- stage 2g: alongside another sync app (archive false) and the skip list --------------------------
+
+fn client_with(archive: bool, skip: Vec<FileKey>) -> Client {
+    let mut config = test_config();
+    config.archive = archive;
+    config.skip = skip;
+    Client::new(config)
+}
+
+fn two_file_watch() -> FakeWatch {
+    let mut watch = FakeWatch::new();
+    watch.add_file(fake_entry(FILE_A, 32, 2000), lcg_bytes(1, 2000));
+    watch.add_file(fake_entry(FILE_B, 4, 300), lcg_bytes(2, 300));
+    watch
+}
+
+/// Archive false: two files on the watch, handshake done, no sync yet.
+fn alongside_sim() -> Sim {
+    let mut sim = Sim::with(client_with(false, vec![]), two_file_watch());
+    sim.handshake();
+    sim
+}
+
+fn key(index: u16, sub_type: u8, size: usize) -> FileKey {
+    FileKey::of(&fake_entry(index, sub_type, size))
+}
+
+fn skipped_indices(sim: &Sim) -> Vec<u16> {
+    sim.events
+        .iter()
+        .filter_map(|e| match e {
+            Event::FileSkipped { entry } => Some(entry.index),
+            _ => None,
+        })
+        .collect()
+}
+
+/// With archive false no 5008 exists anywhere on the wire, the watch holds
+/// every file as pending, and no file was reported archived.
+fn assert_never_archived(sim: &Sim) {
+    assert!(sim.phone_requests(5008).is_empty(), "no 5008 built");
+    assert!(
+        !sim.phone_ids().contains(&5008),
+        "no 5008 on the wire in any form"
+    );
+    assert!(sim.watch.archived_indices.is_empty());
+    assert!(!sim
+        .events
+        .iter()
+        .any(|e| matches!(e, Event::FileArchived { .. })));
+}
+
+#[test]
+fn file_key_comes_from_the_entry_without_the_index() {
+    let a = fake_entry(FILE_A, 32, 2000);
+    let mut moved = a.clone();
+    moved.index = 5;
+    moved.flags = 0x80;
+    assert_eq!(FileKey::of(&a), FileKey::of(&moved));
+    let mut other = a.clone();
+    other.timestamp += 1;
+    assert_ne!(FileKey::of(&a), FileKey::of(&other));
+    assert_eq!(
+        FileKey::of(&a),
+        FileKey {
+            data_type: 128,
+            sub_type: 32,
+            file_number: FILE_A + 1000,
+            size: 2000,
+            timestamp: 1_000_000 + FILE_A as u32,
+        }
+    );
+}
+
+#[test]
+fn alongside_stores_and_moves_on_without_archiving() {
+    let mut sim = alongside_sim();
+    sim.watch_sends(&sim.watch.sync_request(2));
+    assert_eq!(sim.downloaded().len(), 1, "waiting for the first file");
+    store_everything(&mut sim);
+    assert_eq!(downloaded_indices(&sim), vec![FILE_A, FILE_B]);
+    assert_never_archived(&sim);
+    assert_eq!(sim.watch.pending_files().len(), 2, "left for the other app");
+    let last = sim.watch.phone_msgs.last().unwrap();
+    assert_eq!((last.id, last.payload.clone()), (5030, vec![0, 0]));
+    assert!(sim.events.contains(&Event::SyncFinished {
+        cycle: 1,
+        downloaded: 2,
+        archived: 0,
+        failed: 0,
+        skipped: 0,
+    }));
+    assert_eq!(sim.client.phase(), Phase::Ready);
+    assert!(sim.closed_reason().is_none());
+}
+
+#[test]
+fn alongside_retry_after_a_failed_download_is_copied_without_archive() {
+    let mut sim = Sim::with(client_with(false, vec![]), two_file_watch());
+    sim.watch.faults.insert(FILE_A, vec![Fault::BadCrc].into());
+    sim.handshake();
+    sim.watch_sends(&sim.watch.sync_request(2));
+    assert!(chunk_ack_statuses(&sim).contains(&m::CHUNK_CRC_MISMATCH));
+    assert_eq!(sim.downloaded().len(), 1);
+    assert_eq!(sim.downloaded()[0].2, lcg_bytes(1, 2000));
+    store_everything(&mut sim);
+    assert_eq!(downloaded_indices(&sim), vec![FILE_A, FILE_B]);
+    assert_never_archived(&sim);
+    assert!(sim.events.contains(&Event::SyncFinished {
+        cycle: 1,
+        downloaded: 2,
+        archived: 0,
+        failed: 0,
+        skipped: 0,
+    }));
+}
+
+#[test]
+fn alongside_stale_confirmations_write_nothing_and_archive_nothing() {
+    let mut sim = alongside_sim();
+    sim.watch_sends(&sim.watch.sync_request(2));
+    let before = sim.phone_writes.len();
+    sim.input(Input::FileStored { transfer_id: 999 });
+    assert_eq!(sim.phone_writes.len(), before, "unknown id writes nothing");
+    assert!(sim
+        .events
+        .contains(&Event::StaleConfirmation { transfer_id: 999 }));
+    let id = latest_downloaded_id(&sim);
+    sim.input(Input::FileStored { transfer_id: id });
+    assert_eq!(sim.downloaded().len(), 2, "moved on to the next file");
+    // The first id again, now stale: still nothing archived.
+    let before = sim.phone_writes.len();
+    sim.input(Input::FileStored { transfer_id: id });
+    assert_eq!(sim.phone_writes.len(), before);
+    store_everything(&mut sim);
+    assert_never_archived(&sim);
+    assert_archive_rule(&sim);
+}
+
+#[test]
+fn alongside_a_failed_store_is_not_archived_and_not_remembered() {
+    let mut sim = alongside_sim();
+    sim.watch_sends(&sim.watch.sync_request(2));
+    let id = latest_downloaded_id(&sim);
+    sim.input(Input::FileStoreFailed { transfer_id: id });
+    assert!(sim.events.iter().any(|e| matches!(
+        e,
+        Event::FileFailed {
+            reason: FileFailure::StoreFailed,
+            ..
+        }
+    )));
+    assert_eq!(sim.downloaded().len(), 2, "next file is fetched");
+    let id = latest_downloaded_id(&sim);
+    sim.input(Input::FileStored { transfer_id: id });
+    assert_never_archived(&sim);
+    // A second cycle on this connection fetches the failed file again and
+    // skips the stored one.
+    sim.watch_sends(&sim.watch.sync_request(2));
+    assert_eq!(downloaded_indices(&sim), vec![FILE_A, FILE_B, FILE_A]);
+    store_everything(&mut sim);
+    assert_eq!(skipped_indices(&sim), vec![FILE_B]);
+    assert_eq!(downloaded_indices(&sim), vec![FILE_A, FILE_B, FILE_A]);
+    assert_never_archived(&sim);
+}
+
+#[test]
+fn skip_keys_suppress_the_download_and_are_counted() {
+    let skip = vec![key(FILE_A, 32, 2000)];
+    let mut sim = Sim::with(client_with(true, skip), two_file_watch());
+    sim.handshake();
+    sim.watch_sends(&sim.watch.sync_request(2));
+    store_everything(&mut sim);
+    assert_eq!(downloaded_indices(&sim), vec![FILE_B]);
+    assert_eq!(
+        sim.phone_requests(5002).len(),
+        2,
+        "directory + the one file; none for the skipped one"
+    );
+    assert_eq!(skipped_indices(&sim), vec![FILE_A]);
+    assert!(sim.events.contains(&Event::SyncFinished {
+        cycle: 1,
+        downloaded: 1,
+        archived: 1,
+        failed: 0,
+        skipped: 1,
+    }));
+    // Keys only skip: the skipped file is never archived either.
+    assert_eq!(sim.watch.archived_indices, vec![FILE_B]);
+    assert_archive_rule(&sim);
+}
+
+#[test]
+fn skip_matches_the_whole_key_not_just_the_file_number() {
+    // Same file number and type, different size or sub type: another file.
+    let skip = vec![key(FILE_A, 32, 1999), key(FILE_B, 5, 300)];
+    let mut sim = Sim::with(client_with(false, skip), two_file_watch());
+    sim.handshake();
+    sim.watch_sends(&sim.watch.sync_request(2));
+    store_everything(&mut sim);
+    assert_eq!(downloaded_indices(&sim), vec![FILE_A, FILE_B]);
+    assert!(skipped_indices(&sim).is_empty());
+    assert_never_archived(&sim);
+}
+
+#[test]
+fn skipping_everything_still_completes_the_cycle() {
+    let skip = vec![key(FILE_A, 32, 2000), key(FILE_B, 4, 300)];
+    let mut sim = Sim::with(client_with(false, skip), two_file_watch());
+    sim.handshake();
+    sim.watch_sends(&sim.watch.sync_request(2));
+    assert!(sim.downloaded().is_empty());
+    assert_eq!(skipped_indices(&sim), vec![FILE_A, FILE_B]);
+    let last = sim.watch.phone_msgs.last().unwrap();
+    assert_eq!((last.id, last.payload.clone()), (5030, vec![0, 0]));
+    assert!(sim.events.contains(&Event::SyncFinished {
+        cycle: 1,
+        downloaded: 0,
+        archived: 0,
+        failed: 0,
+        skipped: 2,
+    }));
+    assert_never_archived(&sim);
+    assert_eq!(sim.client.phase(), Phase::Ready);
+}
+
+#[test]
+fn a_5009_for_a_skip_listed_file_is_ignored_without_a_cycle() {
+    let skip = vec![key(FILE_A, 32, 2000)];
+    let mut sim = Sim::with(client_with(false, skip), two_file_watch());
+    sim.handshake();
+    sim.watch_sends(&sim.watch.file_available(FILE_A));
+    assert_eq!(sim.phone_responses(5009).len(), 1, "acknowledged");
+    assert!(sync_started(&sim).is_empty(), "no cycle for a file we skip");
+    assert!(sim.downloaded().is_empty());
+    // An announced file that is not listed is still fetched.
+    sim.watch_sends(&sim.watch.file_available(FILE_B));
+    store_everything(&mut sim);
+    assert_eq!(downloaded_indices(&sim), vec![FILE_B]);
+    assert_never_archived(&sim);
+}
+
+#[test]
+fn a_file_stored_alongside_is_skipped_by_the_next_cycle_of_the_same_connection() {
+    let mut sim = alongside_sim();
+    sim.watch_sends(&sim.watch.sync_request(2));
+    store_everything(&mut sim);
+    assert_eq!(downloaded_indices(&sim), vec![FILE_A, FILE_B]);
+    assert!(skipped_indices(&sim).is_empty());
+
+    sim.watch_sends(&sim.watch.sync_request(2));
+    assert_eq!(
+        downloaded_indices(&sim),
+        vec![FILE_A, FILE_B],
+        "no new download"
+    );
+    assert_eq!(skipped_indices(&sim), vec![FILE_A, FILE_B]);
+    assert_eq!(
+        sim.phone_requests(5002).len(),
+        4,
+        "directory + two files, then only the directory"
+    );
+    assert!(sim.events.contains(&Event::SyncFinished {
+        cycle: 2,
+        downloaded: 0,
+        archived: 0,
+        failed: 0,
+        skipped: 2,
+    }));
+    assert_never_archived(&sim);
+    assert_eq!(sim.client.phase(), Phase::Ready);
+}
+
+#[test]
+fn with_archive_true_a_stored_file_is_archived_and_not_remembered() {
+    // Unchanged behaviour: the watch drops archived files from the listing,
+    // so the second cycle is simply empty (and skips nothing).
+    let mut sim = Sim::with(client_with(true, vec![]), two_file_watch());
+    sim.handshake();
+    sim.watch_sends(&sim.watch.sync_request(2));
+    store_everything(&mut sim);
+    assert_eq!(sim.watch.archived_indices, vec![FILE_A, FILE_B]);
+    sim.watch_sends(&sim.watch.sync_request(2));
+    assert!(skipped_indices(&sim).is_empty());
+    assert!(sim.events.contains(&finished(2, 0, 0, 0)));
 }

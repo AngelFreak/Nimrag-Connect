@@ -12,6 +12,19 @@ pub struct ClientConfig {
     pub app_version: u16,
     pub capabilities: Vec<u8>,
     pub first_connect: bool,
+    /// False: never archive on the watch (alongside another sync app).
+    pub archive: bool,
+    /// Files to leave alone (not downloaded, `Event::FileSkipped`).
+    pub skip: Vec<FileKey>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, uniffi::Record)]
+pub struct FileKey {
+    pub data_type: u8,
+    pub sub_type: u8,
+    pub file_number: u16,
+    pub size: u32,
+    pub timestamp: u32,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Record)]
@@ -126,6 +139,9 @@ pub enum Event {
         reason: FileFailure,
         will_retry: bool,
     },
+    FileSkipped {
+        entry: DirEntry,
+    },
     FileArchived {
         transfer_id: u64,
     },
@@ -137,6 +153,7 @@ pub enum Event {
         downloaded: u32,
         archived: u32,
         failed: u32,
+        skipped: u32,
     },
     Unsupported {
         message_id: u16,

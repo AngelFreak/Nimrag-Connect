@@ -26,6 +26,8 @@ private fun config() = ClientConfig(
     appVersion = 1234u,
     capabilities = byteArrayOf(0x11, 0x22),
     firstConnect = false,
+    archive = true,
+    skip = emptyList(),
 )
 
 private fun now(monoMs: ULong) = Now(

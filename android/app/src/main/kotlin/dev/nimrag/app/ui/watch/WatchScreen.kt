@@ -50,6 +50,7 @@ import dev.nimrag.app.R
 import dev.nimrag.app.model.AppState
 import dev.nimrag.app.model.FoundDevice
 import dev.nimrag.app.model.GarminConnect
+import dev.nimrag.app.model.GarminConnectMode
 import dev.nimrag.app.model.LinkState
 import dev.nimrag.app.model.WatchController
 import dev.nimrag.app.model.WatchState
@@ -123,18 +124,27 @@ fun WatchScreen(
             BluetoothOffCard(onEnable = { enableBluetoothLauncher.launch(Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE)) })
         }
         val watchReady = (state.watch as? WatchState.Paired)?.link == LinkState.Ready
-        if (state.garminConnect != GarminConnect.Absent && !watchReady) {
-            GarminConnectCard(
-                bluetoothOff = state.garminConnect == GarminConnect.BluetoothOff,
-                onOpenAppInfo = {
-                    context.startActivity(
-                        Intent(
-                            Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-                            Uri.fromParts("package", GARMIN_CONNECT_PACKAGE, null),
-                        ),
-                    )
-                },
+        val openGarminConnectInfo = {
+            context.startActivity(
+                Intent(
+                    Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                    Uri.fromParts("package", GARMIN_CONNECT_PACKAGE, null),
+                ),
             )
+        }
+        if (state.garminConnect != GarminConnect.Absent) {
+            if (state.settings.garminConnectMode == GarminConnectMode.Alongside) {
+                // Not tied to the link: the point is that Connect stays supplied while we are connected.
+                AlongsideCard(
+                    bluetoothOff = state.garminConnect == GarminConnect.BluetoothOff,
+                    onOpenAppInfo = openGarminConnectInfo,
+                )
+            } else if (!watchReady) {
+                GarminConnectCard(
+                    bluetoothOff = state.garminConnect == GarminConnect.BluetoothOff,
+                    onOpenAppInfo = openGarminConnectInfo,
+                )
+            }
         }
 
         when (val watch = state.watch) {
@@ -234,6 +244,28 @@ internal fun GarminConnectCard(bluetoothOff: Boolean, onOpenAppInfo: () -> Unit,
         Text(stringResource(R.string.garmin_connect_body), style = MaterialTheme.typography.bodyMedium)
         Text(stringResource(R.string.garmin_connect_test), style = MaterialTheme.typography.bodyMedium)
         Text(stringResource(R.string.garmin_connect_switch), style = MaterialTheme.typography.bodySmall)
+    }
+}
+
+/** Alongside mode: both apps share the watch. Warns when Connect has lost its Bluetooth access. */
+@Composable
+internal fun AlongsideCard(bluetoothOff: Boolean, onOpenAppInfo: () -> Unit, modifier: Modifier = Modifier) {
+    MessageCard(
+        icon = Icons.Filled.Info,
+        title = stringResource(R.string.garmin_alongside_title),
+        containerColor = MaterialTheme.colorScheme.secondaryContainer,
+        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+        modifier = modifier,
+        actions = if (bluetoothOff) {
+            { Button(onClick = onOpenAppInfo) { Text(stringResource(R.string.garmin_connect_open)) } }
+        } else {
+            null
+        },
+    ) {
+        Text(stringResource(R.string.garmin_alongside_body), style = MaterialTheme.typography.bodyMedium)
+        if (bluetoothOff) {
+            Text(stringResource(R.string.garmin_alongside_off_body), style = MaterialTheme.typography.bodyMedium)
+        }
     }
 }
 

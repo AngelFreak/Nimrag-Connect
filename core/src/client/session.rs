@@ -221,7 +221,7 @@ impl Session {
             ready: false,
             battery_requested: false,
             req: Requests::default(),
-            sync: SyncCycle::new(config.connection_epoch),
+            sync: SyncCycle::new(config),
             deadline: None,
         }
     }

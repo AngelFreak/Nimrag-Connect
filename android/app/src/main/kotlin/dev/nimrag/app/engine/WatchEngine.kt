@@ -6,6 +6,7 @@ import dev.nimrag.app.engine.ble.WatchLink
 import dev.nimrag.app.engine.logic.CapabilityHex
 import dev.nimrag.app.engine.logic.UploadPolicy
 import dev.nimrag.app.model.AppState
+import dev.nimrag.app.model.GarminConnectMode
 import dev.nimrag.app.model.ServerTest
 import dev.nimrag.app.model.WatchController
 import kotlinx.coroutines.Dispatchers
@@ -45,6 +46,7 @@ class WatchEngine(private val hub: Hub) : WatchController {
         link.restore()
         hub.handler.post {
             hub.log.load()
+            link.refreshLeftForGarminConnect()
             hub.refreshPermissions()
             startServiceIfPaired(StartSource.ProcessStart)
         }
@@ -181,6 +183,13 @@ class WatchEngine(private val hub: Hub) : WatchController {
         publishSettings()
         hub.log.info("Capability mask saved, used from the next connection")
         return true
+    }
+
+    override fun setGarminConnectMode(mode: GarminConnectMode) {
+        if (hub.settings.garminConnectMode == mode) return
+        hub.settings.garminConnectMode = mode
+        publishSettings()
+        hub.handler.post { link.onGarminConnectModeChanged(mode) }
     }
 
     private fun publishSettings() = hub.update { it.copy(settings = hub.settings.toState()) }
