@@ -33,4 +33,6 @@ The owner has not chosen a licence yet. Crates declare `LicenseRef-nimrag-pendin
 
 - APKs, decompiled sources and raw captures stay in `private/`, which git ignores, and are not redistributed.
 - The recovered `.proto` schemas describe a wire format and exist for interoperability with the owner's own device. Remove them from any public branch if the owner decides they should not be published.
-- The FIT protocol itself is published by Garmin in the FIT SDK under its own licence. Check that licence before FIT SDK files are bundled.
+- FIT profile (owner decision, 2026-11-19):
+  - `core/src/fit/profile_data.rs` is generated from Garmin's **public** FIT SDK (npm `@garmin/fitsdk`) under that SDK's licence. The package version and licence are recorded in the file header.
+  - `core/src/fit/profile_overlay.rs` holds only the messages, fields and enum values the public profile lacks, extracted from the FIT SDK copy inside the Garmin Connect app. It is governed by the app's terms rather than the FIT SDK licence. It is kept separate so that it can be replaced by an empty table on any public branch.

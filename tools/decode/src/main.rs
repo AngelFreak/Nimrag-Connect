@@ -3,6 +3,8 @@
 //!
 //! Thin CLI over nimrag-core; all parsing lives there.
 
+mod fit_cmd;
+
 use std::collections::{BTreeMap, HashMap};
 use std::io::{Read, Write};
 use std::path::PathBuf;
@@ -23,6 +25,8 @@ options:
   --verbose    also print control frames, info pages, service data, MLR events
   --extract D  write every downloaded file to directory D (name: index_type_sub.bin)
   --strict     exit with status 2 if any frame could not be decoded
+
+subcommand: nimrag-decode fit [--fields] <file.fit>   (see `nimrag-decode fit`)
 ";
 
 struct Options {
@@ -385,6 +389,10 @@ fn open_stream(source: &str) -> std::io::Result<Box<dyn Read>> {
 }
 
 fn main() -> ExitCode {
+    let argv: Vec<String> = std::env::args().skip(1).collect();
+    if argv.first().map(String::as_str) == Some("fit") {
+        return fit_cmd::run(&argv[1..]);
+    }
     let opts = match parse_args() {
         Ok(o) => o,
         Err(e) => {

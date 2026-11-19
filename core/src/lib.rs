@@ -8,6 +8,7 @@ pub mod capture;
 pub mod cobs;
 pub mod crc;
 pub mod describe;
+pub mod fit;
 pub mod gfdi;
 pub mod link;
 pub mod mlr;
