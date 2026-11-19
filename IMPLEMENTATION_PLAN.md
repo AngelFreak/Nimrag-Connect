@@ -52,7 +52,7 @@ Roles: main session orchestrates and integrates; Sonnet builders implement on di
 ## Stage 1e: Garmin export importer
 **Status**: Complete (FIT only; TCX/GPX/JSON counted, not stored — owner decision pending)
 ## Gate 1
-**Status**: Passed for Bluetooth-downloaded files (upload, parse, reparse identical; import identical). The USB copy is still needed: the watch hasn't been plugged in yet.
+**Status**: Passed 2026-11-19. USB copy of the watch (mass storage, mounted read-only, 319 files, every checksum verified against the watch): 274 FIT files uploaded over HTTP with source=usb, all 201; all parse and derive `ok`; `reparse` (789 109 messages) and `rebuild-ledger` give byte-identical tables; a repeat upload returns 200 and stores nothing. 189 activities (2023-07 to today), no implausible timestamps. Only 2 of the 16 Bluetooth files are byte-identical on the drive (the activity and the Firstbeat backup): the watch cuts monitoring/metrics files per sync and keeps only the current day's growing file on the drive, so per-file hash comparison belongs to gate 2.
 
 ### Owner decisions, 2026-11-19 ("do it all")
 - VO2 max may be shown as max MET × 3.5, labelled as derived from the watch's maximal_met (not Garmin's published value).
@@ -67,7 +67,7 @@ Roles as phase 1. Order follows the brief: the core state machine passes the pha
 **Goal**: `nimrag_core::client::Client`, our side of the watch link as a pure state machine: multi-link bring-up, MLR, GFDI handshake, time duty, pending-file listing, download with CRC check, archive only after the caller confirms safe storage. Bytes and caller decisions in; GATT writes, events and one deadline out.
 **Success Criteria**: (1) the committed synthetic session tests pass through `Client::handle` only; (2) for every session in the three private captures, the replay harness below reports zero differences outside the allowed list; (3) no 5008 is ever emitted without a matching `FileStored`; (4) `core` stays std-only; `cargo clippy` and `cargo fmt --check` clean.
 **Tests**: `core/tests/client_synthetic.rs` (committed, fake ids), `core/tests/client_replay_private.rs` (skips with a printed notice when `private/captures` is absent; fails instead when `NIMRAG_REQUIRE_PRIVATE=1`), unit tests per module.
-**Status**: In Progress (contract accepted by orchestrator)
+**Status**: In Progress (client, unit and synthetic tests done; private replay passes every lane and is blocked only on two stop-and-report items awaiting the orchestrator: app-initiated protobuf requests and close-handle control types)
 
 ### Stage 2a contract
 
@@ -105,7 +105,7 @@ Labels as in PROTOCOL.md: **seen** / **inferred** / **unknown**; **ours** = a fr
 | any other request (5036, 5042, 5014, 5034, 5009, 5011/5012, 5022, 5023, 5027, 5054, …) | 5000 `id, status 2`, no body; emit `Unsupported` | inferred (APK auto-reply; status value never seen on the wire, Q-GFDI-5) |
 | 5000 matching no request; bad COBS / length / CRC | `Anomaly`, nothing sent | ours |
 
-- Deliberately not sent (each is on the allowed-differences list): info page 5; NFC and real-time service registrations; 5043 FeatureCapabilitiesRequest; 5026 settings 6/7/8 (Explore omits it too); 5030 HOST_DID_ENTER_FOREGROUND; 5033/5035/5049; every 5044 answer to a watch protobuf request, including the cloud HTTP proxy; the 255/19 upload (5005/5003/5004); weather 5011/5012.
+- Deliberately not sent (each is on the allowed-differences list): info page 5; NFC and real-time service registrations; 5043 FeatureCapabilitiesRequest; app-initiated 5043 protobuf requests on Smart field 21 (music) and field 42 (RealtimeSettings: settings screens, a later companion duty) together with the watch's ACK/5044 replies to them; 5026 settings 6/7/8 (Explore omits it too); 5030 HOST_DID_ENTER_FOREGROUND; 5033/5035/5049; every 5044 answer to a watch protobuf request, including the cloud HTTP proxy; the 255/19 upload (5005/5003/5004); weather 5011/5012.
 
 #### 4. Sync cycle and safety (`client/sync.rs`)
 - Trigger: a watch 5037, or `StartSync`, which sends 5043 with `Smart.core(13){1{1=0}}` (header `request_id, offset 0, total 6, chunk 6`; request ids count from 0) and then waits for the watch's 5037 [seen: CAP-1 t=62.56–62.71]. No 5037 within 30 s → `Anomaly(SyncNotGranted)`, back to `Ready`, no listing.
