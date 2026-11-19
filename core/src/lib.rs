@@ -10,6 +10,7 @@ pub mod cobs;
 pub mod crc;
 pub mod derive;
 pub mod describe;
+pub mod devices;
 pub mod fit;
 pub mod gfdi;
 pub mod link;
