@@ -12,6 +12,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends build-essential
 WORKDIR /src
 COPY Cargo.toml Cargo.lock ./
 COPY core ./core
+COPY ffi ./ffi
 COPY server ./server
 COPY tools ./tools
 COPY --from=web /src/web/dist ./web/dist
