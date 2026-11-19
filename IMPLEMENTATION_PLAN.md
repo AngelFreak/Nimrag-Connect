@@ -28,9 +28,9 @@ The finished product: an Android app that pairs with the Instinct 2 without Garm
 | | 2f | Further companion duties, one at a time, ported from Gadgetbridge where it has them: GPS assist (setting, the only Garmin call), weather, notifications, music, find my phone | Not Started |
 | | 2g | Garmin Connect too, for owners who want both: **Alongside** (phone side, both apps share the watch, Nimrag copies, Connect archives) now; **Forward** (server uploads activities to Garmin Connect), approved, after 3a | Alongside: built, live test pending; Forward: Not Started |
 | | Gate 2 | A week of normal wear: no manual steps, no lost or duplicated files; counts and hashes against a USB copy | — |
-| 3 Web | 3a | JSON API, web login (password + optional passkey), device tokens created in the web UI, generated TS types | In Progress |
-| | 3b | Web scaffold: Vite/React/TS, TanStack Query, design system, PWA, embedded in the server binary, Docker image | In Progress |
-| | 3c–3m | Pages 1–11 of the brief (Today … Desktop extras) | Not Started |
+| 3 Web | 3a | JSON API, web login (password + optional passkey), device tokens created in the web UI, generated TS types | Done (7eb0ea7; passkeys later) |
+| | 3b | Web scaffold: Vite/React/TS, TanStack Query, design system, PWA, embedded in the server binary, Docker image | Done (7bf05e6; Docker build untested) |
+| | 3c–3m | Pages 1–11 of the brief (Today … Desktop extras) | In Progress (3c–3l building in parallel; 3m after) |
 | | 3n | Android shell: web view with native bottom bar, offline via PWA cache | Not Started |
 | | Gate 3 | Every page from real data, "unavailable" shown correctly, accessibility check | — |
 | 4 Writing + ops | 4a | FIT encoder + workout builder, sent to the watch via the phone (encoder and upload path ported from Gadgetbridge) | Not Started |
