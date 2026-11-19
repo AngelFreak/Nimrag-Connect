@@ -1,0 +1,44 @@
+# Architecture
+
+Current state at the end of phase 0 work, so far.
+
+## Layout
+
+| Path | What | State |
+| --- | --- | --- |
+| `core/` | `nimrag-core`: sans-IO protocol and capture decoding | phase 0 decode path done |
+| `tools/decode/` | `nimrag-decode`: CLI over `core` | done for snoop logs, stdin and TCP |
+| `tools/proto-recover/` | recovers `.proto` schemas from the app's compiled descriptors | done |
+| `docs/protocol/` | protocol map (`PROTOCOL.md`, CSV tables, `proto/`, `HOOKS.md`, `OPEN-QUESTIONS.md`, `PROVENANCE.md`) | done for static analysis + CAP-1 |
+| `server/`, `web/`, `android/` | phases 1–3 | not started |
+| `private/` | APKs, decompiled sources, raw captures, notes (git-ignored) | local only |
+
+## `core` modules
+
+All of them are sans-IO: bytes in, values and events out. None of them touches Bluetooth or the network.
+
+| Module | Responsibility |
+| --- | --- |
+| `crc` | CRC-16/ARC, used by GFDI and FIT |
+| `cobs` | COBS encode/decode and a streaming frame splitter |
+| `gfdi` | GFDI message parse/encode (plain and compact transaction ids), response body, message names |
+| `multilink` | multi-link control frames (handle 0), service ids, request builders |
+| `mlr` | MLR 2-byte header, receive window (in-order, duplicate and gap detection) |
+| `capture` | btsnoop (file and stream), HCI ACL → L2CAP reassembly, ATT PDUs, UUIDs |
+| `link` | `LinkDecoder`: ATT values → multi-link / MLR / COBS / GFDI events; reassembles downloads and parses the directory |
+| `describe` | readable summaries of payloads, Garmin time, schema-less protobuf dump |
+
+The phase 2 protocol state machine (our own client) will sit next to `link` and reuse the same codecs. The decoder and the client share one implementation of each layer.
+
+## Decisions
+
+| Decision | Reason |
+| --- | --- |
+| No dependencies in `core` or `tools/decode` (std only) | small attack surface, simple builds for Android later; the formats involved are small and fully specified |
+| Hand-written CLI argument parsing | four flags; a dependency isn't worth it |
+| Real captures stay in `private/captures/`; tests replay them when present | captures contain personal data (unit id, MACs, notification text, cloud responses). A synthetic session built in the test, with fake ids, is the committed fixture. |
+| Unit ids, identity addresses and client ids are never printed by the decoder | so decoder output can be pasted into issues |
+| Gadgetbridge used as documentation only | see `LICENSING.md` |
+| Rust toolchain: stable 1.100 via rustup | `rust-version = 1.80` minimum in the workspace |
+
+Library choices for phases 1–3 (axum, sqlx, React, uPlot, MapLibre, ts-rs, UniFFI, FIT decoder) have not been evaluated yet. They will be recorded here when each phase starts.
