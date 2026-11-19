@@ -6,11 +6,11 @@ Each entry lists what is unknown, whether our client needs the answer to pair, l
 
 | Id | Question | Blocking? | How to settle |
 | --- | --- | --- | --- |
-| Q-MLR-1 | MLR window size, ACK policy (after how many packets or how long), retransmit timer and backoff, maximum retries | **yes**, for a robust client; the bit layout is already known | Native analysis of `libreliable-ml.so` (running). Then a phase 2 test: deliberately withhold ACKs and measure the watch's retransmit timing in a capture. |
-| Q-MLR-2 | Do ACK-only packets carry a meaningful seq? Is there a reset or resync packet? What happens when seq wraps past 63? | **yes** | Native analysis, plus a long capture: a big file over 64 packets. CAP-1 had no wrap. |
+| Q-MLR-1 | Does the **watch** side use the same MLR core as the app's library (window, 10 ms ACK, 2 s minimum timeout)? The app side is now known statically (PROTOCOL §1.4). | no; our client follows the app's parameters | Phase 2 test: withhold ACKs and measure the watch's retransmit timing in a capture. |
+| Q-MLR-2 | How the watch handles a seq gap and wraparound in practice. Statically: go-back-N, ACK-only packets have seq 0, no reset packet. | no | A capture with radio loss or a large file (> 64 packets) |
 | Q-MLR-3 | Can a client register GFDI with mode 0 (no MLR) and get plain-handle traffic? This would simplify our client. | no (MLR is understood) | Phase 2 test: register mode 0 and check the response flags and traffic. |
 | Q-ML-1 | Meaning of close-all response status 1 (seen in CAP-1 for both apps) | no | Phase 2 test: send close-all right after a fresh connect and see whether the status changes. |
-| Q-ML-2 | Does the watch tie anything to the u64 client id? Connect uses 1, Explore a random value. Would our client clash with Connect if both used 1? | **yes**, while Connect is still installed | Phase 2 test with our own client id; with the official app removed it no longer matters. |
+| Q-ML-2 | Does the watch tie anything to the u64 client id across characteristic pairs? CAP-2 shows Connect using id 1 on two pairs in turn, with per-pair handles. Would our client clash with Connect if both used 1 at the same time? | **yes**, while Connect is still installed | Phase 2 test with our own client id; with the official app removed it no longer matters. |
 | Q-ML-3 | What do the `flags` bits other than bit 0 and the `extra` byte in a register response mean? | no | More captures and native analysis |
 
 ## GFDI
@@ -40,7 +40,7 @@ Each entry lists what is unknown, whether our client needs the answer to pair, l
 | Q-SYNC-3 | Behaviour if a file is never archived: is it listed again (filter 3)? Is there a limit? | no | Phase 2 test |
 | Q-SYNC-4 | Meaning of 5002 `flags = 0x01` and the 5054 compressed format; 5054 has never been seen | no | APK `qv7` (compressed parser) plus a capture of a large file |
 | Q-SYNC-5 | Contents of FIT sub-types 38, 58, 70, 72 and 74 (Gadgetbridge names: SCORE?, DEVICE_58, HSA, FBT_BACKUP, FBT_PTD_BACKUP) | no; phase 1 parsers decide | Decode the extracted files with the FIT decoder (phase 1). CAP-1 already holds two 128/58 files. |
-| Q-SYNC-6 | Behaviour of a large file (activity, sleep) over 4000 bytes: chunk size and whether an MLR window limit applies | **yes** | Capture: sync after an activity and after a night |
+| Q-SYNC-6 | Chunk size of files over `max_packet` (4000): CAP-2 has a 5157-byte activity in several 5004 chunks, all decoded; the exact rule for chunk length is not yet derived | no | Measure chunk sizes in CAP-2 and the overnight capture |
 
 ## Companion duties
 
@@ -56,6 +56,6 @@ Each entry lists what is unknown, whether our client needs the answer to pair, l
 | --- | --- |
 | Reconnect and normal sync | **done** (CAP-1) |
 | Fresh pairing | needs the owner (Q-PAIR-1) |
-| Sync after an activity | needs the owner to record an activity |
+| Sync after an activity | **done** (CAP-2) |
 | Sync after a night | wear the watch overnight, sync next morning |
 | Settings change | change a watch setting in the app (Q-GFDI-4) |

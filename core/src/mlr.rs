@@ -11,7 +11,9 @@
 //! bits  5..0  : seq  = this packet's sequence number (mod 64)
 //! ```
 //!
-//! A 2-byte packet is a pure acknowledgement and carries no data.
+//! A 2-byte packet is a pure acknowledgement (its seq field is 0) and
+//! carries no data. Delivery is go-back-N over a 64-number space: the
+//! receiver accepts only the next expected seq and drops everything else.
 //! Observed in capture 2026-11-19 (see docs/protocol/PROTOCOL.md); the bit
 //! layout is cross-checked against the native library analysis.
 
@@ -56,8 +58,10 @@ pub enum Receive {
     Accept,
     /// Already delivered (a retransmission): drop.
     Duplicate,
-    /// Sequence number ahead of the next expected one: data was lost.
-    Gap { expected: u8 },
+    /// Ahead of the next expected number (an earlier packet was lost). The
+    /// receiver is go-back-N: it drops this packet and waits for the
+    /// sender's retransmission, so the data must not be delivered.
+    OutOfOrder { expected: u8 },
 }
 
 /// Per-direction in-order receive tracker (sequence numbers mod 64).
@@ -75,11 +79,6 @@ impl ReceiveWindow {
         self.next
     }
 
-    /// Accept `seq` as delivered after a gap; the next expected becomes seq + 1.
-    pub fn resync_after(&mut self, seq: u8) {
-        self.next = (seq + 1) & 0x3F;
-    }
-
     pub fn offer(&mut self, seq: u8) -> Receive {
         let seq = seq & 0x3F;
         if seq == self.next {
@@ -92,7 +91,7 @@ impl ReceiveWindow {
         if behind <= 32 {
             Receive::Duplicate
         } else {
-            Receive::Gap {
+            Receive::OutOfOrder {
                 expected: self.next,
             }
         }
@@ -158,6 +157,6 @@ mod tests {
         assert_eq!(w.next_expected(), 0);
         assert_eq!(w.offer(63), Receive::Duplicate);
         assert_eq!(w.offer(0), Receive::Accept);
-        assert_eq!(w.offer(5), Receive::Gap { expected: 1 });
+        assert_eq!(w.offer(5), Receive::OutOfOrder { expected: 1 });
     }
 }

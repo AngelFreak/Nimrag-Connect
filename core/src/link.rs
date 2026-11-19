@@ -14,6 +14,16 @@ use crate::gfdi::{Message, Status};
 use crate::mlr::{self, Receive, ReceiveWindow};
 use crate::multilink::{self, Control};
 
+/// One multi-link session: a client id on one characteristic pair. The
+/// watch keeps handles per characteristic pair, and the same app can use the
+/// same client id on two pairs (Connect does after reconnecting), so both
+/// parts are needed. `channel` is the ATT handle of the pair's notify value.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct Link {
+    pub client: u64,
+    pub channel: u16,
+}
+
 /// A decoded protocol event.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Event {
@@ -28,49 +38,50 @@ pub enum Event {
     },
     InfoPage {
         direction: Direction,
-        client: u64,
+        client: Link,
         page: InfoPage,
     },
     /// Bytes for a registered non-GFDI service (e.g. keep-alive).
     ServiceData {
         direction: Direction,
-        client: u64,
+        client: Link,
         service: u16,
         data: Vec<u8>,
     },
     Gfdi {
         direction: Direction,
-        client: u64,
+        client: Link,
         message: Message,
     },
     GfdiError {
         direction: Direction,
-        client: u64,
+        client: Link,
         error: String,
         frame: Vec<u8>,
     },
     MlrDuplicate {
         direction: Direction,
-        client: u64,
+        client: Link,
         handle: u8,
         seq: u8,
     },
-    MlrGap {
+    /// Packet ahead of the expected seq; dropped as the real receiver does.
+    MlrOutOfOrder {
         direction: Direction,
-        client: u64,
+        client: Link,
         handle: u8,
         seq: u8,
         expected: u8,
     },
     FileDownloaded {
-        client: u64,
+        client: Link,
         index: u16,
         entry: Option<DirEntry>,
         data: Vec<u8>,
         crc_ok: bool,
     },
     Directory {
-        client: u64,
+        client: Link,
         entries: Vec<DirEntry>,
     },
     /// Client characteristic configuration write (enable notify/indicate) on
@@ -138,8 +149,12 @@ struct ClientState {
 /// The decoder. Feed it `(direction, Att)` pairs in capture order.
 #[derive(Debug, Default)]
 pub struct LinkDecoder {
-    att_client: HashMap<u16, u64>,
-    clients: HashMap<u64, ClientState>,
+    /// ATT handle (notify or write) -> session it belongs to.
+    att_link: HashMap<u16, Link>,
+    /// Write handles that sent a control request whose response has not been
+    /// seen yet, by client id; paired with the notify handle of the response.
+    pending_write: HashMap<u64, u16>,
+    clients: HashMap<Link, ClientState>,
 }
 
 impl LinkDecoder {
@@ -166,7 +181,7 @@ impl LinkDecoder {
         if value[0] == 0 {
             return self.control(direction, att_handle, value);
         }
-        let Some(&client) = self.att_client.get(&att_handle) else {
+        let Some(&client) = self.att_link.get(&att_handle) else {
             if direction == Direction::Sent && value.len() == 2 && value[1] == 0 && value[0] <= 3 {
                 return vec![Event::DescriptorWrite {
                     att_handle,
@@ -207,23 +222,13 @@ impl LinkDecoder {
                     handle: h.handle,
                     seq: h.seq,
                 }],
-                Receive::Gap { expected } => {
-                    // Resynchronise on the packet we have and report the loss.
-                    let st = self.clients.get_mut(&client).unwrap();
-                    st.windows
-                        .get_mut(&(h.handle, direction))
-                        .unwrap()
-                        .resync_after(h.seq);
-                    let mut ev = vec![Event::MlrGap {
-                        direction,
-                        client,
-                        handle: h.handle,
-                        seq: h.seq,
-                        expected,
-                    }];
-                    ev.extend(self.service_bytes(direction, client, service, data));
-                    ev
-                }
+                Receive::OutOfOrder { expected } => vec![Event::MlrOutOfOrder {
+                    direction,
+                    client,
+                    handle: h.handle,
+                    seq: h.seq,
+                    expected,
+                }],
             }
         } else {
             let Some(&service) = state.plain.get(&value[0]) else {
@@ -259,38 +264,56 @@ impl LinkDecoder {
             Control::Unparsed { .. } => None,
         };
         if let Some(c) = client {
-            self.att_client.insert(att_handle, c);
-            let st = self.clients.entry(c).or_default();
-            match &control {
-                Control::RegisterResponse {
-                    service,
-                    status: 0,
-                    handle: Some(h),
-                    flags,
-                    ..
-                } => {
-                    if flags.unwrap_or(0) & 1 != 0 {
-                        let mh = h & 0x7;
-                        st.reliable.insert(mh, *service);
-                        st.windows.retain(|(hh, _), _| *hh != mh);
-                    } else {
-                        st.plain.insert(*h, *service);
+            if direction == Direction::Sent {
+                if !self.att_link.contains_key(&att_handle) {
+                    self.pending_write.insert(c, att_handle);
+                }
+            } else {
+                let link = Link {
+                    client: c,
+                    channel: att_handle,
+                };
+                self.att_link.insert(att_handle, link);
+                if let Some(w) = self.pending_write.remove(&c) {
+                    self.att_link.insert(w, link);
+                }
+                let st = self.clients.entry(link).or_default();
+                match &control {
+                    Control::RegisterResponse {
+                        service,
+                        status: 0,
+                        handle: Some(h),
+                        flags,
+                        ..
+                    } => {
+                        if flags.unwrap_or(0) & 1 != 0 {
+                            let mh = h & 0x7;
+                            st.reliable.insert(mh, *service);
+                            st.windows.retain(|(hh, _), _| *hh != mh);
+                        } else {
+                            st.plain.insert(*h, *service);
+                        }
+                        st.cobs.remove(&(*service, Direction::Sent));
+                        st.cobs.remove(&(*service, Direction::Received));
                     }
-                    st.cobs.remove(&(*service, Direction::Sent));
-                    st.cobs.remove(&(*service, Direction::Received));
+                    Control::CloseHandleResponse { handle, .. }
+                    | Control::InvalidHandle { handle, .. } => {
+                        // Reliable handles carry bit 7 (0x80 | mlr handle); a
+                        // plain handle must not touch the MLR map.
+                        if handle & 0x80 != 0 {
+                            st.reliable.remove(&(handle & 0x7));
+                        } else {
+                            st.plain.remove(handle);
+                        }
+                    }
+                    Control::CloseAllResponse { .. } => {
+                        st.plain.clear();
+                        st.reliable.clear();
+                        st.windows.clear();
+                        st.cobs.clear();
+                    }
+                    _ => {}
                 }
-                Control::CloseHandleResponse { handle, .. }
-                | Control::InvalidHandle { handle, .. } => {
-                    st.plain.remove(handle);
-                    st.reliable.remove(&(handle & 0x7));
-                }
-                Control::CloseAllResponse { .. } => {
-                    st.plain.clear();
-                    st.reliable.clear();
-                    st.windows.clear();
-                    st.cobs.clear();
-                }
-                _ => {}
             }
         }
         vec![Event::Control {
@@ -303,7 +326,7 @@ impl LinkDecoder {
     fn service_bytes(
         &mut self,
         direction: Direction,
-        client: u64,
+        client: Link,
         service: u16,
         data: &[u8],
     ) -> Vec<Event> {
@@ -361,7 +384,7 @@ impl LinkDecoder {
         }
     }
 
-    fn track_files(&mut self, direction: Direction, client: u64, m: &Message) -> Vec<Event> {
+    fn track_files(&mut self, direction: Direction, client: Link, m: &Message) -> Vec<Event> {
         let st = self.clients.get_mut(&client).unwrap();
         match (direction, m.id) {
             (Direction::Sent, 5002) if m.payload.len() >= 2 => {
@@ -584,7 +607,10 @@ mod tests {
         );
         assert!(ev.contains(&Event::InfoPage {
             direction: Direction::Received,
-            client: 1,
+            client: Link {
+                client: 1,
+                channel: N
+            },
             page: InfoPage::ProductInfo {
                 product: 3888,
                 firmware: 1722
@@ -648,6 +674,147 @@ mod tests {
                 ..
             }
         )));
+    }
+
+    #[test]
+    fn go_back_n_after_loss_yields_intact_message() {
+        // Packet 1 is lost; the watch sends 2 (dropped by the receiver as out
+        // of order), times out, and resends 1, 2, 3 (go-back-N).
+        let mut dec = LinkDecoder::new();
+        let wire = encode_frame(&Message::new(5024, (0..50).collect()).encode());
+        let chunks: Vec<&[u8]> = wire.chunks(18).collect();
+        assert!(chunks.len() >= 4);
+        let pkt = |seq: usize| {
+            notify(mlr::build(
+                mlr::Header {
+                    handle: 7,
+                    ack: 0,
+                    seq: seq as u8,
+                },
+                chunks[seq],
+            ))
+        };
+        let mut items = vec![
+            write(multilink::register_request(1, 1, 2)),
+            notify(register_resp(1, 0x87, 1)),
+            pkt(0),
+            pkt(2),
+        ];
+        for s in 1..chunks.len() {
+            items.push(pkt(s));
+        }
+        let ev = run(&mut dec, items);
+        assert_eq!(gfdi_msgs(&ev), vec![(Direction::Received, 5024)]);
+        assert!(ev.iter().any(|e| matches!(
+            e,
+            Event::MlrOutOfOrder {
+                seq: 2,
+                expected: 1,
+                ..
+            }
+        )));
+        assert!(!ev.iter().any(|e| matches!(e, Event::GfdiError { .. })));
+    }
+
+    #[test]
+    fn same_client_id_on_two_characteristic_pairs_keeps_separate_state() {
+        // Connect reconnects on a second pair (notify 0x1D / write 0x20) with
+        // client id 1 while the first pair (0x18 / 0x1B) is still registered.
+        let mut dec = LinkDecoder::new();
+        let w2 = |v: Vec<u8>| {
+            (
+                Direction::Sent,
+                Att::Write {
+                    handle: 0x20,
+                    value: v,
+                    command: true,
+                },
+            )
+        };
+        let n2 = |v: Vec<u8>| {
+            (
+                Direction::Received,
+                Att::Notify {
+                    handle: 0x1D,
+                    value: v,
+                    indication: false,
+                },
+            )
+        };
+        let msg = |id: u16, h: u8| -> Vec<u8> {
+            let wire = encode_frame(&Message::new(id, vec![1, 2, 3]).encode());
+            mlr::build(
+                mlr::Header {
+                    handle: h,
+                    ack: 0,
+                    seq: 0,
+                },
+                &wire,
+            )
+        };
+        let items = vec![
+            write(multilink::register_request(1, 1, 2)),
+            notify(register_resp(1, 0x82, 1)),
+            w2(multilink::close_all_request(1)),
+            n2({
+                let mut v = vec![0, 6];
+                v.extend_from_slice(&1u64.to_le_bytes());
+                v.extend_from_slice(&[0, 0, 1]);
+                v
+            }),
+            w2(multilink::register_request(1, 1, 2)),
+            n2(register_resp(1, 0x86, 1)),
+            n2(msg(5030, 6)),
+            notify(msg(5031, 2)),
+        ];
+        let ev = run(&mut dec, items);
+        assert!(
+            !ev.iter().any(|e| matches!(e, Event::Unknown { .. })),
+            "{ev:?}"
+        );
+        let got: Vec<(u16, u16)> = ev
+            .iter()
+            .filter_map(|e| match e {
+                Event::Gfdi {
+                    client, message, ..
+                } => Some((client.channel, message.id)),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(got, vec![(0x1D, 5030), (N, 5031)]);
+    }
+
+    #[test]
+    fn closing_a_plain_handle_does_not_unregister_a_reliable_one() {
+        // Seen in a real capture: closing real-time handle 70 (0x46) must not
+        // drop reliable GFDI handle 6 (0x86), although 70 & 7 == 6.
+        let mut dec = LinkDecoder::new();
+        let close_resp = {
+            let mut v = vec![0, 3];
+            v.extend_from_slice(&1u64.to_le_bytes());
+            v.extend_from_slice(&20u16.to_le_bytes());
+            v.extend_from_slice(&[0x46, 0]);
+            v
+        };
+        let wire = encode_frame(&Message::new(5030, vec![0, 0]).encode());
+        let ev = run(
+            &mut dec,
+            vec![
+                write(multilink::register_request(1, 1, 2)),
+                notify(register_resp(1, 0x86, 1)),
+                notify(register_resp(20, 0x46, 0)),
+                notify(close_resp),
+                notify(mlr::build(
+                    mlr::Header {
+                        handle: 6,
+                        ack: 0,
+                        seq: 0,
+                    },
+                    &wire,
+                )),
+            ],
+        );
+        assert_eq!(gfdi_msgs(&ev), vec![(Direction::Received, 5030)]);
     }
 
     #[test]

@@ -10,7 +10,7 @@ use std::process::ExitCode;
 
 use nimrag_core::capture::{self, Direction, L2capReassembler, Record, ATT_CID};
 use nimrag_core::describe::{describe, file_type_name, hex};
-use nimrag_core::link::{Event, InfoPage, LinkDecoder};
+use nimrag_core::link::{Event, InfoPage, Link, LinkDecoder};
 use nimrag_core::multilink::{service_name, Control};
 
 const USAGE: &str = "\
@@ -63,6 +63,11 @@ fn parse_args() -> Result<Options, String> {
 struct ClientLabels(HashMap<u64, String>);
 
 impl ClientLabels {
+    /// Label for a session: client label plus the notify handle of its pair.
+    fn link(&mut self, l: Link) -> String {
+        format!("{}@{:02x}", self.get(l.client), l.channel)
+    }
+
     fn get(&mut self, id: u64) -> String {
         let n = self.0.len();
         self.0
@@ -140,7 +145,7 @@ impl Decoder {
                 Some(format!(
                     "{} [{}] {}",
                     arrow(direction),
-                    self.labels.get(client),
+                    self.labels.link(client),
                     describe(&message)
                 ))
             }
@@ -154,7 +159,7 @@ impl Decoder {
                 Some(format!(
                     "{} [{}] GFDI ERROR {error} frame={}",
                     arrow(direction),
-                    self.labels.get(client),
+                    self.labels.link(client),
                     hex(&frame)
                 ))
             }
@@ -200,7 +205,7 @@ impl Decoder {
                 }
                 Some(format!(
                     "== [{}] file index={index} ({kind}) {} bytes, running CRC {}",
-                    self.labels.get(client),
+                    self.labels.link(client),
                     data.len(),
                     if crc_ok { "ok" } else { "MISMATCH" }
                 ))
@@ -208,7 +213,7 @@ impl Decoder {
             Event::Directory { client, entries } => {
                 let mut s = format!(
                     "== [{}] directory: {} entries",
-                    self.labels.get(client),
+                    self.labels.link(client),
                     entries.len()
                 );
                 for e in entries {
@@ -248,7 +253,7 @@ impl Decoder {
             } => Some(format!(
                 "{} [{}] ML info {}",
                 arrow(direction),
-                self.labels.get(client),
+                self.labels.link(client),
                 describe_page(&page)
             )),
             Event::ServiceData {
@@ -259,7 +264,7 @@ impl Decoder {
             } => Some(format!(
                 "{} [{}] {} {}",
                 arrow(direction),
-                self.labels.get(client),
+                self.labels.link(client),
                 service_name(service),
                 hex(&data)
             )),
@@ -271,20 +276,21 @@ impl Decoder {
             } => Some(format!(
                 "{} [{}] MLR h{handle} retransmission seq={seq}",
                 arrow(direction),
-                self.labels.get(client)
+                self.labels.link(client)
             )),
-            Event::MlrGap {
+            Event::MlrOutOfOrder {
                 direction,
                 client,
                 handle,
                 seq,
                 expected,
             } => {
-                self.errors += 1;
+                // Normal after a radio loss: the receiver drops it and the
+                // sender retransmits (go-back-N). Not a decode error.
                 Some(format!(
-                    "{} [{}] MLR h{handle} GAP seq={seq} expected={expected}",
+                    "{} [{}] MLR h{handle} out of order seq={seq} expected={expected} (dropped)",
                     arrow(direction),
-                    self.labels.get(client)
+                    self.labels.link(client)
                 ))
             }
         };

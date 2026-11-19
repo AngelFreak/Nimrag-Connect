@@ -233,7 +233,7 @@ fn synthetic_session_decodes_strictly_and_extracts_the_file() {
         String::from_utf8_lossy(&out.stderr)
     );
     for expected in [
-        "ML register-response GFDI(1) SUCCESS handle=Some(130) reliable=true",
+        "[c1] ML register-response GFDI(1) SUCCESS handle=Some(130) reliable=true",
         "ML info product=3888 firmware=17.22 unit_id=<redacted>",
         "DeviceInformation(5024) protocol=150 product=3888 unit_id=<redacted>",
         "MLR h2 retransmission",

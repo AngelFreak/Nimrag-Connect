@@ -22,6 +22,7 @@ Status: phase 0. The static map is complete and one live capture has been decode
 | --- | --- |
 | APK `cls.method` | Garmin Connect 5.31 (11761), names as produced by jadx 1.5.3 `--deobf`. See `PROVENANCE.md`. |
 | CAP-1 | HCI snoop capture of 2026-11-19 09:41: Bluetooth restart, reconnect, one manual sync and one app-started sync. Raw file kept private; SHA-256 `34d283c5…79e49ae`. Decoded by `tools/decode`. |
+| CAP-2 | HCI snoop capture continuing to 2026-11-19 10:02: Connect and Explore reconnect on new characteristic pairs (about t = 700 s), then a sync after a recorded test activity (activity 128/4, monitoring 128/32, metrics 128/44, 128/58). Raw file kept private; SHA-256 `fc919d19…91417e7f`. |
 | GB `path` | Gadgetbridge at `7257742b`; cross-check only. |
 
 Labels: **seen** means observed in code or capture. **inferred** means reasoned from surrounding evidence. **unknown** means each has an entry in `OPEN-QUESTIONS.md`.
@@ -37,6 +38,7 @@ Labels: **seen** means observed in code or capture. **inferred** means reasoned 
 | Data characteristics | notify `6A4E2810`–`2819`; write = the same UUID with the first `1` replaced by `2` (`2810` → `2820`) | seen | APK `vit.initialize`, `eb00.m39647a` |
 | Choice | the app picks a random notify char from those present. A register status 3 means another client already holds it, and its 16-bit field names the characteristic to retry on. | seen | APK `vit`, `aww` |
 | In CAP-1 | Connect: notify `0x0018` / write `0x001b`. Garmin Explore: `0x002c` / `0x002f`. Same LE link. | seen | CAP-1 |
+| Reconnect | after a reconnect, Connect took a different pair (`0x001d` / `0x0020`) and reused client id 1. Handles are kept per characteristic pair, so a decoder or client must key its state by (pair, client id). | seen | CAP-2 |
 | Write type | write without response (ATT `0x52`); watch → phone uses notifications (`0x1B`) | seen | CAP-1 |
 | MTU | the app requests 515 (`a94`); the phone's stack sent 517 in CAP-1; the watch answers **23** | seen | APK `a94`; CAP-1 |
 | Payload per packet | MTU − 3 − 1 (plain handle) or MTU − 3 − 2 (MLR), so 19 or 18 bytes on this watch | seen | APK `cit.m9423f`, `v84.onMtuChanged`; CAP-1 |
@@ -88,9 +90,31 @@ Every packet on a reliable handle starts with a 2-byte **big-endian** header ins
 | 11–6 | ack: next sequence number expected from the peer (mod 64) |
 | 5–0 | seq: this packet's sequence number (mod 64) |
 
-A 2-byte packet is an acknowledgement only. [seen: CAP-1, for example watch `f0 00`…`f0 03` followed by phone ack `f1 00` (ack = 4); APK `cit.m9423f` (header is 2 bytes); native library: see `OPEN-QUESTIONS.md` Q-MLR-*]
+[seen: CAP-1, for example watch `f0 00`…`f0 03` followed by phone ack `f1 00` (ack = 4); APK `cit.m9423f`; native `libreliable-ml.so` (`mlr_format_*`), checked against the library's own built-in header test vectors]
 
-Window size, ACK timing, retransmission timers and reset behaviour are implemented in native code (`libreliable-ml.so`, JNI `MLRConnectionHelper.mlr*`). That analysis is still running and goes in `notes/mlr.md` → this section. Gadgetbridge's description (window 32, ACK after 5 packets or 20 ms, retransmit after 1 s doubling to 20 s) is an **unverified** hypothesis until then.
+The behaviour below was recovered statically from the native library. Symbols are exported by name: `MLR_reliable_*`, `mlr_format_*`, `mlr_os_*`. Where possible it was cross-checked with CAP-1.
+
+| Aspect | Behaviour | Label |
+| --- | --- | --- |
+| Packet types | two only: DATA (header + payload, always carries the current ack) and ACK-only (2 bytes, seq field 0). There is no NAK, reset, configure or handshake packet at this layer, and no length or CRC. | seen |
+| Start state | both sides start at seq 0 / ack 0 when the handle is registered | seen; CAP-1 consistent |
+| Payload | (ATT_MTU − 3) − 2 bytes, fixed when the connection opens; a packet never spans two blobs. 18 bytes on the Instinct 2 link. | seen; CAP-1 |
+| Sequence space | 64 (6 bits) | seen |
+| Send window | starts at 32, grows by 1 per RTT sample up to 63, halves on each timeout (minimum 1) | seen |
+| Receiving | go-back-N: only the next expected seq is accepted. Out-of-order and duplicate packets are dropped without buffering. | seen |
+| Retransmission | on timeout, resend from the oldest unacknowledged packet, rebuilt with the *current* ack | seen |
+| ACK policy | after 5 received data packets, or 10 ms after the first unacknowledged one; any outgoing data packet carries the ack instead | seen |
+| Timeout | Jacobson/Karels estimate (α 1/8, β 1/4, Karn's rule). Starts at 2000 ms, never below 2000 ms, doubles on each timeout up to 20000 ms. A duplicate ACK-only packet restarts the timer; there is no fast retransmit. On Android it retries every 20 s indefinitely. | seen |
+| Handle check | a reliable handle without bit 7 is rejected; the watch returns `0x80 \| h` (CAP-1: 0x82, 0x83, 0x87) | seen |
+| App driving model | one packet at a time through Java `onSendDataBlobStart`; the next packet waits for `mlrReadyToSend` after each BLE write (one token shared by all handles). Timers are Java `Timer`s that call `mlrExecuteTimer`. | seen |
+
+Compared with Gadgetbridge:
+
+- **Confirmed:** header layout, 64 sequence numbers, MTU − 2 payload, ACK after 5 packets, timeout doubling to 20 s, window halved on timeout, resend everything unacknowledged.
+- **Refuted:** the ACK delay is 10 ms, not 20 ms; the first timeout is 2 s and adaptive, not 1 s; resent packets carry the current ack, not the original one.
+- **Corrected:** 32 is only the starting window.
+
+MLR is optional for a client. Without the native library the app registers GFDI in mode 0 and runs plain multi-link (seen: `kit.mo8947r`). Whether the Instinct 2 accepts mode 0 is Q-MLR-3.
 
 ## 2. Framing (GFDI)
 
@@ -170,7 +194,7 @@ flags: READ 0x80, WRITE 0x40, ERASE 0x20, ARCHIVE 0x10, APPEND 0x08, CRYPTO 0x04
 
 - **P→W 5002:** `u16 index, u32 offset (0), u8 type (1 = new), u16 crc_seed (0), u32 max_size (0 = whole file), u8 flags`. The app sends flags `0x01`, which means compressed data is allowed (inferred). No compressed (5054) data appeared in CAP-1.
 - **Reply body:** `u8 status, u32 size`. Status values: 0 OK, 1 no such index, 2 not readable, 3 not ready (retry after 1 s), 4 invalid request, 5 CRC mismatch, 6 beyond file size. [seen: APK `wtz`]
-- **W→P 5004 FileData:** `u8 flags, u16 crc, u32 offset, data`. The crc is CRC-16/ARC over **all file bytes so far**. The Instinct 2 sent each file in **one** 5004 (up to 1438 bytes here). When a FIT file is complete, the crc is 0x0000, because a FIT file ends with its own CRC.
+- **W→P 5004 FileData:** `u8 flags, u16 crc, u32 offset, data`. The crc is CRC-16/ARC over **all file bytes so far**. The Instinct 2 sent each file in **one** 5004 when it fits under `max_packet`; the 5157-byte activity in CAP-2 came in several chunks. When a FIT file is complete, the crc is 0x0000, because a FIT file ends with its own CRC.
 - **P→W ACK(5004):** `u8 status, u32 bytes_received`. Status 0 = ok (also for a duplicate), 3 = CRC mismatch (abort), 4 = offset mismatch (resend), 2 = abort.
 
 The app never resumes at an offset other than 0, although the fields would allow it. [seen: APK `yw40`; CAP-1]
