@@ -1,0 +1,44 @@
+Nimrag Connect
+Copyright (C) 2026 the Nimrag Connect contributors
+
+This program is free software: you can redistribute it and/or modify it
+under the terms of the GNU Affero General Public License as published by
+the Free Software Foundation, either version 3 of the License, or (at your
+option) any later version. See LICENSE.
+
+This program is distributed in the hope that it will be useful, but
+WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+
+-------------------------------------------------------------------------
+Gadgetbridge
+-------------------------------------------------------------------------
+
+Nimrag Connect ports code and definitions from Gadgetbridge, the free and
+open-source app for wearables that works without the vendors' cloud:
+
+  https://codeberg.org/Freeyourgadget/Gadgetbridge
+  Copyright (C) the Gadgetbridge contributors (see CONTRIBUTORS.rst in the
+  Gadgetbridge repository)
+  Licensed under the GNU Affero General Public License v3 or later.
+
+Ported work is based on Gadgetbridge commit
+7257742b96a30fff0db9e79230435ac2aeb39f57 (2026-11-18). Every ported file
+names its Gadgetbridge source file(s) and keeps the original copyright
+lines in its header, and docs/PORTED.md lists each one. Gadgetbridge's
+artwork (LICENSE.artwork, CC BY-SA 4.0) is not used.
+
+Thank you to everyone who built Gadgetbridge. Years of careful work on
+Garmin devices made it possible for Nimrag Connect to support wearables
+without decoding every one of them from scratch.
+
+-------------------------------------------------------------------------
+Garmin
+-------------------------------------------------------------------------
+
+Nimrag Connect is an independent project and is not affiliated with,
+endorsed by or supported by Garmin. Garmin, Garmin Connect and Instinct
+are trademarks of Garmin Ltd. or its subsidiaries, used only to describe
+compatibility. The FIT profile tables used for field names are generated
+locally from the user's own copy of the Garmin Connect app and are never
+distributed with this program.

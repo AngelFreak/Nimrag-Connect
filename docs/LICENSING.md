@@ -4,30 +4,27 @@ Hard rule 6 of the build brief: if any Gadgetbridge (AGPL-3.0) code or message
 definitions are ported or copied, including by translation into Rust, the
 component containing them becomes AGPL. This file records which path was taken.
 
-## Path taken: original implementation (no Gadgetbridge code)
+## Path taken: AGPL-3.0-or-later, porting from Gadgetbridge (owner decision, 2026-11-19)
 
-| Component | Status | Basis |
-| --- | --- | --- |
-| `/core` | Original | Written from `docs/protocol/`, which was derived from static analysis of the Garmin Connect app and from our own HCI captures. |
-| `/tools/decode` | Original | Thin CLI over `/core`. |
-| `/tools/proto-recover` | Original | Extracts schemas from the app's compiled protobuf descriptors. |
-| `docs/protocol/proto/*.proto` | Recovered from the Garmin Connect app | Generated mechanically from the app's own descriptors; not taken from Gadgetbridge's `.proto` files. |
+The owner decided to port Gadgetbridge's Garmin wearable work instead of decoding every device from scratch. Following rule 6, the whole project is licensed **AGPL-3.0-or-later** (`LICENSE`, `NOTICE`, `license` in `Cargo.toml`). `/core` is linked into the server and the Android app, so all three are covered.
 
-How Gadgetbridge was used:
+History: until this decision, every module was written without Gadgetbridge code (from `docs/protocol/`, the Garmin Connect app's behaviour and our own captures), with Gadgetbridge read as documentation only at commit `7257742b`. That code stays as it is; it is now simply AGPL like the rest.
 
-- It was read as documentation only, at commit `7257742b` (see `docs/protocol/PROVENANCE.md`).
-- A survey of it was written in our own words and kept in the private notes. It is not in the repository.
-- Every protocol fact we implement was checked against the Garmin app or a capture before it went into code. Where Gadgetbridge and the app disagree, `docs/protocol/PROTOCOL.md` says so and we follow the app or the capture.
-- Generic algorithms are implemented from their public definitions: CRC-16/ARC, COBS, the btsnoop format, Bluetooth HCI, L2CAP and ATT.
+### Rules for ported code
 
-Rules for future work:
+1. **Source and attribution.** Port from Gadgetbridge commit `7257742b96a30fff0db9e79230435ac2aeb39f57` unless a later commit is recorded. Each ported Rust or Kotlin file starts with a header naming the Gadgetbridge source file(s) and the commit, and keeps the original copyright lines. `docs/PORTED.md` lists every ported file with its source.
+2. **Evidence still applies (hard rule 5).** Ported behaviour is labelled *inferred (Gadgetbridge)* in `docs/protocol/` until a capture or a test on a real device shows it. Where Gadgetbridge and our captures disagree, the capture wins and `PROTOCOL.md` says so. Devices we don't own are listed as *supported per Gadgetbridge, not verified*.
+3. **No Garmin profile data.** Gadgetbridge's generated FIT message and field tables are derived from Garmin's FIT SDK profile. The owner's earlier decision stands: profile tables are generated locally and never committed (see below). Port the code that uses them, not the tables.
+4. **No artwork.** Gadgetbridge's artwork (`LICENSE.artwork`, CC BY-SA 4.0) is not copied.
+5. **Network use.** AGPL §13: users who interact with the server over a network must be offered its source. The web interface links to the source repository and the running version (phase 3).
+6. **Credit.** Gadgetbridge is credited and thanked in `README.md` and `NOTICE`.
 
-- Do not copy or translate code from Gadgetbridge into any module listed above.
-- If someone decides to port Gadgetbridge code, put it in a separate, clearly named module and mark it AGPL in `LICENSE` and `NOTICE`. Because `/core` is linked into both the server and the Android app, that decision makes both AGPL. The owner must agree to it first.
+### Recovered from the Garmin Connect app
 
-## Project licence
-
-The owner has not chosen a licence yet. Crates declare `LicenseRef-nimrag-pending` until then.
+| Component | Basis |
+| --- | --- |
+| `docs/protocol/proto/*.proto` | Generated mechanically from the app's own descriptors by `tools/proto-recover`, not taken from Gadgetbridge's `.proto` files. |
+| `docs/protocol/*.md`, `*.csv` | Our own notes from static analysis of the app and our own captures. |
 
 ## Garmin material
 

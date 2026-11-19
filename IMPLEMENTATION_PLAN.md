@@ -20,24 +20,27 @@ The finished product: an Android app that pairs with the Instinct 2 without Garm
 | | 1e | Garmin export importer | Complete (FIT only) |
 | | Gate 1 | USB copy uploads, parses, reparses identically | **Passed** 2026-11-19 |
 | 2 Android sync | 2a | sans-IO protocol client + capture replay | Complete |
+| | 2p | Port Gadgetbridge's Garmin work: survey, device catalogue (≈197 models), protocol diff against our captures | Not Started |
 | | 2b | FFI crate (UniFFI) + Android Gradle project | Not Started (brief ready) |
 | | 2c | Foreground service, BLE link, pairing without Garmin Connect | Not Started (needs owner) |
 | | 2d | Phone storage, archive only after safe storage, upload queue | Not Started |
 | | 2e | Time duty + native Devices and sync screen + sync log | Not Started |
-| | 2f | Further companion duties, one at a time: GPS assist (setting, the only Garmin call), weather, notifications | Not Started |
+| | 2f | Further companion duties, one at a time, ported from Gadgetbridge where it has them: GPS assist (setting, the only Garmin call), weather, notifications, music, find my phone | Not Started |
 | | Gate 2 | A week of normal wear: no manual steps, no lost or duplicated files; counts and hashes against a USB copy | — |
 | 3 Web | 3a | JSON API, web login (password + optional passkey), device tokens created in the web UI, generated TS types | Not Started |
 | | 3b | Web scaffold: Vite/React/TS, TanStack Query, design system, PWA, embedded in the server binary, Docker image | Not Started |
 | | 3c–3m | Pages 1–11 of the brief (Today … Desktop extras) | Not Started |
 | | 3n | Android shell: web view with native bottom bar, offline via PWA cache | Not Started |
 | | Gate 3 | Every page from real data, "unavailable" shown correctly, accessibility check | — |
-| 4 Writing + ops | 4a | FIT encoder + workout builder, sent to the watch via the phone | Not Started (needs upload-to-watch protocol evidence) |
+| 4 Writing + ops | 4a | FIT encoder + workout builder, sent to the watch via the phone (encoder and upload path ported from Gadgetbridge) | Not Started |
 | | 4b | Scheduled backups + documented restore test | Not Started |
 | | 4c | Export: originals + CSV per data type | Not Started |
 | | 4d | Runbook: install, upgrade, restore, re-pair, firmware over USB | Not Started |
 | | Gate 4 | Final report | — |
 
 Every phase ends with an update to `docs/ARCHITECTURE.md` and a gate report (engineering standards).
+
+**Licence and reuse (owner decision, 2026-11-19):** Nimrag Connect is AGPL-3.0-or-later and ports Gadgetbridge's Garmin work instead of decoding every device from scratch. Rules: `docs/LICENSING.md` (attribution header per file, `docs/PORTED.md` register, ported behaviour labelled *inferred (Gadgetbridge)* until verified on a device, no Garmin FIT profile tables, no artwork).
 
 # Phase 0: protocol (static map + captures)
 
@@ -95,15 +98,15 @@ Workflow as described at the top of this file.
 - VO2 max may be shown as max MET × 3.5, labelled as derived from the watch's maximal_met (not Garmin's published value).
 - Oracle check against Garmin Connect: approved and done once, read-only (results: docs/protocol/OPEN-QUESTIONS.md Q-FIT-1/2; values in private/oracle/).
 - JSON wellness from the export: import approved in principle; the parser waits for a real export (formats must be seen, not guessed).
-- Project licence: still open.
+- Project licence: AGPL-3.0-or-later, porting from Gadgetbridge (decided later the same day; see docs/LICENSING.md).
 
 # Phase 2: Android sync
 
 ## Where work stopped (2026-11-19, owner paused)
 - Done and committed: phase 0 decoding, phase 1 (stages 1a–1e, gate 1 passed on a USB copy), stage 2a (protocol client, replays all five captured Connect sessions).
-- Next: stage 2b as defined below (FFI crate + Android Gradle project; toolchain already installed). Then 2c, which needs the owner: the watch has to be paired with our app instead of Garmin Connect, so ask first.
+- Next: stage 2p (port Gadgetbridge's Garmin work: survey, device catalogue, protocol diff) and stage 2b (FFI crate + Android Gradle project; toolchain already installed). They touch different paths and can run in parallel. Then 2c, which needs the owner: the watch has to be paired with our app instead of Garmin Connect, so ask first.
 - Still open from phase 0: the night-sync capture (sleep/HRV/SpO2 on real data) and the fresh-pairing capture (needs the owner).
-- Owner decisions still open: project licence; committing a scrubbed real transcript as a fixture; whether to import non-FIT export JSON once a real export exists.
+- Owner decisions still open: committing a scrubbed real transcript as a fixture; whether to import non-FIT export JSON once a real export exists.
 - Ignore the Samsung device on adb (not ours); the Pixel 9a is the phone.
 
 Roles as phase 1. Order follows the brief: the core state machine passes the phase 0 captures on the desktop before anything runs on the phone.
@@ -222,6 +225,17 @@ Labels as in PROTOCOL.md: **seen** / **inferred** / **unknown**; **ours** = a fr
 - **Replay cannot pass empty (S3).** If `private/captures` exists, all three captures must load, sessions per capture must be 1/2/2, files replayed > 0, and a client `Anomaly` fails the session.
 - **Nits accepted:** input applied before timers; caller inputs never extend the reply deadline; empty 5004 chunks are not progress; saturating arithmetic on caller times; a duplicate ACK-only restarts the retransmit timer (PROTOCOL §1.4); `link.rs` tracks a 5002 as leniently as before; `FileType` lives in `messages` (re-exported by `client`). Kept as is, to check live in 2c: a stray 5004 gets ACK status 2.
 
+## Stage 2p: port Gadgetbridge's Garmin work
+Base: Gadgetbridge commit `7257742b` (local copy in `private/re/gadgetbridge`, git-ignored). Rules: `docs/LICENSING.md`.
+**Goal**:
+1. Survey (reviewer): map Gadgetbridge's Garmin modules (`devices/garmin/*` coordinators and capabilities; `service/devices/garmin/*`: communicator, messages, file transfer, agps, http, notifications, weather, fit/workouts, protobuf handlers) to our components, and list for each: port / already covered by our own code / skip (and why). Output: a port list in this stage.
+2. Device catalogue in `core/src/devices/` (ported): Garmin product ids → model name, capability flags and per-model quirks for the ≈197 Gadgetbridge models, so the app recognises other wearables. Each model marked *supported per Gadgetbridge, not verified* until someone syncs one.
+3. Protocol diff: compare Gadgetbridge's message handling with `docs/protocol/PROTOCOL.md` and our captures; record every disagreement in `PROTOCOL.md` (captures win) and add Gadgetbridge-only knowledge as *inferred (Gadgetbridge)*.
+4. Parser parity: compare Gadgetbridge's FIT import (sleep stages, HRV, stress, body battery, respiration, SpO2, workouts) with our `derive` module; port the interpretation logic we lack, not the generated FIT tables.
+**Success Criteria**: every ported file has the attribution header and a `docs/PORTED.md` row; the catalogue recognises the Instinct 2 (product 3888) exactly as our captures show; the private replay and all tests still pass; nothing from Gadgetbridge's generated FIT profile is committed.
+**Tests**: catalogue lookups (known ids, unknown id → generic Garmin); a parity test per ported parser rule over our real files (private) and synthetic files (committed).
+**Status**: Not Started
+
 ## Stage 2b: Android build of /core (cargo-ndk, UniFFI, Gradle module)
 **Toolchain (installed 2026-11-19, owner approved incl. SDK licences)**: `ANDROID_HOME=~/opt/android-sdk` (cmdline-tools 23.0, checksum-verified; platform-tools 37.0.1, build-tools 37.0.0, platforms/android-37.2, NDK 30.0.16248370), Rust targets aarch64/x86_64-linux-android, cargo-ndk 4.1.2, JDK 25 at ~/opt/rea-engines/jdk25. `cargo ndk -t arm64-v8a -t x86_64 build -p nimrag-core` builds. UniFFI goes in a separate FFI crate so `core` stays std-only.
 **Goal**: `ffi/` crate `nimrag-ffi` (workspace member) exposing `nimrag_core::client` through UniFFI (proc-macros; `core` stays std-only); `android/` Gradle project with `:core` (Android library: generated Kotlin bindings + `.so` for arm64-v8a and x86_64 built by cargo-ndk from Gradle) and a minimal `:app` shell for 2c.
@@ -239,8 +253,8 @@ Labels as in PROTOCOL.md: **seen** / **inferred** / **unknown**; **ours** = a fr
 **Status**: Not Started
 
 ## Stage 2f: further companion duties
-**Goal**: one at a time, each a user setting: GPS assist data (the only allowed Garmin call; off switch), weather, notifications
-**Success Criteria**: each duty verified live on the watch; each has a capture before code where PROTOCOL.md marks it unknown (Q-COMP-1..3, Q-SYNC-2)
+**Goal**: one at a time, each a user setting: GPS assist data (the only allowed Garmin call; off switch), weather, notifications, music control, find my phone. Port Gadgetbridge's implementation of each (`agps`, `NotificationsHandler`, weather, music handlers) instead of decoding from scratch.
+**Success Criteria**: each duty verified live on the watch; where PROTOCOL.md marks it unknown (Q-COMP-1..3, Q-SYNC-2), the ported behaviour is confirmed by a capture before it is marked verified
 **Status**: Not Started
 
 ## Gate 2
@@ -277,7 +291,7 @@ Each page renders from real synced data, shows "unavailable" correctly for missi
 ## Stage 4a: workouts
 **Goal**: workout builder (steps, repeat blocks) saved on the server, encoded with a new `fit::encode` (typed inputs; BaseType size/invalid/to_byte), sent to the watch through the phone
 **Success Criteria**: the workout appears and runs on the watch (verified on the watch before calling it done)
-**Needs first**: protocol evidence for uploads to the watch (5005/5003/5004 path, Q-SYNC-2) from a capture of Garmin Connect sending a workout
+**Approach**: port Gadgetbridge's workout encoder (`fit/workouts`) and its upload path to the watch; confirm the upload path with one capture of a workout transfer before calling it verified (Q-SYNC-2)
 **Status**: Not Started
 
 ## Stage 4b: backups

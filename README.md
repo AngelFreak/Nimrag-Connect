@@ -8,7 +8,7 @@
   <img alt="Platform: Android" src="https://img.shields.io/badge/phone-Android-4FD1B5?style=flat-square&logo=android&logoColor=E8EDEE&labelColor=171E22">
   <img alt="No cloud" src="https://img.shields.io/badge/cloud-none-A594FF?style=flat-square&labelColor=171E22">
   <img alt="AI-assisted, responsibly" src="https://img.shields.io/badge/AI--assisted-responsibly-F2D45C?style=flat-square&labelColor=171E22">
-  <img alt="Licence: not chosen yet" src="https://img.shields.io/badge/licence-not%20chosen%20yet-9AA7AC?style=flat-square&labelColor=171E22">
+  <img alt="Licence: AGPL-3.0-or-later" src="https://img.shields.io/badge/licence-AGPL--3.0--or--later-9AA7AC?style=flat-square&labelColor=171E22">
 </p>
 
 <p align="center">
@@ -65,7 +65,7 @@ One Rust crate, `nimrag-core`, holds the watch protocol and all FIT decoding. It
 | --- | --- | --- |
 | ✅ | **0. Protocol map:** static analysis and live Bluetooth captures, decoded end to end | Done. Night-sync and fresh-pairing captures still to record. |
 | ✅ | **1. Server:** ingest, file store, FIT decoding, parsers, `reparse`, export importer | Done. Gate passed on a full USB copy of a watch. |
-| 🚧 | **2. Android sync:** protocol client, Android app, upload queue, companion duties | The protocol client is done and replays every captured session. The Android app is next. |
+| 🚧 | **2. Android sync:** protocol client, Android app, upload queue, companion duties, Garmin device support ported from Gadgetbridge | The protocol client is done and replays every captured session. Porting Gadgetbridge's Garmin work and the Android app are next. |
 | ⏳ | **3. Web interface:** Today, activities, sleep, trends, training, calendar and more | Planned. |
 | ⏳ | **4. Writing and operations:** workouts to the watch, backups, export, runbook | Planned. |
 
@@ -123,7 +123,7 @@ cargo run -p nimrag-server -- import-export --data-dir ./data ~/Downloads/garmin
 
 ## Compatibility
 
-Nimrag Connect is built for Android phones and Garmin wearables that use Garmin's multi-link Bluetooth protocol. So far all development and verification has been done against an **Instinct 2**, and a few details, such as the Bluetooth packet size, were measured on that model. Reports from other watches are welcome.
+Nimrag Connect is built for Android phones and Garmin wearables that use Garmin's multi-link Bluetooth protocol. So far all development and verification has been done against an **Instinct 2**, and a few details, such as the Bluetooth packet size, were measured on that model. Support for other Garmin models is being ported from Gadgetbridge's device catalogue (about 200 models). Until someone syncs one, those models count as *supported per Gadgetbridge, not verified*. Reports from other watches are very welcome.
 
 ## AI-assisted development
 
@@ -134,17 +134,19 @@ AI-assisted contributions are welcome. We ask that they are responsible:
 - **Own your change.** Understand it, be able to explain it, and stand behind it, whoever or whatever typed it.
 - **Prove it.** Tests for new behaviour, and tests that go through the real entry point, not just a unit in isolation. Run the full suite before you open a pull request.
 - **Evidence, not plausibility.** AI is good at confident guesses. Protocol and data claims need a capture, a file or a test, and must be labelled *seen*, *inferred* or *unknown*. Never invent values.
-- **Respect licences.** Don't paste or translate code from Gadgetbridge (AGPL) or other projects into this codebase, and never commit Garmin profile tables.
+- **Respect licences.** Code ported from Gadgetbridge keeps its attribution header and gets a row in [`docs/PORTED.md`](docs/PORTED.md). Don't paste code from projects whose licence isn't compatible with the AGPL, and never commit Garmin profile tables.
 - **Keep personal data out.** No real captures, ids, positions or account data in commits, prompts you share or test fixtures.
 - **Say how it was made.** Mention AI assistance in your pull request so reviewers know where to look harder.
 
 ## Acknowledgements
 
-[Gadgetbridge](https://codeberg.org/Freeyourgadget/Gadgetbridge) was read as documentation while mapping the protocol; no code was copied. Every fact we implement was checked against our own captures. See [`docs/LICENSING.md`](docs/LICENSING.md).
+A big thank you to **[Gadgetbridge](https://codeberg.org/Freeyourgadget/Gadgetbridge)** and everyone who has contributed to it. Gadgetbridge is the free and open-source app that lets people use their wearables without the vendors' cloud, and its years of careful work on Garmin devices are what let Nimrag Connect support Garmin wearables without decoding every model from scratch.
+
+Nimrag Connect ports Gadgetbridge's Garmin work under the AGPL, with each ported file credited in its header and listed in [`docs/PORTED.md`](docs/PORTED.md). Ported behaviour is still checked against our own captures before we call it verified. Gadgetbridge's original copyright stays with its authors. If you can, [support Gadgetbridge on Liberapay](https://liberapay.com/Gadgetbridge/donate) too.
 
 ## Licence and disclaimer
 
-A licence has not been chosen yet, so until one is added all rights are reserved.
+Nimrag Connect is free software under the [GNU Affero General Public License v3.0 or later](LICENSE). If you run a modified server for other people, the AGPL asks you to offer them its source. See [`NOTICE`](NOTICE) for attributions.
 
 Nimrag Connect is an independent project and is not affiliated with, endorsed by or supported by Garmin. Garmin, Garmin Connect and Instinct are trademarks of Garmin Ltd. or its subsidiaries, used here only to describe compatibility.
 

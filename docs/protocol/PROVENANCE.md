@@ -43,6 +43,8 @@ redistributed.
 Gadgetbridge was read as documentation only. No code, message definitions or
 `.proto` text from it is in this repository; see `docs/LICENSING.md`.
 
+That describes phase 0. On 2026-11-19 the owner decided to port Gadgetbridge's Garmin work under the AGPL from here on; see `docs/LICENSING.md` and `docs/PORTED.md`.
+
 ## Tools
 
 | Tool | Version |
