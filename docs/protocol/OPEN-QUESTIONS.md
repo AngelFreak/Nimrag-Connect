@@ -30,6 +30,8 @@ Each entry lists what is unknown, whether our client needs the answer to pair, l
 | Q-PAIR-1 | The fresh-pairing flow: bonding, PAIR_START/PAIR_COMPLETE events, FIT capabilities → connectivity, setup wizard. CAP-1 is only a reconnect. | **yes** | Capture: unpair the watch in Connect and in Android, then pair again with the official app and snoop logging on. This erases the pairing, so the owner has to agree first. |
 | Q-AUTH-1 | Does the Instinct 2 ever start Garmin Auth (5101) after a normal LE bonding? APK and CAP-1 say no on a bonded link. | **yes** (it decides whether we need crypto) | The fresh-pairing capture (Q-PAIR-1) |
 | Q-TIME-1 | Watch behaviour when its 5052 time request gets no reply | no | Phase 2 test |
+| Q-TIME-2 | Order and meaning of the two daylight-saving fields in the 5052 reply. CAP-1 (November) has the earlier date first; Gadgetbridge always writes the later transition first. "Next DST start, next DST end" fits both (PROTOCOL §9.3); our client sends "next, following", which would then be wrong between March and October. | **yes, before the next clock change** (a wrong order could shift the watch's clock by an hour on the changeover day) | A capture of a Connect session taken in summer time, or the app's code that builds the reply (APK, the handler for 5052). Until then keep the capture's order. |
+| Q-ADV-1 | Does the Instinct 2 advertise Garmin manufacturer data (company id 0x0087) starting with its product number, as Gadgetbridge assumes for recognition (PROTOCOL §9.1)? | no (the name pattern is the fallback) | Read the advertising data in 2c, or info page 1 in CAP-1. |
 
 ## File sync
 
@@ -68,3 +70,34 @@ The owner approved one read-only comparison of a morning's derived data against 
 | Sync after an activity | **done** (CAP-2) |
 | Sync after a night | **not yet**: CAP-1 was the first sync of the day, but the overnight sleep and HRV files had already synced before logging started. Needs tomorrow morning's first sync. |
 | Settings change | **done** (CAP-3: time format, via RealtimeSettings) |
+
+## Gadgetbridge answers (stage 2p)
+
+What Gadgetbridge at `7257742b` says about the questions above. Each answer is *inferred (Gadgetbridge)*: it is what that code does, not something we have seen. A question stays open until the capture or test in its own row is done; the last column says what changed. Details and file names are in PROTOCOL.md §9.
+
+| Id | Gadgetbridge's answer | State after 2p |
+| --- | --- | --- |
+| Q-MLR-1, Q-MLR-2 | Nothing new; its MLR is a re-implementation with different timing (PROTOCOL §1.4). | open |
+| Q-MLR-3 | Plain mode is its original transport and still a per-device option: register GFDI with mode 0, then one handle byte per write. | open, but very probably yes; test in 2c |
+| Q-ML-1 | It accepts any close-all status and goes on. | open; confirms the status can be ignored |
+| Q-ML-2 | It uses the fixed client id 2 on every device and drops control messages addressed to another id. | open for the case "Connect connected at the same time"; a client id of our own is safe otherwise |
+| Q-ML-3 | It reads only the byte after the handle and treats non-zero as "reliable". | open |
+| Q-GFDI-1 | First tail byte 1 means a BLE and a classic Bluetooth address (6 bytes each) follow; then one unknown byte. | first byte explained (matches the app's "dual pairing"); second byte open |
+| Q-GFDI-2 | Body = `u8 result (0 applied), u16 x, u8 flags`; it also only observed `x = index − 1`. | layout explained; why `− 1` is open |
+| Q-GFDI-3 | The two bytes are `chunk status` (0 kept, 1 discarded) and a status code (0, 100–103, 200, 201). `01 c9` = discarded, 201 "unknown". | answered as *inferred*; which watch message the app rejected can be read from CAP-1 t=5.42 |
+| Q-GFDI-4 | 6 = auto upload enabled, 7 = weather conditions enabled, 8 = weather alerts enabled; it sends the same three values as Connect. | answered as *inferred*; the diff capture is still the proof |
+| Q-GFDI-5 | It stays silent on unhandled requests on all its devices, and sends status 2 only to refuse 5052 when time sync is off. | open; both silence and status 2 are evidently tolerated, so our status 2 reply is low risk |
+| Q-PAIR-1 | On a first connection it sends system events 4, 0 and 14 (pair complete, sync complete, setup wizard complete) after the normal handshake; bonding is left to Android. | open; 2c starts from this sequence and the capture must confirm it |
+| Q-AUTH-1 | It answers 5101 by echoing it with "guess ok" and implements nothing further, which only works if watches do not insist on Garmin Auth. | open |
+| Q-TIME-1 | Nothing: it always answers, or refuses with status 2. | open |
+| Q-SYNC-1 | Names for bits 0–6, 8–32, 36 and 39 (PROTOCOL §9.4). | answered as *inferred*; the bit-by-bit captures are still the proof |
+| Q-SYNC-2 | It has no 255/19 type and never uploads such a file; its devices sync without it. Upload message layouts are in PROTOCOL §9.5. | open; "not needed for syncing" is now better supported |
+| Q-SYNC-3 | It can leave files unarchived ("keep data on device") and then skips files it already has by name, so re-listing of unarchived files is what it expects. | open; supports the assumption in the 2a contract |
+| Q-SYNC-4 | It sends 5002 flags 0 and has no 5054 parser. So flags 0 very probably means "uncompressed only". The 5054 format is not in Gadgetbridge. | half answered as *inferred*; format open. Our client could send flags 0 to avoid 5054 altogether (integrator decision). |
+| Q-SYNC-5 | Type names only (38 score, 58 "device", 70 HSA, 72/74 backups); no parser for their content. | open |
+| Q-SYNC-6 | Nothing for downloads. Its upload chunk is `max_packet − 13` data bytes. Our own arithmetic on CAP-2 suggests the watch fits the whole COBS frame into `max_packet` (PROTOCOL §9.5). | candidate rule from one chunk; check on the next multi-chunk file |
+| Q-FIT-1 | Message 233 is not in its profile. | open |
+| Q-FIT-2 | It resolves `timestamp_16` against the last monitoring timestamp, the rule we found ourselves. | supported by a second source; still re-checked on every capture |
+| Q-COMP-1 | GPS assist only over HTTP (`api.gcs.garmin.com/ephemeris/…`), three file formats; no 255/19 upload, no EPO messages. | open for the Instinct 2; if its ephemeris request is in clear, the ported handler can serve it |
+| Q-COMP-2 | Its schema has no field 11. Our recovered schema names it `encrypted_request`; Gadgetbridge has a "decryption failure" response status. | answered from our own schema: the request is encrypted for Garmin and cannot be served locally. What it asks for stays unknown. |
+| Q-COMP-3 | 5014 layout `u8 format, s32 lat, s32 lon, u8 hours`; answer by FIT weather messages if the watch has capability 26, else HTTP `/weather/…`. | settled for this watch: 5014 (seen in CAP-3), layout *inferred* |

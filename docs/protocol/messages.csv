@@ -7,7 +7,7 @@ id,name,direction,fields,purpose,status,evidence,in_gadgetbridge
 5006,Delete File,phone->watch,unknown,Delete a file on the watch,unknown,"name in sns.m67763a; DeleteFileResponseMessage.MESSAGE_ID",no
 5007,Directory Filter,phone->watch,"u8 filter (0 NO_FILTER,1 DEFAULT,3 PENDING_UPLOADS_ONLY); reply payload u8 (0 = supported)",Limit the next directory listing,seen,"C8648a.m22286a; enum zgd; FileManagerCompat FILTER_TYPE_PENDING_UPLOADS=3",yes
 5008,Set File Flags,phone->watch,"u16 file_index; u8 flags (app sends 0x10 ARCHIVE)",Mark a file synced (archive) on the watch,seen,"C8648a.m22287c; EnumC8652e",yes
-5009,File Ready,watch->phone,"16-byte directory entry: u16 index; u8 data_type; u8 sub_type; u16 file_number; u8 specific_flags; u8 flags; u32 size; u32 timestamp",Watch announces a new file,seen,p860.onMessageReceived (len>=16),differs (GB expects one extra trailing byte)
+5009,File Ready,watch->phone,"16-byte directory entry: u16 index; u8 data_type; u8 sub_type; u16 file_number; u8 specific_flags; u8 flags; u32 size; u32 timestamp",Watch announces a new file,seen,p860.onMessageReceived (len>=16),yes (16 bytes at 7257742b; an earlier note here claimed a 17th byte)
 5011,FIT Definition,both,FIT definition record(s),Carry FIT definition messages (capabilities in; connectivity/weather out),seen,smg (listener 5011),yes
 5012,FIT Data,both,FIT data record(s),Carry FIT data messages,seen,smg (listener 5012); smg.m67689c sends FIT connectivity (global 127),yes
 5014,Weather Request,watch->phone,unverified in app (GB: u8 format; s32 lat; s32 lon; u8 hours),Watch asks for weather,inferred,name in sns.m67763a,yes
