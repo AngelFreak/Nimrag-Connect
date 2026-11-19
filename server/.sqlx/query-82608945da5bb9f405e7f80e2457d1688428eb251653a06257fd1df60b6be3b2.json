@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO file_derive (sha256, derive_version, status, error, skipped_rows)\n         VALUES (?, ?, ?, ?, ?)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 5
+    },
+    "nullable": []
+  },
+  "hash": "82608945da5bb9f405e7f80e2457d1688428eb251653a06257fd1df60b6be3b2"
+}

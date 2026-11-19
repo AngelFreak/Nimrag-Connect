@@ -557,6 +557,8 @@ async fn ledger_rebuilds_from_sidecars_and_reparse_leaves_it_alone() {
         "DELETE FROM fit_messages",
         "DELETE FROM fit_files",
         "DELETE FROM file_parse",
+        "DELETE FROM file_derive",
+        "DELETE FROM sources",
         "DELETE FROM uploads",
         "DELETE FROM files",
     ] {
@@ -569,4 +571,37 @@ async fn ledger_rebuilds_from_sidecars_and_reparse_leaves_it_alone() {
     assert_eq!(dump_ledger(&e.pool).await, ledger);
     derive::reparse(&e.pool, e.dir.path()).await.unwrap();
     assert_eq!(dump_derived(&e.pool).await, derived);
+}
+
+#[tokio::test]
+async fn file_derive_and_sources_are_written_for_fit_files() {
+    let e = env().await;
+    let (_, j) = e.upload("data_type=128", &tiny_fit(1234)).await;
+    let sha = j["sha256"].as_str().unwrap();
+    let status: String = sqlx::query_scalar("SELECT status FROM file_derive WHERE sha256 = ?")
+        .bind(sha)
+        .fetch_one(&e.pool)
+        .await
+        .unwrap();
+    let sources: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM sources WHERE sha256 = ?")
+        .bind(sha)
+        .fetch_one(&e.pool)
+        .await
+        .unwrap();
+    if nimrag_core::fit::profile::available() {
+        assert_eq!((status.as_str(), sources), ("ok", 1));
+        let (ok, src): (i64, i64) = sqlx::query_as("SELECT ok, src_id FROM sources")
+            .fetch_one(&e.pool)
+            .await
+            .unwrap();
+        assert_eq!((ok, src), (1, nimrag_server::derived::src_id(sha)));
+    } else {
+        // Raw tables are still filled; derived ones are not.
+        assert_eq!((status.as_str(), sources), ("no_profile", 0));
+        let n: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM fit_messages")
+            .fetch_one(&e.pool)
+            .await
+            .unwrap();
+        assert_eq!(n, 1);
+    }
 }

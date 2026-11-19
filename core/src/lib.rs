@@ -7,6 +7,7 @@
 pub mod capture;
 pub mod cobs;
 pub mod crc;
+pub mod derive;
 pub mod describe;
 pub mod fit;
 pub mod gfdi;

@@ -55,6 +55,7 @@ pub fn parse(bytes: &[u8]) -> Parsed {
 }
 
 async fn clear(tx: &mut Transaction<'_, Sqlite>, sha256: &str) -> Result<()> {
+    crate::derived::clear_file(tx, sha256).await?;
     sqlx::query!("DELETE FROM fit_messages WHERE sha256 = ?", sha256)
         .execute(&mut **tx)
         .await?;
@@ -194,6 +195,7 @@ pub async fn write(tx: &mut Transaction<'_, Sqlite>, sha256: &str, parsed: &Pars
     )
     .execute(&mut **tx)
     .await?;
+    crate::derived::persist(tx, sha256, &parsed.decoded, parsed.error.as_deref()).await?;
     Ok(())
 }
 
@@ -337,6 +339,8 @@ pub async fn reparse(pool: &SqlitePool, data_dir: &Path) -> Result<ReparseReport
     sqlx::query!("DELETE FROM file_parse WHERE sha256 NOT IN (SELECT sha256 FROM files)")
         .execute(&mut *tx)
         .await?;
+    // Sample tables are rebuilt from scratch: clear, then upsert every file in sha256 order.
+    crate::derived::clear_samples(&mut tx).await?;
     tx.commit().await?;
 
     let rows = sqlx::query!(r#"SELECT sha256 as "sha256!" FROM files ORDER BY sha256"#)

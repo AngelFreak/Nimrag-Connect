@@ -58,6 +58,9 @@ async fn main() -> Result<()> {
     };
     let o = parse_opts(rest)?;
     init_logging(o.log_json);
+    if matches!(cmd.as_str(), "serve" | "reparse") {
+        warn_if_no_profile();
+    }
 
     match cmd.as_str() {
         "serve" => serve(o).await,
@@ -87,6 +90,13 @@ async fn main() -> Result<()> {
         }
         "token" => token(o).await,
         _ => bail!("unknown command {cmd}\n{USAGE}"),
+    }
+}
+
+fn warn_if_no_profile() {
+    if !nimrag_core::fit::profile::available() {
+        eprintln!("WARNING: no generated FIT profile compiled in; derived tables (activities, wellness) will NOT be filled. See tools/fit-profile/README.md.");
+        tracing::warn!("FIT profile unavailable: derived tables will not be filled");
     }
 }
 

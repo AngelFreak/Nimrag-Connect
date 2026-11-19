@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO sources (sha256, src_id, ok, last_ts, msg_count, serial, time_created,\n            file_type, rank_key) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 9
+    },
+    "nullable": []
+  },
+  "hash": "5d1f620be77c27ef84614e01cf15d405b290c9835b8dcdc91c0fe42a8b885f82"
+}
