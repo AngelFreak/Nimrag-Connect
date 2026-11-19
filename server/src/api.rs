@@ -269,8 +269,8 @@ async fn upload(
 
     let mut tx = state.pool.begin().await?;
     ledger::insert_file(&mut tx, &sidecar).await?;
-    if repeat {
-        ledger::bump_last_upload(&mut tx, &sha256, &event).await?;
+    if repeat && ledger::bump_last_upload(&mut tx, &sha256, &event).await? {
+        // folded into the existing row
     } else {
         ledger::insert_upload(&mut tx, &sha256, &event).await?;
     }

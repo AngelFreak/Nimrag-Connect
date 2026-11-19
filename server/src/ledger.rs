@@ -127,13 +127,14 @@ pub async fn insert_upload(
     Ok(())
 }
 
-/// Mirror a repeat into the last `uploads` row of this file.
+/// Mirror a repeat into the last `uploads` row of this file. Returns false if
+/// the file has no `uploads` row yet (an earlier ingest never committed).
 pub async fn bump_last_upload(
     tx: &mut Transaction<'_, Sqlite>,
     sha256: &str,
     ev: &UploadEvent,
-) -> Result<()> {
-    sqlx::query!(
+) -> Result<bool> {
+    let n = sqlx::query!(
         "UPDATE uploads SET repeat_count = ?, last_at = ?
          WHERE id = (SELECT MAX(id) FROM uploads WHERE sha256 = ?)",
         ev.repeat_count,
@@ -141,8 +142,9 @@ pub async fn bump_last_upload(
         sha256
     )
     .execute(&mut **tx)
-    .await?;
-    Ok(())
+    .await?
+    .rows_affected();
+    Ok(n > 0)
 }
 
 #[derive(Debug, Default, PartialEq, Eq)]
