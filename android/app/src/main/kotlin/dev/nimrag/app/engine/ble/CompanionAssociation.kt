@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.bluetooth.le.ScanFilter
 import android.companion.AssociationInfo
 import android.companion.AssociationRequest
+import android.companion.BluetoothDeviceFilter
 import android.companion.BluetoothLeDeviceFilter
 import android.companion.CompanionDeviceManager
 import android.content.IntentSender
@@ -48,7 +49,7 @@ class CompanionAssociation(private val hub: Hub) {
         /** Not available or failed: pair without it. */
         Unavailable,
 
-        /** The user declined the system dialog. */
+        /** The user declined the system dialog, or it found nothing within its search time. */
         Declined,
     }
 
@@ -73,10 +74,14 @@ class CompanionAssociation(private val hub: Hub) {
         }
         onDone = done
         val request = try {
-            val filter = BluetoothLeDeviceFilter.Builder()
+            val le = BluetoothLeDeviceFilter.Builder()
                 .setScanFilter(ScanFilter.Builder().setDeviceAddress(address).build())
                 .build()
-            AssociationRequest.Builder().addDeviceFilter(filter).setSingleDevice(true).build()
+            // The dialog lists bonded devices that match a classic filter at once, without
+            // scanning. That finds a watch already bonded (by Garmin Connect, say), which may
+            // not advertise while it is connected.
+            val bonded = BluetoothDeviceFilter.Builder().setAddress(address).build()
+            AssociationRequest.Builder().addDeviceFilter(bonded).addDeviceFilter(le).setSingleDevice(true).build()
         } catch (_: Exception) {
             finish(Outcome.Unavailable)
             return
@@ -100,7 +105,9 @@ class CompanionAssociation(private val hub: Hub) {
 
             override fun onFailure(error: CharSequence?) {
                 hub.handler.post {
-                    hub.log.warn("Companion association failed")
+                    // Also called after the dialog was cancelled; only a pending request matters.
+                    if (onDone == null) return@post
+                    hub.log.warn("Companion association failed${error?.let { " ($it)" } ?: ""}")
                     finish(Outcome.Unavailable)
                 }
             }

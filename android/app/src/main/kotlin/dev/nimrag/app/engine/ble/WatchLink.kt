@@ -86,6 +86,9 @@ class WatchLink(private val hub: Hub, private val scanner: BleScanner) {
     /** The bond with the remembered watch is gone: no reconnecting until forget + pair. */
     private var bondLost = false
 
+    /** The adapter is switching off or off (set by the first of the two broadcasts). */
+    private var adapterOff = false
+
     /** The "Garmin Connect may hold the watch" hint was logged since the last good link. */
     private var otherAppHinted = false
 
@@ -169,7 +172,14 @@ class WatchLink(private val hub: Hub, private val scanner: BleScanner) {
             return
         }
         scanner.stop()
-        pairing = Pairing(address, name, model, unsupportedReason)
+        // Decided first, before anything can fail: a bond that already exists (usually Garmin
+        // Connect's) is reused and must never be removed by us.
+        val bondedBefore = try {
+            adapter()?.getRemoteDevice(address)?.bondState == BluetoothDevice.BOND_BONDED
+        } catch (_: Exception) {
+            false
+        }
+        pairing = Pairing(address, name, model, unsupportedReason, bondedBefore)
         bondLost = false
         otherAppHinted = false
         hub.update { it.copy(watch = WatchState.Pairing(address, name), pairingError = null) }
@@ -184,8 +194,8 @@ class WatchLink(private val hub: Hub, private val scanner: BleScanner) {
         WatchService.start(ctx)
         handler.postDelayed(pairTimeout, PAIR_TIMEOUT_MS)
         // First the companion association (the system's own dialog, shown by MainActivity),
-        // then the bond. Without the association the pairing still works, but the link will
-        // not come back by itself after Android killed the process.
+        // then the bond. The association is optional: without it the pairing still works, but
+        // the link will not come back by itself after Android killed the process.
         hub.companion.associate(address, ::onAssociation)
     }
 
@@ -194,9 +204,10 @@ class WatchLink(private val hub: Hub, private val scanner: BleScanner) {
         when (outcome) {
             CompanionAssociation.Outcome.Created ->
                 log.info("Pairing path: companion association in place, the system can restart the link")
-            CompanionAssociation.Outcome.Unavailable ->
+            // The dialog also ends as "declined" when it found nothing within its 20 s search,
+            // so neither outcome stops the pairing.
+            CompanionAssociation.Outcome.Unavailable, CompanionAssociation.Outcome.Declined ->
                 log.warn("Pairing path: no companion association, after a process death the app must be opened to reconnect")
-            CompanionAssociation.Outcome.Declined -> return failPairing("The companion association was declined")
         }
         startBonding(pending.address)
     }
@@ -206,9 +217,9 @@ class WatchLink(private val hub: Hub, private val scanner: BleScanner) {
             val device = adapter()?.getRemoteDevice(address) ?: return failPairing("Bluetooth is not available")
             when (device.bondState) {
                 BluetoothDevice.BOND_BONDED -> {
-                    // Usually Garmin Connect's bond. Reusing it works; removing it would unpair the other app.
-                    pairing = pairing?.copy(bondedBefore = true)
-                    log.info("The phone is already paired with this watch at the Bluetooth level; reusing that pairing")
+                    if (pairing?.bondedBefore == true) {
+                        log.info("The phone is already paired with this watch at the Bluetooth level; reusing that pairing")
+                    }
                     completeBond()
                 }
                 BluetoothDevice.BOND_BONDING -> log.info("Waiting for the pairing dialog")
@@ -387,6 +398,9 @@ class WatchLink(private val hub: Hub, private val scanner: BleScanner) {
     }
 
     private fun onBluetoothOff() {
+        // Called for both TURNING_OFF and OFF: act and log once.
+        if (adapterOff) return
+        adapterOff = true
         hub.refreshPermissions()
         if (pairing != null) failPairing("Bluetooth was switched off")
         scanner.stop()
@@ -397,6 +411,7 @@ class WatchLink(private val hub: Hub, private val scanner: BleScanner) {
     }
 
     private fun onBluetoothOn() {
+        adapterOff = false
         hub.refreshPermissions()
         log.info("Bluetooth switched on")
         if (running && settings.watch != null) {
