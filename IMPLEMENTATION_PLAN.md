@@ -33,21 +33,22 @@ Roles: main session orchestrates and integrates; Sonnet builders implement on di
 **Goal**: sans-IO FIT binary decoder per contract in core/src/fit/mod.rs; keeps every message and field (unknown, manufacturer-specific, developer) with raw bytes
 **Success Criteria**: decodes all FIT files extracted from private captures with header+file CRC ok; round-trip raw bytes per field; chained files; compressed timestamps
 **Tests**: synthetic FIT files built in tests (definition/data, big-endian arch, compressed timestamp, developer fields, invalid values, chained); private-file replay
-**Status**: Not Started
+**Status**: Complete
 
 ## Stage 1b: FIT profile from the app (/core/src/fit/profile.rs, tools/fit-profile/) — builder B
 **Goal**: generated table of message/field names, types, scale/offset/units and enum value names, extracted from the FIT profile bundled in Garmin Connect 5.31
 **Success Criteria**: lookup API per contract; covers record, session, lap, monitoring, sleep_level, hrv_*, set, exercise_title, etc.; generator reproducible
 **Tests**: known entries (record.heart_rate, session.total_timer_time scale 1000, sport enum names)
-**Status**: Not Started
+**Status**: Complete
 
 ## Stage 1c: server ingest (/server) — builder C
 **Goal**: axum + sqlx SQLite (WAL) service: file store by SHA-256, POST /api/files idempotent, device-token auth, migrations, `reparse` subcommand skeleton, raw FIT message table
 **Success Criteria**: upload same file twice -> one stored copy, 200 both times with same id; unauthenticated -> 401; reparse rebuilds derived tables from store
 **Tests**: integration tests through the real router (axum test client) and the real binary for reparse
-**Status**: Not Started
+**Status**: Complete
 
-## Stage 1d: parsers (activities, monitoring, sleep, HRV, metrics) — after 1a+1b
+## Stage 1d: parsers (activities, monitoring, sleep, HRV, metrics)
+**Status**: Complete (sleep/HRV/SpO2 unverified on real files until a night capture)
 ## Stage 1e: Garmin export importer — after 1c
 ## Gate 1
 
