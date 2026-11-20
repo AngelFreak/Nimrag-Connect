@@ -70,7 +70,6 @@ import dev.nimrag.app.model.WatchController
 import dev.nimrag.app.ui.components.ActivitiesIcon
 import dev.nimrag.app.ui.components.HealthIcon
 import dev.nimrag.app.ui.components.LocalNowMs
-import dev.nimrag.app.ui.components.StrengthIcon
 import dev.nimrag.app.ui.components.TodayIcon
 import dev.nimrag.app.ui.components.WatchIcon
 import dev.nimrag.app.ui.settings.LicencesScreen
@@ -104,7 +103,7 @@ private val NavSaver = listSaver<ShellNav, Any>(
 )
 
 /**
- * The whole app: theme, the native bottom bar (Today, Activities, Health, Strength, Watch), one
+ * The whole app: theme, the native bottom bar (Today, Activities, Health, Watch), one
  * shared web view for the first four and the native Watch, Sync and Settings screens under Watch.
  * [demo] marks the fake controller.
  */
@@ -251,7 +250,6 @@ private val BarItems = listOf(
     BarItem(MainTab.Today, R.string.tab_today, TodayIcon),
     BarItem(MainTab.Activities, R.string.tab_activities, ActivitiesIcon),
     BarItem(MainTab.Health, R.string.tab_health, HealthIcon),
-    BarItem(MainTab.Strength, R.string.tab_strength, StrengthIcon),
     BarItem(MainTab.Watch, R.string.tab_watch, WatchIcon),
 )
 

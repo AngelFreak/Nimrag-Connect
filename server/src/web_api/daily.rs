@@ -472,10 +472,13 @@ struct Stages {
 }
 
 /// Segments from sleep-level rows: each row lasts until the next one (or the end).
+/// Stage segments of a night. Each `sleep_levels` row is the stage of the period that ENDS
+/// at its time, from the previous row (or the session start); checked against an Instinct 2's
+/// own sleep summary (deep/light/REM/awake all matched to the minute, 2026-11-20).
 fn stages_of(levels: &[(i64, i64)], start: i64, end: i64) -> Option<Stages> {
     let inside: Vec<&(i64, i64)> = levels
         .iter()
-        .filter(|l| l.0 >= start && l.0 < end)
+        .filter(|l| l.0 > start && l.0 <= end)
         .collect();
     if inside.is_empty() {
         return None;
@@ -487,15 +490,17 @@ fn stages_of(levels: &[(i64, i64)], start: i64, end: i64) -> Option<Stages> {
         rem: 0.0,
         awake: 0.0,
     };
-    for (i, (ts, level)) in inside.iter().enumerate() {
-        let to = inside.get(i + 1).map_or(end, |n| n.0);
+    let mut from = start;
+    for (to, level) in inside {
+        let (to, from_here) = (*to, from);
+        from = to;
         let Some(stage) = stage_of(*level) else {
             continue;
         };
-        if to <= *ts {
+        if to <= from_here {
             continue;
         }
-        let d = (to - ts) as f64;
+        let d = (to - from_here) as f64;
         match stage {
             SleepStage::Deep => st.deep += d,
             SleepStage::Light => st.light += d,
@@ -503,14 +508,15 @@ fn stages_of(levels: &[(i64, i64)], start: i64, end: i64) -> Option<Stages> {
             SleepStage::Awake => st.awake += d,
             SleepStage::Unmeasurable => {}
         }
-        st.segments.push((*ts, to, stage));
+        st.segments.push((from_here, to, stage));
     }
     Some(st)
 }
 
 async fn levels(ctx: &Ctx, from: i64, to: i64) -> Res<Vec<(i64, i64)>> {
     Ok(sqlx::query_as(
-        "SELECT ts, level FROM sleep_levels WHERE user_id = ? AND ts >= ? AND ts < ? ORDER BY ts",
+        // Rows end their period, so a night (from, to] holds the rows after `from` up to `to`.
+        "SELECT ts, level FROM sleep_levels WHERE user_id = ? AND ts > ? AND ts <= ? ORDER BY ts",
     )
     .bind(ctx.uid)
     .bind(from)
@@ -544,7 +550,7 @@ pub async fn nights(ctx: &Ctx, from: NaiveDate, to: NaiveDate) -> Res<Vec<NightS
     let Some(max_end) = sessions.iter().map(|s| s.end_ts).max() else {
         return Ok(vec![]);
     };
-    let lv = levels(ctx, lo, max_end + 1).await?;
+    let lv = levels(ctx, lo, max_end).await?;
     let mut by_date: BTreeMap<NaiveDate, (i64, NightSummary)> = BTreeMap::new();
     for s in &sessions {
         let d = night_date(ctx, s.start_ts);
@@ -944,4 +950,62 @@ pub async fn intensity_days(
 /// Moderate + 2 x vigorous, `None` unless at least one is known.
 pub fn intensity_total(m: Option<f64>, v: Option<f64>) -> Option<f64> {
     (m.is_some() || v.is_some()).then(|| m.unwrap_or(0.0) + 2.0 * v.unwrap_or(0.0))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::stages_of;
+
+    /// An Instinct 2 night (2026-11-19/20): sleep 22:10 to 07:49 and its 30 level rows, as
+    /// (minutes after 22:10, level). The watch's own summary: deep 1h39, light 6h9, REM 1h22,
+    /// awake 29m.
+    #[test]
+    fn rows_end_their_period_and_match_the_watch() {
+        let rows = [
+            (17, 2),
+            (64, 3),
+            (110, 2),
+            (111, 1),
+            (119, 2),
+            (132, 3),
+            (189, 2),
+            (192, 1),
+            (210, 2),
+            (219, 1),
+            (252, 2),
+            (291, 3),
+            (304, 2),
+            (321, 4),
+            (330, 1),
+            (394, 2),
+            (438, 4),
+            (439, 1),
+            (481, 2),
+            (483, 1),
+            (495, 2),
+            (500, 4),
+            (521, 2),
+            (522, 1),
+            (533, 2),
+            (549, 4),
+            (551, 1),
+            (564, 2),
+            (565, 1),
+            (579, 2),
+        ];
+        let start = 1_000_000;
+        let lv: Vec<(i64, i64)> = rows.iter().map(|&(m, l)| (start + m * 60, l)).collect();
+        let st = stages_of(&lv, start, start + 579 * 60).expect("stages");
+        let min = |s: f64| (s / 60.0).round() as i64;
+        assert_eq!(
+            (min(st.deep), min(st.light), min(st.rem), min(st.awake)),
+            (99, 369, 82, 29)
+        );
+        assert_eq!(
+            st.segments.first().map(|s| (s.0, s.1)),
+            Some((start, start + 17 * 60))
+        );
+        // A row at the start time closes nothing and is not part of this night.
+        assert!(stages_of(&[(start, 3)], start, start + 60).is_none());
+    }
 }

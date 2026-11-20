@@ -266,9 +266,20 @@ describe('AppShell', () => {
     const labels = within(bottom as HTMLElement)
       .getAllByRole('link')
       .map((a) => a.textContent);
-    expect(labels).toEqual(['Today', 'Activities', 'Health', 'Strength']);
-    expect(within(bottom as HTMLElement).getByRole('link', { name: 'Strength' })).toHaveAttribute('href', '/strength');
+    expect(labels).toEqual(['Today', 'Activities', 'Health']);
     expect(within(bottom as HTMLElement).getByRole('link', { name: 'Today' })).toHaveAttribute('aria-current', 'page');
+  });
+
+  it('the phone bar has no Strength tab: strength pages light up Activities', () => {
+    wrap(
+      <AppShell tabs>
+        <h1>Strength</h1>
+      </AppShell>,
+      '/strength',
+    );
+    const bottom = screen.getAllByRole('navigation', { name: 'Main' }).find((n) => n.classList.contains('bottom-nav'));
+    expect(within(bottom as HTMLElement).queryByRole('link', { name: 'Strength' })).toBeNull();
+    expect(within(bottom as HTMLElement).getByRole('link', { name: 'Activities' })).toHaveAttribute('aria-current', 'page');
   });
 
   it('the phone top bar is a landmark, so its buttons are not outside every region', () => {

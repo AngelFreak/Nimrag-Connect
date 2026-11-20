@@ -114,13 +114,15 @@ async fn fixture(e: &Env) {
         sha('a')
     ))
     .await;
+    // Each row ends its period: light to 23:00, deep to 00:00, light to 02:00, REM to 03:00,
+    // awake to 03:10, light to 06:00.
     let lv = [
-        (s, 2),
-        (at(18, 23, 0), 3),
-        (at(19, 0, 0), 2),
-        (at(19, 2, 0), 4),
-        (at(19, 3, 0), 1),
-        (at(19, 3, 10), 2),
+        (at(18, 23, 0), 2),
+        (at(19, 0, 0), 3),
+        (at(19, 2, 0), 2),
+        (at(19, 3, 0), 4),
+        (at(19, 3, 10), 1),
+        (w, 2),
     ];
     values(
         e,

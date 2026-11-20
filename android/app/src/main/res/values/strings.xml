@@ -184,11 +184,10 @@
     <string name="tab_today">Today</string>
     <string name="tab_activities">Activities</string>
     <string name="tab_health">Health</string>
-    <string name="tab_strength">Strength</string>
     <string name="devices_title">Devices and sync</string>
     <string name="devices_subtitle">Watch, phone and your server</string>
     <string name="server_needed_title">Set your server</string>
-    <string name="server_needed_body">Today, Activities, Health and Strength show your data from your own Nimrag server. Enter its address in Settings.</string>
+    <string name="server_needed_body">Today, Activities and Health show your data from your own Nimrag server. Enter its address in Settings.</string>
     <string name="server_needed_invalid">The saved server address is not valid: %1$s. Enter a URL starting with http:// or https:// in Settings.</string>
     <string name="server_needed_open">Open Settings</string>
     <string name="server_unreachable_title">Server unreachable</string>
