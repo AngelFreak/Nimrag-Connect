@@ -3,7 +3,8 @@ import { Link } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { getBridge, hasNativeSync, isNativeApp, openWatch, type LinkState } from '../native';
 import { useNativeStatus } from '../lib/hooks';
-import { RefreshIcon, UserIcon, WatchIcon } from './icons';
+import { RefreshIcon, WatchIcon } from './icons';
+import { ProfileMenu } from './ProfileMenu';
 
 const MIN_SPIN_MS = 700;
 
@@ -103,15 +104,6 @@ export function WatchLink({ link }: { link: LinkState }) {
   );
 }
 
-/** User icon: profile and settings. */
-export function ProfileLink() {
-  return (
-    <Link to="/settings" className="icon-btn" aria-label="Profile and settings">
-      <UserIcon />
-    </Link>
-  );
-}
-
 /** Sync button and watch link wired to the real behaviour and status. */
 export function SyncAndWatch() {
   const { sync, spinning, native } = useSync();
@@ -129,7 +121,7 @@ export function MainBar() {
   return (
     // A banner landmark, so the buttons are not outside every landmark (axe: region).
     <header className="mainbar">
-      <ProfileLink />
+      <ProfileMenu align="start" />
       <div className="mainbar__right">
         <SyncAndWatch />
       </div>

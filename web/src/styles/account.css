@@ -1,0 +1,202 @@
+/* Accounts: profile menu, QR code and secret, the admin area. Built from the same tokens as components.css. */
+
+.shell__spacer {
+  flex: 1;
+}
+
+select.field__input {
+  appearance: none;
+  padding-right: 40px;
+  background-image: linear-gradient(45deg, transparent 50%, var(--text-2) 50%), linear-gradient(135deg, var(--text-2) 50%, transparent 50%);
+  background-position:
+    calc(100% - 20px) 50%,
+    calc(100% - 14px) 50%;
+  background-size:
+    6px 6px,
+    6px 6px;
+  background-repeat: no-repeat;
+}
+
+/* ------------------------------------------------------------------ profile menu */
+.profile-menu {
+  position: relative;
+}
+.profile-menu__panel {
+  position: absolute;
+  top: calc(100% + 4px);
+  z-index: 40;
+  min-width: 220px;
+  display: flex;
+  flex-direction: column;
+  padding: 6px;
+  background: var(--raised);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-control);
+  box-shadow: 0 10px 30px rgba(5, 8, 10, 0.5);
+}
+.profile-menu__panel[data-align='start'] {
+  left: 0;
+}
+.profile-menu__panel[data-align='end'] {
+  right: 0;
+}
+.profile-menu__who {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px 10px;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 4px;
+}
+.profile-menu__name {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.profile-menu__role {
+  font-size: var(--fs-sm);
+  color: var(--text-2);
+}
+.profile-menu__item {
+  display: flex;
+  align-items: center;
+  min-height: var(--touch);
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--radius-segment);
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: var(--fs-md);
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+.profile-menu__item:hover {
+  background: var(--card);
+}
+
+/* ------------------------------------------------------------------ authenticator (QR) */
+.authenticator {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+}
+.qr {
+  width: min(100%, 240px);
+  height: auto;
+  aspect-ratio: 1;
+  border-radius: var(--radius-control);
+  flex: none;
+}
+.authenticator__text {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.authenticator__secret {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: var(--fs-base);
+  letter-spacing: 0.04em;
+}
+
+/* ------------------------------------------------------------------ admin */
+.user-list {
+  display: flex;
+  flex-direction: column;
+}
+.user-row {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 0;
+  border-top: 1px solid var(--line);
+}
+.user-row:first-child {
+  border-top: 0;
+}
+.user-row[data-disabled='true'] .user-row__name > span:first-child {
+  color: var(--text-2);
+  text-decoration: line-through;
+}
+.user-row__main {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.user-row__name {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--fs-xl);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.user-row__facts {
+  color: var(--text-2);
+  font-size: var(--fs-sm);
+}
+.user-row__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.assign-group {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+}
+.assign-group__name {
+  display: block;
+  font-weight: 500;
+}
+.assign-group__meta {
+  display: block;
+  color: var(--text-2);
+  font-size: var(--fs-sm);
+  font-weight: 400;
+}
+.check-row > span:first-child {
+  min-width: 0;
+}
+
+.modal__body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-bottom: 12px;
+}
+.modal__body:empty {
+  display: none;
+}
+.modal__list {
+  list-style: disc;
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: var(--fs-base);
+}
+.temp-password {
+  min-height: var(--touch-lg);
+  font-size: var(--fs-lg);
+  letter-spacing: 0.03em;
+}
+
+@media (min-width: 720px) {
+  .user-row {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .user-row__actions {
+    justify-content: flex-end;
+    flex: none;
+  }
+}

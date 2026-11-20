@@ -19,3 +19,5 @@ export * from './ListRow';
 export * from './TopBar';
 export * from './SyncControls';
 export * from './AppShell';
+export * from './ProfileMenu';
+export * from './Modal';

@@ -1,4 +1,4 @@
-import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, Ref } from 'react';
+import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, Ref, SelectHTMLAttributes } from 'react';
 import { Link, type LinkProps } from 'react-router-dom';
 import { useId } from 'react';
 
@@ -42,6 +42,34 @@ export function TextField({ label, hint, id, ref, ...rest }: FieldProps) {
       <input ref={ref} id={inputId} className="field__input" aria-describedby={hint ? `${inputId}-hint` : undefined} {...rest} />
       {hint ? (
         <span className="field__hint" id={`${inputId}-hint`}>
+          {hint}
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
+interface SelectFieldProps extends Omit<SelectHTMLAttributes<HTMLSelectElement>, 'id'> {
+  label: ReactNode;
+  hint?: ReactNode;
+  id?: string;
+  ref?: Ref<HTMLSelectElement>;
+}
+
+/** Labelled native select with the same 48 px box as `TextField`. */
+export function SelectField({ label, hint, id, ref, children, ...rest }: SelectFieldProps) {
+  const auto = useId();
+  const selectId = id ?? auto;
+  return (
+    <div className="field">
+      <label className="field__label" htmlFor={selectId}>
+        {label}
+      </label>
+      <select ref={ref} id={selectId} className="field__input" aria-describedby={hint ? `${selectId}-hint` : undefined} {...rest}>
+        {children}
+      </select>
+      {hint ? (
+        <span className="field__hint" id={`${selectId}-hint`}>
           {hint}
         </span>
       ) : null}

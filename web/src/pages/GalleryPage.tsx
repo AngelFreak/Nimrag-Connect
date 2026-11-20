@@ -16,7 +16,7 @@ import {
   Legend,
   ListRow,
   MapView,
-  ProfileLink,
+  ProfileMenu,
   ProgressBar,
   RangeBar,
   Ring,
@@ -168,7 +168,7 @@ export function GalleryPage() {
         <div className="gallery__grid">
           <Frame label="Top bar of the main tabs (profile, sync, watch)">
             <div className="mainbar" style={{ padding: 8 }}>
-              <ProfileLink />
+              <ProfileMenu align="start" />
               <div className="mainbar__right">
                 <SyncButton spinning={false} onClick={() => setSpinDemo(true)} />
                 <WatchLink link="connected" />

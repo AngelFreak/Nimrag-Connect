@@ -256,7 +256,8 @@ describe('AppShell', () => {
         <h1>Today</h1>
       </AppShell>,
     );
-    expect(screen.getAllByRole('link', { name: 'Profile and settings' })[0]).toHaveAttribute('href', '/settings');
+    // The profile button opens a menu (username, Settings or Admin, Log out); see account.test.tsx.
+    expect(screen.getAllByRole('button', { name: 'Profile and account' })[0]).toHaveAttribute('aria-expanded', 'false');
     expect(screen.getAllByRole('button', { name: 'Refresh' }).length).toBeGreaterThan(0);
     expect(screen.getAllByRole('link', { name: 'Watch status unknown' })[0]).toHaveAttribute('href', '/devices');
     const navs = screen.getAllByRole('navigation', { name: 'Main' });
@@ -278,7 +279,22 @@ describe('AppShell', () => {
     );
     const bar = document.querySelector('.mainbar') as HTMLElement;
     expect(bar.tagName).toBe('HEADER');
-    expect(within(bar).getByRole('link', { name: 'Profile and settings' })).toBeInTheDocument();
+    expect(within(bar).getByRole('button', { name: 'Profile and account' })).toBeInTheDocument();
+  });
+
+  it('the admin area has no tabs, no sync and no watch: only the brand and the profile menu', () => {
+    wrap(
+      <AppShell area="admin">
+        <h1>Admin</h1>
+      </AppShell>,
+      '/admin',
+    );
+    expect(document.querySelector('.bottom-nav')).toBeNull();
+    expect(document.querySelector('.desk-nav')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Refresh' })).toBeNull();
+    expect(screen.queryByRole('link', { name: /Watch/ })).toBeNull();
+    expect(screen.getByRole('link', { name: 'Nimrag Connect' })).toHaveAttribute('href', '/admin');
+    expect(screen.getAllByRole('button', { name: 'Profile and account' }).length).toBeGreaterThan(0);
   });
 
   it('detail pages have no bottom navigation', () => {

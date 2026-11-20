@@ -1,11 +1,15 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { useQueryClient } from '@tanstack/react-query';
-import { ApiError, NetworkError, api } from '../api/client';
+import { api } from '../api/client';
+import type { EnrolRequest, LoginRequest, LoginResponse, Me } from '../api/generated';
+import { Brand, FormError } from '../account/AuthLayout';
+import { classifyStepError, describeLoginError, describeStepError } from '../account/errors';
+import { NewPasswordFields } from '../account/PasswordFields';
+import { passwordProblem } from '../account/passwords';
+import { landingPath, useSetupStatus, useStartSession } from '../account/queries';
+import { AuthenticatorPanel, CodeField } from '../account/TotpFields';
 import { Button, TextField } from '../components';
-import { AlertIcon } from '../components/icons';
 import { usePageTitle } from '../lib/hooks';
-import { useSetupStatus } from './SetupPage';
 
 /** Only same-origin paths are valid redirect targets after login. */
 export function safeNext(next: string | null): string {
@@ -13,31 +17,16 @@ export function safeNext(next: string | null): string {
   return next;
 }
 
-export function describeLoginError(error: unknown): string {
-  if (error instanceof ApiError) {
-    if (error.status === 401) return 'Wrong password.';
-    if (error.status === 429) return 'Too many attempts. Wait a little and try again.';
-    return `The server answered with an error (${error.status}). Try again.`;
-  }
-  if (error instanceof NetworkError) return 'Could not reach the server. Check your connection and try again.';
-  return 'Something went wrong. Try again.';
-}
+type Enrol = Extract<LoginResponse, { step: 'enrol2fa' }>;
+type Change = Extract<LoginResponse, { step: 'change_password' }>;
+type Step = { kind: 'credentials' } | { kind: 'enrol'; data: Enrol } | { kind: 'change'; data: Change };
 
-/** Password login: POST /api/login, then GET /api/me to confirm the session. */
-export function LoginPage() {
-  usePageTitle('Log in');
-  const navigate = useNavigate();
-  const [params] = useSearchParams();
-  const queryClient = useQueryClient();
+function CredentialsStep({ notice, onNext, onDone }: { notice: string | null; onNext: (step: Step) => void; onDone: (me: Me) => void }) {
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState<string | null>(null);
+  const [code, setCode] = useState('');
+  const [error, setError] = useState<string | null>(notice);
   const [busy, setBusy] = useState(false);
-  const setup = useSetupStatus();
-
-  // A new server has no password yet: the first visit sets one instead.
-  useEffect(() => {
-    if (setup.data?.needed) void navigate('/setup', { replace: true });
-  }, [setup.data, navigate]);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -45,49 +34,184 @@ export function LoginPage() {
     setBusy(true);
     setError(null);
     try {
-      await api.post('/api/login', { password }, { redirectOn401: false });
-      const me = await api.get('/api/me');
-      queryClient.clear();
-      queryClient.setQueryData(['me'], me);
-      void navigate(safeNext(params.get('next')), { replace: true });
+      const body: LoginRequest = { username: username.trim(), password };
+      if (code) body.code = code;
+      const res = await api.post<LoginResponse>('/api/login', body, { redirectOn401: false });
+      if (res.step === 'enrol2fa') onNext({ kind: 'enrol', data: res });
+      else if (res.step === 'change_password') onNext({ kind: 'change', data: res });
+      else onDone(res);
     } catch (err) {
       setError(describeLoginError(err));
       setPassword('');
+      setCode('');
     } finally {
       setBusy(false);
     }
   }
 
   return (
+    <form className="login" onSubmit={(e) => void onSubmit(e)} noValidate aria-label="Log in">
+      <Brand sub="Your watch data, on your own server." />
+      <TextField
+        label="Username"
+        name="username"
+        autoComplete="username"
+        autoCapitalize="off"
+        autoCorrect="off"
+        spellCheck={false}
+        required
+        value={username}
+        onChange={(e) => setUsername(e.target.value)}
+        aria-invalid={error ? true : undefined}
+      />
+      <TextField
+        label="Password"
+        type="password"
+        name="password"
+        autoComplete="current-password"
+        required
+        value={password}
+        onChange={(e) => setPassword(e.target.value)}
+        aria-invalid={error ? true : undefined}
+      />
+      <CodeField value={code} onChange={setCode} hint="From your authenticator app. Leave it empty the first time you log in." invalid={error !== null} />
+      <FormError>{error}</FormError>
+      <Button type="submit" variant="primary" size="lg" block disabled={busy || username.trim().length === 0 || password.length === 0}>
+        {busy ? 'Logging in' : 'Log in'}
+      </Button>
+    </form>
+  );
+}
+
+function EnrolStep({ data, onDone, onRestart }: { data: Enrol; onDone: (me: Me) => void; onRestart: (message: string | null) => void }) {
+  const [code, setCode] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirm, setConfirm] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const codeInput = useRef<HTMLInputElement>(null);
+  const passwordMissing = data.must_change_password ? passwordProblem(password, confirm) : null;
+
+  async function onSubmit(e: FormEvent) {
+    e.preventDefault();
+    if (busy || code.length !== 6 || passwordMissing) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const body: EnrolRequest = { pending_token: data.pending_token, code };
+      if (data.must_change_password) body.new_password = password;
+      const me = await api.post<Me>('/api/login/totp-enrol', body, { redirectOn401: false });
+      onDone(me);
+    } catch (err) {
+      const kind = classifyStepError(err);
+      if (kind === 'expired') {
+        onRestart('That step expired. Log in again.');
+        return;
+      }
+      setError(describeStepError(err));
+      setCode('');
+      if (kind === 'wrong-code') codeInput.current?.focus();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <form className="login" onSubmit={(e) => void onSubmit(e)} noValidate aria-label="Set up two-factor">
+      <Brand sub="Set up two-factor to finish logging in." />
+      <p className="stat__sub">Your account needs a second step. Add it to an authenticator app, then enter the 6-digit code the app shows.</p>
+      <AuthenticatorPanel uri={data.otpauth_uri} secret={data.secret} />
+      {data.must_change_password ? (
+        <NewPasswordFields password={password} confirm={confirm} onPassword={setPassword} onConfirm={setConfirm} hint="Replaces the temporary password you were given. At least 10 characters." />
+      ) : null}
+      <CodeField ref={codeInput} value={code} onChange={setCode} />
+      <FormError>{error}</FormError>
+      <Button type="submit" variant="primary" size="lg" block disabled={busy || code.length !== 6 || passwordMissing !== null}>
+        {busy ? 'Checking' : 'Finish and log in'}
+      </Button>
+      <Button onClick={() => onRestart(null)}>Start over</Button>
+    </form>
+  );
+}
+
+function ChangeStep({ data, onDone, onRestart }: { data: Change; onDone: (me: Me) => void; onRestart: (message: string | null) => void }) {
+  const [password, setPassword] = useState('');
+  const [confirm, setConfirm] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const problem = passwordProblem(password, confirm);
+
+  async function onSubmit(e: FormEvent) {
+    e.preventDefault();
+    if (busy || problem) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const me = await api.post<Me>('/api/login/change-password', { pending_token: data.pending_token, new_password: password }, { redirectOn401: false });
+      onDone(me);
+    } catch (err) {
+      if (classifyStepError(err) === 'expired') {
+        onRestart('That step expired. Log in again.');
+        return;
+      }
+      setError(describeStepError(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <form className="login" onSubmit={(e) => void onSubmit(e)} noValidate aria-label="Choose a new password">
+      <Brand sub="Choose your own password." />
+      <p className="stat__sub">You logged in with a temporary password. Choose a new one to continue.</p>
+      <NewPasswordFields password={password} confirm={confirm} onPassword={setPassword} onConfirm={setConfirm} />
+      <FormError>{error}</FormError>
+      <Button type="submit" variant="primary" size="lg" block disabled={busy || problem !== null}>
+        {busy ? 'Saving' : 'Save password and log in'}
+      </Button>
+      <Button onClick={() => onRestart(null)}>Start over</Button>
+    </form>
+  );
+}
+
+/**
+ * Login: username, password and the 6-digit code in one form (POST /api/login). A person who has
+ * no two-factor yet is led through enrolling it, and one with a temporary password through
+ * choosing their own, before the session starts.
+ */
+export function LoginPage() {
+  usePageTitle('Log in');
+  const navigate = useNavigate();
+  const [params] = useSearchParams();
+  const startSession = useStartSession();
+  const setup = useSetupStatus();
+  const [step, setStep] = useState<Step>({ kind: 'credentials' });
+  const [notice, setNotice] = useState<string | null>(null);
+
+  // A new server has no account yet: the first visit sets up the admin instead.
+  useEffect(() => {
+    if (setup.data?.needed) void navigate('/setup', { replace: true });
+  }, [setup.data, navigate]);
+
+  function done(me: Me) {
+    startSession(me);
+    void navigate(landingPath(me, params.get('next')), { replace: true });
+  }
+
+  function restart(message: string | null) {
+    setNotice(message);
+    setStep({ kind: 'credentials' });
+  }
+
+  return (
     <div className="center-page">
-      <form className="login" onSubmit={(e) => void onSubmit(e)} noValidate>
-        <div className="login__brand">
-          <img src="/icon.svg" alt="" width={44} height={44} />
-          <div>
-            <h1 className="login__title">Nimrag Connect</h1>
-            <p className="login__sub">Your watch data, on your own server.</p>
-          </div>
-        </div>
-        <TextField
-          label="Password"
-          type="password"
-          name="password"
-          autoComplete="current-password"
-          required
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          aria-invalid={error ? true : undefined}
-        />
-        {error ? (
-          <p className="login__error" role="alert">
-            <AlertIcon size={20} />
-            <span>{error}</span>
-          </p>
-        ) : null}
-        <Button type="submit" variant="primary" size="lg" block disabled={busy || password.length === 0}>
-          {busy ? 'Logging in' : 'Log in'}
-        </Button>
-      </form>
+      {step.kind === 'enrol' ? (
+        <EnrolStep data={step.data} onDone={done} onRestart={restart} />
+      ) : step.kind === 'change' ? (
+        <ChangeStep data={step.data} onDone={done} onRestart={restart} />
+      ) : (
+        <CredentialsStep notice={notice} onNext={setStep} onDone={done} />
+      )}
     </div>
   );
 }

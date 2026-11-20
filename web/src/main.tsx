@@ -13,6 +13,7 @@ import '@fontsource/space-grotesk/latin-600.css';
 import './styles/tokens.css';
 import './styles/global.css';
 import './styles/components.css';
+import './styles/account.css';
 
 import { App } from './App';
 import { queryClient } from './api/queryClient';

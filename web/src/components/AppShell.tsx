@@ -2,7 +2,8 @@ import { useEffect, useRef, type ReactNode } from 'react';
 import { Link, Outlet, useLocation } from 'react-router-dom';
 import { ActivitiesIcon, HealthIcon, StrengthIcon, TodayIcon } from './icons';
 import { isNativeApp } from '../native';
-import { MainBar, ProfileLink, SyncAndWatch } from './SyncControls';
+import { ProfileMenu } from './ProfileMenu';
+import { MainBar, SyncAndWatch } from './SyncControls';
 
 export type NavKey = 'today' | 'activities' | 'sleep' | 'health' | 'strength' | 'devices' | 'other';
 
@@ -77,6 +78,11 @@ interface AppShellProps {
    * and use their own back button.
    */
   tabs?: boolean;
+  /**
+   * The admin area: no data tabs, no sync or watch buttons. The header holds the brand (a link to
+   * /admin) and the profile menu; a phone gets a small top bar with the profile button.
+   */
+  area?: 'data' | 'admin';
   /** Render children instead of the router outlet (gallery, tests). */
   children?: ReactNode;
 }
@@ -85,7 +91,8 @@ interface AppShellProps {
  * Page frame. Phone: optional top bar, the page, bottom navigation.
  * From 1024 px: the dashboard layout with the navigation in a header, content up to 1280 px.
  */
-export function AppShell({ tabs = false, children }: AppShellProps) {
+export function AppShell({ tabs = false, area = 'data', children }: AppShellProps) {
+  const admin = area === 'admin';
   const { pathname, search } = useLocation();
   const active = navKeyFor(pathname, search);
   const main = useRef<HTMLElement>(null);
@@ -107,24 +114,30 @@ export function AppShell({ tabs = false, children }: AppShellProps) {
       </a>
       <header className="shell__header">
         <div className="shell__header-inner">
-          <Link to="/" className="shell__brand">
+          <Link to={admin ? '/admin' : '/'} className="shell__brand">
             Nimrag Connect
           </Link>
-          <DesktopNav active={active} />
+          {admin ? <div className="shell__spacer" /> : <DesktopNav active={active} />}
           <div className="shell__tools">
-            <SyncAndWatch />
-            <ProfileLink />
+            {admin ? null : <SyncAndWatch />}
+            <ProfileMenu align="end" />
           </div>
         </div>
       </header>
       <div className="shell__body">
         {tabs ? <MainBar /> : null}
+        {admin ? (
+          // Phone only (the header takes over from 1024 px); a banner landmark like the main bar.
+          <header className="mainbar">
+            <ProfileMenu align="start" />
+          </header>
+        ) : null}
         <main id="main" ref={main} tabIndex={-1} style={{ outline: 'none' }}>
           {children ?? <Outlet />}
         </main>
       </div>
       {/* In the Android app the native bottom bar replaces this one. */}
-      {tabs && !isNativeApp() ? <BottomNav active={active} /> : null}
+      {tabs && !admin && !isNativeApp() ? <BottomNav active={active} /> : null}
     </div>
   );
 }
