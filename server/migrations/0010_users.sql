@@ -300,7 +300,7 @@ ALTER TABLE vo2max RENAME TO vo2max_old;
 CREATE TABLE vo2max (
     user_id INTEGER NOT NULL DEFAULT 0,
     ts           INTEGER,
-    maximal_met  REAL NOT NULL,,
+    maximal_met  REAL NOT NULL,
     sport        INTEGER,
     src          INTEGER NOT NULL,
     PRIMARY KEY (user_id, ts)
