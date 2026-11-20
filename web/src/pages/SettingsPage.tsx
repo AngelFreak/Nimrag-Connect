@@ -4,7 +4,7 @@ import { usePageTitle } from '../lib/hooks';
 import { GarminCard } from './system/GarminCard';
 import { GoalsCard } from './system/GoalsCard';
 import { PasswordCard } from './system/PasswordCard';
-import { TokensCard } from './system/TokensCard';
+import { PhonesCard } from './system/PhonesCard';
 import { TwoFactorCard } from './system/TwoFactorCard';
 import { errorMessage } from './system/errors';
 import { useSettings } from './today/queries';
@@ -26,7 +26,7 @@ export function SettingsPage() {
         variant="back"
         backTo="/"
         title="Settings"
-        subtitle="Timezone, goals, device tokens, two-factor and password"
+        subtitle="Timezone, goals, signed-in phones, two-factor and password"
         aside={<SampleDataChip sample={settings.data?.sample} />}
       />
       <div className="page">
@@ -45,7 +45,7 @@ export function SettingsPage() {
               </ErrorState>
             </Card>
           )}
-          <TokensCard timezone={timezone} />
+          <PhonesCard timezone={timezone} />
           <GarminCard timezone={timezone} />
           <TwoFactorCard />
           <PasswordCard />

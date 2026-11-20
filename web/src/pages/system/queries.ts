@@ -11,8 +11,6 @@ import type {
   GarminMfaRequest,
   GarminStatus,
   Me,
-  NewToken,
-  NewTokenResponse,
   SettingsPatch,
   SettingsResponse,
   SetupStartResponse,
@@ -27,16 +25,6 @@ export const GARMIN_KEY = ['garmin'] as const;
 
 export function useTokens() {
   return useQuery({ queryKey: TOKENS_KEY, queryFn: ({ signal }) => api.get<TokenList>('/api/tokens', { signal }) });
-}
-
-/** Creates a device token. The secret is returned to the caller only; it is never put in the query cache. */
-export function useCreateToken() {
-  const client = useQueryClient();
-  return useMutation({
-    // A wrong owner password is 403 (not 401), so it is not mistaken for a lost session.
-    mutationFn: (body: NewToken) => api.post<NewTokenResponse>('/api/tokens', body),
-    onSuccess: () => client.invalidateQueries({ queryKey: TOKENS_KEY }),
-  });
 }
 
 export function useRevokeToken() {

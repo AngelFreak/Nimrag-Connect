@@ -128,7 +128,7 @@ export function UploadersCard({ query, timezone }: { query: UseQueryResult<Devic
       <Pending query={query} what="the upload devices" height={90}>
         {(d) =>
           d.upload_devices.length === 0 ? (
-            <p className="stat__sub">No device has been set up to upload yet. Create a device token in Settings.</p>
+            <p className="stat__sub">No phone has signed in to upload yet. Sign in to the Nimrag Connect app on your phone.</p>
           ) : (
             <Table
               caption="Upload devices"
@@ -145,7 +145,7 @@ export function UploadersCard({ query, timezone }: { query: UseQueryResult<Devic
         }
       </Pending>
       <LinkButton to="/settings" size="lg">
-        Manage device tokens
+        Manage signed-in phones
       </LinkButton>
     </Card>
   );

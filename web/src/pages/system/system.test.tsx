@@ -6,9 +6,7 @@ import { DevicesPage } from '../DevicesPage';
 import { SettingsPage } from '../SettingsPage';
 import { json, mockApi, renderAt } from '../body/testUtils';
 import { parseTokenFile } from './GarminCard';
-import { describeTokenError } from './TokensCard';
 import { validateGoals, formFrom } from './GoalsCard';
-import { ApiError } from '../../api/client';
 
 const settings: SettingsResponse = {
   timezone: 'Europe/Copenhagen',
@@ -62,7 +60,7 @@ describe('Devices page', () => {
     expect(screen.getByText('1,284 files, 212 MB')).toBeInTheDocument();
     expect(screen.getByText('5.0 MB')).toBeInTheDocument();
     expect(screen.getByText('Pixel 9a', { selector: 'td' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Manage device tokens' })).toHaveAttribute('href', '/settings');
+    expect(screen.getByRole('link', { name: 'Manage signed-in phones' })).toHaveAttribute('href', '/settings');
     expect(screen.getByText('Read in part').nextElementSibling).toHaveTextContent('3');
   });
 
@@ -177,69 +175,46 @@ describe('Settings: timezone and goals', () => {
   });
 });
 
-describe('Settings: device tokens', () => {
-  it('lists tokens, revoked ones without a Revoke button, never used as "Never"', async () => {
+describe('Settings: signed-in phones', () => {
+  it('lists the active phones with when they signed in and were last used, never a token', async () => {
     mockApi(settingsRoutes());
     renderAt(<SettingsPage />, '/settings');
-    const table = await screen.findByRole('table', { name: 'Device tokens' });
-    expect(within(table).getByText('Pixel 9a')).toBeInTheDocument();
-    expect(within(table).getByRole('button', { name: 'Revoke token Pixel 9a' })).toBeInTheDocument();
-    expect(within(table).queryByRole('button', { name: 'Revoke token Old phone' })).not.toBeInTheDocument();
-    expect(within(table).getByText('Never')).toBeInTheDocument();
+    const list = await screen.findByRole('list', { name: 'Signed-in phones' });
+    expect(within(list).getByText('Pixel 9a')).toBeInTheDocument();
+    expect(within(list).getAllByRole('listitem')).toHaveLength(1);
+    expect(within(list).getByText('Signed in')).toBeInTheDocument();
+    expect(within(list).getByText('Last used')).toBeInTheDocument();
+    expect(within(list).getByRole('button', { name: 'Sign out this phone, Pixel 9a' })).toHaveTextContent('Sign out this phone');
+    // A revoked phone is signed out already: it is not listed.
+    expect(within(list).queryByText('Old phone')).not.toBeInTheDocument();
+    // Users do not create or copy tokens.
+    expect(screen.queryByRole('button', { name: 'Create token' })).not.toBeInTheDocument();
+    expect(screen.queryByText(/device token/i)).not.toBeInTheDocument();
   });
 
-  it('revoking asks once more, then calls DELETE', async () => {
+  it('with no phone signed in, says how a phone signs in', async () => {
+    mockApi({ ...settingsRoutes(), '/api/tokens': { tokens: [] } });
+    renderAt(<SettingsPage />, '/settings');
+    expect(await screen.findByText(/No phone is signed in/)).toBeInTheDocument();
+    expect(screen.queryByRole('list', { name: 'Signed-in phones' })).not.toBeInTheDocument();
+  });
+
+  it('signing a phone out asks once more, then calls DELETE', async () => {
     const { calls } = mockApi({ ...settingsRoutes(), 'DELETE /api/tokens/1': () => new Response(null, { status: 204 }) });
     renderAt(<SettingsPage />, '/settings');
-    await userEvent.click(await screen.findByRole('button', { name: 'Revoke token Pixel 9a' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Sign out this phone, Pixel 9a' }));
     expect(calls.some((c) => c.init?.method === 'DELETE')).toBe(false);
-    await userEvent.click(screen.getByRole('button', { name: 'Confirm revoking token Pixel 9a' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Yes, sign it out, Pixel 9a' }));
     await waitFor(() => expect(calls.some((c) => c.init?.method === 'DELETE' && c.url === '/api/tokens/1')).toBe(true));
   });
 
-  it('creating a token needs the password, shows the secret once with a warning, and copies it', async () => {
-    const writeText = vi.fn(async () => {});
-    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
-    const { calls } = mockApi({
-      ...settingsRoutes(),
-      'POST /api/tokens': () => json({ id: 3, name: 'Tablet', token: 'nrg_secret_value_123' }, { status: 201 }),
-    });
+  it('cancelling the confirmation changes nothing', async () => {
+    const { calls } = mockApi(settingsRoutes());
     renderAt(<SettingsPage />, '/settings');
-    await userEvent.click(await screen.findByRole('button', { name: 'Create token' }));
-    await userEvent.type(screen.getByLabelText('Name', { exact: true }), 'Tablet');
-    await userEvent.type(screen.getByLabelText('Your password'), 'correct horse battery');
-    await userEvent.click(screen.getByRole('button', { name: 'Create token' }));
-
-    const post = calls.find((c) => c.init?.method === 'POST')!;
-    expect(JSON.parse(String(post.init?.body))).toEqual({ name: 'Tablet', password: 'correct horse battery' });
-    expect(await screen.findByRole('alert')).toHaveTextContent(/shown only once/);
-    expect(screen.getByLabelText('Token')).toHaveValue('nrg_secret_value_123');
-
-    await userEvent.click(screen.getByRole('button', { name: 'Copy token' }));
-    expect(writeText).toHaveBeenCalledWith('nrg_secret_value_123');
-    expect(await screen.findByText('Copied to the clipboard.')).toBeInTheDocument();
-
-    await userEvent.click(screen.getByRole('button', { name: 'I have saved it' }));
-    expect(screen.queryByDisplayValue('nrg_secret_value_123')).not.toBeInTheDocument();
-    expect(screen.queryByText(/nrg_secret_value_123/)).not.toBeInTheDocument();
-  });
-
-  it('a wrong password (403) says so and creates nothing', async () => {
-    mockApi({ ...settingsRoutes(), 'POST /api/tokens': () => json({ error: 'wrong password' }, { status: 403 }) });
-    renderAt(<SettingsPage />, '/settings');
-    await userEvent.click(await screen.findByRole('button', { name: 'Create token' }));
-    await userEvent.type(screen.getByLabelText('Name', { exact: true }), 'Tablet');
-    await userEvent.type(screen.getByLabelText('Your password'), 'nope');
-    await userEvent.click(screen.getByRole('button', { name: 'Create token' }));
-    expect(await screen.findByRole('alert')).toHaveTextContent('Wrong password.');
-    expect(screen.queryByLabelText('Token')).not.toBeInTheDocument();
-    expect(screen.getByLabelText('Your password')).toHaveValue('');
-  });
-
-  it('describes the refusals in plain words', () => {
-    expect(describeTokenError(new ApiError(403, 'x'))).toBe('Wrong password.');
-    expect(describeTokenError(new ApiError(429, 'x'))).toMatch(/Too many attempts/);
-    expect(describeTokenError(new ApiError(500, 'database busy'))).toBe('database busy');
+    await userEvent.click(await screen.findByRole('button', { name: 'Sign out this phone, Pixel 9a' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Cancel, Pixel 9a' }));
+    expect(screen.getByRole('button', { name: 'Sign out this phone, Pixel 9a' })).toBeInTheDocument();
+    expect(calls.some((c) => c.init?.method === 'DELETE')).toBe(false);
   });
 });
 

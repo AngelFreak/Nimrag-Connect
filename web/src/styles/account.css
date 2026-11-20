@@ -200,3 +200,60 @@ select.field__input {
     flex: none;
   }
 }
+
+/* Settings, signed-in phones: one wrapping block per phone, never wider than the card (320 px up). */
+.phones-card {
+  min-width: 0;
+}
+.phones {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.phones__item {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+.phones__item:first-child {
+  padding-top: 0;
+  border-top: 0;
+}
+.phones__name {
+  margin: 0;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.phones__meta {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 20px;
+  font-size: var(--fs-sm);
+  color: var(--text-2);
+}
+.phones__meta div {
+  min-width: 0;
+}
+.phones__meta dt {
+  display: inline;
+}
+.phones__meta dt::after {
+  content: ': ';
+}
+.phones__meta dd {
+  display: inline;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.phones__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
