@@ -17,7 +17,7 @@ export function describeTokenError(error: unknown): string {
 }
 
 /** The token is shown once, with a warning and a copy button. Closing it drops the secret from memory. */
-function NewTokenNotice({ token, onClose }: { token: NewTokenResponse; onClose: () => void }) {
+export function NewTokenNotice({ token, onClose }: { token: NewTokenResponse; onClose: () => void }) {
   const [copied, setCopied] = useState<'yes' | 'no' | null>(null);
   const box = useRef<HTMLTextAreaElement>(null);
   const heading = useRef<HTMLHeadingElement>(null);

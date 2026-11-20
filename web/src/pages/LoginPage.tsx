@@ -1,10 +1,11 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { ApiError, NetworkError, api } from '../api/client';
 import { Button, TextField } from '../components';
 import { AlertIcon } from '../components/icons';
 import { usePageTitle } from '../lib/hooks';
+import { useSetupStatus } from './SetupPage';
 
 /** Only same-origin paths are valid redirect targets after login. */
 export function safeNext(next: string | null): string {
@@ -31,6 +32,12 @@ export function LoginPage() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const setup = useSetupStatus();
+
+  // A new server has no password yet: the first visit sets one instead.
+  useEffect(() => {
+    if (setup.data?.needed) void navigate('/setup', { replace: true });
+  }, [setup.data, navigate]);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();

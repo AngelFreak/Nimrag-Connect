@@ -738,3 +738,75 @@ async fn at_most_twenty_active_tokens_via_the_web() {
         .await;
     assert_eq!(s, StatusCode::CREATED);
 }
+
+#[tokio::test]
+async fn first_run_setup_sets_the_password_once_and_signs_in() {
+    let e = env_at(1_800_000_000).await;
+    let (s, _, j) = e.call(Method::GET, "/api/setup", None, false, None).await;
+    assert_eq!(s, StatusCode::OK);
+    assert_eq!(j["needed"], true);
+
+    // CSRF header required; short passwords refused.
+    let (s, _, _) = e
+        .call(
+            Method::POST,
+            "/api/setup",
+            None,
+            false,
+            login_body(PASSWORD),
+        )
+        .await;
+    assert_eq!(s, StatusCode::FORBIDDEN);
+    let (s, _, _) = e
+        .call(Method::POST, "/api/setup", None, true, login_body("short"))
+        .await;
+    assert_eq!(s, StatusCode::BAD_REQUEST);
+
+    let (s, h, j) = e
+        .call(Method::POST, "/api/setup", None, true, login_body(PASSWORD))
+        .await;
+    assert_eq!(s, StatusCode::CREATED);
+    assert_eq!(j["authenticated"], true);
+    let set = h.get(header::SET_COOKIE).unwrap().to_str().unwrap();
+    assert!(set.contains("__Host-nimrag_session=") && set.contains("HttpOnly"));
+    let cookie = set.split(';').next().unwrap().to_owned();
+    let (s, _, _) = e
+        .call(Method::GET, "/api/me", Some(&cookie), false, None)
+        .await;
+    assert_eq!(s, StatusCode::OK);
+
+    // Closed from now on, for everyone, and the password is the one given.
+    let (_, _, j) = e.call(Method::GET, "/api/setup", None, false, None).await;
+    assert_eq!(j["needed"], false);
+    let (s, h, _) = e
+        .call(
+            Method::POST,
+            "/api/setup",
+            Some(&cookie),
+            true,
+            login_body("another password"),
+        )
+        .await;
+    assert_eq!(s, StatusCode::CONFLICT);
+    assert!(h.get(header::SET_COOKIE).is_none());
+    let (s, _, _) = e
+        .call(
+            Method::POST,
+            "/api/login",
+            None,
+            false,
+            login_body(PASSWORD),
+        )
+        .await;
+    assert_eq!(s, StatusCode::OK);
+}
+
+#[tokio::test]
+async fn racing_owner_claims_have_one_winner() {
+    let e = env_at(1_800_000_000).await;
+    let (a, b) = tokio::join!(
+        nimrag_server::auth::claim_owner(&e.pool, "first password", 0),
+        nimrag_server::auth::claim_owner(&e.pool, "second password", 0),
+    );
+    assert_ne!(a.unwrap(), b.unwrap());
+}

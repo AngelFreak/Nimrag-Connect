@@ -1,4 +1,4 @@
-//! Login, logout, `GET /api/me` and device-token management.
+//! First-run setup, login, logout, `GET /api/me` and device-token management.
 
 use super::{ApiJson, Ctx};
 use crate::api::{ApiError, AppState};
@@ -21,6 +21,12 @@ pub fn routes() -> Router<AppState> {
             "/api/login",
             post(login).layer(DefaultBodyLimit::max(crate::api::MAX_LOGIN_BYTES)),
         )
+        .route(
+            "/api/setup",
+            get(setup_status)
+                .post(setup)
+                .layer(DefaultBodyLimit::max(crate::api::MAX_LOGIN_BYTES)),
+        )
         .route("/api/logout", post(logout))
         .route("/api/me", get(me))
         .route("/api/tokens", get(list_tokens).post(create_token))
@@ -38,6 +44,18 @@ pub struct Me {
 
 #[derive(Debug, Serialize, Deserialize, TS)]
 pub struct LoginRequest {
+    pub password: String,
+}
+
+/// `GET /api/setup`: whether the server still waits for its owner password.
+#[derive(Debug, Serialize, Deserialize, TS)]
+pub struct SetupStatus {
+    pub needed: bool,
+}
+
+/// `POST /api/setup`: the first owner password (only while none is set).
+#[derive(Debug, Serialize, Deserialize, TS)]
+pub struct SetupRequest {
     pub password: String,
 }
 
@@ -68,7 +86,7 @@ fn password_refusal(verdict: Verdict) -> Option<Response> {
         Verdict::NoOwner => Some(
             ApiError::new(
                 StatusCode::CONFLICT,
-                "no password set; run `nimrag-server user set-password`",
+                "no password set; open the web app to set one",
             )
             .into_response(),
         ),
@@ -94,6 +112,52 @@ async fn login(
     };
     Ok(with_cookie(
         Json(me).into_response(),
+        &auth::set_cookie_header(Some(&id), state.insecure_cookies),
+    ))
+}
+
+async fn setup_status(State(state): State<AppState>) -> Result<Json<SetupStatus>, ApiError> {
+    let needed = auth::owner_hash(&state.pool).await?.is_none();
+    Ok(Json(SetupStatus { needed }))
+}
+
+/// Sets the first owner password and signs the caller in. Open to anyone who can
+/// reach the server, but only until a password exists; after that it is 409 and
+/// changing the password stays a server command.
+async fn setup(
+    State(state): State<AppState>,
+    ApiJson(body): ApiJson<SetupRequest>,
+) -> Result<Response, ApiError> {
+    if body.password.chars().count() < auth::MIN_PASSWORD_LEN {
+        return Err(ApiError::bad_request(format!(
+            "password must have at least {} characters",
+            auth::MIN_PASSWORD_LEN
+        )));
+    }
+    let already = || ApiError::new(StatusCode::CONFLICT, "the owner password is already set");
+    if auth::owner_hash(&state.pool).await?.is_some() {
+        return Err(already());
+    }
+    // One argon2 job at a time, as for logins.
+    let _permit = state
+        .login_gate
+        .acquire()
+        .await
+        .map_err(|e| anyhow::anyhow!("login gate closed: {e}"))?;
+    let now = state.now();
+    if !auth::claim_owner(&state.pool, &body.password, now).await? {
+        return Err(already());
+    }
+    tracing::info!("owner password set through first-run setup");
+    let id = auth::create_session(&state.pool, now).await?;
+    let ctx = Ctx::new(&state).await?;
+    let me = Me {
+        authenticated: true,
+        timezone: ctx.tz().name().to_owned(),
+        sample: ctx.sample(),
+    };
+    Ok(with_cookie(
+        (StatusCode::CREATED, Json(me)).into_response(),
         &auth::set_cookie_header(Some(&id), state.insecure_cookies),
     ))
 }

@@ -68,6 +68,26 @@ pub async fn set_password(pool: &SqlitePool, password: &str, now: i64) -> Result
     Ok(())
 }
 
+/// First-run setup: store the owner's password only if none is set yet. Returns
+/// `false` (and changes nothing) when an owner already exists, so of two racing
+/// setups exactly one wins.
+pub async fn claim_owner(pool: &SqlitePool, password: &str, now: i64) -> Result<bool> {
+    if password.chars().count() < MIN_PASSWORD_LEN {
+        anyhow::bail!("password must have at least {MIN_PASSWORD_LEN} characters");
+    }
+    let password = password.to_owned();
+    let hash = tokio::task::spawn_blocking(move || hash_password(&password)).await??;
+    let done = sqlx::query(
+        "INSERT INTO owner (id, password_hash, updated_at) VALUES (1, ?, ?)
+         ON CONFLICT (id) DO NOTHING",
+    )
+    .bind(hash)
+    .bind(now)
+    .execute(pool)
+    .await?;
+    Ok(done.rows_affected() == 1)
+}
+
 pub async fn owner_hash(pool: &SqlitePool) -> Result<Option<String>> {
     Ok(
         sqlx::query_scalar::<_, String>("SELECT password_hash FROM owner WHERE id = 1")

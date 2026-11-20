@@ -194,6 +194,8 @@ pub fn export_types(dir: &Path) -> anyhow::Result<()> {
         &cfg,
         account::Me,
         account::LoginRequest,
+        account::SetupStatus,
+        account::SetupRequest,
         account::TokenList,
         account::NewToken,
         account::NewTokenResponse,

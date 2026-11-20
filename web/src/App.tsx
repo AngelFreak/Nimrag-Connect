@@ -15,6 +15,7 @@ import { LoginPage } from './pages/LoginPage';
 import { MovementPage } from './pages/MovementPage';
 import { NotFoundPage } from './pages/NotFoundPage';
 import { SettingsPage } from './pages/SettingsPage';
+import { SetupPage } from './pages/SetupPage';
 import { SleepPage } from './pages/SleepPage';
 import { StrengthPage } from './pages/StrengthPage';
 import { TodayPage } from './pages/TodayPage';
@@ -30,8 +31,10 @@ export function App() {
   useEffect(() => {
     setUnauthorizedHandler(() => {
       const here = window.location.pathname + window.location.search;
-      if (window.location.pathname.startsWith('/login')) return;
-      void navigate(`/login?next=${encodeURIComponent(here)}`, { replace: true });
+      if (window.location.pathname.startsWith('/login') || window.location.pathname.startsWith('/setup')) return;
+      void navigate(`/login?next=${encodeURIComponent(here)}`, {
+        replace: true,
+      });
     });
     return () => setUnauthorizedHandler(null);
   }, [navigate]);
@@ -39,6 +42,7 @@ export function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/setup" element={<SetupPage />} />
       {/* Main tabs: top bar (profile, sync, watch) and bottom navigation on a phone. */}
       <Route element={<AppShell tabs />}>
         <Route index element={<TodayPage />} />

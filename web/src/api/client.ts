@@ -47,7 +47,7 @@ const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 type UnauthorizedHandler = () => void;
 
 function defaultUnauthorized(): void {
-  if (window.location.pathname.startsWith('/login')) return;
+  if (window.location.pathname.startsWith('/login') || window.location.pathname.startsWith('/setup')) return;
   const next = window.location.pathname + window.location.search;
   window.location.assign(`/login?next=${encodeURIComponent(next)}`);
 }

@@ -24,6 +24,8 @@ export type { NewToken } from "./NewToken";
 export type { NewTokenResponse } from "./NewTokenResponse";
 export type { SettingsPatch } from "./SettingsPatch";
 export type { SettingsResponse } from "./SettingsResponse";
+export type { SetupRequest } from "./SetupRequest";
+export type { SetupStatus } from "./SetupStatus";
 export type { SleepNightResponse } from "./SleepNightResponse";
 export type { SleepNightsResponse } from "./SleepNightsResponse";
 export type { StorageResponse } from "./StorageResponse";
