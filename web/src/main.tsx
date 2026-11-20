@@ -31,5 +31,21 @@ createRoot(root).render(
   </StrictMode>,
 );
 
-// Offline shell. The worker is only generated in production builds.
-if (import.meta.env.PROD) registerSW({ immediate: true });
+// Offline shell. The worker is only generated in production builds. The browser checks for a new
+// worker only on navigation, and the Android app keeps one page open for days, so also check when
+// the page comes back to the foreground and every hour; a new worker reloads the page (autoUpdate).
+if (import.meta.env.PROD) {
+  registerSW({
+    immediate: true,
+    onRegisteredSW(_url, registration) {
+      if (!registration) return;
+      const check = () => {
+        if (navigator.onLine) void registration.update().catch(() => undefined);
+      };
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') check();
+      });
+      setInterval(check, 60 * 60 * 1000);
+    },
+  });
+}
