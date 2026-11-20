@@ -225,6 +225,8 @@ const TABLES: &[&str] = &[
     "activities",
     "activity_sessions",
     "activity_laps",
+    "activity_records",
+    "activity_time_in_zone",
     "strength_sets",
     "exercise_titles",
     "activity_metrics",
@@ -912,4 +914,418 @@ async fn another_users_watch_activity_hides_nothing() {
         count(&e.pool, "SELECT COUNT(*) FROM activities_current").await,
         3
     );
+}
+
+// ---- records ----------------------------------------------------------------------------------
+
+/// Made-up position: 10.0 degrees north, 20.0 east, plus `step` semicircle units (nowhere real).
+const LAT0: i64 = 119_304_647;
+const LON0: i64 = 238_609_294;
+
+fn fit_secs(unix: i64) -> i64 {
+    unix - FIT_EPOCH
+}
+
+fn fld(name: &str, def: i64, base: &str, raw: Value, value: Value) -> Value {
+    json!({"name": name, "definition_number": def, "base_type": base, "raw_value": raw, "value": value})
+}
+
+/// One `record` message the way the connector returns it: some fields named, some `unknown_N`.
+/// `named` false = the connector's decoder lacked the profile for speed and altitude.
+fn record(idx: i64, unix: i64, step: i64, hr: i64, named: bool) -> Value {
+    let mut f = vec![
+        fld(
+            "timestamp",
+            253,
+            "uint32",
+            json!(fit_secs(unix)),
+            json!("2026-03-12T16:00:00"),
+        ),
+        fld(
+            "position_lat",
+            0,
+            "sint32",
+            json!(LAT0 + step),
+            json!(LAT0 + step),
+        ),
+        fld(
+            "position_long",
+            1,
+            "sint32",
+            json!(LON0 + step),
+            json!(LON0 + step),
+        ),
+        fld(
+            "distance",
+            5,
+            "uint32",
+            json!(100 * step),
+            json!(step as f64),
+        ),
+        fld("heart_rate", 3, "uint8", json!(hr), json!(hr)),
+        fld("unknown_134", 134, "uint8", json!(9), json!(9)),
+    ];
+    if named {
+        f.push(fld("enhanced_speed", 73, "uint32", json!(2500), json!(2.5)));
+        f.push(fld(
+            "enhanced_altitude",
+            78,
+            "uint32",
+            json!(2464),
+            json!(-7.2),
+        ));
+    } else {
+        f.push(fld("unknown_73", 73, "uint32", json!(2500), json!(2500)));
+        f.push(fld("unknown_78", 78, "uint32", json!(2464), json!(2464)));
+    }
+    json!({"message_index": idx, "type": "record", "global_message_number": 20, "fields": f})
+}
+
+/// A `time_in_zone` message (the connector names it `unknown_216`): the raw array is in
+/// milliseconds.
+fn zone_msg(idx: i64, ref_mesg: i64, ref_index: i64, ms: Value) -> Value {
+    json!({"message_index": idx, "type": "unknown_216", "global_message_number": 216, "fields": [
+        fld("unknown_253", 253, "uint32", json!(1), json!(1)),
+        fld("unknown_0", 0, "uint16", json!(ref_mesg), json!(ref_mesg)),
+        fld("unknown_1", 1, "uint16", json!(ref_index), json!(ref_index)),
+        fld("unknown_2", 2, "uint32", ms.clone(), ms),
+        fld("unknown_6", 6, "uint8", json!([101, 121, 141, 162, 182, 202]), json!([101, 121, 141, 162, 182, 202])),
+    ]})
+}
+
+fn page(id: i64, offset: i64, messages: Vec<Value>) -> Value {
+    json!({"activity_id": id, "source": "garmin_original_fit",
+           "pagination": {"offset": offset, "limit": 5000, "returned_count": messages.len()},
+           "messages": messages})
+}
+
+/// Records for the detailed strength session 1002 (starts 17:00 local = 16:00 UTC), in two pages
+/// that overlap on message 2, as the connector pages when the limit is small.
+fn write_records(dir: &Path) {
+    let t0 = cph(2026, 3, 12, 17, 0);
+    write_json(
+        dir,
+        "records/1002_0.json",
+        &page(
+            1002,
+            0,
+            vec![
+                record(0, t0, 0, 100, true),
+                record(1, t0 + 1, 10, 110, false),
+                record(2, t0 + 2, 20, 120, true),
+                // a record without a timestamp or any value is not a row
+                json!({"message_index": 3, "type": "record", "global_message_number": 20,
+                       "fields": [fld("unknown_134", 134, "uint8", json!(1), json!(1))]}),
+            ],
+        ),
+    );
+    write_json(
+        dir,
+        "records/1002_4.json",
+        &page(
+            1002,
+            4,
+            vec![
+                record(2, t0 + 2, 20, 120, true),
+                zone_msg(4, 216, 0, json!([6002, 26147, 17000, 0, 0, 0, 0])),
+                record(5, t0 + 3, 30, 130, false),
+                zone_msg(6, 18, 0, json!([10_000, 60_000, 300_000, null, 0, 0, 0])),
+                {
+                    // a heart rate of 255 is the FIT "invalid" value, not a reading
+                    let mut r = record(7, t0 + 4, 40, 255, false);
+                    r["fields"][4]["raw_value"] = json!(255);
+                    r
+                },
+            ],
+        ),
+    );
+}
+
+fn q(s: &str) -> sqlx::AssertSqlSafe<String> {
+    sqlx::AssertSqlSafe(s.to_owned())
+}
+
+async fn sha_of(pool: &SqlitePool, key: &str) -> String {
+    sqlx::query_scalar(sqlx::AssertSqlSafe(format!(
+        "SELECT sha256 FROM activities_current WHERE activity_key = '{key}'"
+    )))
+    .fetch_one(pool)
+    .await
+    .unwrap()
+}
+
+#[tokio::test]
+async fn records_fill_the_track_the_charts_and_the_zones() {
+    let e = env_at(now()).await;
+    let input = fixtures();
+    write_records(input.path());
+    let out = import(&e, input.path());
+    // The records directory is not a pile of unrecognised files.
+    assert!(out.contains("JSON files read:      8"), "{out}");
+    assert!(out.contains("not Connect JSON (not stored): 0"), "{out}");
+    assert!(out.contains("activities with records: 1"), "{out}");
+    assert!(out.contains("blobs stored new:     8"), "{out}");
+
+    let sha = sha_of(&e.pool, "connect:1002").await;
+    let n = count(
+        &e.pool,
+        &format!("SELECT COUNT(*) FROM activity_records WHERE sha256 = '{sha}'"),
+    )
+    .await;
+    assert_eq!(
+        n, 5,
+        "messages 0, 1, 2, 5, 7 (2 is on both pages, 3 has no value)"
+    );
+    let first: (i64, f64, f64, f64, f64, f64, f64) = sqlx::query_as(q(&format!(
+        "SELECT ts, lat, lon, hr, speed, altitude_m, distance_m FROM activity_records
+         WHERE sha256 = '{sha}' ORDER BY idx LIMIT 1"
+    )))
+    .fetch_one(&e.pool)
+    .await
+    .unwrap();
+    assert_eq!(first.0, cph(2026, 3, 12, 17, 0));
+    assert!(
+        (first.1 - 10.0).abs() < 1e-6 && (first.2 - 20.0).abs() < 1e-6,
+        "degrees"
+    );
+    assert_eq!((first.3, first.4, first.6), (100.0, 2.5, 0.0));
+    assert!((first.5 + 7.2).abs() < 1e-9, "metres");
+    // Unnamed speed and altitude are scaled here: the same numbers.
+    let second: (f64, f64, f64) = sqlx::query_as(q(&format!(
+        "SELECT speed, altitude_m, distance_m FROM activity_records WHERE sha256 = '{sha}' AND idx = 1"
+    )))
+    .fetch_one(&e.pool)
+    .await
+    .unwrap();
+    assert!((second.0 - 2.5).abs() < 1e-9 && (second.1 + 7.2).abs() < 1e-9);
+    assert_eq!(second.2, 10.0, "distance in metres");
+    let last_hr: Option<f64> = sqlx::query_scalar(q(&format!(
+        "SELECT hr FROM activity_records WHERE sha256 = '{sha}' ORDER BY idx DESC LIMIT 1"
+    )))
+    .fetch_one(&e.pool)
+    .await
+    .unwrap();
+    assert_eq!(last_hr, None, "255 is invalid");
+
+    let zones: Vec<(Option<i64>, Option<i64>, String)> = sqlx::query_as(q(&format!(
+        "SELECT ref_mesg, ref_index, hr_zone_s FROM activity_time_in_zone WHERE sha256 = '{sha}' ORDER BY idx"
+    )))
+    .fetch_all(&e.pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        zones,
+        vec![
+            (Some(216), Some(0), "[6.002,26.147,17,0,0,0,0]".into()),
+            (Some(18), Some(0), "[10,60,300,null,0,0,0]".into()),
+        ]
+    );
+    // Only the activity with records has rows; the list entry and the others have none.
+    assert_eq!(
+        count(&e.pool, "SELECT COUNT(*) FROM activity_records").await,
+        5
+    );
+
+    // The activity page reads them: track, series and the zones of the session message.
+    set_zone(&e, e.user_id).await;
+    let user = e.login().await;
+    let d = e.get(&user, &format!("/api/activities/{sha}")).await;
+    assert_eq!(d["has_track"], true);
+    let series = &d["series"];
+    assert_eq!(
+        series["heart_rate_bpm"],
+        json!([100.0, 110.0, 120.0, 130.0, null])
+    );
+    assert_eq!(series["elapsed_s"], json!([0.0, 1.0, 2.0, 3.0, 4.0]));
+    assert_eq!(d["hr_below_zone1_s"], 10.0);
+    assert_eq!(d["hr_zones"][0]["duration_s"], 60.0);
+    assert_eq!(d["hr_zones"][1]["duration_s"], 300.0);
+    assert_eq!(d["hr_zones"][2]["duration_s"], Value::Null);
+    let t = e.get(&user, &format!("/api/activities/{sha}/track")).await;
+    assert_eq!(t["available"], true);
+    assert_eq!(t["points"].as_array().unwrap().len(), 5);
+}
+
+#[tokio::test]
+async fn a_rerun_with_records_changes_nothing_and_reparse_agrees() {
+    let e = env_at(now()).await;
+    let input = fixtures();
+    write_records(input.path());
+    import(&e, input.path());
+    let before = dump(&e.pool).await;
+    assert!(before.contains("activity_records|"));
+    let second = import(&e, input.path());
+    assert!(second.contains("blobs stored new:     0"), "{second}");
+    assert!(second.contains("activities with records: 1"), "{second}");
+    assert_eq!(dump(&e.pool).await, before);
+    assert_eq!(count(&e.pool, "SELECT COUNT(*) FROM files").await, 8);
+    reparse(e.dir.path());
+    assert_eq!(dump(&e.pool).await, before);
+}
+
+#[tokio::test]
+async fn records_pulled_later_are_added_to_an_activity_imported_without() {
+    let e = env_at(now()).await;
+    let input = fixtures();
+    import(&e, input.path());
+    let old = sha_of(&e.pool, "connect:1002").await;
+    assert_eq!(
+        count(&e.pool, "SELECT COUNT(*) FROM activity_records").await,
+        0
+    );
+
+    write_records(input.path());
+    let out = import(&e, input.path());
+    assert!(out.contains("blobs stored new:     1"), "{out}");
+    assert!(out.contains("blobs already there:  7"), "{out}");
+    // The activity with records is the current one; the first import stays, hidden.
+    let now_sha = sha_of(&e.pool, "connect:1002").await;
+    assert_ne!(now_sha, old);
+    assert_eq!(
+        count(
+            &e.pool,
+            "SELECT COUNT(*) FROM activities WHERE activity_key = 'connect:1002'"
+        )
+        .await,
+        2
+    );
+    assert_eq!(
+        count(
+            &e.pool,
+            "SELECT COUNT(*) FROM activities_current WHERE activity_key = 'connect:1002'"
+        )
+        .await,
+        1
+    );
+    assert_eq!(
+        count(&e.pool, "SELECT COUNT(*) FROM activity_records").await,
+        5
+    );
+    assert_eq!(
+        count(&e.pool, "SELECT COUNT(*) FROM activity_time_in_zone").await,
+        2
+    );
+    // The page lists it once, with its track.
+    set_zone(&e, e.user_id).await;
+    let user = e.login().await;
+    let list = e.get(&user, "/api/activities").await;
+    assert_eq!(list["items"].as_array().unwrap().len(), 2);
+    assert_eq!(
+        e.get(&user, &format!("/api/activities/{now_sha}")).await["has_track"],
+        true
+    );
+    // And once more changes nothing.
+    let before = dump(&e.pool).await;
+    let third = import(&e, input.path());
+    assert!(third.contains("blobs stored new:     0"), "{third}");
+    assert_eq!(dump(&e.pool).await, before);
+}
+
+#[tokio::test]
+async fn records_of_an_unknown_activity_or_for_another_one_are_not_used() {
+    let e = env_at(now()).await;
+    let input = fixtures();
+    // Pages for an activity that has no file here, and a stray name.
+    write_json(
+        input.path(),
+        "records/777_0.json",
+        &page(777, 0, vec![record(0, now(), 0, 90, true)]),
+    );
+    std::fs::write(input.path().join("records/notes.txt"), "x").unwrap();
+    let out = import(&e, input.path());
+    assert!(out.contains("activities with records: 0"), "{out}");
+    assert!(
+        out.contains("records without an activity file (not stored): 1"),
+        "{out}"
+    );
+    assert_eq!(
+        count(&e.pool, "SELECT COUNT(*) FROM activity_records").await,
+        0
+    );
+
+    // A page whose activity_id is another one: reported, the activity is stored without records.
+    write_json(
+        input.path(),
+        "records/1002_0.json",
+        &page(555, 0, vec![record(0, now(), 0, 90, true)]),
+    );
+    let bad = run_connect(e.dir.path(), input.path(), USER, &["--timezone", TZ]);
+    assert!(!bad.status.success());
+    assert!(
+        String::from_utf8_lossy(&bad.stderr).contains("imported without records"),
+        "{}",
+        String::from_utf8_lossy(&bad.stderr)
+    );
+    assert_eq!(
+        count(&e.pool, "SELECT COUNT(*) FROM activity_records").await,
+        0
+    );
+    assert_eq!(
+        count(
+            &e.pool,
+            "SELECT COUNT(*) FROM activities_current WHERE activity_key = 'connect:1002'"
+        )
+        .await,
+        1
+    );
+}
+
+#[tokio::test]
+async fn a_watch_activity_still_hides_a_connect_activity_that_has_records() {
+    if !profile::available() {
+        return;
+    }
+    for connect_first in [true, false] {
+        let e = env_at(now()).await;
+        let input = fixtures();
+        write_records(input.path());
+        if connect_first {
+            import(&e, input.path());
+        }
+        // A watch strength session starting 45 s after the Connect one (17:00 local).
+        let t = (cph(2026, 3, 12, 17, 0) + 45 - FIT_EPOCH) as u32;
+        let fit = FitBuilder::new()
+            .message(0, &[(3, Fv::U32(9)), (4, Fv::U32(t))])
+            .message(20, &[(253, Fv::U32(t)), (3, Fv::U8(120)), (5, Fv::U32(0))])
+            .message(
+                18,
+                &[
+                    (253, Fv::U32(t + 1800)),
+                    (2, Fv::U32(t)),
+                    (5, Fv::U8(1)),
+                    (7, Fv::U32(1_800_000)),
+                ],
+            )
+            .message(
+                34,
+                &[
+                    (253, Fv::U32(t + 1800)),
+                    (5, Fv::U32(t + 5400)),
+                    (1, Fv::U16(1)),
+                ],
+            )
+            .build();
+        upload(&e, &e.token.clone(), 4, fit).await;
+        if !connect_first {
+            import(&e, input.path());
+        }
+        let keys: Vec<Option<String>> =
+            sqlx::query_scalar("SELECT activity_key FROM activities_current ORDER BY start_ts")
+                .fetch_all(&e.pool)
+                .await
+                .unwrap();
+        assert!(
+            !keys.iter().any(|k| k.as_deref() == Some("connect:1002")),
+            "connect_first={connect_first}: {keys:?}"
+        );
+        // Hidden, not deleted: its records are still stored.
+        assert_eq!(
+            count(
+                &e.pool,
+                "SELECT COUNT(*) FROM activity_records r JOIN sources s ON s.sha256 = r.sha256 WHERE s.origin = 'connect'"
+            )
+            .await,
+            5
+        );
+    }
 }

@@ -1,23 +1,82 @@
 //! `import-connect`: store a directory of Garmin Connect JSON as blobs (one envelope per input
 //! file, one per activity of an activity list) through the one ingest path, owned by one user.
 //!
+//! `DIR/records/<activity id>_<offset>.json` (pages of the connector's `get_activity_fit_messages`
+//! with the record, time in zone and zones target messages, see [`super::records`]) is optional:
+//! an activity file with pages gets its records folded into its envelope, one without is stored
+//! as before. An activity imported earlier without records becomes a second blob (the envelope
+//! has the records now) that outranks it by row count, so a re-run after the pull adds the track
+//! and the charts; the older blob stays stored and is hidden by `activities_current`.
+//!
 //! Re-running is idempotent: identical input gives identical envelopes, so every blob is already
 //! stored and ledgered (the origin, the path inside the directory, folds repeats into the
 //! existing event), and nothing is derived twice. Files that are not recognised Connect JSON
 //! are listed and not stored.
 
-use super::{wrap, Kind};
+use super::{records, wrap, wrap_with_records, Kind};
 use crate::api::AppState;
 use crate::ledger::Meta;
 use crate::{ingest, store};
 use anyhow::{Context, Result};
 use chrono_tz::Tz;
 use serde_json::Value;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 /// Largest input file read.
 const MAX_FILE_BYTES: u64 = 256 << 20;
+
+/// Where the record pages are, below the input directory.
+const RECORDS_DIR: &str = "records";
+
+/// Record pages by activity id: (offset, path) in offset order. Names that are not
+/// `<id>_<offset>.json` are ignored. A missing directory is no pages.
+fn record_pages(dir: &Path) -> BTreeMap<i64, Vec<(i64, PathBuf)>> {
+    let mut out: BTreeMap<i64, Vec<(i64, PathBuf)>> = BTreeMap::new();
+    let Ok(entries) = std::fs::read_dir(dir.join(RECORDS_DIR)) else {
+        return out;
+    };
+    for e in entries.flatten() {
+        if !e.file_type().is_ok_and(|t| t.is_file()) {
+            continue;
+        }
+        let name = e.file_name().to_string_lossy().into_owned();
+        let Some(stem) = name.strip_suffix(".json") else {
+            continue;
+        };
+        let Some((id, offset)) = stem.split_once('_') else {
+            continue;
+        };
+        if let (Ok(id), Ok(offset)) = (id.parse::<i64>(), offset.parse::<i64>()) {
+            out.entry(id).or_default().push((offset, e.path()));
+        }
+    }
+    for pages in out.values_mut() {
+        pages.sort();
+    }
+    out
+}
+
+/// The `records` member of one activity from its pages on disk.
+fn read_records(pages: &[(i64, PathBuf)], id: i64) -> Result<Option<Value>, String> {
+    let mut parsed = Vec::new();
+    for (_, path) in pages {
+        let name = path
+            .file_name()
+            .map_or_else(String::new, |n| n.to_string_lossy().into_owned());
+        let len = std::fs::metadata(path)
+            .map_err(|e| format!("records/{name}: {e}"))?
+            .len();
+        if len > MAX_FILE_BYTES {
+            return Err(format!("records/{name}: larger than the size limit"));
+        }
+        let text = std::fs::read_to_string(path).map_err(|e| format!("records/{name}: {e}"))?;
+        parsed.push(
+            serde_json::from_str::<Value>(&text).map_err(|e| format!("records/{name}: {e}"))?,
+        );
+    }
+    records::extract(id, &parsed)
+}
 
 #[derive(Debug, Default)]
 pub struct Report {
@@ -25,6 +84,10 @@ pub struct Report {
     pub files: u64,
     /// Blobs stored for the first time and blobs that were already there, by kind.
     pub by_kind: BTreeMap<&'static str, (u64, u64)>,
+    /// Activity blobs (new or already there) that carry records.
+    pub with_records: u64,
+    /// Activities that have `records/` pages and no activity file in the directory.
+    pub records_without_activity: Vec<i64>,
     /// Files that are not Connect JSON this importer knows (path inside the directory).
     pub unrecognised: Vec<String>,
     pub errors: Vec<String>,
@@ -89,7 +152,8 @@ pub fn classify(v: &Value) -> Option<Kind> {
 }
 
 /// Every `*.json` below `dir`, in path order, as (path inside `dir`, full path). Symbolic links
-/// are not followed.
+/// are not followed. The top-level `records` directory is not walked: it holds pages of
+/// activity records, read per activity (see [`record_pages`]).
 fn json_files(dir: &Path) -> Result<Vec<(String, PathBuf)>> {
     fn walk(dir: &Path, prefix: &str, out: &mut Vec<(String, PathBuf)>) -> Result<()> {
         let mut entries = std::fs::read_dir(dir)
@@ -105,6 +169,9 @@ fn json_files(dir: &Path) -> Result<Vec<(String, PathBuf)>> {
             };
             let ft = e.file_type()?;
             if ft.is_dir() {
+                if prefix.is_empty() && name == RECORDS_DIR {
+                    continue;
+                }
                 walk(&e.path(), &rel, out)?;
             } else if ft.is_file() && name.to_ascii_lowercase().ends_with(".json") {
                 out.push((rel, e.path()));
@@ -122,39 +189,68 @@ struct Blob {
     kind: Kind,
     origin: String,
     bytes: Vec<u8>,
+    /// The envelope carries records.
+    with_records: bool,
 }
 
-/// The blobs of one input file; `None` when it is not Connect JSON.
-fn blobs_of(rel: &str, raw: &str, tz: Tz) -> Option<Vec<Blob>> {
+/// What `blobs_of` gives for one input file: its blobs and the problems met on the way.
+type Blobs = (Vec<Blob>, Vec<String>);
+
+/// The blobs of one input file; `None` when it is not Connect JSON. `records` gives the records
+/// member of an activity id (`Ok(None)`: none pulled); when it fails the activity is built
+/// without records and the error is returned beside the blob.
+fn blobs_of(
+    rel: &str,
+    raw: &str,
+    tz: Tz,
+    records: &dyn Fn(i64) -> Result<Option<Value>, String>,
+) -> Option<Blobs> {
     let value: Value = serde_json::from_str(raw).ok()?;
     if let Some(items) = value.get("activities").and_then(Value::as_array) {
-        return Some(
-            items
-                .iter()
-                .filter_map(|item| {
-                    let id = item.get("id")?.as_i64()?;
-                    let text = serde_json::to_string(item).ok()?;
-                    Some(Blob {
-                        kind: Kind::ActivitySummary,
-                        origin: format!("{rel}#{id}"),
-                        bytes: wrap(Kind::ActivitySummary, tz, &text),
-                    })
+        let blobs = items
+            .iter()
+            .filter_map(|item| {
+                let id = item.get("id")?.as_i64()?;
+                let text = serde_json::to_string(item).ok()?;
+                Some(Blob {
+                    kind: Kind::ActivitySummary,
+                    origin: format!("{rel}#{id}"),
+                    bytes: wrap(Kind::ActivitySummary, tz, &text),
+                    with_records: false,
                 })
-                .collect(),
-        );
+            })
+            .collect();
+        return Some((blobs, Vec::new()));
     }
     let kind = classify(&value)?;
-    Some(vec![Blob {
-        kind,
-        origin: rel.to_owned(),
-        bytes: wrap(kind, tz, raw),
-    }])
+    let mut errors = Vec::new();
+    let mut recs = None;
+    if kind == Kind::Activity {
+        if let Some(id) = value.pointer("/summary/id").and_then(Value::as_i64) {
+            match records(id) {
+                Ok(r) => recs = r,
+                Err(e) => errors.push(format!("{rel}: {e}; imported without records")),
+            }
+        }
+    }
+    let bytes = wrap_with_records(kind, tz, raw, recs.as_ref());
+    Some((
+        vec![Blob {
+            kind,
+            origin: rel.to_owned(),
+            bytes,
+            with_records: recs.is_some(),
+        }],
+        errors,
+    ))
 }
 
 /// Import every recognised JSON below `dir` for user `owner`. Local dates and times are read in
 /// `tz`.
 pub async fn run(state: &AppState, dir: &Path, owner: i64, tz: Tz) -> Result<Report> {
     let mut report = Report::default();
+    let pages = std::sync::Arc::new(record_pages(dir));
+    let mut used: BTreeSet<i64> = BTreeSet::new();
     let files = {
         let dir = dir.to_path_buf();
         tokio::task::spawn_blocking(move || json_files(&dir))
@@ -187,10 +283,27 @@ pub async fn run(state: &AppState, dir: &Path, owner: i64, tz: Tz) -> Result<Rep
                 continue;
             }
         };
-        let Some(blobs) = blobs_of(&rel, &raw, tz) else {
+        let built = {
+            let (rel, pages) = (rel.clone(), pages.clone());
+            tokio::task::spawn_blocking(move || {
+                let ids = std::cell::RefCell::new(Vec::new());
+                let lookup = |id: i64| {
+                    ids.borrow_mut().push(id);
+                    pages.get(&id).map_or(Ok(None), |p| read_records(p, id))
+                };
+                let built = blobs_of(&rel, &raw, tz, &lookup);
+                (built, ids.into_inner())
+            })
+            .await
+            .context("blob task")?
+        };
+        let (built, ids) = built;
+        used.extend(ids);
+        let Some((blobs, problems)) = built else {
             report.unrecognised.push(rel);
             continue;
         };
+        report.errors.extend(problems);
         for b in blobs {
             let meta = Meta {
                 source: "connect".into(),
@@ -224,6 +337,7 @@ pub async fn run(state: &AppState, dir: &Path, owner: i64, tz: Tz) -> Result<Rep
             .await
             {
                 Ok(created) => {
+                    report.with_records += u64::from(b.with_records);
                     let e = report.by_kind.entry(b.kind.as_str()).or_default();
                     if created {
                         e.0 += 1;
@@ -237,6 +351,11 @@ pub async fn run(state: &AppState, dir: &Path, owner: i64, tz: Tz) -> Result<Rep
             }
         }
     }
+    report.records_without_activity = pages
+        .keys()
+        .filter(|id| !used.contains(id))
+        .copied()
+        .collect();
     Ok(report)
 }
 
@@ -282,7 +401,8 @@ mod tests {
     fn an_activity_list_becomes_one_blob_per_activity() {
         let tz: Tz = "Europe/Copenhagen".parse().unwrap();
         let raw = r#"{"count": 2, "activities": [{"id": 7, "type": "running"}, {"id": 8}, {"no_id": 1}]}"#;
-        let blobs = blobs_of("activities_x.json", raw, tz).unwrap();
+        let (blobs, problems) = blobs_of("activities_x.json", raw, tz, &|_| Ok(None)).unwrap();
+        assert!(problems.is_empty());
         assert_eq!(blobs.len(), 2);
         assert_eq!(blobs[0].origin, "activities_x.json#7");
         assert!(blobs.iter().all(|b| b.kind == Kind::ActivitySummary));

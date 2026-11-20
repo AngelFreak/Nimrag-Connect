@@ -447,6 +447,13 @@ async fn import_connect(o: Opts) -> Result<()> {
     for (kind, (new, present)) in &r.by_kind {
         println!("  {kind}: {new} new, {present} already there");
     }
+    println!("activities with records: {}", r.with_records);
+    if !r.records_without_activity.is_empty() {
+        println!(
+            "records without an activity file (not stored): {}",
+            r.records_without_activity.len()
+        );
+    }
     println!("not Connect JSON (not stored): {}", r.unrecognised.len());
     for p in &r.unrecognised {
         println!("    {p}");

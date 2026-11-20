@@ -14,6 +14,10 @@
 //! (the importer takes it from the user's `timezone` setting); the same files imported under a
 //! different zone are a different blob.
 //!
+//! An activity's per-second records and time in zone (`records/<id>_<offset>.json`, see
+//! [`records`]) are folded into its envelope as a `records` member, so they are derived from the
+//! blob's bytes like everything else.
+//!
 //! A Connect source ranks below every FIT source (`sources.origin = 'connect'`, rank key
 //! starting with `-`), so a watch row wins whatever the import order. Rows that Connect gives
 //! only per date sit at the start of that local day, so any reading the watch made later the
@@ -21,6 +25,7 @@
 //! by a FIT one of the same user at the same time (see `migrations/0011_connect.sql`).
 
 pub mod import;
+pub mod records;
 mod rows;
 
 use crate::derived::{self, activity, upsert_samples, wellness, V};
@@ -53,7 +58,8 @@ pub enum Kind {
     TrainingLoad,
     Vo2max,
     Stats,
-    /// One activity: Connect's summary plus the decoded FIT messages (no records).
+    /// One activity: Connect's summary plus the decoded FIT messages, and (when its records were
+    /// pulled) the track, series and time in zone.
     Activity,
     /// One entry of Connect's activity list.
     ActivitySummary,
@@ -115,8 +121,22 @@ pub fn rank_key(kind: Kind, last_ts: Option<i64>, rows: u64) -> String {
 
 /// The original JSON wrapped in its envelope.
 pub fn wrap(kind: Kind, tz: chrono_tz::Tz, original: &str) -> Vec<u8> {
+    wrap_with_records(kind, tz, original, None)
+}
+
+/// The original JSON wrapped in its envelope, plus (an activity only) the `records` member
+/// built by [`records::extract`]: the track, the series and the time in zone. Without it the
+/// bytes are exactly those of [`wrap`], so an activity imported before records existed keeps its
+/// blob and an activity without records files stays the same.
+pub fn wrap_with_records(
+    kind: Kind,
+    tz: chrono_tz::Tz,
+    original: &str,
+    records: Option<&Value>,
+) -> Vec<u8> {
+    let extra = records.map_or(String::new(), |r| format!(r#","records":{r}"#));
     format!(
-        r#"{{"nimrag_connect":{ENVELOPE_VERSION},"kind":"{}","tz":"{}","data":{}}}"#,
+        r#"{{"nimrag_connect":{ENVELOPE_VERSION},"kind":"{}","tz":"{}","data":{}{extra}}}"#,
         kind.as_str(),
         tz.name(),
         original.trim()
@@ -172,6 +192,9 @@ pub fn parse(bytes: &[u8]) -> Parsed {
         kind: String,
         tz: String,
         data: Value,
+        /// Only an activity has it, see [`records`].
+        #[serde(default)]
+        records: Option<Value>,
     }
     let fail = |e: String| Parsed {
         error: Some(e),
@@ -199,6 +222,11 @@ pub fn parse(bytes: &[u8]) -> Parsed {
     };
     if let Err(e) = rows::fill(kind, &env.data, tz, &mut p) {
         return fail(format!("{}: {e}", kind.as_str()));
+    }
+    if let (Some(r), Kind::Activity) = (&env.records, kind) {
+        if let Err(e) = records::apply(r, &mut p) {
+            return fail(format!("{}: {e}", kind.as_str()));
+        }
     }
     p.derived.facts.last_ts = p.last_ts;
     p.derived.facts.msg_count = p.rows;
