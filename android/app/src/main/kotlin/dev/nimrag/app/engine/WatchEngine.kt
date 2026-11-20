@@ -5,10 +5,12 @@ import dev.nimrag.app.engine.ble.BleScanner
 import dev.nimrag.app.engine.ble.WatchLink
 import dev.nimrag.app.engine.logic.CapabilityHex
 import dev.nimrag.app.engine.logic.UploadPolicy
+import dev.nimrag.app.engine.local.LocalWeb
 import dev.nimrag.app.model.AppState
 import dev.nimrag.app.model.GarminConnectMode
 import dev.nimrag.app.model.ServerTest
 import dev.nimrag.app.model.WatchController
+import dev.nimrag.app.model.WebMode
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.withContext
@@ -51,7 +53,12 @@ class WatchEngine(private val hub: Hub) : WatchController {
             startServiceIfPaired(StartSource.ProcessStart)
         }
         hub.uploader.start()
+        hub.local.start()
     }
+
+    override fun localWeb(): LocalWeb? = hub.local.web
+
+    override fun webMode(): WebMode = hub.settings.webMode
 
     /**
      * Process start, boot, the companion presence service: run the service when a watch is

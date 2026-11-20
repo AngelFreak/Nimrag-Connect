@@ -193,6 +193,8 @@
     <string name="server_needed_open">Open Settings</string>
     <string name="server_unreachable_title">Server unreachable</string>
     <string name="server_unreachable_body">Nimrag could not reach your server, and there is no saved copy of this page on the phone yet. Check the connection (and the VPN, if the server is on your tailnet), then try again.</string>
+    <string name="local_copy_banner">This phone\'s copy (read-only)</string>
+    <string name="local_copy_try_server">Use server</string>
     <string name="server_unreachable_retry">Retry</string>
     <string name="server_unreachable_retrying">Trying again…</string>
     <string name="web_preview_placeholder">Web view (not shown in previews)</string>

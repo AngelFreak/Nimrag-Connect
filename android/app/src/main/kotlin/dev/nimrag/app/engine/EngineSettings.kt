@@ -6,6 +6,7 @@ import dev.nimrag.app.engine.logic.CapabilityHex
 import dev.nimrag.app.model.GarminConnectMode
 import dev.nimrag.app.model.Settings
 import dev.nimrag.app.model.SyncResult
+import dev.nimrag.app.model.WebMode
 import java.security.SecureRandom
 
 /** The watch this install is paired with. */
@@ -39,6 +40,11 @@ class EngineSettings(context: Context) {
             if (value.isNullOrEmpty()) edit.remove(TOKEN) else edit.putString(TOKEN, value)
             edit.apply()
         }
+
+    /** Debug override of which web source the shell uses (stored by name; Auto when unknown). */
+    var webMode: WebMode
+        get() = runCatching { WebMode.valueOf(prefs.getString(WEB_MODE, null).orEmpty()) }.getOrDefault(WebMode.Auto)
+        set(value) = prefs.edit().putString(WEB_MODE, value.name).apply()
 
     var allowMobileData: Boolean
         get() = prefs.getBoolean(ALLOW_MOBILE, false)
@@ -151,6 +157,7 @@ class EngineSettings(context: Context) {
 
     private companion object {
         const val SERVER_URL = "server_url"
+        const val WEB_MODE = "web_mode"
         const val TOKEN = "token"
         const val ALLOW_MOBILE = "allow_mobile_data"
         const val AUTO_SYNC = "auto_sync_minutes"

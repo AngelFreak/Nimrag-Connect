@@ -42,6 +42,7 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.webkit.WebViewCompat
 import androidx.webkit.WebViewFeature
+import dev.nimrag.app.engine.local.LocalWeb
 import dev.nimrag.app.model.WatchController
 import dev.nimrag.app.ui.shell.logic.BridgeScripts
 import dev.nimrag.app.ui.shell.logic.BridgeStatus
@@ -212,6 +213,7 @@ fun rememberWebShellState(): WebShellState = remember { WebShellState() }
 @Composable
 fun ServerWebView(
     target: ServerTarget,
+    localWeb: LocalWeb?,
     state: WebShellState,
     controller: WatchController,
     visible: Boolean,
@@ -244,6 +246,7 @@ fun ServerWebView(
                 createWebView(
                     context = context,
                     target = target,
+                    localWeb = localWeb,
                     state = state,
                     controller = controller,
                     onOpenWatch = { openWatch() },
@@ -266,6 +269,7 @@ fun ServerWebView(
 private fun createWebView(
     context: Context,
     target: ServerTarget,
+    localWeb: LocalWeb?,
     state: WebShellState,
     controller: WatchController,
     onOpenWatch: () -> Unit,
@@ -289,7 +293,8 @@ private fun createWebView(
         javaScriptCanOpenWindowsAutomatically = false
         setSupportMultipleWindows(false)
         setGeolocationEnabled(false)
-        cacheMode = cacheModeFor(context)
+        // The local server is on the phone itself: never stale, never "offline".
+        cacheMode = if (localWeb != null) WebSettings.LOAD_DEFAULT else cacheModeFor(context)
     }
     // Service workers stay on (the PWA's offline pages); they get no file or content access either.
     ServiceWorkerController.getInstance().serviceWorkerWebSettings.apply {
@@ -303,7 +308,7 @@ private fun createWebView(
     }
 
     // Offline: with no network the HTTP cache answers first; with one, the normal rules apply.
-    val stopWatchingNetwork = watchNetwork(context) { online ->
+    val stopWatchingNetwork = if (localWeb != null) NoStop else watchNetwork(context) { online ->
         webView.settings.cacheMode = if (online) WebSettings.LOAD_DEFAULT else WebSettings.LOAD_CACHE_ELSE_NETWORK
     }
     webView.tag = Runnable { stopWatchingNetwork() }
@@ -326,14 +331,20 @@ private fun createWebView(
 
     webView.webViewClient = ShellWebViewClient(target.origin, state, documentStart)
     webView.webChromeClient = ShellChromeClient(chooseFile)
-    webView.loadUrl(target.startUrl)
+    if (localWeb != null) {
+        // The launch secret goes into the cookie jar before the first request; the local server
+        // answers 403 to anything without it (other apps can reach 127.0.0.1 too).
+        CookieManager.getInstance().setCookie(target.startUrl, localWeb.cookie()) { webView.loadUrl(target.startUrl) }
+    } else {
+        webView.loadUrl(target.startUrl)
+    }
     return webView
 }
 
 private fun cacheModeFor(context: Context): Int =
     if (isOnline(context)) WebSettings.LOAD_DEFAULT else WebSettings.LOAD_CACHE_ELSE_NETWORK
 
-private fun isOnline(context: Context): Boolean {
+internal fun isOnline(context: Context): Boolean {
     val cm = context.getSystemService(ConnectivityManager::class.java) ?: return true
     val caps = cm.getNetworkCapabilities(cm.activeNetwork ?: return false) ?: return false
     return caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)

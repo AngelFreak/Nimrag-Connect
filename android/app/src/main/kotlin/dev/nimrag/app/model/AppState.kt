@@ -1,5 +1,6 @@
 package dev.nimrag.app.model
 
+import dev.nimrag.app.engine.local.LocalWeb
 import kotlinx.coroutines.flow.StateFlow
 
 /*
@@ -26,6 +27,8 @@ data class AppState(
      * Watch screen explains how to keep it out of the way.
      */
     val garminConnect: GarminConnect = GarminConnect.Absent,
+    /** Port of the server inside the app on 127.0.0.1 once it runs (personal flavor), else null. */
+    val localWebPort: Int? = null,
 )
 
 enum class GarminConnect {
@@ -219,7 +222,16 @@ interface WatchController {
 
     /** Saved; a connected watch is reconnected so the new mode applies at once. */
     fun setGarminConnectMode(mode: GarminConnectMode)
+
+    /** How to reach the server inside the app (personal flavor), once [AppState.localWebPort] is set. */
+    fun localWeb(): LocalWeb? = null
+
+    /** Which web source the owner chose (debug override of the automatic rule). */
+    fun webMode(): WebMode = WebMode.Auto
 }
+
+/** Where the web view loads from: see `WebSourcePolicy`. */
+enum class WebMode { Auto, Local, Remote }
 
 /** Set once in Application.onCreate by the engine; read by the UI. */
 object AppGraph {

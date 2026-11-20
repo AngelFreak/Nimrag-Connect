@@ -84,6 +84,11 @@ import dev.nimrag.app.ui.shell.logic.MainTab
 import dev.nimrag.app.ui.shell.logic.RouteTabs
 import dev.nimrag.app.ui.shell.logic.ServerOrigin
 import dev.nimrag.app.ui.shell.logic.ShellNav
+import dev.nimrag.app.ui.shell.logic.WebSource
+import dev.nimrag.app.ui.shell.logic.WebSourcePolicy
+import dev.nimrag.app.ui.shell.LocalCopyBanner
+import dev.nimrag.app.ui.shell.isOnline
+import androidx.compose.ui.platform.LocalContext
 import dev.nimrag.app.ui.shell.rememberWebShellState
 import dev.nimrag.app.ui.sync.SyncScreen
 import dev.nimrag.app.ui.theme.NimragColors
@@ -131,9 +136,36 @@ internal fun NimragShell(
     val section = WatchSection.entries[sectionIndex]
 
     val rawServerUrl = state.settings.serverUrl
-    val target = remember(rawServerUrl) { ServerOrigin.parse(rawServerUrl) }
+    val remoteTarget = remember(rawServerUrl) { ServerOrigin.parse(rawServerUrl) }
     val webState = rememberWebShellState()
     val inspection = LocalInspectionMode.current
+    val context = LocalContext.current
+
+    // The phone's own copy of the data (personal flavor): used when the server is not the better
+    // choice (see WebSourcePolicy). Decided when the web view is created, never while a page is open.
+    val localWeb = remember(state.localWebPort) { if (state.localWebPort != null) controller.localWeb() else null }
+    var remoteFailed by remember { mutableStateOf(false) }
+    var forceRemote by remember { mutableStateOf(false) }
+    val source = remember(localWeb, rawServerUrl, remoteFailed, forceRemote) {
+        if (forceRemote) {
+            WebSource.Remote
+        } else {
+            WebSourcePolicy.choose(
+                mode = controller.webMode(),
+                localReady = localWeb != null,
+                remoteConfigured = remoteTarget != null,
+                online = isOnline(context),
+                remoteFailed = remoteFailed,
+                pendingUploads = state.uploads.pending,
+            )
+        }
+    }
+    val onLocal = source == WebSource.Local && localWeb != null
+    val target = if (onLocal) ServerOrigin.parse(localWeb.startUrl) else remoteTarget
+    // The server did not answer and the phone has a copy: switch to it for the rest of this run.
+    LaunchedEffect(webState.unreachable, localWeb) {
+        if (webState.unreachable && localWeb != null && !onLocal && !forceRemote) remoteFailed = true
+    }
 
     // Permissions and Bluetooth can change while we are away (system settings, quick tiles).
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
@@ -185,10 +217,17 @@ internal fun NimragShell(
                 .imePadding(),
         ) {
             if (demo) DemoBanner()
+            if (onLocal && remoteTarget != null && !nav.inWatch) {
+                LocalCopyBanner(onTryServer = {
+                    remoteFailed = false
+                    forceRemote = true
+                })
+            }
             Box(Modifier.weight(1f).fillMaxWidth()) {
                 if (target != null && !inspection) {
                     ServerWebView(
                         target = target,
+                        localWeb = if (onLocal) localWeb else null,
                         state = webState,
                         controller = controller,
                         visible = !nav.inWatch,

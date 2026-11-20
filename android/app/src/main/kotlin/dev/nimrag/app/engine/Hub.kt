@@ -8,6 +8,8 @@ import android.os.Build
 import android.os.Handler
 import android.os.HandlerThread
 import dev.nimrag.app.engine.ble.CompanionAssociation
+import dev.nimrag.app.engine.local.LocalServerFactory
+import dev.nimrag.app.engine.local.LocalServerHost
 import dev.nimrag.app.engine.store.EngineDb
 import dev.nimrag.app.engine.store.EngineLog
 import dev.nimrag.app.engine.store.FileStore
@@ -45,6 +47,15 @@ class Hub(val app: Application) {
         log = log,
         onState = { uploads -> update { it.copy(uploads = uploads) } },
     )
+
+    /**
+     * The server inside the app (personal flavor; a no-op in public): the same watch files, shown
+     * by the web view when the real server is not the better choice. [AppState.localWebPort]
+     * is set once it runs.
+     */
+    val local: LocalServerHost = LocalServerFactory.create(app, db, store, log) { port ->
+        update { it.copy(localWebPort = port) }
+    }
 
     fun update(block: (AppState) -> AppState) = flow.update(block)
 

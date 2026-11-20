@@ -58,7 +58,8 @@ class EngineDb(context: Context) : SQLiteOpenHelper(context, "nimrag.db", null, 
                 uploaded_at INTEGER,
                 attempts INTEGER NOT NULL DEFAULT 0,
                 next_attempt_at INTEGER NOT NULL DEFAULT 0,
-                last_error TEXT
+                last_error TEXT,
+                local_at INTEGER
             )""",
         )
         db.execSQL("CREATE INDEX files_pending ON files(uploaded_at, next_attempt_at)")
@@ -76,6 +77,8 @@ class EngineDb(context: Context) : SQLiteOpenHelper(context, "nimrag.db", null, 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
         // 1 -> 2: the `copied` table (Garmin Connect alongside, stage 2g).
         if (oldVersion < 2) createCopied(db)
+        // 2 -> 3: when a file went into the local server (personal flavor); NULL = not yet.
+        if (oldVersion < 3) db.execSQL("ALTER TABLE files ADD COLUMN local_at INTEGER")
     }
 
     /**
@@ -197,6 +200,19 @@ class EngineDb(context: Context) : SQLiteOpenHelper(context, "nimrag.db", null, 
         lastError = c.getColumnIndexOrThrow("last_error").let { if (c.isNull(it)) null else c.getString(it) },
     )
 
+    // ---- local server (personal flavor) ----
+
+    /** The oldest stored file the local server has not ingested yet. */
+    fun nextLocalPending(): FileRow? = readableDatabase.rawQuery(
+        "SELECT * FROM files WHERE local_at IS NULL ORDER BY received_at, sha256 LIMIT 1",
+        null,
+    ).use { c -> if (c.moveToFirst()) row(c) else null }
+
+    fun markLocal(sha256: String, nowMs: Long) {
+        val v = ContentValues().apply { put("local_at", nowMs) }
+        writableDatabase.update("files", v, "sha256 = ?", arrayOf(sha256))
+    }
+
     // ---- copied (alongside) ----
 
     /** Records a copied file; the same key again only refreshes `copied_at` and the hash. */
@@ -267,6 +283,6 @@ class EngineDb(context: Context) : SQLiteOpenHelper(context, "nimrag.db", null, 
     }
 
     private companion object {
-        const val VERSION = 2
+        const val VERSION = 3
     }
 }

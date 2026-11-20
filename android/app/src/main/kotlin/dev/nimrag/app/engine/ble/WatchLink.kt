@@ -873,7 +873,10 @@ class WatchLink(private val hub: Hub, private val scanner: BleScanner) {
             log.error("Could not store a $kind file: ${e.javaClass.simpleName}${e.message?.let { ": ${it.take(100)}" } ?: ""}")
             false
         }
-        if (stored) hub.uploader.wake()
+        if (stored) {
+            hub.uploader.wake()
+            hub.local.onFileStored() // the phone's own copy of the data (personal flavor), off this thread
+        }
         if (stored && sha != null && connectionMode == GarminConnectMode.Alongside) rememberCopied(entry, sha)
         feed(if (stored) Input.FileStored(event.transferId) else Input.FileStoreFailed(event.transferId))
     }

@@ -21,8 +21,12 @@ Needs: JDK 25, the Android SDK (`ANDROID_HOME`) with platform 37.2, build-tools
 and fails on a mismatch.
 
 ```
-./gradlew :core:assembleRelease :app:assembleDebug :hosttest:test
+./gradlew :app:assemblePublicRelease :app:assemblePublicDebug :app:testPublicDebugUnitTest :app:lintPublicDebug :hosttest:test
 ```
+
+Two flavors (dimension `distribution`): `public` is the build that is published, `personal` is the
+owner's own build (see "Personal flavor" below). Task names carry the flavor, for example
+`:app:testPublicDebugUnitTest`.
 
 Pinning: Gradle wrapper with `distributionSha256Sum`, every Gradle dependency in
 `gradle/verification-metadata.xml` (sha256), `cargo --locked` everywhere, ABIs
@@ -31,6 +35,8 @@ limited to arm64-v8a and x86_64. The Rust library is built with
 
 ## No FIT profile on Android (licence)
 
+This section is about the `public` flavor. The `personal` flavor is the one deliberate exception.
+
 The locally generated FIT profile is Garmin data and is never redistributed.
 Every cargo call from Gradle (`buildSrc/src/main/kotlin/CargoTasks.kt`) sets
 `NIMRAG_FIT_PROFILE=none`, then reads cargo's build-script output and fails the
@@ -38,8 +44,29 @@ build if core's `cfg(fit_profile)` is on. `core/build.rs` and `ffi/build.rs` als
 refuse any Android target with a profile (or without the variable). Finally the
 tasks grep both finished `.so` files: a marker string that core emits only when a
 profile is compiled in, the test-fixtures `ScriptedWatch`, and build-machine paths
-must all be absent. The app also checks `fitProfileCompiledIn()` at start. The FFI
-does not expose FIT parsing.
+must all be absent. The app also checks `fitProfileCompiledIn()` at start (it must be false in
+`public`, true in `personal`). The `public` FFI does not expose FIT parsing.
+
+## Personal flavor (never published)
+
+The owner's own build: the FIT profile is compiled in and the server runs inside the app
+(cargo feature `local-server` of `nimrag-ffi`: `nimrag_server::embedded`, with the web app embedded
+by rust-embed). Every stored watch file is ingested into that local server too, so Today, Activities,
+Health and Strength can show the newest data from the phone itself, also offline. See
+IMPLEMENTATION_PLAN.md, stage 3o.
+
+```
+(cd ../web && npm ci && npm run build)      # the web app is embedded into the library
+CARGO_BUILD_JOBS=4 ./gradlew -Pnimrag.fitProfile=/path/to/profile_data.rs :app:assemblePersonalRelease
+```
+
+`-Pnimrag.fitProfile` (or `NIMRAG_FIT_PROFILE_FILE`) names the locally generated profile
+(tools/fit-profile/README.md); without it the personal tasks fail. Only the personal cargo tasks
+set `NIMRAG_ALLOW_ANDROID_FIT_PROFILE=personal-apk-never-published`, the explicit opt-in that
+`core/build.rs` and `ffi/build.rs` require before they accept a profile for an Android target.
+The personal build checks that the profile marker IS in the `.so`. Never upload a personal APK
+(it contains Garmin data); install it from the owner's own server or with `adb`. The library is
+about 17 MB per ABI (the APK stores `.so` files uncompressed): build for arm64 only when size matters.
 
 ## Dependencies
 
