@@ -127,11 +127,12 @@ export function formatTicks(ticks: number[], unit: AxisUnit = 'int'): string[] {
 }
 
 /**
- * How many tick labels fit along `heightPx` of plot: one per `1.8 × fontPx`, between 2 and 5
- * (Garmin Connect draws 3 to 5). Labels then never touch, even at 130% text size.
+ * How many tick labels fit along `heightPx` of plot: one per `2.4 × fontPx`, between 2 and 5
+ * (Garmin Connect draws 3 to 5). Labels then keep clear air between them, even at 130% text size
+ * on a short chart.
  */
 export function tickCountFor(heightPx: number, fontPx: number): number {
-  const fit = Math.floor(heightPx / (fontPx * 1.8)) + 1;
+  const fit = Math.floor(heightPx / (fontPx * 2.4)) + 1;
   return Math.max(2, Math.min(5, fit));
 }
 

@@ -30,10 +30,12 @@ const PADDING = { sm: 'sm', md: 'tile', lg: 'lg', xl: 'xl' } as const;
 /** Label, big value in Space Grotesk, and a sub line in the metric's colour. */
 export function StatTile({ label, value, sub, tone = 'muted', size = 'md', children, href, hideWhenMissing = false, ...rest }: StatTileProps) {
   if (hideWhenMissing && (isMissing(value) || value === '' || value === false)) return null;
+  // A word ("Recovery") rather than a number: it may need to shrink to fit a narrow tile.
+  const word = typeof value === 'string' && !/\d/.test(value);
   const tile = (
     <Card padding={PADDING[size]} className={`stat stat--${size}`} {...(href ? {} : rest)}>
       <span className="stat__label">{label}</span>
-      <span className="stat__value">
+      <span className={word ? 'stat__value stat__value--word' : 'stat__value'}>
         <ValueOrUnavailable value={value} />
       </span>
       {sub ? <span className={`stat__sub tone-${tone}`}>{sub}</span> : null}

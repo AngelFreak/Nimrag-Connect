@@ -136,6 +136,15 @@
   grid-template-columns: 1fr 1fr;
   gap: var(--gap);
 }
+/* A word value ("Recovery") shrinks to fit its half-width tile instead of breaking mid-word.
+   The cap is low because Android's text zoom multiplies the result again. */
+.glance-grid .stat {
+  container-type: inline-size;
+}
+.glance-grid .stat__value--word {
+  font-size: min(var(--fs-stat), 15cqi);
+  hyphens: auto;
+}
 /* An odd last card spans the row instead of standing alone next to an empty cell. */
 .glance-grid > :last-child:nth-child(odd) {
   grid-column: 1 / -1;

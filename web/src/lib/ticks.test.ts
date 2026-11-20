@@ -71,7 +71,9 @@ describe('unit ticks and labels', () => {
 
 describe('scale helpers', () => {
   it('fits tick labels to the height and font size', () => {
-    expect(tickCountFor(48, 12)).toBe(3);
+    expect(tickCountFor(48, 12)).toBe(2);
+    expect(tickCountFor(90, 15.6)).toBe(3);
+    expect(tickCountFor(120, 12)).toBe(5);
     expect(tickCountFor(48, 15.6)).toBe(2);
     expect(tickCountFor(300, 12)).toBe(5);
     expect(tickCountFor(10, 12)).toBe(2);
