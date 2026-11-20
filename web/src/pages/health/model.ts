@@ -8,7 +8,7 @@ import type { StressSample } from '../../api/generated/StressSample';
 import type { TimedValue } from '../../api/generated/TimedValue';
 import type { TrendSeries } from '../../api/generated/TrendSeries';
 import type { TrendsResponse } from '../../api/generated/TrendsResponse';
-import type { StageSpan, StressBucket } from '../../components';
+import type { StageSpan, StressBucket, XLabel } from '../../components';
 import { addDays, fmtDay } from '../../lib/dates';
 import { fmtDurationMin, fmtFixed, fmtInt, isMissing, type Maybe } from '../../lib/format';
 import { clockAt, dayStartMs, daysBetween, epochMs, offsetMin } from './time';
@@ -223,11 +223,19 @@ export function trendXY(series: TrendSeries, from: string, to: string, scale = 1
   return { x, y };
 }
 
-/** Four evenly spaced date labels for the bottom of a chart. */
-export function rangeAxis(t: Pick<TrendsResponse, 'from' | 'to'>): string[] {
+/** Four evenly spaced date labels for the bottom of a chart, each at its day's x (days since `from`). */
+export function rangeXLabels(t: Pick<TrendsResponse, 'from' | 'to'>): XLabel[] {
   const span = daysBetween(t.from, t.to);
   const fmt: Intl.DateTimeFormatOptions = span > 200 ? { month: 'short', year: 'numeric' } : { day: 'numeric', month: 'short' };
-  return [0, 1, 2, 3].map((i) => fmtDay(addDays(t.from, Math.round((i * span) / 3)), fmt));
+  return [0, 1, 2, 3].map((i) => {
+    const day = Math.round((i * span) / 3);
+    return { value: day, text: fmtDay(addDays(t.from, day), fmt) };
+  });
+}
+
+/** The text of `rangeXLabels`. */
+export function rangeAxis(t: Pick<TrendsResponse, 'from' | 'to'>): string[] {
+  return rangeXLabels(t).map((l) => l.text);
 }
 
 const num = (v: number | null, digits = 0): string | null => (digits === 0 ? fmtInt(v) : fmtFixed(v, digits));

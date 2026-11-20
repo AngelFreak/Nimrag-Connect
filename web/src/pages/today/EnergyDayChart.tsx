@@ -1,14 +1,16 @@
 import type { EnergyBlock } from '../../api/generated/EnergyBlock';
 import type { StressBlock } from '../../api/generated/StressBlock';
 import type { StressLevel } from '../../api/generated/StressLevel';
-import { Unavailable } from '../../components';
+import { PlotFrame, PlotXLabels, plotTicks, Unavailable } from '../../components';
 import { fmtInt } from '../../lib/format';
+import { tickCountFor, unitTicks } from '../../lib/ticks';
 import { fmtTime } from './format';
 
 const W = 320;
-const ENERGY_H = 84;
-const STRESS_TOP = 94;
-const STRESS_H = 36;
+const ENERGY_H = 96;
+// Room between the two scales so the "0" of energy and the "100" of stress never touch (at 130% text too).
+const STRESS_TOP = 126;
+const STRESS_H = 44;
 const H = STRESS_TOP + STRESS_H;
 const BINS = 72;
 
@@ -86,6 +88,11 @@ export function EnergyDayChart({ energy, stress, timezone }: Props) {
   const span = Math.max(1, t1 - t0);
   const x = (t: number) => ((t - t0) / span) * W;
   const y = (v: number) => ENERGY_H - (Math.min(100, Math.max(0, v)) / 100) * (ENERGY_H - 4) - 2;
+  // Both 0 to 100: energy over the line, stress over the bars under it.
+  const ticks = [
+    ...plotTicks(unitTicks(0, 100, tickCountFor(ENERGY_H, 16)), 'int', (v) => y(v) / H),
+    ...plotTicks(unitTicks(0, 100, tickCountFor(STRESS_H, 16)), 'int', (v) => (STRESS_TOP + STRESS_H - (v / 100) * STRESS_H) / H),
+  ];
 
   const line = points.map((p) => `${x(p.t).toFixed(1)},${y(p.v).toFixed(1)}`).join(' ');
   const area = `0,${ENERGY_H} ${line} ${W},${ENERGY_H}`;
@@ -110,9 +117,19 @@ export function EnergyDayChart({ energy, stress, timezone }: Props) {
     .filter(Boolean)
     .join(' ');
 
+  const xAxis = (
+    <PlotXLabels
+      labels={[
+        { at: 0, text: first ?? '' },
+        { at: 0.5, text: mid ?? '' },
+        { at: 1, text: last ?? '' },
+      ]}
+    />
+  );
+
   return (
     <div className="day-chart">
-      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" role="img" aria-label="Energy through the day with stress below">
+      <PlotFrame ticks={ticks} viewW={W} viewH={H} label="Energy through the day with stress below, both from 0 to 100" xAxis={xAxis}>
         <polygon points={area} style={{ fill: 'var(--energy-fill)' }} />
         <polyline points={line} fill="none" strokeWidth={2.5} strokeLinejoin="round" vectorEffect="non-scaling-stroke" style={{ stroke: 'var(--energy)' }} />
         {anyStress
@@ -124,12 +141,7 @@ export function EnergyDayChart({ energy, stress, timezone }: Props) {
             })
           : null}
         {wakeX !== null ? <line x1={wakeX} x2={wakeX} y1={0} y2={H} strokeWidth={2} strokeDasharray="4 3" vectorEffect="non-scaling-stroke" style={{ stroke: 'var(--text)' }} /> : null}
-      </svg>
-      <div className="day-chart__axis" aria-hidden="true">
-        <span>{first}</span>
-        <span>{mid}</span>
-        <span>{last}</span>
-      </div>
+      </PlotFrame>
       <div className="day-chart__legend">
         {wakeX !== null && wakeText ? (
           <span>

@@ -57,6 +57,12 @@ export function timeTicks(totalMinutes: number, maxTicks = 5): TimeTick[] {
   return out;
 }
 
+/** Time labels under an activity chart (0, 10, 20, 30 min), at their minute on the chart's own x axis. */
+export function timeLabels(totalMinutes: number): { value: number; text: string }[] {
+  const ticks = timeTicks(totalMinutes);
+  return ticks.length < 2 ? [] : ticks.map((t) => ({ value: t.minutes, text: t.label }));
+}
+
 /** Slower than this (about 33 min/km) counts as standing still: a gap, not a spike. */
 const MIN_MOVING_MPS = 0.5;
 

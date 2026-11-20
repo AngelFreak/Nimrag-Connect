@@ -7,10 +7,10 @@ import { Card, CardHeader, DataList, EmptyState, Legend, SampleDataChip, SeriesC
 import { fmtDayLong, fmtMonthDay } from '../../lib/dates';
 import { fmtInt, statusName, withUnit } from '../../lib/format';
 import { useIsDesktop, usePageTitle } from '../../lib/hooks';
-import { CardSkeleton, ChartAxis, ChartSummary, LoadError } from './parts';
+import { CardSkeleton, ChartSummary, LoadError } from './parts';
 import { PeriodNav, RangeBar, usePeriod, type PeriodOption } from './period';
 import { useHrv } from './queries';
-import { baselineShort, baselineText, dayAxis, hrvChart, hrvChartSummary, hrvHasData, hrvValue, type HrvMode } from './ranges';
+import { baselineShort, baselineText, dayAxisLabels, hrvChart, hrvChartSummary, hrvHasData, hrvValue, type HrvMode } from './ranges';
 import { clock } from './time';
 
 // The HRV status page. 7d and 4w: the 7-day averages against the balanced range, with a marker per
@@ -138,9 +138,8 @@ function AveragesCard({ data, mode, onMode }: { data: HrvRange; mode: HrvMode; o
         {...(chart.band ? { band: chart.band } : {})}
         xRange={[-0.5, data.days.length - 0.5]}
         height={desktop ? 170 : 130}
-        axes={desktop ? 'y' : false}
+        xLabels={dayAxisLabels(data.from, data.days.length)}
       />
-      {chart.count > 0 ? <ChartAxis labels={dayAxis(data.from, data.days.length)} /> : null}
       <ChartSummary hidden={chart.count > 0}>{summary}</ChartSummary>
       <Legend items={items} />
     </Card>
@@ -233,12 +232,8 @@ function ReadingsCard({ day, night }: { day: HrvDay; night: HrvRange['night'] })
         series={[{ label: 'HRV', color: 'link', data: night.readings.map((r) => r.value), points: night.readings.length <= 12 }]}
         {...(band ? { band } : {})}
         height={desktop ? 170 : 120}
-        axes={desktop ? 'y' : false}
+        xLabels={secs.length < 2 ? [] : [{ value: secs[0] as number, text: clock(first) ?? '' }, { value: secs[secs.length - 1] as number, text: clock(last) ?? '' }]}
       />
-      <div className="chart__axis" aria-hidden="true" style={{ paddingLeft: desktop ? 46 : 6, paddingRight: 6 }}>
-        <span>{clock(first)}</span>
-        <span>{clock(last)}</span>
-      </div>
       <ChartSummary hidden>{summary}</ChartSummary>
       <div className="stat-trio">
         <StatTile size="sm" label="Lowest" value={withUnit(fmtInt(night.low_ms), 'ms')} />

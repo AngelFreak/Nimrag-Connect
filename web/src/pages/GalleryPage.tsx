@@ -277,11 +277,15 @@ export function GalleryPage() {
           </Card>
           <Card>
             <CardHeader title="Heart rate, last 24 hours" aside="48 to 148 bpm" tone="muted" />
-            <SeriesChart label="Heart rate over the last 24 hours" summary="Heart rate over the last 24 hours, low overnight with a peak of 148 bpm." x={range(HR_24H.length)} series={[{ label: 'Heart rate', color: 'heart', data: HR_24H }]} height={64} />
+            <SeriesChart label="Heart rate over the last 24 hours" summary="Heart rate over the last 24 hours, low overnight with a peak of 148 bpm." x={range(HR_24H.length)} series={[{ label: 'Heart rate', color: 'heart', data: HR_24H }]} height={96} xLabels={[0, 6, 12, 18, 24].map((v) => ({ value: (v / 24) * (HR_24H.length - 1), text: String(v).padStart(2, '0') }))} />
           </Card>
           <Card>
             <CardHeader title="Energy" aside="High 94 · Low 38" />
             <SeriesChart label="Energy across the day" summary="Energy charges overnight to 94 and drains to 38 after the evening workout." x={range(ENERGY_DAY.length)} series={[{ label: 'Energy', color: 'energy', data: ENERGY_DAY, area: true }]} yRange={[0, 100]} height={100} />
+          </Card>
+          <Card>
+            <CardHeader title="Sparkline in a tile" />
+            <SeriesChart label="Breathing rate" summary="Breathing rate overnight, between 13.1 and 13.9 breaths per minute." x={range(8)} series={[{ label: 'Breathing', color: 'link', data: [13.4, 13.1, 13.6, 13.3, 13.9, 13.5, 13.2, 13.4], width: 2 }]} height={36} yUnit="decimal" sparkline />
           </Card>
           <Card>
             <CardHeader title="Gap in the data" />

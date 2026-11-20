@@ -157,6 +157,7 @@ function build(id: HomeCard, t: Today): Built {
               x={values.map((_, i) => i)}
               series={[{ label: 'HRV', color: 'link', data: values, width: 2 }]}
               {...(band ? { band } : {})}
+              sparkline
               height={36}
             />
           ) : null,

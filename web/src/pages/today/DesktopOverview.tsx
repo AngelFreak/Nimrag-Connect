@@ -61,17 +61,20 @@ function Body<T>({ query, what, children }: { query: UseQueryResult<T>; what: st
   return <>{children(query.data)}</>;
 }
 
-/** A few evenly spaced date labels for a chart's x axis. */
-function dateTicks(dates: string[], count = 5): string[] {
+/** A few evenly spaced date labels for a chart's x axis; each carries the index of its date. */
+function dateTickLabels(dates: string[], count = 5): { value: number; text: string }[] {
   if (dates.length === 0) return [];
   const n = Math.min(count, dates.length);
-  const out: string[] = [];
+  const out: { value: number; text: string }[] = [];
   for (let i = 0; i < n; i += 1) {
     const idx = n === 1 ? 0 : Math.round((i * (dates.length - 1)) / (n - 1));
-    out.push(fmtDay(dates[idx]!, { day: 'numeric', month: 'short' }));
+    out.push({ value: idx, text: fmtDay(dates[idx]!, { day: 'numeric', month: 'short' }) });
   }
   return out;
 }
+
+/** The same labels as plain text, for the bar chart's label row. */
+const dateTicks = (dates: string[], count = 5): string[] => dateTickLabels(dates, count).map((l) => l.text);
 
 function HrvPanel() {
   const [range, setRange] = useState<TrendRange>('4w');
@@ -100,13 +103,8 @@ function HrvPanel() {
                 series={[{ label: 'HRV', color: 'link', data: values }]}
                 {...(band ? { band } : {})}
                 height={200}
-                axes="y"
+                xLabels={dateTickLabels(points.map((p) => p.date))}
               />
-              <div className="chart__axis" aria-hidden="true">
-                {dateTicks(points.map((p) => p.date)).map((t, i) => (
-                  <span key={`${t}-${i}`}>{t}</span>
-                ))}
-              </div>
             </>
           );
         }}
@@ -136,6 +134,7 @@ function SleepPanel() {
                 values={nights.length ? hours : []}
                 labels={nights.map((n) => n.date)}
                 axisLabels={dateTicks(nights.map((n) => n.date), 4)}
+                yUnit="hours"
                 label={label}
                 highlightIndex={nights.length - 1}
                 summary={`${label}.`}

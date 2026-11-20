@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef } from 'react';
 import uPlot from 'uplot';
 import 'uplot/dist/uPlot.min.css';
+import { extremeTicks, formatTicks, roundTick, tickCountFor, unitTicks, type AxisUnit } from '../lib/ticks';
 import { Unavailable } from './Unavailable';
 
 // uPlot draws on a canvas, so it needs real colour values rather than CSS variables.
@@ -20,6 +21,9 @@ const TEXT_2 = '#9aa7ac';
 const LINE = '#243037';
 const BAND = '#1d3144';
 const ENERGY_FILL = '#173a36';
+const FONT_FAMILY = 'Inter, system-ui, sans-serif';
+/** Gap between the value labels and the plot. */
+const AXIS_GAP = 4;
 
 /** A marker drawn on one point: green dot, orange square, red triangle (HRV status). */
 export interface ChartMarker {
@@ -50,6 +54,12 @@ export interface BandSeries {
   hi: (number | null)[];
 }
 
+/** A label under the plot, at an x value ("00" at 0, "12" at 12): drawn as the chart's own x axis so it lines up with the data. */
+export interface XLabel {
+  value: number;
+  text: string;
+}
+
 interface SeriesChartProps {
   /** Short accessible name: "Overnight HRV over 4 weeks". */
   label: string;
@@ -73,10 +83,16 @@ interface SeriesChartProps {
   /** Show the summary as a line under the chart too (otherwise only screen readers get it). */
   summaryVisible?: boolean;
   /**
-   * Axis labels and grid lines (desktop charts): true for both axes, 'y' for the value axis only
-   * (put your own date labels under the chart), false for the bare phone style.
+   * Axes: the value axis (labels on the left, faint grid lines across) is on by default, phone and
+   * desktop alike. `true` adds uPlot's own x labels as well; `false` draws neither (no chart uses it).
    */
   axes?: boolean | 'y';
+  /** Labels under the plot, drawn as the x axis at exactly these x values (hours of a day, dates). */
+  xLabels?: XLabel[];
+  /** What the y values are: decides the tick steps and how a tick is written (default whole numbers). */
+  yUnit?: AxisUnit;
+  /** A tiny chart in a tile: only two value labels, the lowest and highest reading. */
+  sparkline?: boolean;
 }
 
 function bandExtent(band: [number, number] | BandSeries): [number, number] {
@@ -153,20 +169,51 @@ function hasData(series: ChartSeries[]): boolean {
 }
 
 /** Line chart on uPlot with an accessible name and a text summary. */
-export function SeriesChart({ label, summary, x, series, height = 90, time = false, band, yRange, xRange, summaryVisible = false, axes = false }: SeriesChartProps) {
+export function SeriesChart({ label, summary, x, series, height = 90, time = false, band, yRange, xRange, summaryVisible = false, axes = 'y', xLabels, yUnit = 'int', sparkline = false }: SeriesChartProps) {
   const host = useRef<HTMLDivElement>(null);
   const available = hasData(series) && x.length > 0;
-  const key = useMemo(() => JSON.stringify([x, series, height, time, band, yRange, xRange, axes]), [x, series, height, time, band, yRange, xRange, axes]);
+  const key = useMemo(() => JSON.stringify([x, series, height, time, band, yRange, xRange, axes, xLabels, yUnit, sparkline]), [x, series, height, time, band, yRange, xRange, axes, xLabels, yUnit, sparkline]);
 
   useEffect(() => {
     const el = host.current;
     if (!el || !available) return;
     const width = Math.max(120, el.clientWidth || 320);
 
+    // Canvas text ignores the page text size, so take it from the element (styled with --fs-xs): at
+    // 130% text zoom the labels grow with the rest of the page. The gutter is sized from the labels.
+    // Whole pixels: uPlot scales the size in the font string with a pattern that only reads integers.
+    const fs = Math.max(10, Math.round(parseFloat(getComputedStyle(el).fontSize) || 12));
+    const font = `${fs}px ${FONT_FAMILY}`;
+    const showY = axes !== false;
+    const showX = axes === true || (axes !== false && !!xLabels?.length);
+    // The x labels sit half a line lower, clear of the lowest value label that is centred on the baseline.
+    const xGap = Math.ceil(fs / 2) + 2;
+    const xSize = showX ? Math.ceil(fs * 1.2) + xGap + 2 : 0;
+    // Half a label of room above the top tick and, with no x labels, below the bottom one.
+    const padTop = Math.ceil(fs / 2) + 2;
+    const padBottom = showX ? 2 : Math.ceil(fs / 2) + 2;
+    const plotHeight = sparkline ? Math.max(height, Math.ceil(fs * 1.6) + padTop + padBottom) : height;
+    const total = plotHeight + xSize;
+    const ticksWanted = tickCountFor(plotHeight - padTop - padBottom, fs);
+    el.style.minHeight = `${total}px`;
+
+    // uPlot remembers the font it last set, so put the context's font back after measuring.
+    const measure = (u: uPlot, text: string) => {
+      const ctx = u.ctx;
+      const before = ctx.font;
+      ctx.font = font;
+      const width = ctx.measureText(text).width;
+      ctx.font = before;
+      return width;
+    };
+    const labelText = new Map((xLabels ?? []).map((l) => [l.value, l.text]));
+    const lastLabel = xLabels?.reduce<XLabel | undefined>((a, l) => (!a || l.value > a.value ? l : a), undefined);
+
     const opts: uPlot.Options = {
       width,
-      height,
-      padding: [6, 6, axes === true ? 0 : 6, axes ? 0 : 6],
+      height: total,
+      // The right side keeps room for half of the last x label, which is centred on the plot's edge.
+      padding: [padTop, (u: uPlot) => (lastLabel ? Math.max(6, Math.ceil(measure(u, lastLabel.text) / 2) + 2) : 6), padBottom, 0],
       legend: { show: false },
       cursor: { show: false },
       select: { show: false, left: 0, top: 0, width: 0, height: 0 },
@@ -188,8 +235,36 @@ export function SeriesChart({ label, summary, x, series, height = 90, time = fal
         },
       },
       axes: [
-        { show: axes === true, stroke: TEXT_2, grid: { stroke: LINE, width: 1 }, ticks: { show: false }, size: 28, font: '12px Inter, sans-serif' },
-        { show: axes !== false, stroke: TEXT_2, grid: { stroke: LINE, width: 1 }, ticks: { show: false }, size: 40, font: '12px Inter, sans-serif' },
+        {
+          show: showX,
+          stroke: TEXT_2,
+          font,
+          gap: xGap,
+          grid: { show: false },
+          ticks: { show: false },
+          size: xSize,
+          ...(xLabels?.length
+            ? {
+                splits: (_u: uPlot, _i: number, min: number, max: number) => xLabels.map((l) => l.value).filter((v) => v >= min - 1e-9 && v <= max + 1e-9),
+                values: (_u: uPlot, splits: number[]) => splits.map((v) => labelText.get(v) ?? ''),
+              }
+            : {}),
+        },
+        {
+          show: showY,
+          stroke: TEXT_2,
+          font,
+          gap: AXIS_GAP,
+          grid: { stroke: LINE, width: 1 },
+          ticks: { show: false },
+          // As wide as the widest label, so numbers never clip (and a 130% font widens it).
+          size: (u: uPlot, values: string[] | null) => (values && values.length ? Math.ceil(Math.max(...values.map((v) => measure(u, v)))) + AXIS_GAP + 2 : 24),
+          splits: (_u: uPlot, _i: number, min: number, max: number) =>
+            (sparkline ? [...new Set(extremeTicks(series.flatMap((s) => s.data)).map((v) => roundTick(v, yUnit)))] : unitTicks(min, max, ticksWanted, yUnit)).filter(
+              (v) => v >= min && v <= max,
+            ),
+          values: (_u: uPlot, splits: number[]) => formatTicks(splits, yUnit),
+        },
       ],
       series: [
         {},
@@ -215,10 +290,16 @@ export function SeriesChart({ label, summary, x, series, height = 90, time = fal
     const plot = new uPlot(opts, [x, ...series.map((s) => s.data)] as uPlot.AlignedData, el);
     const observer = new ResizeObserver(() => {
       const w = Math.max(120, el.clientWidth);
-      if (w !== plot.width) plot.setSize({ width: w, height });
+      if (w !== plot.width) plot.setSize({ width: w, height: total });
     });
     observer.observe(el);
+    // The labels are measured with the web font; when it arrives late, measure again.
+    let disposed = false;
+    void document.fonts?.ready.then(() => {
+      if (!disposed) plot.redraw?.(false, true);
+    });
     return () => {
+      disposed = true;
       observer.disconnect();
       plot.destroy();
     };
@@ -239,7 +320,7 @@ export function SeriesChart({ label, summary, x, series, height = 90, time = fal
 
   return (
     <div className="series-chart">
-      <div ref={host} role="img" aria-label={label} style={{ minHeight: axes === true ? height + 28 : height }} />
+      <div ref={host} className="series-chart__plot" role="img" aria-label={label} style={{ minHeight: axes === true || xLabels?.length ? height + 28 : height }} />
       <p className={summaryVisible ? 'chart-summary' : 'sr-only'}>{summary}</p>
     </div>
   );

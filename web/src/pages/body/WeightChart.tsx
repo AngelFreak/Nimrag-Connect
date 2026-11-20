@@ -1,10 +1,11 @@
-import { Unavailable } from '../../components';
+import { PlotFrame, PlotXLabels, plotTicks, Unavailable } from '../../components';
 import { fmtShortDay } from '../../lib/dates';
+import { tickCountFor, unitTicks } from '../../lib/ticks';
 import { toPoints, weightSummary } from './body';
 import type { TimedValue } from './types';
 
 const W = 320;
-const H = 120;
+const H = 132;
 
 /**
  * Weight over 90 days: each weigh-in is a dot, the smoothed trend a line. Dots are HTML so they
@@ -35,24 +36,28 @@ export function WeightChart({ weights, trend }: { weights: TimedValue[]; trend: 
   const last = dots[dots.length - 1]!;
   const midDay = dots[Math.floor((dots.length - 1) / 2)]!;
   const summary = weightSummary(dots, line);
+  // Kilograms on the left, whole or half steps as the range needs.
+  const ticks = plotTicks(unitTicks(vMin, vMax, Math.min(4, tickCountFor(H, 16)), 'decimal'), 'decimal', y);
+  const dayAt = (t: number) => x(t);
+  const xAxis = (
+    <PlotXLabels
+      labels={[
+        { at: dayAt(first.t), text: fmtShortDay(first.day) },
+        { at: dayAt(midDay.t), text: fmtShortDay(midDay.day) },
+        { at: dayAt(last.t), text: fmtShortDay(last.day) },
+      ]}
+    />
+  );
 
   return (
-    <div className="chart">
-      <div className="weight-chart" role="img" aria-label="Weight trend over 90 days: individual weigh-ins as dots with a smoothed trend line" style={{ position: 'relative', height: H }}>
-        <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" aria-hidden="true" style={{ position: 'absolute', inset: 0, width: '100%', height: H }}>
-          <path d={`M0 ${H * 0.25}H${W}M0 ${H * 0.5}H${W}M0 ${H * 0.75}H${W}`} style={{ stroke: 'var(--line)' }} strokeWidth={1} vectorEffect="non-scaling-stroke" />
-          {line.length > 1 ? (
-            <polyline
-              fill="none"
-              style={{ stroke: 'var(--link)' }}
-              strokeWidth={2.5}
-              strokeLinejoin="round"
-              vectorEffect="non-scaling-stroke"
-              points={line.map((p) => `${(x(p.t) * W).toFixed(1)},${(y(p.v) * H).toFixed(1)}`).join(' ')}
-            />
-          ) : null}
-        </svg>
-        {dots.map((p, i) => (
+    <div className="chart weight-chart">
+      <PlotFrame
+        ticks={ticks}
+        viewW={W}
+        viewH={H}
+        label="Weight trend over 90 days: individual weigh-ins as dots with a smoothed trend line, in kilograms"
+        xAxis={xAxis}
+        overlay={dots.map((p, i) => (
           <span
             key={`${p.t}-${i}`}
             aria-hidden="true"
@@ -68,12 +73,18 @@ export function WeightChart({ weights, trend }: { weights: TimedValue[]; trend: 
             }}
           />
         ))}
-      </div>
-      <div className="chart__axis" aria-hidden="true">
-        <span>{fmtShortDay(first.day)}</span>
-        <span>{fmtShortDay(midDay.day)}</span>
-        <span>{fmtShortDay(last.day)}</span>
-      </div>
+      >
+        {line.length > 1 ? (
+          <polyline
+            fill="none"
+            style={{ stroke: 'var(--link)' }}
+            strokeWidth={2.5}
+            strokeLinejoin="round"
+            vectorEffect="non-scaling-stroke"
+            points={line.map((p) => `${(x(p.t) * W).toFixed(1)},${(y(p.v) * H).toFixed(1)}`).join(' ')}
+          />
+        ) : null}
+      </PlotFrame>
       <p className="sr-only">{summary}</p>
       <p className="stat__sub">
         {lo.toFixed(1)} to {hi.toFixed(1)} kg over {dots.length} weigh-in{dots.length === 1 ? '' : 's'}. Dots are weigh-ins, the line is the smoothed trend.

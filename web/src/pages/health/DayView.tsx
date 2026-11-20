@@ -4,11 +4,13 @@ import { addDays, browserToday, fmtShortDay } from '../../lib/dates';
 import { fmtDurationMin, fmtInt, withUnit } from '../../lib/format';
 import { useIsDesktop, usePageTitle } from '../../lib/hooks';
 import { energyAside, energySummary, fmtSeconds, hourSeries, hrAside, hrSummary, kindName, stepsPercent, stressAside, stressBuckets, stressSummary } from './model';
-import { CardSkeleton, ChartAxis, ChartSummary, LoadError } from './parts';
+import { CardSkeleton, ChartSummary, LoadError } from './parts';
 import { useDay } from './queries';
 import { clock } from './time';
 
 const HOURS = ['00', '06', '12', '18', '24'];
+/** The hour labels as the chart's x axis: "00" at hour 0 ... "24" at hour 24. */
+const HOUR_LABELS = HOURS.map((text, i) => ({ value: i * 6, text }));
 
 export function DayView({ date }: { date: string }) {
   const title = fmtShortDay(date);
@@ -66,15 +68,13 @@ function DayCards({ day }: { day: DayResponse }) {
             xRange={[0, 24]}
             series={[{ label: 'Heart rate', color: 'heart', data: hr?.y ?? [] }]}
             height={desktop ? 150 : 110}
-            axes={desktop ? 'y' : false}
+            xLabels={HOUR_LABELS}
           />
-          {hr ? <ChartAxis labels={HOURS} /> : null}
         </Card>
 
         <Card>
           <CardHeader title="Stress" aside={stressAside(st) ?? <Unavailable />} />
-          <StressBars buckets={buckets} label="Stress level across the day" />
-          <ChartAxis labels={HOURS} />
+          <StressBars buckets={buckets} label="Stress level across the day" xLabels={HOURS} />
           <Legend
             items={[
               { key: 'rest', label: <>Rest {fmtSeconds(st.rest_s) ?? <Unavailable />}</>, color: 'var(--stress-rest)' },
@@ -98,9 +98,8 @@ function DayCards({ day }: { day: DayResponse }) {
             series={[{ label: 'Energy', color: 'energy', data: energy?.y ?? [], area: true }]}
             yRange={[0, 100]}
             height={desktop ? 140 : 100}
-            axes={desktop ? 'y' : false}
+            xLabels={HOUR_LABELS}
           />
-          {energy ? <ChartAxis labels={HOURS} /> : null}
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
             <span className="tone-energy">{day.energy.charged === null ? <Unavailable /> : `+${fmtInt(day.energy.charged)} charged`}</span>
             <span className="tone-warn">{day.energy.drained === null ? <Unavailable /> : `-${fmtInt(day.energy.drained)} drained`}</span>

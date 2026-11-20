@@ -1,6 +1,5 @@
 import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
-import { useIsDesktop } from '../../lib/hooks';
 import { Button, Card, ErrorState, Skeleton } from '../../components';
 import './health.css';
 
@@ -50,17 +49,3 @@ export function HubLink({ to, title, sub }: { to: string; title: string; sub: st
   );
 }
 
-/**
- * Date or hour labels under a SeriesChart. The chart keeps 6 px of padding at both sides and, with
- * the value axis on (desktop), a 40 px axis column on the left; the labels line up with the plot.
- */
-export function ChartAxis({ labels }: { labels: string[] }) {
-  const desktop = useIsDesktop();
-  return (
-    <div className="chart__axis" aria-hidden="true" style={{ paddingLeft: desktop ? 46 : 6, paddingRight: 6 }}>
-      {labels.map((l) => (
-        <span key={l}>{l}</span>
-      ))}
-    </div>
-  );
-}

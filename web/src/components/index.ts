@@ -13,6 +13,7 @@ export * from './Table';
 export * from './States';
 export * from './SeriesChart';
 export * from './BarSeries';
+export * from './PlotFrame';
 export * from './MapView';
 export * from './Button';
 export * from './Toggle';
