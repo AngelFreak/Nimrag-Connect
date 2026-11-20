@@ -243,6 +243,9 @@ duplicates and appends cards missing from `order`).
 | `GET /api/trends?range=7d\|4w\|3m\|1y` | HRV with baseline, resting HR, breathing, SpO2, sleep score and duration |
 | `GET /api/movement/{date}` | steps, distance, week of steps, intensity week, calories |
 | `GET /api/training` | training status, load, load balance, recovery, VO2 max |
+| `GET /api/training/status?from&to` | the Training status page: `days` (one status per local day), `runs` (consecutive equal statuses, newest first, with `ongoing` and `starts_before_range`), the colour `legend`, and today's `current` status and `load`. Each status is `{code, label, kind}`; only codes 1 Detraining, 4 Maintaining, 5 Recovery, 7 Productive, 8 Strained and 0 No status are verified, any other code is sent as `Status N` with kind `unknown` |
+| `GET /api/hrv?from&to` | the HRV status page: one entry per local day (status, 7-day average, overnight average, balanced range), the mean of the overnight values, the latest range, and for a one-day range the night's readings |
+| `GET /api/sleep/history?from&to&group=day\|week\|month` | the Sleep score page for more than one night: buckets with average, highest and lowest score and average time asleep, and the stats over the whole range (`long_night_s` is 8 h) |
 | `GET /api/body`, `POST /api/body`, `DELETE /api/body/{id}` | manual weight, body fat and waist entries with the trend |
 | `GET /api/calendar/{yyyy-mm}` | per day activities and summary values, month totals |
 | `GET /api/devices`, `GET /api/storage` | watch battery, last data and sync; file and parse counts |
@@ -254,6 +257,11 @@ touches. Every derived sample table has `user_id` in its primary key (0 = unassi
 `*_current` views carry the owner through `file_owners`, and a by-id endpoint (activity, track,
 strength) answers 404 for a file the session's user does not own.
 `reparse` re-derives from the files and keeps `file_owners`.
+The three range endpoints take local dates `from` and `to` (`to` defaults to today and is
+clamped to it, `from` to `to` minus 6 days; a range over 400 days or with `from` after `to` is
+a 400). They read the derived tables (`training_status`, `training_load`, `hrv_summary`,
+`hrv_values`, `sleep_sessions_current`), so rows that a later Garmin Connect import adds show
+up without changes, and every query filters by the session's user.
 Interpretation rules that are not obvious from the watch data (cumulative step
 counters, weekly intensity totals, night date, VO2 max from MET) are documented
 at the top of `src/web_api/daily.rs` and `src/web_api/training.rs`.
