@@ -180,7 +180,13 @@ fn second_writer_on_the_same_data_dir_is_refused() {
         }
         std::thread::sleep(std::time::Duration::from_millis(50));
     }
-    for cmd in ["reparse", "rebuild-ledger", "import-export", "serve"] {
+    for cmd in [
+        "reparse",
+        "rebuild-ledger",
+        "import-export",
+        "import-connect",
+        "serve",
+    ] {
         let out = bin(dir.path(), &[cmd, dir.path().to_str().unwrap()]);
         assert!(!out.status.success(), "{cmd} must be refused");
         let e = String::from_utf8_lossy(&out.stderr);

@@ -3,6 +3,7 @@
 
 pub mod api;
 pub mod auth;
+pub mod connect;
 pub mod db;
 pub mod derive;
 pub mod derived;

@@ -63,7 +63,8 @@ pub async fn last_upload(ctx: &Ctx) -> Res<Option<String>> {
 
 pub async fn last_data_ts(ctx: &Ctx) -> Res<Option<i64>> {
     Ok(sqlx::query_scalar(
-        "SELECT MAX(s.last_ts) FROM sources s JOIN file_owners o ON o.sha256 = s.sha256 AND o.user_id = ?",
+        "SELECT MAX(s.last_ts) FROM sources s JOIN file_owners o ON o.sha256 = s.sha256 AND o.user_id = ?
+         WHERE s.origin = 'fit'",
     )
     .bind(ctx.uid)
     .fetch_one(&ctx.pool)

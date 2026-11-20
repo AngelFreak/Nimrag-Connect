@@ -390,10 +390,18 @@ pub struct SessionRow {
     pub rem_score: Option<f64>,
     pub awakenings_count: Option<f64>,
     pub avg_stress: Option<f64>,
+    /// Stage totals a night imported from Garmin Connect carries (a watch night has stage rows
+    /// in `sleep_levels` instead).
+    pub asleep_s: Option<f64>,
+    pub deep_s: Option<f64>,
+    pub light_s: Option<f64>,
+    pub rem_s: Option<f64>,
+    pub awake_s: Option<f64>,
 }
 
 const SESSION_COLS: &str = "start_ts, end_ts, overall_score, quality_score, duration_score,
-    recovery_score, deep_score, light_score, rem_score, awakenings_count, avg_stress";
+    recovery_score, deep_score, light_score, rem_score, awakenings_count, avg_stress,
+    asleep_s, deep_s, light_s, rem_s, awake_s";
 const NIGHT_SHIFT_S: i64 = 6 * 3600;
 
 /// The local date a night belongs to: the day it began on, counting starts
@@ -531,14 +539,18 @@ fn summary(ctx: &Ctx, s: &SessionRow, lv: &[(i64, i64)]) -> NightSummary {
         date: crate::settings::date_string(night_date(ctx, s.start_ts)),
         start: ctx.ts(s.start_ts),
         end: ctx.ts(s.end_ts),
+        // Time asleep: from the stage rows of a watch night, else the totals an imported night
+        // carries, else the whole span.
         duration_s: st
             .as_ref()
-            .map_or((s.end_ts - s.start_ts) as f64, |t| t.deep + t.light + t.rem),
+            .map_or(s.asleep_s.unwrap_or((s.end_ts - s.start_ts) as f64), |t| {
+                t.deep + t.light + t.rem
+            }),
         score: s.overall_score,
-        deep_s: st.as_ref().map(|t| t.deep),
-        light_s: st.as_ref().map(|t| t.light),
-        rem_s: st.as_ref().map(|t| t.rem),
-        awake_s: st.as_ref().map(|t| t.awake),
+        deep_s: st.as_ref().map(|t| t.deep).or(s.deep_s),
+        light_s: st.as_ref().map(|t| t.light).or(s.light_s),
+        rem_s: st.as_ref().map(|t| t.rem).or(s.rem_s),
+        awake_s: st.as_ref().map(|t| t.awake).or(s.awake_s),
     }
 }
 
@@ -579,7 +591,12 @@ pub async fn night_detail(ctx: &Ctx, s: &SessionRow) -> Res<SleepNight> {
         ctx,
         "SELECT last_night_avg FROM hrv_summary WHERE user_id = ? AND ts >= ? AND ts <= ? AND last_night_avg IS NOT NULL
          ORDER BY ts DESC LIMIT 1",
-        &[s.start_ts, s.end_ts + 6 * 3600],
+        // From the start of the night, or of the day it ends on: a summary imported from Garmin
+        // Connect sits at the start of its day.
+        &[
+            s.start_ts.min(ctx.day_bounds(ctx.date(s.end_ts)).0),
+            s.end_ts + 6 * 3600,
+        ],
     )
     .await?
     {
@@ -839,6 +856,22 @@ pub async fn day_stats(
             add(&mut s.steps, steps);
             add(&mut s.distance_m, dist);
             add(&mut s.active_kcal, kcal);
+        }
+    }
+
+    // Whole-day totals imported from Garmin Connect fill the days that have no minute data.
+    let totals: Vec<(i64, Option<f64>, Option<f64>)> = sqlx::query_as(
+        "SELECT ts, steps, active_kcal FROM daily_totals WHERE user_id = ? AND ts >= ? AND ts < ?",
+    )
+    .bind(ctx.uid)
+    .bind(lo)
+    .bind(hi)
+    .fetch_all(&ctx.pool)
+    .await?;
+    for (ts, steps, kcal) in totals {
+        if let Some(s) = out.get_mut(&ctx.date(ts)) {
+            s.steps = s.steps.or(steps);
+            s.active_kcal = s.active_kcal.or(kcal);
         }
     }
 

@@ -501,6 +501,15 @@ Final report: what works, what was verified and how, what is still unknown.
 **Status**: Server and web done and tested (server integration tests for migration, accounts and 2FA, admin, isolation, app login and the CLI; web unit tests and Playwright against the real server). Android app not started (the API above is fixed for it).
 **Open**: file ownership is stored only in the database, so `rebuild-ledger` from sidecars yields unowned files; a user without 2FA can enrol with the password alone at first login (by design, so new users get their temporary password in person); a Garmin Forward account from before accounts (user 0) idles until an admin assigns it.
 
+## Garmin Connect history (2026-11-20)
+**Goal**: the owner's year of Garmin Connect history (pulled as JSON through a Connect connector) shows on the history pages before the watch has synced that long to this server.
+**Contract** (details in `server/README.md`, "Garmin Connect history"):
+- `nimrag-server import-connect --user USERNAME [--timezone IANA] <dir>`: same lock as `import-export`, data owned by the named normal user. Each JSON becomes a content-addressed blob (`files.source = 'connect'`) holding an envelope around the original text, derived through `ingest` and `reparse` like a FIT file, so it survives reparse, assign and restarts; a re-import adds nothing.
+- Rank: `sources.origin = 'connect'` with a rank key starting `-`, below every FIT key: the watch wins whatever the import order. A Connect activity is hidden by a FIT activity of the same user starting within 120 s, a Connect night by an overlapping FIT night (views `activities_current`, `sleep_sessions_current`).
+- Mapped onto the existing tables (training status and load, HRV with baselines, resting HR, VO2 max, sleep, activities with sessions, laps and strength sets); new: `sleep_sessions` stage totals and `daily_totals` (steps and calories per day, used when a day has no minute data). Migration 0011 also rebuilds `files` so its `source` CHECK accepts `connect`.
+**Status**: done and tested on synthetic fixtures; dry run on a scratch copy of the real history showed training status runs from May to November, a year of sleep nights, 28 days of HRV with baselines and the activity list.
+**Open**: the real history has no night to check Connect's sleep instants against the watch-verified night of 2026-11-19/20 (it was pulled before that night); the instants were checked against the HRV local strings instead. Date-only rows sit at local midnight, so a DST change inside the imported range moves nothing but is unverified on real data; a user who changes zone and re-imports gets a second set of blobs (the zone is part of the blob). No heart-rate zones or tracks (not in the data). Not run against the live database.
+
 # Appendix: contracts and reviewer notes
 
 ### Reviewer notes for stage 1d (parsers), recorded 2026-11-19
