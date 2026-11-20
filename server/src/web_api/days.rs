@@ -156,6 +156,20 @@ pub struct MovementResponse {
 }
 
 pub async fn resting_kcal(ctx: &Ctx, d: NaiveDate) -> Res<Option<f64>> {
+    if let Some(v) = watch_resting_kcal(ctx, d).await? {
+        return Ok(Some(v));
+    }
+    // No watch settings: the day's total imported from Garmin Connect, if any.
+    super::daily::one_f64(
+        ctx,
+        "SELECT resting_kcal FROM daily_totals WHERE user_id = ? AND ts >= ? AND ts < ?
+         AND resting_kcal IS NOT NULL LIMIT 1",
+        &[ctx.day_bounds(d).0, ctx.day_bounds(d).1],
+    )
+    .await
+}
+
+async fn watch_resting_kcal(ctx: &Ctx, d: NaiveDate) -> Res<Option<f64>> {
     super::daily::one_f64(
         ctx,
         "SELECT m.rmr_kcal_day FROM mon_info m JOIN sources s ON s.sha256 = m.sha256
