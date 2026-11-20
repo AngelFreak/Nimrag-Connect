@@ -29,6 +29,7 @@ export type { HrvRange } from "./HrvRange";
 export type { LoginRequest } from "./LoginRequest";
 export type { LoginResponse } from "./LoginResponse";
 export type { Me } from "./Me";
+export type { MetricRange } from "./MetricRange";
 export type { MovementResponse } from "./MovementResponse";
 export type { NewBodyEntry } from "./NewBodyEntry";
 export type { NewUser } from "./NewUser";

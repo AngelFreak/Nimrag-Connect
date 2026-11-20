@@ -166,7 +166,7 @@ pub struct TrainingResponse {
     pub readiness: Option<TrainingReadinessCard>,
 }
 
-type StatusRow = (
+pub type StatusRow = (
     i64,
     Option<i64>,
     Option<f64>,
@@ -176,21 +176,22 @@ type StatusRow = (
     Option<i64>,
 );
 
-async fn status_rows(ctx: &Ctx, from: i64) -> Res<Vec<StatusRow>> {
+/// Training status rows with `from <= ts <= to`, oldest first.
+pub async fn status_rows(ctx: &Ctx, from: i64, to: i64) -> Res<Vec<StatusRow>> {
     Ok(sqlx::query_as(
         "SELECT ts, status, weekly_load_sum, load_min, load_max, fitness_trend, load_trend
          FROM training_status WHERE user_id = ? AND ts >= ? AND ts <= ? ORDER BY ts",
     )
     .bind(ctx.uid)
     .bind(from)
-    .bind(ctx.now)
+    .bind(to)
     .fetch_all(&ctx.pool)
     .await?)
 }
 
 pub async fn status_and_load(ctx: &Ctx) -> Res<(TrainingStatusCard, TrainingLoadCard)> {
     let today = ctx.today();
-    let rows = status_rows(ctx, ctx.day_bounds(today - Duration::days(120)).0).await?;
+    let rows = status_rows(ctx, ctx.day_bounds(today - Duration::days(120)).0, ctx.now).await?;
     let latest = rows.last();
     let (since, lower) = match latest.and_then(|l| l.1) {
         Some(code) => {
@@ -290,9 +291,15 @@ pub async fn recovery(ctx: &Ctx) -> Res<RecoveryCard> {
     })
 }
 
-pub async fn vo2max(ctx: &Ctx) -> Res<Vo2Card> {
-    // Watch-level readings plus the maximal MET stored with each activity file.
-    let rows: Vec<(i64, f64)> = sqlx::query_as(
+/// ml/kg/min from the watch's maximal MET (derived: MET x 3.5).
+pub fn vo2_from_met(met: f64) -> f64 {
+    round1(met * 3.5)
+}
+
+/// `(ts, maximal_met)` readings with `ts <= to`, oldest first: the watch-level readings plus the
+/// maximal MET stored with each activity file.
+pub async fn vo2_readings(ctx: &Ctx, to: i64) -> Res<Vec<(i64, f64)>> {
+    Ok(sqlx::query_as(
         "SELECT ts, maximal_met FROM (
              SELECT ts, maximal_met FROM vo2max WHERE user_id = ?
              UNION ALL
@@ -303,14 +310,18 @@ pub async fn vo2max(ctx: &Ctx) -> Res<Vo2Card> {
     )
     .bind(ctx.uid)
     .bind(ctx.uid)
-    .bind(ctx.now)
+    .bind(to)
     .fetch_all(&ctx.pool)
-    .await?;
+    .await?)
+}
+
+pub async fn vo2max(ctx: &Ctx) -> Res<Vo2Card> {
+    let rows = vo2_readings(ctx, ctx.now).await?;
     let recent: Vec<&(i64, f64)> = rows
         .iter()
         .filter(|r| r.0 >= ctx.now - 90 * 86_400)
         .collect();
-    let conv = |met: f64| round1(met * 3.5);
+    let conv = vo2_from_met;
     let last = rows.last();
     Ok(Vo2Card {
         value: last.map(|l| conv(l.1)),

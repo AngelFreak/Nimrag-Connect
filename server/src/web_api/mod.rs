@@ -17,6 +17,7 @@ pub mod body;
 pub mod daily;
 pub mod days;
 pub mod hrv;
+pub mod metrics;
 pub mod prefs;
 pub mod sleep;
 pub mod strength;
@@ -51,6 +52,7 @@ pub fn router() -> Router<AppState> {
         .merge(strength::routes())
         .merge(sleep::routes())
         .merge(trends::routes())
+        .merge(metrics::routes())
         .merge(training::routes())
         .merge(body::routes())
         .merge(system::routes())
@@ -283,6 +285,7 @@ pub fn export_types(dir: &Path) -> anyhow::Result<()> {
         sleep::SleepNightResponse,
         sleep::SleepNightsResponse,
         trends::TrendsResponse,
+        metrics::MetricRange,
         training::TrainingResponse,
         training::TrainingStatusRange,
         hrv::HrvRange,
