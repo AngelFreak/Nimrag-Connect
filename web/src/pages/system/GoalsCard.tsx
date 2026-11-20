@@ -90,7 +90,7 @@ export function GoalsCard({ settings }: { settings: SettingsResponse }) {
   }
 
   return (
-    <Card padding="lg" aria-label="Timezone and goals">
+    <Card padding="lg" aria-label="Timezone and goal settings">
       <form onSubmit={submit} noValidate className="form">
         <div className="form__group">
           <h3 className="form__group-title">Timezone</h3>
