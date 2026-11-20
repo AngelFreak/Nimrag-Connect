@@ -117,8 +117,15 @@ export function MapView({ track, tilesUrl = DEFAULT_TILES_URL, label = 'Route ma
     let remove: (() => void) | undefined;
 
     void (async () => {
-      const [maplibre, { Protocol }] = await Promise.all([import('maplibre-gl'), import('pmtiles'), import('maplibre-gl/dist/maplibre-gl.css')]);
+      const [maplibre, { Protocol }, worker] = await Promise.all([
+        import('maplibre-gl'),
+        import('pmtiles'),
+        // MapLibre finds its worker next to its own module, which the bundle renames: give Vite's URL.
+        import('maplibre-gl/dist/maplibre-gl-worker.mjs?url'),
+        import('maplibre-gl/dist/maplibre-gl.css'),
+      ]);
       if (disposed || !container.current) return;
+      maplibre.setWorkerUrl(worker.default);
       const protocol = new Protocol();
       maplibre.addProtocol('pmtiles', protocol.tile);
       const first = track?.[0];

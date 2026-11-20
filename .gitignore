@@ -44,3 +44,6 @@ __pycache__/
 /android/**/generated/
 /android/**/jniLibs/
 /android/buildSrc/.kotlin/
+
+# Map tiles for --tiles-dir (an extract around the owner's routes: private)
+/tiles/
