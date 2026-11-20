@@ -55,7 +55,9 @@ test('gallery has no serious accessibility violations (incl. 4.5:1 contrast)', a
   expect(summary).toEqual([]);
 });
 
-test('login page logs in via POST /api/login then GET /api/me', async ({ page, baseURL }) => {
+const ME = { authenticated: true, username: 'demo', role: 'user', timezone: 'Europe/Copenhagen', sample: false };
+
+test('login page logs in with username, password and code via POST /api/login', async ({ page, baseURL }) => {
   const problems = watch(page, baseURL as string);
   const calls: string[] = [];
   let loginHeaders: Record<string, string> = {};
@@ -65,12 +67,9 @@ test('login page logs in via POST /api/login then GET /api/me', async ({ page, b
     calls.push(`${req.method()} /api/login`);
     loginHeaders = req.headers();
     loginBody = req.postData() ?? '';
-    await route.fulfill({ status: 204 });
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ step: 'done', ...ME }) });
   });
-  await page.route('**/api/me', async (route) => {
-    calls.push(`${route.request().method()} /api/me`);
-    await route.fulfill({ status: 200, contentType: 'application/json', body: '{"user":"owner"}' });
-  });
+  await page.route('**/api/me', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(ME) }));
 
   await page.goto('/login');
   await expect(page.getByRole('heading', { name: 'Nimrag Connect' })).toBeVisible();
@@ -79,21 +78,56 @@ test('login page logs in via POST /api/login then GET /api/me', async ({ page, b
 
   const submit = page.getByRole('button', { name: 'Log in' });
   await expect(submit).toBeDisabled();
+  await page.getByLabel('Username').fill('Demo');
   await page.getByLabel('Password').fill('correct horse');
+  await page.getByLabel('6-digit code').fill('123456');
   await submit.click();
 
   await expect(page).toHaveURL(/\/$/);
-  expect(calls).toEqual(['POST /api/login', 'GET /api/me']);
+  expect(calls).toEqual(['POST /api/login']);
   expect(loginHeaders['x-nimrag']).toBe('1');
-  expect(JSON.parse(loginBody)).toEqual({ password: 'correct horse' });
+  expect(JSON.parse(loginBody)).toEqual({ username: 'Demo', password: 'correct horse', code: '123456' });
   expect(problems.filter((p) => !p.includes('/api/'))).toEqual([]);
 });
 
-test('login shows an error for a wrong password and stays on the page', async ({ page }) => {
-  await page.route('**/api/login', (route) => route.fulfill({ status: 401, contentType: 'application/json', body: '{"error":"invalid"}' }));
+test('login shows one generic message for a wrong username, password or code and stays on the page', async ({ page }) => {
+  await page.route('**/api/login', (route) => route.fulfill({ status: 401, contentType: 'application/json', body: '{"error":"wrong username, password or code"}' }));
   await page.goto('/login');
+  await page.getByLabel('Username').fill('demo');
   await page.getByLabel('Password').fill('nope');
   await page.getByRole('button', { name: 'Log in' }).click();
-  await expect(page.getByRole('alert')).toContainText('Wrong password.');
+  await expect(page.getByRole('alert')).toContainText('Wrong username, password or code.');
   await expect(page).toHaveURL(/\/login/);
 });
+
+for (const vp of [
+  { name: 'phone 390', width: 390, height: 844 },
+  { name: 'desktop 1360', width: 1360, height: 1000 },
+]) {
+  test(`login enrol step (QR code, secret, new password) is accessible and draws the QR as inline SVG at ${vp.name}`, async ({ page, baseURL }) => {
+    await page.setViewportSize({ width: vp.width, height: vp.height });
+    const problems = watch(page, baseURL as string);
+    const uri = 'otpauth://totp/Nimrag%20Connect:anna?secret=KRSXG5CTMVRXEZLUKRSXG5CTMVRXEZLU&issuer=Nimrag%20Connect';
+    await page.route('**/api/login', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ step: 'enrol2fa', pending_token: 'p', otpauth_uri: uri, secret: 'KRSXG5CTMVRXEZLUKRSXG5CTMVRXEZLU', must_change_password: true }),
+      }),
+    );
+    await page.goto('/login');
+    await page.getByLabel('Username').fill('anna');
+    await page.getByLabel('Password').fill('a temporary password');
+    await page.getByRole('button', { name: 'Log in' }).click();
+
+    const qr = page.getByRole('img', { name: /QR code/ });
+    await expect(qr).toBeVisible();
+    expect(await qr.evaluate((el) => el.tagName.toLowerCase())).toBe('svg');
+    await expect(page.getByLabel('Secret key')).toHaveValue('KRSXG5CTMVRXEZLUKRSXG5CTMVRXEZLU');
+    await expect(page.getByLabel('New password', { exact: true })).toBeVisible();
+    const results = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa']).analyze();
+    expect(results.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(' ')).slice(0, 3).join(' | ')}`)).toEqual([]);
+    // The secret never leaves the page: no request to another origin.
+    expect(problems.filter((p) => p.startsWith('third-party'))).toEqual([]);
+  });
+}

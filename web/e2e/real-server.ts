@@ -15,21 +15,47 @@ export const repoRoot = path.resolve(webDir, '..');
 export const PORT = Number(process.env['NIMRAG_E2E_PORT'] ?? 18121);
 export const ORIGIN = `http://127.0.0.1:${PORT}`;
 
-/** The owner password the setup gives the seeded database (the server wants 10 characters or more). */
-export const PASSWORD = 'nimrag-e2e-password';
+/** Where the second, empty server answers: the first-run setup page is tested against it. */
+export const SETUP_PORT = PORT + 1;
+export const SETUP_ORIGIN = `http://127.0.0.1:${SETUP_PORT}`;
+
+/**
+ * The seeded accounts. `dev-seed` takes their passwords and 2FA secrets from the environment
+ * (NIMRAG_SEED_*), so the tests know them up front. Passwords need 10 characters or more; the
+ * secrets are base32.
+ */
+export interface Persona {
+  username: string;
+  password: string;
+  /** Base32 TOTP secret. */
+  totp: string;
+}
+/** Role admin, no data: sets the server up and manages users. */
+export const ADMIN: Persona = { username: 'admin', password: 'nimrag-e2e-admin-password', totp: 'GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ' };
+/** Role user: owns all the sample data. */
+export const DEMO: Persona = { username: 'demo', password: 'nimrag-e2e-demo-password', totp: 'KRSXG5CTMVRXEZLUKRSXG5CTMVRXEZLU' };
 
 // Outside Playwright's output folder, which is emptied at the start of every run.
 export const stateDir = path.join(webDir, '.e2e');
 /** What the teardown needs to clean up: server pid and temp data dir. */
 export const serverFile = path.join(stateDir, 'server.json');
-/** Browser storage state with the logged-in session cookie. */
-export const sessionFile = path.join(stateDir, 'session.json');
+/** Browser storage state with the demo user's session cookie (the default of the real project). */
+export const sessionFile = path.join(stateDir, 'session-demo.json');
+/** The same for the admin. */
+export const adminSessionFile = path.join(stateDir, 'session-admin.json');
 /** Ids and dates of the seeded data, for the routes that need one. */
 export const fixtureFile = path.join(stateDir, 'fixture.json');
 
-export interface ServerState {
+export interface ServerProcess {
   pid: number;
   dataDir: string;
+}
+
+export interface ServerState extends ServerProcess {
+  /** The binary, for CLI helpers (`token create`). */
+  bin: string;
+  /** The empty server behind SETUP_ORIGIN. */
+  setup?: ServerProcess;
 }
 
 export interface Fixture {
@@ -60,16 +86,25 @@ function isOurServer(pid: number): boolean {
   }
 }
 
-/** Stops the server started by the setup and deletes its data dir. Safe to call when nothing runs. */
+async function stop(proc: ServerProcess): Promise<void> {
+  if (alive(proc.pid) && isOurServer(proc.pid)) {
+    process.kill(proc.pid, 'SIGTERM');
+    const deadline = Date.now() + 10_000;
+    while (alive(proc.pid) && Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 100));
+    if (alive(proc.pid)) process.kill(proc.pid, 'SIGKILL');
+  }
+  fs.rmSync(proc.dataDir, { recursive: true, force: true });
+}
+
+/** Stops the servers started by the setup and deletes their data dirs. Safe to call when nothing runs. */
 export async function stopServer(): Promise<void> {
   if (!fs.existsSync(serverFile)) return;
   const state = JSON.parse(fs.readFileSync(serverFile, 'utf8')) as ServerState;
-  if (alive(state.pid) && isOurServer(state.pid)) {
-    process.kill(state.pid, 'SIGTERM');
-    const deadline = Date.now() + 10_000;
-    while (alive(state.pid) && Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 100));
-    if (alive(state.pid)) process.kill(state.pid, 'SIGKILL');
-  }
-  fs.rmSync(state.dataDir, { recursive: true, force: true });
-  for (const f of [serverFile, sessionFile, fixtureFile]) fs.rmSync(f, { force: true });
+  await stop(state);
+  if (state.setup) await stop(state.setup);
+  for (const f of [serverFile, sessionFile, adminSessionFile, fixtureFile, path.join(stateDir, 'totp-steps.json')]) fs.rmSync(f, { force: true });
+}
+
+export function readServerState(): ServerState {
+  return JSON.parse(fs.readFileSync(serverFile, 'utf8')) as ServerState;
 }

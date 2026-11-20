@@ -1,11 +1,11 @@
 import fs from 'node:fs';
-import AxeBuilder from '@axe-core/playwright';
-import { expect, test, type Page } from '@playwright/test';
-import { fixtureFile, ORIGIN, type Fixture } from './real-server';
+import { expect, test } from '@playwright/test';
+import { expectAxeClean, settled, VIEWPORTS, watch } from './helpers';
+import { DEMO, fixtureFile, ORIGIN, type Fixture } from './real-server';
 
-// Every route against the real nimrag-server with dev-seed data (see real.setup.ts): each page
-// must render, make no failing request, log no console error, and pass axe (WCAG 2 A and AA) at
-// phone and desktop width.
+// Every route against the real nimrag-server with dev-seed data (see real.setup.ts), signed in as
+// the seeded user `demo` (the session saved by the setup project): each page must render, make no
+// failing request, log no console error, and pass axe (WCAG 2 A and AA) at phone and desktop width.
 
 const ROUTES: [name: string, path: (f: Fixture) => string][] = [
   ['Today', () => '/'],
@@ -31,51 +31,6 @@ const ROUTES: [name: string, path: (f: Fixture) => string][] = [
   ['Page not found', () => '/does-not-exist'],
 ];
 
-// WCAG 2 A and AA (with the 2.1 additions), plus axe's best-practice rules (landmarks, heading order).
-const AXE_TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'best-practice'];
-
-const VIEWPORTS = [
-  { name: 'phone 390', width: 390, height: 844 },
-  { name: 'desktop 1360', width: 1360, height: 1000 },
-];
-
-/** Collects everything that should never happen on a healthy page. */
-function watch(page: Page) {
-  const problems: string[] = [];
-  page.on('pageerror', (e) => problems.push(`page error: ${e.message}`));
-  page.on('console', (m) => {
-    if (m.type() !== 'error') return;
-    // A server without a tile file answers the map probe with 404: expected, the page shows a placeholder.
-    if (m.location().url.includes('/tiles/')) return;
-    problems.push(`console error: ${m.text()}`);
-  });
-  page.on('requestfailed', (r) => {
-    // A query cancelled by leaving the page is not a failure.
-    if (r.failure()?.errorText === 'net::ERR_ABORTED') return;
-    problems.push(`request failed: ${r.method()} ${r.url()} (${r.failure()?.errorText})`);
-  });
-  page.on('response', (r) => {
-    if (r.status() < 400 || new URL(r.url()).pathname.startsWith('/tiles/')) return;
-    problems.push(`HTTP ${r.status()}: ${r.request().method()} ${r.url()}`);
-  });
-  page.on('request', (r) => {
-    if (r.url().startsWith('data:') || r.url().startsWith('blob:')) return;
-    if (new URL(r.url()).origin !== ORIGIN) problems.push(`third-party request: ${r.url()}`);
-  });
-  return problems;
-}
-
-/** The page has its heading, nothing is loading any more, and charts have drawn. */
-async function settled(page: Page, heading?: string) {
-  const h1 = page.getByRole('heading', { level: 1 }).first();
-  await expect(h1).toBeVisible();
-  if (heading) await expect(h1).toContainText(heading);
-  await page.waitForLoadState('networkidle');
-  await expect(page.locator('[aria-busy="true"]')).toHaveCount(0);
-  await expect(page.locator('.skeleton')).toHaveCount(0);
-  await page.evaluate(() => document.fonts.ready);
-}
-
 let fixture: Fixture;
 test.beforeAll(() => {
   fixture = JSON.parse(fs.readFileSync(fixtureFile, 'utf8')) as Fixture;
@@ -87,7 +42,7 @@ for (const vp of VIEWPORTS) {
 
     for (const [name, path] of ROUTES) {
       test(`${name} renders and passes axe`, async ({ page }) => {
-        const problems = watch(page);
+        const problems = watch(page, ORIGIN);
         await page.goto(path(fixture));
         await settled(page);
         // A real route is not the "page not found" page, and the not-found page is.
@@ -96,9 +51,7 @@ for (const vp of VIEWPORTS) {
         // The error screens of the pages are failures here: the seeded server must answer every call.
         await expect(page.getByRole('alert')).toHaveCount(0);
 
-        const results = await new AxeBuilder({ page }).withTags(AXE_TAGS).analyze();
-        const violations = results.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(' ')).slice(0, 4).join(' | ')}`);
-        expect(violations, 'axe violations').toEqual([]);
+        await expectAxeClean(page);
         expect(problems, 'console errors and failed requests').toEqual([]);
       });
     }
@@ -116,6 +69,21 @@ test('the session works: the API answers 401 without it, and the app sends the u
   await context.close();
 });
 
+test('the demo user is a normal user: the profile menu says so, and /admin is not found', async ({ page }) => {
+  await page.goto('/');
+  await settled(page);
+  await page.getByRole('button', { name: 'Profile and account' }).first().click();
+  const menu = page.getByRole('group', { name: 'Account' }).first();
+  await expect(menu).toContainText('demo');
+  await expect(menu).toContainText('User');
+  await expect(menu.getByRole('link', { name: 'Settings' })).toBeVisible();
+  await expect(menu.getByRole('link', { name: 'Admin area' })).toHaveCount(0);
+
+  await page.goto('/admin');
+  await settled(page, 'Page not found');
+  expect((await page.request.get('/api/admin/users')).status()).toBe(403);
+});
+
 test('Settings: a new device token is shown once, with a warning', async ({ page }) => {
   await page.goto('/settings');
   await settled(page);
@@ -126,7 +94,7 @@ test('Settings: a new device token is shown once, with a warning', async ({ page
   await expect(page.getByRole('alert')).toHaveText('Wrong password.');
   // Still logged in: a wrong token password is 403, not 401.
   await expect(page).toHaveURL(/\/settings$/);
-  await page.getByLabel('Your password').fill('nimrag-e2e-password');
+  await page.getByLabel('Your password').fill(DEMO.password);
   await page.getByRole('button', { name: 'Create token' }).last().click();
   await expect(page.getByText('shown only once')).toBeVisible();
   const secret = await page.getByLabel('Token', { exact: true }).inputValue();

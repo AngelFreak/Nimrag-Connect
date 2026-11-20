@@ -18,6 +18,8 @@ for (const size of SIZES) {
   for (const p of PAGES) {
     test(`${p.name} at ${size.name} px`, async ({ page }) => {
       await page.setViewportSize({ width: size.width, height: size.height });
+      // Signed in as a normal user, so the data pages are not replaced by the login page.
+      await page.route('**/api/me', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ authenticated: true, username: 'demo', role: 'user', timezone: 'Europe/Copenhagen', sample: false }) }));
       await page.goto(p.path);
       await expect(page.getByRole('heading', { level: 1 }).first()).toBeVisible();
       await page.evaluate(() => document.fonts.ready);

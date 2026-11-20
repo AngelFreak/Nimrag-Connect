@@ -6,9 +6,12 @@ import { ORIGIN, sessionFile } from './e2e/real-server';
 // * `smoke`: against `vite preview` of the production build, with the API mocked by the tests
 //   (gallery, login page). `PLAYWRIGHT_BASE_URL` points these at a running server instead and
 //   skips the preview server.
-// * `real`: against the real `nimrag-server` binary with dev-seed data. `real-setup` builds the
-//   web app and the server, seeds a temp data dir, starts the server on 127.0.0.1:18121 and logs
-//   in; `real-teardown` stops it. Every route is checked for errors and accessibility.
+// * `real`: against the real `nimrag-server` binary with dev-seed data (the admin `admin` and the
+//   user `demo`, both with 2FA). `real-setup` builds the web app and the server, seeds a temp data
+//   dir, starts the server on 127.0.0.1:18121 and a second one on an empty data dir
+//   (127.0.0.1:18122, for the first-run setup page), and logs each account in once;
+//   `real-teardown` stops them. The specs are real.spec.ts (every route as `demo`, checked for
+//   errors and accessibility), real.login.spec.ts, real.admin.spec.ts and real.firstrun.spec.ts.
 const external = process.env['PLAYWRIGHT_BASE_URL'];
 const baseURL = external ?? 'http://127.0.0.1:4173';
 
@@ -38,8 +41,9 @@ export default defineConfig({
     { name: 'real-teardown', testMatch: /real\.teardown\.ts/ },
     {
       name: 'real',
-      testMatch: /real\.spec\.ts/,
+      testMatch: /real(\.[a-z]+)?\.spec\.ts/,
       dependencies: ['real-setup'],
+      // Signed in as the seeded user `demo` unless a spec says otherwise (test.use({ storageState })).
       use: { ...devices['Desktop Chrome'], baseURL: ORIGIN, storageState: sessionFile, serviceWorkers: 'block' },
     },
   ],
