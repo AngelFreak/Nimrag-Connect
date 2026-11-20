@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { expectAxeClean, settled, VIEWPORTS, watch } from './helpers';
+import { expectAxeClean, logOutFromProfile, openProfile, settled, VIEWPORTS, watch } from './helpers';
 import { ADMIN, DEMO, ORIGIN } from './real-server';
 import { nextTotp } from './totp';
 
@@ -59,8 +59,8 @@ test('the user demo logs in with username, password and code and sees Today', as
   await settled(page);
   await expect(page.getByRole('navigation', { name: 'Main' }).first()).toBeVisible();
   await expect(page.getByRole('link', { name: 'Today' }).first()).toBeVisible();
-  await page.getByRole('button', { name: 'Profile and account' }).first().click();
-  await expect(page.getByRole('group', { name: 'Account' }).first()).toContainText('demo');
+  await openProfile(page);
+  await expect(page.getByRole('region', { name: 'Your account' })).toContainText('demo');
   // The page loaded real data for the signed-in user.
   expect((await page.request.get('/api/me')).status()).toBe(200);
   expect(problems, 'console errors and failed requests').toEqual([]);
@@ -78,11 +78,9 @@ test('the admin logs in with username, password and code and lands in the admin 
   await settled(page, 'Admin');
   await expect(page.getByRole('navigation', { name: 'Main' })).toHaveCount(0);
   await expect(page.getByRole('link', { name: 'Activities' })).toHaveCount(0);
-  await page.getByRole('button', { name: 'Profile and account' }).first().click();
-  const menu = page.getByRole('group', { name: 'Account' }).first();
-  await expect(menu).toContainText('admin');
-  await expect(menu.getByRole('link', { name: 'Admin area' })).toBeVisible();
-  await menu.getByRole('button', { name: 'Log out' }).click();
-  await expect(page).toHaveURL(/\/login/);
+  await openProfile(page);
+  await expect(page.getByRole('region', { name: 'Your account' })).toContainText('admin');
+  await expect(page.getByRole('link', { name: 'Admin area' })).toBeVisible();
+  await logOutFromProfile(page);
   expect((await page.request.get('/api/admin/users')).status()).toBe(401);
 });

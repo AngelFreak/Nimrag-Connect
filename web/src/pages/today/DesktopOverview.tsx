@@ -209,7 +209,7 @@ function SyncPanel({ timezone }: { timezone: string }) {
       </Body>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginTop: 4 }}>
         <LinkButton to="/devices" variant="primary">
-          Devices and sync
+          Open the Watch page
         </LinkButton>
       </div>
     </Card>

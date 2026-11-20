@@ -19,8 +19,8 @@ export function useToday() {
   return useQuery({ queryKey: TODAY_KEY, queryFn: ({ signal }) => api.get<Today>('/api/today', { signal }) });
 }
 
-export function useSettings() {
-  return useQuery({ queryKey: SETTINGS_KEY, queryFn: ({ signal }) => api.get<SettingsResponse>('/api/settings', { signal }) });
+export function useSettings(enabled = true) {
+  return useQuery({ queryKey: SETTINGS_KEY, queryFn: ({ signal }) => api.get<SettingsResponse>('/api/settings', { signal }), enabled });
 }
 
 /** Desktop overview: the five newest activities. */

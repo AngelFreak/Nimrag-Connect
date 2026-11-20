@@ -2,8 +2,9 @@ import { useEffect, useRef, useState, type FormEvent } from 'react';
 import type { SetupStartResponse } from '../../api/generated';
 import { classifyStepError, describeAccountError, describeStepError } from '../../account/errors';
 import { AuthenticatorPanel, CodeField } from '../../account/TotpFields';
-import { Button, Card, CardHeader, TextField } from '../../components';
-import { useConfirmTwoFactor, useStartTwoFactor } from './queries';
+import { Button, Card, LinkButton, TextField } from '../../components';
+import { useConfirmTwoFactor, useStartTwoFactor } from '../system/queries';
+import { SubPage } from './common';
 
 type Phase = { kind: 'idle' } | { kind: 'password' } | { kind: 'code'; data: SetupStartResponse } | { kind: 'done' };
 
@@ -95,48 +96,58 @@ function CodeStep({ data, onDone, onRestart }: { data: SetupStartResponse; onDon
   );
 }
 
-/** Settings, "Two-factor": swap the authenticator (password, QR code, confirm with a code). */
-export function TwoFactorCard() {
+/**
+ * Profile, Two-step login: swap the authenticator (password, QR code, confirm with a code). The login
+ * always asks for a code, so there is nothing to turn off here, only a new phone to set up.
+ */
+export function TwoStepPage() {
   const [phase, setPhase] = useState<Phase>({ kind: 'idle' });
   const [notice, setNotice] = useState('');
 
   return (
-    <Card padding="lg" aria-labelledby="two-factor-title">
-      <CardHeader title="Two-factor" id="two-factor-title" level={3} />
-      {phase.kind === 'idle' || phase.kind === 'done' ? (
-        <>
-          <p className="card__intro">Logging in asks for a 6-digit code from your authenticator app. Got a new phone? Set it up again here.</p>
-          {phase.kind === 'done' ? (
+    <SubPage title="Two-step login" backTo="/profile">
+      <p className="subpage__lede">Logging in asks for a 6-digit code from your authenticator app. Got a new phone? Set it up again here.</p>
+      <Card padding="lg" aria-label="Authenticator">
+        {phase.kind === 'idle' ? (
+          <>
+            {notice ? (
+              <p className="status-msg status-msg--error" role="alert">
+                {notice}
+              </p>
+            ) : null}
+            <Button
+              size="lg"
+              onClick={() => {
+                setNotice('');
+                setPhase({ kind: 'password' });
+              }}
+            >
+              Set up again
+            </Button>
+          </>
+        ) : null}
+        {phase.kind === 'done' ? (
+          <>
             <p className="status-msg status-msg--ok" role="status">
-              Two-factor is set up with the new authenticator. The old one no longer works.
+              Two-step login is set up with the new authenticator. The old one no longer works.
             </p>
-          ) : null}
-          {notice ? (
-            <p className="status-msg status-msg--error" role="alert">
-              {notice}
-            </p>
-          ) : null}
-          <Button
-            onClick={() => {
-              setNotice('');
-              setPhase({ kind: 'password' });
+            <LinkButton to="/profile" size="lg" variant="primary">
+              Back to profile
+            </LinkButton>
+          </>
+        ) : null}
+        {phase.kind === 'password' ? <PasswordStep onStarted={(data) => setPhase({ kind: 'code', data })} onCancel={() => setPhase({ kind: 'idle' })} /> : null}
+        {phase.kind === 'code' ? (
+          <CodeStep
+            data={phase.data}
+            onDone={() => setPhase({ kind: 'done' })}
+            onRestart={(message) => {
+              setNotice(message);
+              setPhase({ kind: 'idle' });
             }}
-          >
-            Set up two-factor again
-          </Button>
-        </>
-      ) : null}
-      {phase.kind === 'password' ? <PasswordStep onStarted={(data) => setPhase({ kind: 'code', data })} onCancel={() => setPhase({ kind: 'idle' })} /> : null}
-      {phase.kind === 'code' ? (
-        <CodeStep
-          data={phase.data}
-          onDone={() => setPhase({ kind: 'done' })}
-          onRestart={(message) => {
-            setNotice(message);
-            setPhase({ kind: 'idle' });
-          }}
-        />
-      ) : null}
-    </Card>
+          />
+        ) : null}
+      </Card>
+    </SubPage>
   );
 }

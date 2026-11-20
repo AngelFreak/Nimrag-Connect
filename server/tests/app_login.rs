@@ -766,3 +766,41 @@ async fn each_user_sees_and_signs_out_only_their_own_phones() {
     .await;
     assert_eq!(s, StatusCode::UNAUTHORIZED);
 }
+
+#[tokio::test]
+async fn the_phone_list_marks_the_phone_this_session_came_from() {
+    let e = setup().await;
+    let first = register(&e, USER, "Pixel 9a").await;
+    let second = register(&e, USER, "Pixel 9a").await;
+    let current = |list: &Value| -> Vec<i64> {
+        list["tokens"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|t| t["current"] == true)
+            .map(|t| t["id"].as_i64().unwrap())
+            .collect()
+    };
+
+    // Seen from a phone's web view, exactly that phone is "this phone".
+    assert_eq!(
+        current(&e.get(&first.cookie, "/api/tokens").await),
+        vec![first.device_id]
+    );
+    assert_eq!(
+        current(&e.get(&second.cookie, "/api/tokens").await),
+        vec![second.device_id]
+    );
+
+    // A browser session has no phone behind it: nothing is marked, but every phone is listed.
+    let web = e.login().await;
+    let list = e.get(&web, "/api/tokens").await;
+    let ids: Vec<i64> = list["tokens"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|t| t["id"].as_i64().unwrap())
+        .collect();
+    assert!(ids.contains(&first.device_id) && ids.contains(&second.device_id));
+    assert!(current(&list).is_empty(), "{list}");
+}

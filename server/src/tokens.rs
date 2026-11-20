@@ -5,7 +5,7 @@
 //! uploads belong to its user. A user never creates or sees a token: the app's login
 //! (`POST /api/app/login`) issues one in the background, together with a trusted-device secret
 //! (`device_secret_hash`, only its SHA-256 is stored), at most [`MAX_ACTIVE`] active per user.
-//! The web Settings list the user's phones and revoke them (`GET/DELETE /api/tokens`). The
+//! The web Profile lists the user's phones and revokes them (`GET/DELETE /api/tokens`). The
 //! admin's CLI (`token create`) makes tokens for tools, which stay unassigned or belong to the
 //! named user. Revoking a token revokes its device secret and ends its app sessions.
 

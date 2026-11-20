@@ -1,19 +1,21 @@
 import { useId, useRef, useState, type ChangeEvent, type FormEvent } from 'react';
 import type { GarminImportTokens, GarminStatus } from '../../api/generated';
 import type { GarminState } from '../../api/generated/GarminState';
-import { Button, Card, CardHeader, Chip, DataList, ErrorState, Notice, Skeleton, TextField } from '../../components';
+import { Button, Card, ConfirmDialog, DataList, ErrorState, Notice, SendIcon, SettingsGroup, SettingsRow, Skeleton, StatusBanner, TextField } from '../../components';
 import { fmtInt } from '../../lib/format';
 import { fmtDateTime } from '../today/format';
-import { errorMessage } from './errors';
-import { useGarmin, useGarminActions } from './queries';
+import { useSettings } from '../today/queries';
+import { errorMessage } from '../system/errors';
+import { useGarmin, useGarminActions } from '../system/queries';
+import { SubPage } from './common';
 
-/** What the status chip says. A lost login and a paused queue read the same: the way out is to log in again. */
-export const GARMIN_STATE_LABEL: Record<GarminState, string> = {
+/** The one-line value of the "Send activities to Garmin" row. A lost login and a paused queue read the same: the way out is to log in again. */
+export const GARMIN_STATE_VALUE: Record<GarminState, string> = {
   off: 'Off',
-  needs_login: 'Log in to Garmin again',
-  needs_mfa: 'Waiting for the verification code',
-  connected: 'Connected',
-  paused: 'Log in to Garmin again',
+  needs_login: 'Log in again',
+  needs_mfa: 'Waiting for the code',
+  connected: 'On',
+  paused: 'Paused',
 };
 
 /** Reads a python-garminconnect token file (`garmin_tokens.json`). Returns null when it is not one. */
@@ -182,9 +184,8 @@ function Counts({ s, timezone }: { s: GarminStatus; timezone: string }) {
 }
 
 function ConnectedTools({ status, timezone }: { status: GarminStatus; timezone: string }) {
-  const { retry, backfill, logout } = useGarminActions();
+  const { retry, backfill } = useGarminActions();
   const [days, setDays] = useState('30');
-  const [confirmLogout, setConfirmLogout] = useState(false);
   const n = Number(days);
   const daysOk = Number.isInteger(n) && n >= 1 && n <= 3650;
 
@@ -231,57 +232,109 @@ function ConnectedTools({ status, timezone }: { status: GarminStatus; timezone: 
         ) : null}
         {backfill.isError ? <Failure error={backfill.error} /> : null}
       </form>
-      {confirmLogout ? (
-        <div className="form__group" style={{ gap: 10 }}>
-          <p className="card__intro">Stops sending activities to Garmin and deletes the stored login tokens from your server.</p>
-          <div className="form__actions">
-            <Button onClick={() => logout.mutate(undefined, { onSuccess: () => setConfirmLogout(false) })} disabled={logout.isPending}>
-              Yes, log out of Garmin
-            </Button>
-            <Button onClick={() => setConfirmLogout(false)}>Cancel</Button>
-          </div>
-          {logout.isError ? <Failure error={logout.error} /> : null}
-        </div>
-      ) : (
-        <Button onClick={() => setConfirmLogout(true)}>Log out of Garmin</Button>
-      )}
     </>
   );
 }
 
-/** Settings, "Garmin Connect (Forward)": the server sends activity files to the owner's Garmin Connect account. */
-export function GarminCard({ timezone }: { timezone: string }) {
-  const query = useGarmin();
-  const [restart, setRestart] = useState(false);
-  const s = query.data;
-  const state: GarminState | null = s?.state ?? null;
-  const label = state ? GARMIN_STATE_LABEL[state] : null;
-  const showLogin = state === 'off' || state === 'needs_login' || state === 'paused' || (state === 'needs_mfa' && restart);
-
+/** The warning and the login: shown only once the person chooses to turn sending on (or to log in again). */
+function LoginPanel({ again, onLoggedIn }: { again: boolean; onLoggedIn: () => void }) {
   return (
-    <Card padding="lg" aria-labelledby="garmin-title">
-      <CardHeader title="Garmin Connect (Forward)" id="garmin-title" level={3} aside={label ? <Chip>{label}</Chip> : undefined} />
-      <p className="card__intro">
-        Sends each activity your watch records on to your Garmin Connect account. Activities only: Garmin&apos;s import takes no sleep, HRV or other
-        health data.
-      </p>
+    <Card padding="lg" aria-label="Log in to Garmin">
       <Notice tone="warn">
         The login is unofficial: it copies Garmin&apos;s phone app, may stop working without notice and may conflict with Garmin&apos;s terms. Your password is
         used once and never stored; only login tokens are kept, on your server.
       </Notice>
-      {query.isPending ? <Skeleton height={20} lines={3} /> : null}
+      <LoginForm again={again} onLoggedIn={onLoggedIn} />
+      <ImportTokens />
+    </Card>
+  );
+}
+
+/**
+ * Profile, Send activities to Garmin: the server sends activity files to the owner's Garmin Connect
+ * account. The page is a switch and two lines of explanation; the login form appears only when the
+ * switch is turned on, and turning it off again (after a login) asks first.
+ */
+export function GarminPage() {
+  const query = useGarmin();
+  const settings = useSettings();
+  const timezone = settings.data?.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const { logout } = useGarminActions();
+  const [enabling, setEnabling] = useState(false);
+  const [relogin, setRelogin] = useState(false);
+  const [restart, setRestart] = useState(false);
+  const [confirmOff, setConfirmOff] = useState(false);
+  const s = query.data;
+  const state: GarminState | null = s?.state ?? null;
+  const on = state !== null && state !== 'off';
+
+  return (
+    <SubPage title="Send activities to Garmin" backTo="/profile">
+      <p className="subpage__lede">Each activity your watch records is also sent to your Garmin Connect account.</p>
+      <p className="subpage__lede">Activities only: Garmin takes no sleep, HRV or other health data this way.</p>
+      {query.isPending ? (
+        <Card padding="lg" aria-label="Loading the Garmin status">
+          <Skeleton height={20} lines={3} />
+        </Card>
+      ) : null}
       {query.isError && !s ? (
-        <ErrorState title="Could not load the Garmin status" action={<Button onClick={() => void query.refetch()}>Try again</Button>}>
-          {errorMessage(query.error)}
-        </ErrorState>
+        <Card padding="lg">
+          <ErrorState title="Could not load the Garmin status" action={<Button onClick={() => void query.refetch()}>Try again</Button>}>
+            {errorMessage(query.error)}
+          </ErrorState>
+        </Card>
       ) : null}
       {s && state ? (
         <>
-          {state === 'connected' ? <ConnectedTools status={s} timezone={timezone} /> : null}
-          {state === 'needs_mfa' && !restart ? <MfaForm onRestart={() => setRestart(true)} /> : null}
-          {state === 'paused' ? <p className="card__intro">Garmin kept refusing the stored login, so sending is paused. Log in again to carry on.</p> : null}
-          {showLogin ? <LoginForm again={state !== 'off'} onLoggedIn={() => setRestart(false)} /> : null}
-          {state !== 'connected' ? <ImportTokens /> : null}
+          <SettingsGroup title="Garmin Connect">
+            <SettingsRow
+              icon={<SendIcon />}
+              tone="steps"
+              title="Send activities to Garmin"
+              value={enabling && state === 'off' ? 'Log in to turn it on' : GARMIN_STATE_VALUE[state]}
+              checked={on || enabling}
+              onCheckedChange={(next) => {
+                if (next) {
+                  if (state === 'off') setEnabling(true);
+                } else if (state === 'off') {
+                  setEnabling(false);
+                } else {
+                  setConfirmOff(true);
+                }
+              }}
+            />
+          </SettingsGroup>
+
+          {state === 'off' && enabling ? <LoginPanel again={false} onLoggedIn={() => setEnabling(false)} /> : null}
+
+          {state === 'needs_mfa' && !restart ? (
+            <Card padding="lg" aria-label="Garmin verification">
+              <MfaForm onRestart={() => setRestart(true)} />
+            </Card>
+          ) : null}
+          {state === 'needs_mfa' && restart ? <LoginPanel again onLoggedIn={() => setRestart(false)} /> : null}
+
+          {state === 'needs_login' || state === 'paused' ? (
+            <>
+              <StatusBanner
+                action={
+                  relogin ? null : (
+                    <Button onClick={() => setRelogin(true)}>Log in again</Button>
+                  )
+                }
+              >
+                {state === 'paused' ? 'Sending is paused: Garmin kept refusing the stored login.' : 'Garmin asks you to log in again.'}
+              </StatusBanner>
+              {relogin ? <LoginPanel again onLoggedIn={() => setRelogin(false)} /> : null}
+            </>
+          ) : null}
+
+          {state === 'connected' ? (
+            <Card padding="lg" aria-label="Sending status">
+              <ConnectedTools status={s} timezone={timezone} />
+            </Card>
+          ) : null}
+
           {s.last_error ? (
             <p className="status-msg status-msg--error" role="status">
               Last error: {s.last_error}
@@ -289,6 +342,26 @@ export function GarminCard({ timezone }: { timezone: string }) {
           ) : null}
         </>
       ) : null}
-    </Card>
+      {confirmOff ? (
+        <ConfirmDialog
+          title="Stop sending to Garmin?"
+          consequence="New activities stop going to Garmin Connect, and the stored login tokens are deleted from your server."
+          confirmLabel="Turn off"
+          pending={logout.isPending}
+          error={logout.isError ? errorMessage(logout.error) : undefined}
+          onCancel={() => setConfirmOff(false)}
+          onConfirm={() =>
+            logout.mutate(undefined, {
+              onSuccess: () => {
+                setConfirmOff(false);
+                setEnabling(false);
+                setRelogin(false);
+                setRestart(false);
+              },
+            })
+          }
+        />
+      ) : null}
+    </SubPage>
   );
 }

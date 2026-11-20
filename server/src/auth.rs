@@ -115,6 +115,19 @@ pub async fn session_user(pool: &SqlitePool, raw: &str, now: i64) -> Result<Opti
     }))
 }
 
+/// The device token a live session was started by: `Some(id)` for a session the Android app made
+/// (login, unlock, resume), `None` for a browser session or when the cookie names no live session.
+pub async fn session_token_id(pool: &SqlitePool, raw: &str, now: i64) -> Result<Option<i64>> {
+    Ok(
+        sqlx::query_scalar("SELECT token_id FROM sessions WHERE id_hash = ? AND expires_at > ?")
+            .bind(session_hash(raw))
+            .bind(now)
+            .fetch_optional(pool)
+            .await?
+            .flatten(),
+    )
+}
+
 pub async fn delete_session(pool: &SqlitePool, raw: &str) -> Result<()> {
     sqlx::query("DELETE FROM sessions WHERE id_hash = ?")
         .bind(session_hash(raw))

@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import { expect, test } from '@playwright/test';
-import { expectAxeClean, settled, VIEWPORTS, watch } from './helpers';
+import { expectAxeClean, openProfile, settled, VIEWPORTS, watch } from './helpers';
 import { DEMO, fixtureFile, ORIGIN, type Fixture } from './real-server';
 import { nextTotp } from './totp';
 
@@ -49,8 +49,18 @@ const ROUTES: [name: string, path: (f: Fixture) => string][] = [
   ['Calendar, this month', () => '/calendar'],
   ['Calendar, one month', (f) => `/calendar/${f.month}`],
   ['New workout', () => '/workouts/new'],
-  ['Devices', () => '/devices'],
-  ['Settings', () => '/settings'],
+  ['Watch', () => '/devices'],
+  ['Watch details', () => '/devices/details'],
+  ['Profile', () => '/profile'],
+  ['Profile, preferences section', () => '/profile?section=preferences'],
+  ['Profile, about section', () => '/profile?section=about'],
+  ['Password', () => '/profile/password'],
+  ['Two-step login', () => '/profile/two-step'],
+  ['Signed-in phones', () => '/profile/phones'],
+  ['Timezone', () => '/profile/timezone'],
+  ['Goals', () => '/profile/goals'],
+  ['Send activities to Garmin', () => '/profile/garmin'],
+  ['Old settings address', () => '/settings'],
   ['Page not found', () => '/does-not-exist'],
 ];
 
@@ -92,22 +102,26 @@ test('the session works: the API answers 401 without it, and the app sends the u
   await context.close();
 });
 
-test('the demo user is a normal user: the profile menu says so, and /admin is not found', async ({ page }) => {
+test('the demo user is a normal user: the profile says so, and /admin is not found', async ({ page }) => {
   await page.goto('/');
   await settled(page);
-  await page.getByRole('button', { name: 'Profile and account' }).first().click();
-  const menu = page.getByRole('group', { name: 'Account' }).first();
-  await expect(menu).toContainText('demo');
-  await expect(menu).toContainText('User');
-  await expect(menu.getByRole('link', { name: 'Settings' })).toBeVisible();
-  await expect(menu.getByRole('link', { name: 'Admin area' })).toHaveCount(0);
+  await openProfile(page);
+  const head = page.getByRole('region', { name: 'Your account' });
+  await expect(head).toContainText('demo');
+  await expect(head).toContainText('Two-step login on');
+  await expect(page.getByRole('link', { name: 'Admin area' })).toHaveCount(0);
+  await expect(page.getByRole('link', { name: 'Password' })).toBeVisible();
+  // The Preferences group is a section of its own on a wide screen.
+  await page.goto('/profile?section=preferences');
+  await settled(page, 'Profile');
+  await expect(page.getByRole('link', { name: /^Timezone/ })).toBeVisible();
 
   await page.goto('/admin');
   await settled(page, 'Page not found');
   expect((await page.request.get('/api/admin/users')).status()).toBe(403);
 });
 
-test('Settings: a phone that signed in is listed (no token), fits 320 px, and can be signed out', async ({ page, playwright }) => {
+test('Signed-in phones: a phone that signed in is listed (no token), fits 320 px, and can be signed out', async ({ page, playwright }) => {
   // The app's sign-in issues the phone's token in the background; nothing on the web page makes or shows one.
   const phone = await playwright.request.newContext({ baseURL: ORIGIN });
   const name = 'Pixel-9a-pro-max-ultra-with-a-very-long-unbroken-name-12345678';
@@ -120,10 +134,10 @@ test('Settings: a phone that signed in is listed (no token), fits 320 px, and ca
   await phone.dispose();
 
   await page.setViewportSize({ width: 320, height: 700 });
-  await page.goto('/settings');
+  await page.goto('/profile/phones');
   await settled(page);
-  await expect(page.getByRole('heading', { name: 'Signed-in phones' })).toBeVisible();
-  const list = page.getByRole('list', { name: 'Signed-in phones' });
+  await expect(page.getByRole('heading', { level: 1, name: 'Signed-in phones' })).toBeVisible();
+  const list = page.getByRole('main');
   await expect(list.getByText(name)).toBeVisible();
   await expect(page.getByRole('button', { name: 'Create token' })).toHaveCount(0);
   await expect(page.getByText(/device token/i)).toHaveCount(0);
@@ -136,34 +150,66 @@ test('Settings: a phone that signed in is listed (no token), fits 320 px, and ca
   const made = await page.request.post('/api/tokens', { headers: { 'X-Nimrag': '1' }, data: { name: 'x', password: DEMO.password } });
   expect(made.status()).toBe(405);
 
-  await page.getByRole('button', { name: `Sign out this phone, ${name}` }).click();
+  await page.getByRole('button', { name: new RegExp(`^Sign out ${name}`) }).click();
+  const confirm = page.getByRole('dialog', { name: `Sign out ${name}?` });
+  await expect(confirm).toBeVisible();
   await expectAxeClean(page);
   expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
-  await page.getByRole('button', { name: `Yes, sign it out, ${name}` }).click();
+  await confirm.getByRole('button', { name: 'Sign out' }).click();
   await expect(list.getByText(name)).toHaveCount(0);
 });
 
-test('Settings: changing the step goal is saved and shown on Movement', async ({ page }) => {
-  await page.goto('/settings');
+test('Goals: changing the step goal is saved and shown on Movement', async ({ page }) => {
+  await page.goto('/profile/goals');
   await settled(page);
   const field = page.getByLabel('Daily step goal');
   const before = await field.inputValue();
   await field.fill('9500');
-  await page.getByRole('button', { name: 'Save settings' }).click();
+  await page.getByRole('button', { name: 'Save goals' }).click();
   await expect(page.getByRole('status').filter({ hasText: 'Saved.' })).toBeVisible();
   await page.goto('/movement');
   await settled(page);
   await expect(page.getByText('Goal 9,500')).toBeVisible();
-  await page.goto('/settings');
+  await page.goto('/profile?section=preferences');
+  await settled(page, 'Profile');
+  await expect(page.getByRole('link', { name: /^Goals 9,500 steps/ })).toBeVisible();
+  await page.goto('/profile/goals');
   await page.getByLabel('Daily step goal').fill(before);
-  await page.getByRole('button', { name: 'Save settings' }).click();
+  await page.getByRole('button', { name: 'Save goals' }).click();
   await expect(page.getByRole('status').filter({ hasText: 'Saved.' })).toBeVisible();
 });
 
-test('Devices shows the seeded server and watch data', async ({ page }) => {
+test('Timezone: a pick is saved at once', async ({ page }) => {
+  // The seeded zone may be one the list does not offer (the server's own, such as UTC), so it is put back through the API.
+  const original = ((await (await page.request.get('/api/settings')).json()) as { timezone: string }).timezone;
+  try {
+    await page.goto('/profile/timezone');
+    await settled(page);
+    const other = original === 'Europe/Paris' ? 'Europe/Berlin' : 'Europe/Paris';
+    await page.getByLabel('Timezone').selectOption(other);
+    await expect(page.getByRole('status').filter({ hasText: 'Saved.' })).toBeVisible();
+    await page.goto('/profile?section=preferences');
+    await settled(page, 'Profile');
+    await expect(page.getByRole('link', { name: new RegExp(`^Timezone ${other}`) })).toBeVisible();
+  } finally {
+    const back = await page.request.patch('/api/settings', { headers: { 'X-Nimrag': '1' }, data: { timezone: original } });
+    expect(back.ok()).toBe(true);
+  }
+});
+
+test('Watch shows the seeded server and watch data, and the server version shows under About', async ({ page }) => {
   await page.goto('/devices');
-  await settled(page, 'Devices and sync');
-  await expect(page.getByRole('heading', { name: 'Your watch' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Your server' })).toBeVisible();
+  await settled(page, 'Watch');
+  const card = page.getByRole('region', { name: 'Watch status' });
+  await expect(card.getByRole('heading')).toBeVisible();
+  await expect(card.getByText('Battery')).toBeVisible();
   await expect(page.getByText('Reachable')).toBeVisible();
+  await expect(page.getByRole('link', { name: /^Phones/ })).toHaveAttribute('href', '/profile/phones');
+  await page.getByRole('link', { name: /^Details/ }).click();
+  await settled(page, 'Details');
+  await expect(page.getByText(/Original files are kept as the watch sent them/)).toBeVisible();
+
+  await page.goto('/profile?section=about');
+  await settled(page, 'Profile');
+  await expect(page.getByText(/Server \d+\.\d+\.\d+ · AGPL-3\.0/)).toBeVisible();
 });

@@ -91,7 +91,7 @@ describe('who sees what', () => {
     expect(screen.queryByRole('link', { name: 'Activities' })).not.toBeInTheDocument();
   });
 
-  it.each(['/', '/activities', '/settings', '/sleep', '/does-not-exist'])('an admin opening %s is sent to /admin, without a data request', async (path) => {
+  it.each(['/', '/activities', '/sleep', '/devices', '/profile/phones', '/profile/garmin', '/does-not-exist'])('an admin opening %s is sent to /admin, without a data request', async (path) => {
     const { calls } = mockApi(adminApi());
     renderApp(path);
     expect(await screen.findByRole('heading', { level: 1, name: 'Admin' })).toBeInTheDocument();
@@ -107,45 +107,63 @@ describe('who sees what', () => {
   });
 
   it('a normal user sees the data pages with the tabs', async () => {
-    mockApi({ '/api/me': me(), '/api/settings': { timezone: 'Europe/Copenhagen', step_goal: 8000, intensity_goal_min: 150, home_cards: { order: [], hidden: [] }, sample: false }, '/api/tokens': { tokens: [] }, '/api/garmin': { state: 'off', pending: 0, done: 0, failed: 0, last_error: null, next_attempt_at: null } });
+    mockApi({ '/api/me': me(), '/api/settings': { timezone: 'Europe/Copenhagen', step_goal: 8000, intensity_goal_min: 150, home_cards: { order: [], hidden: [] }, sample: false }, '/api/tokens': { tokens: [] }, '/api/garmin': { state: 'off', pending: 0, done: 0, failed: 0, last_error: null, next_attempt_at: null }, '/api/about': { version: '0.1.0' } });
+    renderApp('/profile');
+    expect(await screen.findByRole('heading', { level: 1, name: 'Profile' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Password' })).toHaveAttribute('href', '/profile/password');
+    expect(screen.getByRole('link', { name: /^Timezone/ })).toHaveAttribute('href', '/profile/timezone');
+  });
+
+  it('/settings is an old address for /profile', async () => {
+    mockApi({ '/api/me': me(), '/api/settings': { timezone: 'Europe/Copenhagen', step_goal: 8000, intensity_goal_min: 150, home_cards: { order: [], hidden: [] }, sample: false }, '/api/tokens': { tokens: [] }, '/api/garmin': { state: 'off', pending: 0, done: 0, failed: 0, last_error: null, next_attempt_at: null }, '/api/about': { version: '0.1.0' } });
     renderApp('/settings');
-    expect(await screen.findByRole('heading', { level: 1, name: 'Settings' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Two-factor' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Change password' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { level: 1, name: 'Profile' })).toBeInTheDocument();
+    expect(screen.getByTestId('where')).toHaveTextContent(/^\/profile$/);
+  });
+
+  it('an admin opening /settings lands on the profile, which holds only Account, the admin area and Log out, and asks for no data', async () => {
+    const { calls } = mockApi(adminApi({ '/api/about': { version: '0.1.0' } }));
+    renderApp('/settings');
+    expect(await screen.findByRole('heading', { level: 1, name: 'Profile' })).toBeInTheDocument();
+    expect(screen.getByTestId('where')).toHaveTextContent(/^\/profile$/);
+    expect(screen.getByRole('link', { name: 'Password' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /^Two-step login/ })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Admin area' })).toHaveAttribute('href', '/admin');
+    expect(screen.getByRole('button', { name: 'Log out' })).toBeInTheDocument();
+    for (const name of [/Timezone/, /Goals/, /Signed-in phones/, /Send activities/]) expect(screen.queryByRole('link', { name })).not.toBeInTheDocument();
+    expect(screen.queryByRole('navigation', { name: 'Profile sections' })).not.toBeInTheDocument();
+    expect(calls.filter((c) => /^\/api\/(today|activities|settings|tokens|sleep|garmin|devices)/.test(c.url))).toEqual([]);
   });
 });
 
-describe('profile menu', () => {
-  it('shows the username and role, a link to Settings for a user, and logs out', async () => {
-    const { calls } = mockApi({ '/api/me': me(), 'POST /api/logout': () => new Response(null, { status: 204 }), '/api/setup': { needed: false } });
-    const u = userEvent.setup();
+describe('profile link', () => {
+  it('the avatar is a link called Profile, on the phone bar and the desktop header', async () => {
+    mockApi({ '/api/me': me(), '/api/setup': { needed: false } });
     renderApp('/devices');
-    // The phone top bar and the desktop header each have one; the first is enough.
-    await u.click((await screen.findAllByRole('button', { name: 'Profile and account' }))[0]!);
-    const panel = await screen.findByRole('group', { name: 'Account' });
-    expect(within(panel).getByText('demo')).toBeInTheDocument();
-    expect(within(panel).getByText('User')).toBeInTheDocument();
-    expect(within(panel).getByRole('link', { name: 'Settings' })).toHaveAttribute('href', '/settings');
-    expect(within(panel).queryByRole('link', { name: 'Admin area' })).not.toBeInTheDocument();
-    await u.click(within(panel).getByRole('button', { name: 'Log out' }));
-    await waitFor(() => expect(screen.getByTestId('where')).toHaveTextContent('/login'));
-    expect(calls.some((c) => c.url === '/api/logout' && c.init?.method === 'POST')).toBe(true);
+    const links = await screen.findAllByRole('link', { name: 'Profile' });
+    expect(links.length).toBeGreaterThan(0);
+    for (const link of links) expect(link).toHaveAttribute('href', '/profile');
+    expect(screen.queryByRole('button', { name: 'Profile and account' })).not.toBeInTheDocument();
   });
 
-  it('shows an admin a link to /admin instead, and closes on Escape', async () => {
-    mockApi(adminApi());
+  it('an admin has it too, and it leads to their profile', async () => {
+    mockApi(adminApi({ '/api/about': { version: '0.1.0' } }));
     const u = userEvent.setup();
     renderApp('/admin');
-    const [button] = await screen.findAllByRole('button', { name: 'Profile and account' });
-    await u.click(button!);
-    const panel = await screen.findByRole('group', { name: 'Account' });
-    expect(within(panel).getByText('boss')).toBeInTheDocument();
-    expect(within(panel).getByText('Admin')).toBeInTheDocument();
-    expect(within(panel).getByRole('link', { name: 'Admin area' })).toHaveAttribute('href', '/admin');
-    expect(within(panel).queryByRole('link', { name: 'Settings' })).not.toBeInTheDocument();
-    expect(button).toHaveAttribute('aria-expanded', 'true');
-    await u.keyboard('{Escape}');
-    expect(screen.queryByRole('group', { name: 'Account' })).not.toBeInTheDocument();
-    expect(button).toHaveFocus();
+    await u.click((await screen.findAllByRole('link', { name: 'Profile' }))[0]!);
+    expect(await screen.findByRole('heading', { level: 1, name: 'Profile' })).toBeInTheDocument();
+    expect(screen.getByText('boss')).toBeInTheDocument();
+  });
+
+  it('Log out on the profile asks first, then ends the session and goes to the login page', async () => {
+    const { calls } = mockApi({ '/api/me': me(), 'POST /api/logout': () => new Response(null, { status: 204 }), '/api/setup': { needed: false }, '/api/settings': { timezone: 'Europe/Copenhagen', step_goal: 8000, intensity_goal_min: 150, home_cards: { order: [], hidden: [] }, sample: false }, '/api/tokens': { tokens: [] }, '/api/garmin': { state: 'off', pending: 0, done: 0, failed: 0, last_error: null, next_attempt_at: null }, '/api/about': { version: '0.1.0' } });
+    const u = userEvent.setup();
+    renderApp('/profile');
+    await u.click(await screen.findByRole('button', { name: 'Log out' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Log out?' });
+    expect(calls.some((c) => c.url === '/api/logout')).toBe(false);
+    await u.click(within(dialog).getByRole('button', { name: 'Log out' }));
+    await waitFor(() => expect(screen.getByTestId('where')).toHaveTextContent('/login'));
+    expect(calls.some((c) => c.url === '/api/logout' && c.init?.method === 'POST')).toBe(true);
   });
 });

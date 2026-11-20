@@ -8,7 +8,9 @@ import { routePath } from './MapView';
 import {
   AppShell,
   BarSeries,
+  Button,
   Card,
+  ConfirmDialog,
   EmptyState,
   ErrorState,
   FilterChips,
@@ -18,10 +20,12 @@ import {
   Notice,
   Ring,
   SampleDataChip,
-  Section,
   SegmentedControl,
+  SettingsGroup,
+  SettingsRow,
   Skeleton,
   StatTile,
+  StatusBanner,
   SyncButton,
   MapView,
   Table,
@@ -32,6 +36,7 @@ import {
   WatchLink,
   ZoneBars,
   DataList,
+  KeyIcon,
 } from './index';
 
 function wrap(ui: ReactNode, path = '/') {
@@ -261,8 +266,8 @@ describe('AppShell', () => {
         <h1>Today</h1>
       </AppShell>,
     );
-    // The profile button opens a menu (username, Settings or Admin, Log out); see account.test.tsx.
-    expect(screen.getAllByRole('button', { name: 'Profile and account' })[0]).toHaveAttribute('aria-expanded', 'false');
+    // The avatar is a plain link to the profile page.
+    expect(screen.getAllByRole('link', { name: 'Profile' })[0]).toHaveAttribute('href', '/profile');
     expect(screen.getAllByRole('button', { name: 'Refresh' }).length).toBeGreaterThan(0);
     expect(screen.getAllByRole('link', { name: 'Watch status unknown' })[0]).toHaveAttribute('href', '/devices');
     const navs = screen.getAllByRole('navigation', { name: 'Main' });
@@ -295,10 +300,10 @@ describe('AppShell', () => {
     );
     const bar = document.querySelector('.mainbar') as HTMLElement;
     expect(bar.tagName).toBe('HEADER');
-    expect(within(bar).getByRole('button', { name: 'Profile and account' })).toBeInTheDocument();
+    expect(within(bar).getByRole('link', { name: 'Profile' })).toHaveAttribute('href', '/profile');
   });
 
-  it('the admin area has no tabs, no sync and no watch: only the brand and the profile menu', () => {
+  it('the admin area has no tabs, no sync and no watch: only the brand and the profile link', () => {
     wrap(
       <AppShell area="admin">
         <h1>Admin</h1>
@@ -310,7 +315,7 @@ describe('AppShell', () => {
     expect(screen.queryByRole('button', { name: 'Refresh' })).toBeNull();
     expect(screen.queryByRole('link', { name: /Watch/ })).toBeNull();
     expect(screen.getByRole('link', { name: 'Nimrag Connect' })).toHaveAttribute('href', '/admin');
-    expect(screen.getAllByRole('button', { name: 'Profile and account' }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole('link', { name: 'Profile' }).length).toBeGreaterThan(0);
   });
 
   it('detail pages have no bottom navigation', () => {
@@ -449,7 +454,7 @@ describe('navKeyFor', () => {
     expect(navKeyFor('/activities/9', '')).toBe('activities');
     expect(navKeyFor('/movement/2026-11-18', '')).toBe('health');
     expect(navKeyFor('/devices', '')).toBe('devices');
-    expect(navKeyFor('/settings', '')).toBe('other');
+    expect(navKeyFor('/profile', '')).toBe('other');
   });
 });
 
@@ -476,21 +481,7 @@ describe('Table in a narrow box', () => {
   });
 });
 
-describe('Section and Notice', () => {
-  it('Section is a named group: an h2 title, an optional hint, the cards inside', () => {
-    render(
-      <Section title="Phones" hint="Phones that send files.">
-        <Card>
-          <p>one</p>
-        </Card>
-      </Section>,
-    );
-    const group = screen.getByRole('region', { name: 'Phones' });
-    expect(within(group).getByRole('heading', { level: 2, name: 'Phones' })).toBeInTheDocument();
-    expect(within(group).getByText('Phones that send files.')).toBeInTheDocument();
-    expect(within(group).getByText('one')).toBeInTheDocument();
-  });
-
+describe('Notice', () => {
   it('Notice is plain text, not an alert; the warning tone adds an icon', () => {
     const { container } = render(<Notice tone="warn">The login is unofficial.</Notice>);
     expect(screen.getByText('The login is unofficial.')).toBeInTheDocument();
@@ -587,5 +578,159 @@ describe('routePath', () => {
       expect(nums[i + 1]).toBeLessThanOrEqual(150);
     }
     expect(r?.d.startsWith(`M${r.start[0].toFixed(1)} ${r.start[1].toFixed(1)}`)).toBe(true);
+  });
+});
+
+describe('SettingsRow and SettingsGroup', () => {
+  it('a link row is one link named by its title and value, with the icon hidden from assistive tech', () => {
+    wrap(<SettingsRow icon={<KeyIcon />} title="Timezone" value="Europe/Copenhagen" to="/profile/timezone" />);
+    const link = screen.getByRole('link', { name: 'Timezone Europe/Copenhagen' });
+    expect(link).toHaveAttribute('href', '/profile/timezone');
+    expect(link.querySelectorAll('svg[aria-hidden="true"]').length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('a row without a value is named by its title alone', () => {
+    wrap(<SettingsRow icon={<KeyIcon />} title="Password" to="/profile/password" />);
+    expect(screen.getByRole('link', { name: 'Password' })).toBeInTheDocument();
+  });
+
+  it('a button row runs its action, and has no chevron when it says so', async () => {
+    const onClick = vi.fn();
+    const { container } = wrap(<SettingsRow icon={<KeyIcon />} title="Log out" chevron={false} onClick={onClick} />);
+    await userEvent.click(screen.getByRole('button', { name: 'Log out' }));
+    expect(onClick).toHaveBeenCalledTimes(1);
+    // Only the icon tile's svg: no chevron.
+    expect(container.querySelectorAll('svg')).toHaveLength(1);
+  });
+
+  it('a switch row is a switch in a label: pressing the row toggles it', async () => {
+    const onChange = vi.fn();
+    wrap(<SettingsRow icon={<KeyIcon />} title="Send activities" value="Off" checked={false} onCheckedChange={onChange} />);
+    const toggle = screen.getByRole('switch', { name: 'Send activities Off' });
+    expect(toggle).not.toBeChecked();
+    await userEvent.click(screen.getByText('Send activities'));
+    expect(onChange).toHaveBeenCalledWith(true);
+  });
+
+  it('an action row keeps its small button and is not itself a control', async () => {
+    const onClick = vi.fn();
+    wrap(<SettingsRow icon={<KeyIcon />} title="Pixel 9a" value="Signed in 2 Nov" action={<Button onClick={onClick}>Sign out</Button>} />);
+    expect(screen.queryByRole('link')).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Sign out' }));
+    expect(onClick).toHaveBeenCalled();
+  });
+
+  it('an info row and an external row: a fact, and a link that opens a new tab', () => {
+    wrap(
+      <>
+        <SettingsRow icon={<KeyIcon />} title="Address" value="nimrag.example" info />
+        <SettingsRow icon={<KeyIcon />} title="Source code" value="github.com/x/y" href="https://github.com/x/y" />
+      </>,
+    );
+    expect(screen.getByText('nimrag.example')).toBeInTheDocument();
+    const link = screen.getByRole('link', { name: 'Source code github.com/x/y' });
+    expect(link).toHaveAttribute('href', 'https://github.com/x/y');
+    expect(link).toHaveAttribute('target', '_blank');
+    expect(link).toHaveAttribute('rel', expect.stringContaining('noopener'));
+  });
+
+  it('a group is a named section with its rows in one list, and renders nothing when empty', () => {
+    const { container, rerender } = wrap(
+      <SettingsGroup title="Account">
+        <SettingsRow icon={<KeyIcon />} title="Password" to="/p" />
+        {null}
+        <SettingsRow icon={<KeyIcon />} title="Phones" to="/q" />
+      </SettingsGroup>,
+    );
+    const group = screen.getByRole('region', { name: 'Account' });
+    expect(within(group).getByRole('heading', { level: 2, name: 'Account' })).toBeInTheDocument();
+    expect(within(group).getAllByRole('listitem')).toHaveLength(2);
+    rerender(
+      <QueryClientProvider client={new QueryClient()}>
+        <MemoryRouter>
+          <SettingsGroup title="Empty">{null}</SettingsGroup>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+    expect(container.querySelector('.sgroup')).toBeNull();
+  });
+});
+
+describe('StatusBanner', () => {
+  it('is one line and one fix, and not an alert', async () => {
+    const fix = vi.fn();
+    render(<StatusBanner action={<Button onClick={fix}>Turn on</Button>}>Bluetooth is off.</StatusBanner>);
+    expect(screen.getByText('Bluetooth is off.')).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Turn on' }));
+    expect(fix).toHaveBeenCalled();
+  });
+
+  it('works without an action', () => {
+    render(<StatusBanner tone="info">Heads up.</StatusBanner>);
+    expect(screen.queryByRole('button')).not.toBeInTheDocument();
+  });
+});
+
+describe('ConfirmDialog', () => {
+  function Harness({ onConfirm = vi.fn(), pending = false, error }: { onConfirm?: () => void; pending?: boolean; error?: string }) {
+    const [open, setOpen] = useState(false);
+    return (
+      <>
+        <button onClick={() => setOpen(true)}>Open</button>
+        {open ? (
+          <ConfirmDialog title="Log out?" consequence="You will need a code to log in again." confirmLabel="Log out" pending={pending} error={error} onConfirm={onConfirm} onCancel={() => setOpen(false)} />
+        ) : null}
+      </>
+    );
+  }
+
+  it('is a modal dialog named by its question and described by its consequence', async () => {
+    render(<Harness />);
+    await userEvent.click(screen.getByRole('button', { name: 'Open' }));
+    const dialog = screen.getByRole('dialog', { name: 'Log out?' });
+    expect(dialog).toHaveAttribute('aria-modal', 'true');
+    expect(dialog).toHaveAccessibleDescription('You will need a code to log in again.');
+    expect(within(dialog).getByRole('button', { name: 'Log out' })).toBeInTheDocument();
+  });
+
+  it('keeps Tab inside, Escape cancels, and focus returns to what opened it', async () => {
+    const u = userEvent.setup();
+    render(<Harness />);
+    const opener = screen.getByRole('button', { name: 'Open' });
+    await u.click(opener);
+    const cancel = screen.getByRole('button', { name: 'Cancel' });
+    const yes = screen.getByRole('button', { name: 'Log out' });
+    cancel.focus();
+    await u.tab();
+    expect(yes).toHaveFocus();
+    await u.tab();
+    expect(cancel).toHaveFocus();
+    await u.tab({ shift: true });
+    expect(yes).toHaveFocus();
+    await u.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(opener).toHaveFocus();
+  });
+
+  it('confirm runs the action; while it runs both buttons wait and Escape does nothing', async () => {
+    const u = userEvent.setup();
+    const onConfirm = vi.fn();
+    const { rerender } = render(<Harness onConfirm={onConfirm} />);
+    await u.click(screen.getByRole('button', { name: 'Open' }));
+    await u.click(screen.getByRole('button', { name: 'Log out' }));
+    expect(onConfirm).toHaveBeenCalledTimes(1);
+    rerender(<Harness onConfirm={onConfirm} pending />);
+    expect(screen.getByRole('button', { name: 'Log out' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Cancel' })).toBeDisabled();
+    await u.keyboard('{Escape}');
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+  });
+
+  it('shows why a try failed and stays open', async () => {
+    render(<Harness error="Could not reach the server." />);
+    await userEvent.click(screen.getByRole('button', { name: 'Open' }));
+    expect(screen.getByRole('alert')).toHaveTextContent('Could not reach the server.');
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
   });
 });

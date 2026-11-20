@@ -20,7 +20,7 @@ export function TimezoneNotice({ timezone }: { timezone: string }) {
   if (!isUtcZone(timezone) || suggestedZone(timezone) === null) return null;
   return (
     <p className="today-note today-tz" role="note">
-      Your days follow UTC time. <Link to="/settings">Set your timezone</Link>
+      Your days follow UTC time. <Link to="/profile/timezone">Set your timezone</Link>
     </p>
   );
 }

@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../api/client';
 import { ME_KEY, toMe } from '../../account/queries';
 import type {
+  AboutResponse,
   ChangeOwnPassword,
   GarminBackfillRequest,
   GarminBackfillResponse,
@@ -22,9 +23,15 @@ import { SETTINGS_KEY } from '../today/queries';
 
 export const TOKENS_KEY = ['tokens'] as const;
 export const GARMIN_KEY = ['garmin'] as const;
+export const ABOUT_KEY = ['about'] as const;
 
-export function useTokens() {
-  return useQuery({ queryKey: TOKENS_KEY, queryFn: ({ signal }) => api.get<TokenList>('/api/tokens', { signal }) });
+/** GET /api/about: the server's version. Any signed-in session may ask, admins included. */
+export function useAbout() {
+  return useQuery({ queryKey: ABOUT_KEY, queryFn: ({ signal }) => api.get<AboutResponse>('/api/about', { signal }), staleTime: 5 * 60_000 });
+}
+
+export function useTokens(enabled = true) {
+  return useQuery({ queryKey: TOKENS_KEY, queryFn: ({ signal }) => api.get<TokenList>('/api/tokens', { signal }), enabled });
 }
 
 export function useRevokeToken() {
@@ -47,8 +54,8 @@ export function useSaveSettings() {
   });
 }
 
-export function useGarmin() {
-  return useQuery({ queryKey: GARMIN_KEY, queryFn: ({ signal }) => api.get<GarminStatus>('/api/garmin', { signal }) });
+export function useGarmin(enabled = true) {
+  return useQuery({ queryKey: GARMIN_KEY, queryFn: ({ signal }) => api.get<GarminStatus>('/api/garmin', { signal }), enabled });
 }
 
 /** The Forward actions. Each one ends by refreshing the status. */

@@ -1,0 +1,400 @@
+/* Settings lists (Profile, Watch): rows in grouped cards, status banner, profile header and the desktop
+   section list. Built from the same tokens as components.css; no viewport units (the Android WebView
+   can report them as 0). Text may grow to 130 %: every box here grows with it. */
+
+/* ------------------------------------------------------------------ rows and groups */
+.sgroup {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+.sgroup__title {
+  padding: 0 4px;
+  font-family: var(--font-body);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-2);
+}
+.sgroup__card {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  background: var(--card);
+  border-radius: var(--radius-card);
+  overflow: hidden;
+  min-width: 0;
+}
+.sgroup__card > li + li {
+  border-top: 1px solid var(--line);
+}
+
+.srow {
+  position: relative;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 64px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 16px;
+  border: 0;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+a.srow:hover,
+button.srow:hover:not(:disabled),
+label.srow:hover {
+  background: var(--raised);
+  color: var(--text);
+}
+.srow:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.srow--static {
+  cursor: default;
+  /* A button at the right edge drops below the text when the line is too narrow for both. */
+  flex-wrap: wrap;
+}
+.srow--static .srow__text {
+  flex-basis: 140px;
+}
+.srow:focus-visible {
+  outline-offset: -3px;
+}
+.srow > svg {
+  flex: none;
+  color: var(--text-2);
+}
+.srow__icon {
+  flex: none;
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  /* Fallback first, then the tint where color-mix exists. */
+  background: var(--raised);
+  color: var(--tone, var(--accent));
+}
+.srow__icon[data-tone='accent'] {
+  --tone: var(--accent);
+}
+.srow__icon[data-tone='energy'] {
+  --tone: var(--energy);
+}
+.srow__icon[data-tone='sleep'] {
+  --tone: var(--sleep);
+}
+.srow__icon[data-tone='warn'] {
+  --tone: var(--warn);
+}
+.srow__icon[data-tone='heart'] {
+  --tone: var(--heart);
+}
+.srow__icon[data-tone='steps'] {
+  --tone: var(--steps);
+}
+.srow__icon[data-tone='muted'] {
+  --tone: var(--text-2);
+}
+@supports (background: color-mix(in srgb, red 10%, transparent)) {
+  .srow__icon {
+    background: color-mix(in srgb, var(--tone, var(--accent)) 16%, transparent);
+  }
+}
+.srow__text {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.srow__title {
+  display: block;
+  font-size: var(--fs-lg);
+  font-weight: 500;
+  line-height: 1.3;
+  overflow-wrap: break-word;
+}
+.srow__value {
+  display: block;
+  font-size: var(--fs-base);
+  line-height: 1.35;
+  color: var(--text-2);
+  overflow-wrap: break-word;
+}
+.srow__action {
+  flex: none;
+  max-width: 100%;
+  margin-left: auto;
+}
+/* The switch's track is the row's right edge; the real checkbox covers the whole row. */
+.srow > .toggle__input {
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1;
+}
+
+/* ------------------------------------------------------------------ status banner */
+.sbanner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-control);
+  background: var(--raised);
+}
+.sbanner[data-tone='warn'] {
+  border-color: var(--warn);
+}
+.sbanner__icon {
+  flex: none;
+  display: inline-flex;
+  color: var(--text-2);
+}
+.sbanner[data-tone='warn'] .sbanner__icon {
+  color: var(--warn);
+}
+.sbanner__text {
+  flex: 1 1 160px;
+  min-width: 0;
+  font-size: var(--fs-base);
+  line-height: 1.4;
+  overflow-wrap: break-word;
+}
+.sbanner__action {
+  flex: none;
+  max-width: 100%;
+}
+
+/* ------------------------------------------------------------------ profile */
+.profile-pane {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  min-width: 0;
+}
+.profile-head {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px;
+  background: var(--card);
+  border-radius: var(--radius-card);
+  min-width: 0;
+}
+.profile-head__avatar {
+  flex: none;
+  width: 56px;
+  height: 56px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--band);
+  color: var(--accent);
+  font-family: var(--font-display);
+  font-size: var(--fs-title);
+  font-weight: 600;
+  text-transform: uppercase;
+}
+.profile-head__text {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+.profile-head__name {
+  font-family: var(--font-display);
+  font-size: var(--fs-title-sm);
+  font-weight: 600;
+  line-height: 1.25;
+  overflow-wrap: break-word;
+  max-width: 100%;
+}
+.profile-head__host {
+  font-size: var(--fs-base);
+  color: var(--text-2);
+  overflow-wrap: break-word;
+  max-width: 100%;
+}
+
+/* Sub-page: a narrow column of cards, with the explanation above the form. */
+.subpage {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+.subpage__lede {
+  font-size: var(--fs-base);
+  line-height: 1.5;
+  color: var(--text-2);
+  max-width: 60ch;
+}
+
+/* Signed-in phones. */
+.phone-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.phone-list > li {
+  min-width: 0;
+}
+
+/* The section list is for desktop only; a phone shows the plain list. */
+.profile-layout {
+  display: block;
+  min-width: 0;
+}
+.profile-nav {
+  display: none;
+}
+@media (min-width: 1024px) {
+  .profile-layout {
+    display: grid;
+    grid-template-columns: 220px minmax(0, 640px);
+    gap: 40px;
+    align-items: start;
+    padding-top: 8px;
+  }
+  .profile-nav {
+    display: block;
+    position: sticky;
+    top: 16px;
+  }
+  .profile-nav ul {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .profile-nav a {
+    display: flex;
+    align-items: center;
+    min-height: var(--touch);
+    padding: 0 14px;
+    border-radius: var(--radius-control);
+    color: var(--text-2);
+    text-decoration: none;
+    font-size: var(--fs-md);
+  }
+  .profile-nav a:hover {
+    background: var(--card);
+    color: var(--text);
+  }
+  .profile-nav a[aria-current='page'] {
+    background: var(--card);
+    color: var(--text);
+    font-weight: 600;
+  }
+  /* Desktop shows one section of the home list at a time, picked in the section list. */
+  .profile-home[data-section='account'] > [data-pane]:not([data-pane='account']):not([data-pane='logout']),
+  .profile-home[data-section='preferences'] > [data-pane]:not([data-pane='preferences']),
+  .profile-home[data-section='about'] > [data-pane]:not([data-pane='about']) {
+    display: none;
+  }
+  /* The pages inside the right pane need no extra gutter or width limit of their own. */
+  .profile-layout .page {
+    padding-left: 0;
+    padding-right: 0;
+  }
+  .profile-layout .topbar--back {
+    padding-left: 0;
+  }
+}
+
+/* ------------------------------------------------------------------ watch */
+.watch-card {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 16px;
+  background: var(--card);
+  border-radius: var(--radius-card);
+  min-width: 0;
+}
+.watch-card__head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+.watch-card__name {
+  font-family: var(--font-display);
+  font-size: var(--fs-title-sm);
+  font-weight: 600;
+  line-height: 1.25;
+  overflow-wrap: break-word;
+}
+.watch-card__text {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+.watch-card__facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 120px), 1fr));
+  gap: 12px 16px;
+  margin: 0;
+}
+.watch-card__facts > div {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.watch-card__facts dt {
+  font-size: var(--fs-sm);
+  color: var(--text-2);
+}
+.watch-card__facts dd {
+  margin: 0;
+  font-size: var(--fs-lg);
+  font-weight: 600;
+  overflow-wrap: break-word;
+}
+.watch-page {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  min-width: 0;
+  max-width: 640px;
+}
+
+.profile-content {
+  min-width: 0;
+}
+@media (min-width: 1024px) {
+  .profile-layout--solo {
+    grid-template-columns: minmax(0, 640px);
+  }
+}
+.profile-pane > [data-pane] {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}

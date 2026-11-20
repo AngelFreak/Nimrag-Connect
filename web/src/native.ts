@@ -17,7 +17,7 @@ export interface NimragAppBridge {
   /** Starts a sync with the watch. May return a promise that settles when the sync ends. */
   syncNow?: () => void | Promise<void>;
   status?: () => NativeStatus;
-  /** Opens the app's own Watch screen (Devices and sync stays native in the app). */
+  /** Opens the app's own Watch screen (the Watch tab stays native in the app). */
   openWatch?: () => void;
   /** Tells the app which page the web view shows, so its bottom bar highlights the right tab. */
   onRoute?: (path: string) => void;

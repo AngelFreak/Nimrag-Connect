@@ -17,7 +17,7 @@ import { adminSessionFile, DEMO, fixtureFile, ORIGIN, sessionFile, stateDir, web
 //   * content clipped by overflow: hidden,
 //   * a button, link or field smaller than 44 x 44 px (links inside running text excepted).
 // See layout.ts for the exact rules. The seeded user also has two signed-in phones (a normal name and
-// a long one), because a table of tokens was what once pushed Settings off the screen.
+// a long one), because a table of tokens was what once pushed the phone list off the screen.
 //
 // Everything runs against the real server (see real.setup.ts) with sessions the setup project saved,
 // so no login happens here. Findings are appended to web/.e2e/layout-audit.jsonl (one line per page
@@ -113,12 +113,20 @@ const DEMO_PAGES: Scenario[] = [
   { name: 'Body', path: () => '/body' },
   { name: 'Calendar', path: () => '/calendar' },
   { name: 'New workout', path: () => '/workouts/new' },
-  { name: 'Devices', path: () => '/devices' },
-  { name: 'Settings', path: () => '/settings' },
-  { name: 'Settings, sign-out confirmation', path: () => '/settings', open: click('Sign out this phone') },
-  { name: 'Settings, two-factor password step', path: () => '/settings', open: click('Set up two-factor again') },
+  { name: 'Watch', path: () => '/devices' },
+  { name: 'Watch details', path: () => '/devices/details' },
+  { name: 'Profile', path: () => '/profile' },
+  { name: 'Profile, preferences section', path: () => '/profile?section=preferences' },
+  { name: 'Profile, log out confirmation', path: () => '/profile', open: click('Log out') },
+  { name: 'Password', path: () => '/profile/password' },
+  { name: 'Two-step login', path: () => '/profile/two-step' },
+  { name: 'Two-step login, password step', path: () => '/profile/two-step', open: click('Set up again') },
+  { name: 'Signed-in phones', path: () => '/profile/phones' },
+  { name: 'Signed-in phones, sign-out confirmation', path: () => '/profile/phones', open: click(/^Sign out /) },
+  { name: 'Timezone', path: () => '/profile/timezone' },
+  { name: 'Goals', path: () => '/profile/goals' },
+  { name: 'Send activities to Garmin', path: () => '/profile/garmin' },
   { name: 'Page not found', path: () => '/does-not-exist' },
-  { name: 'Profile menu', path: () => '/', open: click('Profile and account') },
   // States: empty, loading, failed.
   {
     name: 'Activities, empty',
@@ -129,13 +137,15 @@ const DEMO_PAGES: Scenario[] = [
   },
   { name: 'Today, loading', path: () => '/', mock: hangData, loading: true },
   { name: 'Activities, loading', path: () => '/activities', mock: hangData, loading: true },
-  { name: 'Settings, loading', path: () => '/settings', mock: hangData, loading: true },
+  { name: 'Profile, loading', path: () => '/profile', mock: hangData, loading: true },
+  { name: 'Signed-in phones, loading', path: () => '/profile/phones', mock: hangData, loading: true },
   { name: 'Today, error', path: () => '/', mock: failData },
   { name: 'Activities, error', path: () => '/activities', mock: failData },
   { name: 'Health, error', path: () => '/health', mock: failData },
-  { name: 'Settings, error', path: () => '/settings', mock: failData },
+  { name: 'Profile, error', path: () => '/profile', mock: failData },
+  { name: 'Signed-in phones, error', path: () => '/profile/phones', mock: failData },
   { name: 'Activity detail, error', path: (f) => `/activities/${f.runId}`, mock: failData },
-  { name: 'Devices, error', path: () => '/devices', mock: failData },
+  { name: 'Watch, error', path: () => '/devices', mock: failData },
 ];
 
 const dialog = (open: string, name: RegExp | string) => async (page: Page) => {
