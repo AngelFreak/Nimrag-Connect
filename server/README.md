@@ -41,7 +41,7 @@ instead of appending, in both the sidecar and `uploads`.
 
 ```
 nimrag-server serve [--data-dir DIR] [--listen 127.0.0.1:8080] [--log-json]
-                    [--insecure-cookies] [--trusted-proxy CIDR[,CIDR...]]
+                    [--insecure-cookies] [--trusted-proxy CIDR[,CIDR...]] [--tiles-dir DIR]
 nimrag-server token create --name NAME [--user USERNAME]   # for tools and scripts; phones get theirs by signing in to the app
 nimrag-server token list
 nimrag-server token revoke ID
@@ -56,7 +56,8 @@ nimrag-server dev-seed                   # 120 days of sample data, an admin and
 nimrag-server export-types [--out DIR]   # TypeScript for the JSON API (default web/src/api/generated)
 ```
 
-`serve` also takes `--insecure-cookies` and `--trusted-proxy` (see "Owner API"). The first admin
+`serve` also takes `--insecure-cookies` and `--trusted-proxy` (see "Owner API") and `--tiles-dir`
+(see "Map tiles"). The first admin
 is created in the web app on first run (see "Accounts, 2FA and the app"); the CLI user commands
 are the recovery tools of whoever runs the server. Set a password without echoing it, e.g.
 `printf '%s\n' "$PW" | nimrag-server user set-password --username NAME` or
@@ -324,7 +325,8 @@ Versions verified on crates.io on 2026-11-19 (latest stable, not yanked).
 | crate | version | why |
 |---|---|---|
 | axum | 0.8.9 | HTTP router; tokio-team maintained, small API |
-| tokio | 1.54.1 | async runtime (axum/sqlx), `spawn_blocking` for file IO and decoding |
+| tokio | 1.54.1 | async runtime (axum/sqlx), `spawn_blocking` for file IO and decoding; `fs` and `io-util` for the seeks that serve map tiles |
+| tokio-util | 0.7.20 (`io` only) | `ReaderStream`: streams a byte range of a tile file without loading the file |
 | sqlx | 0.9.1 (sqlite, macros, migrate, runtime-tokio; no default features) | compile-time checked queries, embedded migrations, WAL options. 0.9 is a fresh major (2026-05); MSRV 1.94 |
 | sha2 | 0.11.1 | SHA-256 for file addressing and token hashes (RustCrypto) |
 | serde / serde_json | 1.0.229 / 1.0.154 (`preserve_order`) | request/response, sidecars, and JSON columns in definition order |
@@ -342,6 +344,55 @@ Versions verified on crates.io on 2026-11-19 (latest stable, not yanked).
 
 CLI is hand-rolled (no clap): a handful of fixed subcommands and flags; one fewer
 dependency tree to audit.
+
+## Map tiles
+
+```
+nimrag-server serve --tiles-dir DIR        # or NIMRAG_TILES_DIR=DIR
+```
+
+The web app's maps (the activity route, `web/src/components/MapView.tsx`) read a PMTiles vector
+file from `/tiles/map.pmtiles` with HTTP range requests and draw the route alone while that is a
+404. `--tiles-dir DIR` (env fallback `$NIMRAG_TILES_DIR`, like `--data-dir`'s) serves the
+`*.pmtiles` files of `DIR` as `/tiles/<name>.pmtiles`; the web app asks for `map.pmtiles`, so
+that is the file to put there. Without the option the route does not exist and `/tiles/*` is a
+404. `src/tiles.rs`:
+
+* **Signed-in users only.** The session cookie (either role, like the rest of the app) is
+  required: 401 without one, and a device token does not count. (The tiles are OpenStreetMap data
+  and could be public; they are not, so an open server does not serve hundreds of MB to anyone
+  who finds it. The web app's request carries the cookie, so nothing changes for it.)
+* `GET` and `HEAD`. Single ranges: `Range: bytes=a-b`, `bytes=a-` and `bytes=-n` give 206 with
+  `Content-Range: bytes a-b/size`; a range that starts past the end (or `bytes=-0`, or several
+  ranges at once, which are not supported) gives 416 with `Content-Range: bytes */size`; a `Range`
+  of another unit or one that is not well formed is ignored (200, whole file). Every response
+  has `Accept-Ranges: bytes`, `Content-Type: application/octet-stream`, `ETag` (size and
+  modification time) and `Last-Modified`; `If-Match` (412), `If-None-Match` / `If-Modified-Since`
+  (304) and `If-Range` work, so the PMTiles library notices when the file is replaced.
+  `Cache-Control: private, no-cache`.
+* Files are opened and read with a seek to the range's start, streamed for its length: a file
+  of any size costs a few KB of memory per request (a test seeks 5 GiB into a sparse file).
+* Plain names only: letters, digits, `-`, `_` and `.`, ending in `.pmtiles`, not starting with a
+  dot. Anything else (`../x`, `%2f`, subdirectories, other extensions, directories) is a 404, as
+  is a missing file or directory (the server logs a warning at start when `DIR` cannot be read).
+  A symbolic link inside `DIR` is followed: it is the admin's own directory.
+
+Make a tile file for your area with the `pmtiles` CLI (go-pmtiles, <https://github.com/protomaps/go-pmtiles>)
+from a Protomaps daily build of OpenStreetMap (`<YYYYMMDD>` is the date of a recent build):
+
+```
+pmtiles extract https://build.protomaps.com/<YYYYMMDD>.pmtiles map.pmtiles --bbox=<w,s,e,n> --maxzoom=15
+```
+
+`--bbox` is `west,south,east,north` in degrees (for example `8.0,54.5,12.8,57.8` is Denmark);
+`--maxzoom=15` keeps a region the size of a country to a few hundred MB. Put `map.pmtiles` in the
+tiles directory; a new file replaces the old one without restarting the server. In Docker mount
+the directory read-only and set `NIMRAG_TILES_DIR` (see the commented example in
+`docker-compose.yml`); the image's user (uid 10001) must be able to read the files.
+Map data: © OpenStreetMap contributors (the web app shows the attribution).
+
+Tests: `tests/tiles.rs` (whole file, ranges, HEAD, 416, validators, traversal, missing, sign-in,
+a seek deep in a sparse 5 GiB file) and the unit tests in `src/tiles.rs`.
 
 ## Docker
 

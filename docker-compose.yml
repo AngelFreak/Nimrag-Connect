@@ -10,6 +10,12 @@ services:
     volumes:
       # Named volume (not a bind mount) so the non-root user inside owns /data.
       - nimrag_data:/data
+      # Map tiles (optional): a folder with map.pmtiles, served to signed-in users at
+      # /tiles/map.pmtiles. Make the file with `pmtiles extract`, see server/README.md "Map tiles".
+      # The folder and the file must be readable by uid 10001.
+      # - ./tiles:/tiles:ro
+    # environment:
+    #   NIMRAG_TILES_DIR: /tiles
     ports:
       # Local access only; put a TLS proxy in front for phones and browsers.
       - "127.0.0.1:8096:8080"

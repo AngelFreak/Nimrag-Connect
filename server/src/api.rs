@@ -45,6 +45,8 @@ pub struct AppState {
     pub(crate) trusted_proxies: Arc<Vec<crate::auth::Cidr>>,
     /// Forward mode (Garmin Connect upload): runtime state and the worker wake-up.
     pub garmin: Arc<crate::garmin::Garmin>,
+    /// Where `/tiles/<name>.pmtiles` is served from (`--tiles-dir`); `None`: no tiles route.
+    pub tiles_dir: Option<Arc<PathBuf>>,
     clock: Arc<dyn Fn() -> i64 + Send + Sync>,
 }
 
@@ -62,6 +64,7 @@ impl AppState {
             login_gate: Arc::new(tokio::sync::Semaphore::new(1)),
             trusted_proxies: Default::default(),
             garmin: Default::default(),
+            tiles_dir: None,
             clock: Arc::new(system_now),
         }
     }
@@ -74,6 +77,12 @@ impl AppState {
     /// Believe `X-Forwarded-For` from these peers when naming the login client.
     pub fn with_trusted_proxies(mut self, nets: Vec<crate::auth::Cidr>) -> Self {
         self.trusted_proxies = Arc::new(nets);
+        self
+    }
+
+    /// Serve the `*.pmtiles` files of this directory under `/tiles/` (see `tiles.rs`).
+    pub fn with_tiles_dir(mut self, dir: Option<PathBuf>) -> Self {
+        self.tiles_dir = dir.map(Arc::new);
         self
     }
 
@@ -103,8 +112,15 @@ fn system_now() -> i64 {
 
 pub fn router(state: AppState) -> Router {
     let max_body = state.max_body;
-    Router::new()
-        .route("/api/health", get(health))
+    let mut app = Router::new();
+    if state.tiles_dir.is_some() {
+        // Signed-in users only; without the option `/tiles/*` is a 404 (the web fallback).
+        app = app.route(
+            "/tiles/{name}",
+            get(crate::tiles::tile).head(crate::tiles::tile),
+        );
+    }
+    app.route("/api/health", get(health))
         // The device upload is the only large body; a route-level limit wins over the global one.
         .route(
             "/api/files",

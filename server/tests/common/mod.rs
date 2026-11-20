@@ -55,17 +55,23 @@ pub async fn make_user(pool: &SqlitePool, name: &str, role: Role, enrolled: bool
 }
 
 pub async fn env_with_limit(max_body: usize) -> Env {
-    build(None, max_body).await
+    build(None, max_body, None).await
 }
 
-async fn build(clock: Option<i64>, max_body: usize) -> Env {
+/// An environment that serves the `*.pmtiles` files of `tiles` under `/tiles/`.
+pub async fn env_with_tiles(tiles: &Path) -> Env {
+    build(None, api::MAX_BODY_BYTES, Some(tiles.to_path_buf())).await
+}
+
+async fn build(clock: Option<i64>, max_body: usize, tiles: Option<std::path::PathBuf>) -> Env {
     let dir = tempfile::tempdir().unwrap();
     let pool = db::open(dir.path()).await.unwrap();
     let user_id = make_user(&pool, USER, Role::User, true).await;
     let (_, token) = tokens::create(&pool, "test-device", Some(user_id))
         .await
         .unwrap();
-    let mut state = api::AppState::new(pool.clone(), dir.path().to_path_buf(), max_body);
+    let mut state =
+        api::AppState::new(pool.clone(), dir.path().to_path_buf(), max_body).with_tiles_dir(tiles);
     let clock = clock.map(|now| Arc::new(AtomicI64::new(now)));
     if let Some(c) = &clock {
         let c = c.clone();
@@ -224,7 +230,7 @@ pub const PASSWORD: &str = "correct horse battery";
 
 /// An environment whose clock is pinned to `now` (unix seconds).
 pub async fn env_at(now: i64) -> Env {
-    build(Some(now), api::MAX_BODY_BYTES).await
+    build(Some(now), api::MAX_BODY_BYTES, None).await
 }
 
 /// Tables with a `user_id` column that is part of the derived rows.
