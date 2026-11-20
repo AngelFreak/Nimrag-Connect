@@ -89,9 +89,22 @@ class WebShellState {
     private var pendingPath: String? = null
     private var statusProvider: () -> BridgeStatus = { BridgeStatus.Unknown }
     private var released = false
+    private var remote = true
+    private var attachedEpoch = 0
 
-    internal fun attach(webView: WebView, target: ServerTarget, statusProvider: () -> BridgeStatus) {
+    /** Called (main thread) when the real server's session is gone; the shell hands it to the account. */
+    var sessionListener: (() -> Unit)? = null
+
+    internal fun attach(
+        webView: WebView,
+        target: ServerTarget,
+        statusProvider: () -> BridgeStatus,
+        remote: Boolean,
+        sessionEpoch: Int,
+    ) {
         view = webView
+        this.remote = remote
+        attachedEpoch = sessionEpoch
         this.target = target
         this.statusProvider = statusProvider
         pageReady = false
@@ -119,6 +132,28 @@ class WebShellState {
             return
         }
         if (pageReady) runInPage(BridgeScripts.navigateEvent(path)) else pendingPath = path
+    }
+
+    /**
+     * The web app or the web view found the session gone (a 401). Only the real server's session
+     * counts: the phone's own copy is signed in by the app itself.
+     */
+    internal fun sessionExpired() {
+        if (remote && !released) sessionListener?.invoke()
+    }
+
+    /**
+     * A new session cookie is in the jar (unlock): reload the page the web view is on, unless it
+     * was created after that cookie went in. Main thread.
+     */
+    fun reloadForSession(epoch: Int) {
+        if (epoch == attachedEpoch) return
+        attachedEpoch = epoch
+        val v = view ?: return
+        val t = target ?: return
+        if (!remote) return
+        errorThisLoad = false
+        if (v.url.isNullOrBlank()) v.loadUrl(t.startUrl) else v.reload()
     }
 
     /** Web history first; false when there is nothing to go back to. */
@@ -216,6 +251,7 @@ fun ServerWebView(
     localWeb: LocalWeb?,
     state: WebShellState,
     controller: WatchController,
+    sessionEpoch: Int,
     visible: Boolean,
     onOpenWatch: () -> Unit,
     onRoute: (String) -> Unit,
@@ -249,6 +285,7 @@ fun ServerWebView(
                     localWeb = localWeb,
                     state = state,
                     controller = controller,
+                    sessionEpoch = sessionEpoch,
                     onOpenWatch = { openWatch() },
                     onRoute = { route(it) },
                     chooseFile = chooseFile,
@@ -272,6 +309,7 @@ private fun createWebView(
     localWeb: LocalWeb?,
     state: WebShellState,
     controller: WatchController,
+    sessionEpoch: Int,
     onOpenWatch: () -> Unit,
     onRoute: (String) -> Unit,
     chooseFile: (ValueCallback<Array<Uri>>, Intent) -> Boolean,
@@ -314,10 +352,10 @@ private fun createWebView(
     webView.tag = Runnable { stopWatchingNetwork() }
 
     val statusProvider = { BridgeStatus.of(controller.state.value) }
-    state.attach(webView, target, statusProvider)
+    state.attach(webView, target, statusProvider, remote = localWeb == null, sessionEpoch = sessionEpoch)
 
     webView.addJavascriptInterface(
-        NimragWebBridge(webView, target.origin, controller, onOpenWatch, onRoute),
+        NimragWebBridge(webView, target.origin, controller, onOpenWatch, onRoute, state::sessionExpired),
         BridgeScripts.INTERFACE_NAME,
     )
     // window.NimragApp exists before the page's own scripts run, on the server origin only. Where
@@ -413,6 +451,15 @@ private class ShellWebViewClient(
     override fun onReceivedHttpError(view: WebView, request: WebResourceRequest, errorResponse: WebResourceResponse) {
         // A reverse proxy answers 502 to 504 when the app behind it is down.
         if (request.isForMainFrame && errorResponse.statusCode in 502..504) state.loadFailed()
+        // A 401 from the server's own API: the session is gone (a second signal next to the web
+        // app's own call, for a page whose scripts did not get that far). The shell only acts on
+        // it while signed in, so the web app's own "who am I" probe cannot loop.
+        if (errorResponse.statusCode == 401 &&
+            ServerOrigin.decide(request.url.toString(), origin, false) == NavigationDecision.Allow &&
+            request.url.path?.startsWith("/api/") == true
+        ) {
+            state.sessionExpired()
+        }
     }
 
     override fun onRenderProcessGone(view: WebView, detail: RenderProcessGoneDetail): Boolean {
@@ -474,6 +521,7 @@ internal class NimragWebBridge(
     private val controller: WatchController,
     private val onOpenWatch: () -> Unit,
     private val onRoute: (String) -> Unit,
+    private val onSessionExpired: () -> Unit,
 ) {
     private val main = Handler(Looper.getMainLooper())
 
@@ -488,6 +536,12 @@ internal class NimragWebBridge(
     @JavascriptInterface
     fun status(): String = onMain(BridgeStatus.Unknown.toJson()) {
         if (trusted()) BridgeStatus.of(controller.state.value).toJson() else BridgeStatus.Unknown.toJson()
+    }
+
+    /** The web app got a 401 and shows no login page of its own: the app signs in again. */
+    @JavascriptInterface
+    fun sessionExpired() {
+        main.post { if (trusted()) onSessionExpired() }
     }
 
     @JavascriptInterface

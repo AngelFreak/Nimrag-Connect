@@ -29,32 +29,6 @@ import dev.nimrag.app.ui.components.NimragButton
 import dev.nimrag.app.ui.components.SectionCard
 
 /**
- * Shown on the four web tabs when no usable server address is saved. [invalidAddress] is the saved
- * text when it is not blank but cannot be used; [onOpenSettings] goes to the Watch tab's Settings.
- */
-@Composable
-fun ServerNeededScreen(invalidAddress: String?, onOpenSettings: () -> Unit, modifier: Modifier = Modifier) {
-    Box(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp), contentAlignment = Alignment.Center) {
-        SectionCard {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Icon(Icons.Filled.Info, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                CardTitle(stringResource(R.string.server_needed_title))
-            }
-            Text(
-                if (invalidAddress.isNullOrBlank()) {
-                    stringResource(R.string.server_needed_body)
-                } else {
-                    stringResource(R.string.server_needed_invalid, invalidAddress)
-                },
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            NimragButton(onClick = onOpenSettings) { Text(stringResource(R.string.server_needed_open)) }
-        }
-    }
-}
-
-/**
  * Laid over the web view when the server cannot be reached and the PWA has no cached copy of the
  * page (with a cached copy the web view just shows it).
  */

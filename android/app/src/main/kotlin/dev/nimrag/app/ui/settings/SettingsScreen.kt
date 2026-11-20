@@ -17,6 +17,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
@@ -50,6 +51,8 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import dev.nimrag.app.R
+import dev.nimrag.app.engine.auth.logic.AuthPhase
+import dev.nimrag.app.model.AccountState
 import dev.nimrag.app.model.AppState
 import dev.nimrag.app.model.GarminConnectMode
 import dev.nimrag.app.model.ServerTest
@@ -75,8 +78,10 @@ fun SettingsScreen(
     controller: WatchController,
     contentPadding: PaddingValues,
     onOpenLicences: () -> Unit,
+    onSignIn: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
+    val account by controller.account.state.collectAsStateWithLifecycle()
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -87,7 +92,7 @@ fun SettingsScreen(
             .padding(horizontal = 20.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        ServerCard(state.settings, controller)
+        ServerCard(state.settings, controller, account, onSignIn)
         SyncIntervalCard(state.settings.autoSyncMinutes, controller::setAutoSyncMinutes)
         GarminConnectModeCard(state.settings.garminConnectMode, controller::setGarminConnectMode)
         AdvancedCard(state.settings.capabilitiesHex, controller::setCapabilitiesHex)
@@ -95,65 +100,74 @@ fun SettingsScreen(
     }
 }
 
-// ---------------------------------------------------------------- server
+// ---------------------------------------------------------------- account and server
 
-private val UrlPattern = Regex("^https?://\\S+$", RegexOption.IGNORE_CASE)
-
+/**
+ * The account on this phone and the upload rules. The only way to connect is signing in (the
+ * sign-in screen asks for the server address); the phone's upload token is issued then and kept
+ * out of sight, so there is nothing to paste or copy here.
+ */
 @Composable
-internal fun ServerCard(settings: Settings, controller: WatchController, modifier: Modifier = Modifier) {
-    var url by rememberSaveable(settings.serverUrl) { mutableStateOf(settings.serverUrl) }
-    // The token is deliberately not saveable: it must not end up in the saved instance state.
-    var token by remember { mutableStateOf("") }
-    var allowMobile by rememberSaveable(settings.allowMobileData) { mutableStateOf(settings.allowMobileData) }
-    var justSaved by remember { mutableStateOf(false) }
+internal fun ServerCard(
+    settings: Settings,
+    controller: WatchController,
+    account: AccountState,
+    onSignIn: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     var testing by remember { mutableStateOf(false) }
     var testResult by remember { mutableStateOf<ServerTest?>(null) }
+    var confirmSignOut by rememberSaveable { mutableStateOf(false) }
     val testErrorText = stringResource(R.string.server_test_error)
     val scope = rememberCoroutineScope()
-
-    val trimmed = url.trim()
-    val urlValid = trimmed.isEmpty() || UrlPattern.matches(trimmed)
-    val dirty = trimmed != settings.serverUrl || token.isNotEmpty() || allowMobile != settings.allowMobileData
+    val signedIn = account.phase == AuthPhase.SignedIn || account.phase == AuthPhase.Locked
 
     SectionCard(modifier) {
         CardTitle(stringResource(R.string.settings_server))
-        OutlinedTextField(
-            value = url,
-            onValueChange = {
-                url = it
-                justSaved = false
-            },
-            modifier = Modifier.fillMaxWidth(),
-            label = { Text(stringResource(R.string.server_url)) },
-            placeholder = { Text(stringResource(R.string.server_url_placeholder)) },
-            singleLine = true,
-            isError = !urlValid,
-            supportingText = if (!urlValid) ({ Text(stringResource(R.string.server_url_invalid)) }) else null,
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, autoCorrectEnabled = false),
-        )
-        OutlinedTextField(
-            value = token,
-            onValueChange = {
-                token = it
-                justSaved = false
-            },
-            modifier = Modifier.fillMaxWidth(),
-            label = { Text(stringResource(R.string.server_token)) },
-            placeholder = if (settings.hasToken) ({ Text(stringResource(R.string.server_token_saved)) }) else null,
-            supportingText = {
-                Text(stringResource(if (settings.hasToken) R.string.server_token_keep else R.string.server_token_none))
-            },
-            singleLine = true,
-            visualTransformation = PasswordVisualTransformation(),
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, autoCorrectEnabled = false),
-        )
+        if (settings.serverUrl.isNotBlank()) DetailRow(stringResource(R.string.account_server), settings.serverUrl)
+        if (signedIn) {
+            DetailRow(stringResource(R.string.account_user), account.username.orEmpty())
+            if (account.phase == AuthPhase.Locked) {
+                Text(
+                    stringResource(R.string.account_state_locked),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            if (confirmSignOut) {
+                Text(stringResource(R.string.account_sign_out_confirm), style = MaterialTheme.typography.bodyLarge)
+                Text(
+                    stringResource(R.string.account_sign_out_hint),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    NimragButton(
+                        onClick = {
+                            confirmSignOut = false
+                            controller.account.signOut()
+                        },
+                        enabled = !account.busy,
+                    ) { Text(stringResource(R.string.account_sign_out_yes)) }
+                    NimragOutlinedButton(onClick = { confirmSignOut = false }) { Text(stringResource(R.string.account_cancel)) }
+                }
+            } else {
+                NimragOutlinedButton(onClick = { confirmSignOut = true }, enabled = !account.busy) {
+                    Text(stringResource(R.string.account_sign_out))
+                }
+            }
+        } else {
+            Text(
+                stringResource(R.string.account_state_out),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            NimragButton(onClick = onSignIn) { Text(stringResource(R.string.account_sign_in)) }
+        }
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .clickable(role = Role.Switch) {
-                    allowMobile = !allowMobile
-                    justSaved = false
-                },
+                .clickable(role = Role.Switch) { controller.setAllowMobileData(!settings.allowMobileData) },
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(16.dp),
         ) {
@@ -165,18 +179,9 @@ internal fun ServerCard(settings: Settings, controller: WatchController, modifie
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            Switch(checked = allowMobile, onCheckedChange = null)
+            Switch(checked = settings.allowMobileData, onCheckedChange = null)
         }
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            NimragButton(
-                onClick = {
-                    controller.saveServer(trimmed, token.ifEmpty { null }, allowMobile)
-                    token = ""
-                    testResult = null
-                    justSaved = true
-                },
-                enabled = dirty && urlValid,
-            ) { Text(stringResource(R.string.save)) }
             NimragOutlinedButton(
                 onClick = {
                     scope.launch {
@@ -193,23 +198,9 @@ internal fun ServerCard(settings: Settings, controller: WatchController, modifie
                         }
                     }
                 },
-                enabled = !testing && !dirty && settings.serverUrl.isNotBlank(),
+                enabled = !testing && settings.serverUrl.isNotBlank() && settings.hasToken,
             ) { Text(stringResource(R.string.server_test)) }
             if (testing) CircularProgressIndicator(Modifier.padding(start = 4.dp), strokeWidth = 3.dp)
-        }
-        if (dirty) {
-            Text(
-                stringResource(R.string.server_save_first),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        if (justSaved && !dirty) {
-            Text(
-                stringResource(R.string.server_saved),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.status.good,
-            )
         }
         when (val result = testResult) {
             null -> Unit
@@ -223,14 +214,6 @@ internal fun ServerCard(settings: Settings, controller: WatchController, modifie
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.error,
             )
-        }
-        if (settings.hasToken) {
-            TextButton(
-                onClick = {
-                    controller.saveServer(settings.serverUrl, "", settings.allowMobileData)
-                    testResult = null
-                },
-            ) { Text(stringResource(R.string.server_token_remove), color = MaterialTheme.colorScheme.error) }
         }
     }
 }

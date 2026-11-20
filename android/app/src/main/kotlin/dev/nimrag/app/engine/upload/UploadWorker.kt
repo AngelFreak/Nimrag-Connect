@@ -29,7 +29,7 @@ import java.util.concurrent.TimeUnit
  *
  * Rules (IMPLEMENTATION_PLAN.md stage 2d): the active network must be unmetered or a VPN
  * unless "allow mobile data" is on. 200/201 marks the file uploaded; 401/403 stops all
- * uploads until the settings change; 413 or another 4xx parks that file; IO errors, 5xx,
+ * uploads and tells [onTokenRejected] (the account forgets the token and asks for a sign-in); 413 or another 4xx parks that file; IO errors, 5xx,
  * 408 and 429 back off 30 s doubling to 1 h per file. Files stay on the phone afterwards.
  */
 class UploadWorker(
@@ -39,6 +39,8 @@ class UploadWorker(
     private val settings: EngineSettings,
     private val log: EngineLog,
     private val onState: (UploadState) -> Unit,
+    /** An upload came back 401 or 403: the phone's token no longer works. */
+    private val onTokenRejected: () -> Unit = {},
     private val clock: () -> Long = System::currentTimeMillis,
 ) {
     private val connectivity = context.getSystemService(ConnectivityManager::class.java)
@@ -127,12 +129,12 @@ class UploadWorker(
         try {
             val health = request("$base/api/health", "GET", null)
             if (health != 200) return ServerTest.Failed("The server answered HTTP $health to /api/health")
-            val token = settings.token ?: return ServerTest.Failed("The server is reachable, but no token is saved")
+            val token = settings.token ?: return ServerTest.Failed("The server is reachable, but this phone is not signed in")
             // Any path behind the token check will do; an unknown hash gives 404 with a good token.
             val auth = request("$base/api/files/${"0".repeat(64)}", "GET", token)
             return when (auth) {
                 200, 404 -> ServerTest.Ok
-                401, 403 -> ServerTest.Failed("The server refused the token (HTTP $auth)")
+                401, 403 -> ServerTest.Failed("The server no longer accepts this phone (HTTP $auth)")
                 else -> ServerTest.Failed("The server answered HTTP $auth to an authenticated request")
             }
         } catch (e: IOException) {
@@ -186,6 +188,7 @@ class UploadWorker(
             publish()
             if (outcome is UploadPolicy.Outcome.StopAll) {
                 authBlocked = true
+                onTokenRejected()
                 return IDLE_MS
             }
         }
@@ -228,7 +231,7 @@ class UploadWorker(
             }
             is UploadPolicy.Outcome.StopAll -> {
                 lastError = outcome.reason
-                log.error("${outcome.reason}. Uploads stop until the server settings change.")
+                log.error("${outcome.reason}. Uploads stop until this phone signs in again.")
             }
             is UploadPolicy.Outcome.FailFile -> {
                 db.markFailed(row.sha256, row.attempts + 1, UploadPolicy.PARKED, outcome.reason)

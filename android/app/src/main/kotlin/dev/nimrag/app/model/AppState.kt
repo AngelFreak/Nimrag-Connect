@@ -166,7 +166,7 @@ data class StoredFile(
 data class Settings(
     /** e.g. "https://nimrag.example.ts.net"; blank = uploads off. */
     val serverUrl: String = "",
-    /** True when a device token is saved (the token itself never goes into state). */
+    /** True when this phone holds an upload token from its sign-in (the token itself never goes into state). */
     val hasToken: Boolean = false,
     /** Upload over mobile data too (default: Wi-Fi, Ethernet or VPN only). */
     val allowMobileData: Boolean = false,
@@ -191,6 +191,9 @@ sealed interface ServerTest {
 interface WatchController {
     val state: StateFlow<AppState>
 
+    /** Sign-in, unlock and sign-out with the server's accounts. */
+    val account: AccountController get() = NoAccount
+
     /** Re-read permissions and the adapter state (call after a permission dialog). */
     fun refreshPermissions()
 
@@ -209,8 +212,8 @@ interface WatchController {
     /** Retry pending uploads now, ignoring the backoff (still obeys the network rule). */
     fun uploadNow()
 
-    /** [token] null keeps the saved one; "" removes it. */
-    fun saveServer(url: String, token: String?, allowMobileData: Boolean)
+    /** Upload over mobile data too. The server address and the token come from signing in ([account]). */
+    fun setAllowMobileData(allow: Boolean)
 
     /** GET /api/health, then an authenticated request, off the main thread. */
     suspend fun testServer(): ServerTest
@@ -229,6 +232,9 @@ interface WatchController {
     /** Which web source the owner chose (debug override of the automatic rule). */
     fun webMode(): WebMode = WebMode.Auto
 }
+
+/** The account of a controller that has none (previews, the UI-only demo): signed in, nothing to do. */
+private val NoAccount: AccountController = FixedAccountController()
 
 /** Where the web view loads from: see `WebSourcePolicy`. */
 enum class WebMode { Auto, Local, Remote }

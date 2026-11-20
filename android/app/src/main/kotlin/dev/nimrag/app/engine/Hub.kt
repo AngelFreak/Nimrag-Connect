@@ -3,10 +3,15 @@ package dev.nimrag.app.engine
 import android.Manifest
 import android.app.Application
 import android.bluetooth.BluetoothManager
+import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Handler
 import android.os.HandlerThread
+import dev.nimrag.app.engine.auth.AccountManager
+import dev.nimrag.app.engine.auth.AuthStore
+import dev.nimrag.app.engine.auth.SecretVault
+import dev.nimrag.app.engine.auth.WebSession
 import dev.nimrag.app.engine.ble.CompanionAssociation
 import dev.nimrag.app.engine.local.LocalServerFactory
 import dev.nimrag.app.engine.local.LocalServerHost
@@ -39,13 +44,32 @@ class Hub(val app: Application) {
     val db = EngineDb(app)
     val log = EngineLog(db) { lines -> update { it.copy(log = lines) } }
     val store = FileStore(File(app.filesDir, "watch"), db)
-    val uploader = UploadWorker(
+    val uploader: UploadWorker = UploadWorker(
         context = app,
         db = db,
         store = store,
         settings = settings,
         log = log,
         onState = { uploads -> update { it.copy(uploads = uploads) } },
+        // A refused token (revoked on the server, or an old hand-entered one) means: sign in again.
+        onTokenRejected = { account.tokenRejected() },
+    )
+
+    /**
+     * The account: first sign-in, unlock, sign out ([AccountManager]). A new token, a new server
+     * address or a sign-out reach the uploader through [update] and [UploadWorker.onSettingsChanged].
+     */
+    val account: AccountManager = AccountManager(
+        context = app,
+        settings = settings,
+        store = AuthStore(app.getSharedPreferences("account", Context.MODE_PRIVATE)),
+        vault = SecretVault(app, app.getSharedPreferences("account_vault", Context.MODE_PRIVATE)),
+        web = WebSession(app),
+        log = log,
+        onUploadCredentialsChanged = {
+            update { it.copy(settings = settings.toState()) }
+            uploader.onSettingsChanged()
+        },
     )
 
     /**

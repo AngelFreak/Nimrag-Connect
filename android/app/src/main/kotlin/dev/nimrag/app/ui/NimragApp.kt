@@ -37,6 +37,7 @@ import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -65,6 +66,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.repeatOnLifecycle
 import dev.nimrag.app.R
+import dev.nimrag.app.engine.auth.logic.AuthPhase
 import dev.nimrag.app.model.AppState
 import dev.nimrag.app.model.WatchController
 import dev.nimrag.app.ui.components.ActivitiesIcon
@@ -74,7 +76,10 @@ import dev.nimrag.app.ui.components.TodayIcon
 import dev.nimrag.app.ui.components.WatchIcon
 import dev.nimrag.app.ui.settings.LicencesScreen
 import dev.nimrag.app.ui.settings.SettingsScreen
-import dev.nimrag.app.ui.shell.ServerNeededScreen
+import dev.nimrag.app.ui.shell.CheckingScreen
+import dev.nimrag.app.ui.shell.SignInScreen
+import dev.nimrag.app.ui.shell.UnlockScreen
+import dev.nimrag.app.ui.shell.findActivity
 import dev.nimrag.app.ui.shell.ServerUnreachableScreen
 import dev.nimrag.app.ui.shell.ServerWebView
 import dev.nimrag.app.ui.shell.WebPreviewPlaceholder
@@ -145,9 +150,13 @@ internal fun NimragShell(
     val localWeb = remember(state.localWebPort) { if (state.localWebPort != null) controller.localWeb() else null }
     var remoteFailed by remember { mutableStateOf(false) }
     var forceRemote by remember { mutableStateOf(false) }
-    val source = remember(localWeb, rawServerUrl, remoteFailed, forceRemote) {
+
+    // The account decides whether the server's web app may be shown at all: without a live session
+    // the answer is the native sign-in or unlock screen, never the web app's own login page.
+    val account by controller.account.state.collectAsStateWithLifecycle()
+    val source = remember(localWeb, rawServerUrl, remoteFailed, forceRemote, account.phase) {
         if (forceRemote) {
-            WebSource.Remote
+            WebSourcePolicy.remoteFor(account.phase)
         } else {
             WebSourcePolicy.choose(
                 mode = controller.webMode(),
@@ -156,11 +165,35 @@ internal fun NimragShell(
                 online = isOnline(context),
                 remoteFailed = remoteFailed,
                 pendingUploads = state.uploads.pending,
+                auth = account.phase,
             )
         }
     }
     val onLocal = source == WebSource.Local && localWeb != null
     val target = if (onLocal) ServerOrigin.parse(localWeb.startUrl) else remoteTarget
+    // The server's web view stays alive (hidden) while the session is locked, so unlocking brings
+    // the person back to the page they were on; signing out or the first check drops it.
+    var remoteWebAlive by remember { mutableStateOf(false) }
+    LaunchedEffect(source) {
+        when (source) {
+            WebSource.Remote -> remoteWebAlive = true
+            WebSource.SignIn, WebSource.Checking -> remoteWebAlive = false
+            else -> Unit
+        }
+    }
+    val webShown = target != null && !inspection && when (source) {
+        WebSource.Remote, WebSource.Local -> true
+        WebSource.Unlock -> remoteWebAlive
+        WebSource.SignIn, WebSource.Checking -> false
+    }
+    val webVisible = !nav.inWatch && (source == WebSource.Remote || source == WebSource.Local)
+    // The web app (or the web view) found the session gone: the account locks or signs out.
+    DisposableEffect(webState, controller) {
+        webState.sessionListener = { controller.account.sessionExpired() }
+        onDispose { webState.sessionListener = null }
+    }
+    // A new session cookie went in (unlock): the web view reloads with it.
+    LaunchedEffect(account.sessionEpoch) { webState.reloadForSession(account.sessionEpoch) }
     // The server did not answer and the phone has a copy: switch to it for the rest of this run.
     LaunchedEffect(webState.unreachable, localWeb) {
         if (webState.unreachable && localWeb != null && !onLocal && !forceRemote) remoteFailed = true
@@ -169,6 +202,8 @@ internal fun NimragShell(
     // Permissions and Bluetooth can change while we are away (system settings, quick tiles).
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
         controller.refreshPermissions()
+        // Is the session still good? (Throttled in the account; the first check runs at start.)
+        controller.account.checkSession()
         webState.onResume()
     }
     LifecycleEventEffect(Lifecycle.Event.ON_PAUSE) { webState.onPause() }
@@ -200,11 +235,6 @@ internal fun NimragShell(
         }
     }
 
-    val openSettings = {
-        nav = nav.openedWatch()
-        sectionIndex = WatchSection.Settings.ordinal
-        showLicences = false
-    }
     val imeVisible = WindowInsets.isImeVisible
 
     CompositionLocalProvider(LocalNowMs provides nowMs.longValue) {
@@ -223,13 +253,14 @@ internal fun NimragShell(
                 })
             }
             Box(Modifier.weight(1f).fillMaxWidth()) {
-                if (target != null && !inspection) {
+                if (webShown && target != null) {
                     ServerWebView(
                         target = target,
                         localWeb = if (onLocal) localWeb else null,
                         state = webState,
                         controller = controller,
-                        visible = !nav.inWatch,
+                        sessionEpoch = account.sessionEpoch,
+                        visible = webVisible,
                         onOpenWatch = {
                             nav = nav.openedWatch()
                             sectionIndex = 0
@@ -250,10 +281,25 @@ internal fun NimragShell(
                         },
                         showLicences = showLicences,
                         onShowLicences = { showLicences = it },
+                        onSignIn = {
+                            // From Settings: leave the Watch tab for the sign-in screen.
+                            forceRemote = true
+                            nav = nav.tapped(nav.webTab)
+                        },
                     )
-                    target == null -> ServerNeededScreen(
-                        invalidAddress = rawServerUrl.takeIf { ServerOrigin.isInvalid(it) },
-                        onOpenSettings = openSettings,
+                    source == WebSource.Unlock -> UnlockScreen(
+                        account = account,
+                        onFingerprint = { activity -> controller.account.unlockWithFingerprint(activity) },
+                        onPassword = { controller.account.unlockWithPassword(it) },
+                        onOtherAccount = { controller.account.signOut() },
+                        modifier = Modifier.background(MaterialTheme.colorScheme.background),
+                    )
+                    source == WebSource.Checking -> CheckingScreen(Modifier.background(MaterialTheme.colorScheme.background))
+                    source == WebSource.SignIn || target == null -> SignInScreen(
+                        account = account,
+                        savedServer = rawServerUrl,
+                        onSignIn = { server, username, password, code -> controller.account.signIn(server, username, password, code) },
+                        modifier = Modifier.background(MaterialTheme.colorScheme.background),
                     )
                     inspection -> WebPreviewPlaceholder()
                     webState.unreachable -> ServerUnreachableScreen(
@@ -338,6 +384,7 @@ private fun WatchArea(
     onSection: (WatchSection) -> Unit,
     showLicences: Boolean,
     onShowLicences: (Boolean) -> Unit,
+    onSignIn: () -> Unit,
 ) {
     val noPadding = PaddingValues(0.dp)
     Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
@@ -360,6 +407,7 @@ private fun WatchArea(
                     controller = controller,
                     contentPadding = noPadding,
                     onOpenLicences = { onShowLicences(true) },
+                    onSignIn = onSignIn,
                 )
             }
         }
