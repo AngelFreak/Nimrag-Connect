@@ -107,7 +107,7 @@ export function training(over: Partial<TrainingResponse> = {}): TrainingResponse
       anaerobic_target_min: 60,
       anaerobic_target_max: 180,
     },
-    status: { status_code: 4, label: null, since: '2026-11-05', since_is_lower_bound: false, fitness_trend_code: 1, load_trend_code: 2, as_of: '2026-11-19T07:00:00+01:00' },
+    status: { status_code: 4, label: null, kind: null, since: '2026-11-05', since_is_lower_bound: false, fitness_trend_code: 1, load_trend_code: 2, as_of: '2026-11-19T07:00:00+01:00' },
     vo2max: {
       value: 46.2,
       maximal_met: 13.2,

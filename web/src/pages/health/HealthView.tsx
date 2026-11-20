@@ -118,6 +118,9 @@ export function HealthView({ initialRange = '4w' }: { initialRange?: RangeKey })
           </h2>
           <div className="hub-links">
             <HubLink to="/sleep" title="Sleep" sub="Last night, stages and vitals" />
+            <HubLink to="/sleep?range=4w" title="Score history" sub="Sleep score and time asleep over weeks" />
+            <HubLink to="/hrv" title="HRV status" sub="7-day averages and your balanced range" />
+            <HubLink to="/training/status" title="Training status" sub="Recovery, productive, strained and more" />
             <HubLink to="/day" title="Day" sub="Heart rate, stress and energy" />
             <HubLink to="/movement" title="Movement" sub="Steps and intensity minutes" />
             <HubLink to="/training" title="Training" sub="Recovery, load and VO2 max" />

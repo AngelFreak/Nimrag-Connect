@@ -24,6 +24,204 @@
   }
 }
 
+/* Content of a page that fades while a new period loads: the same column as .page. */
+.page-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+  min-width: 0;
+}
+@media (min-width: 1024px) {
+  .page-stack {
+    gap: 20px;
+  }
+}
+
+/* Period under the segmented control: back arrow, dates, forward arrow. */
+.period-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.period-nav__dates {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--fs-xl);
+  font-weight: 600;
+}
+.period-nav .icon-btn:disabled {
+  color: var(--line-strong);
+}
+@media (min-width: 1024px) {
+  .period-nav {
+    justify-content: flex-start;
+    gap: 12px;
+  }
+}
+
+/* Three small figures in a row (average, highest, lowest). */
+.stat-trio {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--gap);
+}
+
+/* HRV: the chart card with the three figures under it (beside it on the desktop). */
+.hrv-top {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+}
+@media (min-width: 1024px) {
+  .hrv-top {
+    display: grid;
+    grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+    gap: 16px;
+    align-items: start;
+  }
+  .hrv-top .stat-trio {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Training status: today's status, the timeline and its list. */
+.status-now {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+}
+@media (min-width: 1024px) {
+  .status-now {
+    display: grid;
+    grid-template-columns: 1fr minmax(280px, 380px);
+    gap: 48px;
+    align-items: center;
+  }
+}
+.status-hero {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.status-hero__dot {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  flex: none;
+}
+.status-timeline {
+  display: flex;
+  gap: 3px;
+  height: 36px;
+}
+.status-timeline--dense {
+  gap: 0;
+}
+.status-timeline__day {
+  flex: 1 1 0;
+  min-width: 1px;
+  border-radius: 4px;
+}
+.status-timeline--dense .status-timeline__day {
+  border-radius: 0;
+}
+.status-timeline--dense .status-timeline__day:first-child {
+  border-radius: 6px 0 0 6px;
+}
+.status-timeline--dense .status-timeline__day:last-child {
+  border-radius: 0 6px 6px 0;
+}
+.status-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* HRV: the on/off switch above the chart and a card per day. */
+.toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: var(--touch);
+  font-size: var(--fs-base);
+  align-self: flex-start;
+}
+.toggle input {
+  width: 22px;
+  height: 22px;
+  accent-color: var(--link);
+}
+.mark {
+  flex: none;
+}
+.day-cards {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--gap);
+}
+@media (min-width: 640px) {
+  .day-cards {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+@media (min-width: 1024px) {
+  .day-cards {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+  }
+}
+.day-card__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+.day-card__date {
+  font-weight: 600;
+  min-height: 24px;
+  display: inline-flex;
+  align-items: center;
+}
+.day-card__vals {
+  margin: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.day-card__vals dt {
+  font-size: var(--fs-xs);
+  color: var(--text-2);
+}
+.day-card__vals dd {
+  margin: 0;
+  font-size: var(--fs-md);
+  font-weight: 600;
+}
+.day-card__status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--fs-base);
+}
+
+/* Sleep: the table behind the charts. */
+.data-details summary {
+  min-height: var(--touch);
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  color: var(--link);
+  font-size: var(--fs-base);
+}
+.data-details[open] {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+}
+
 /* Small chart inside a tile: full tile width. */
 .spark {
   align-self: stretch;

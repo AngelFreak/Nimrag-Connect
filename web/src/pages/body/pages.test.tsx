@@ -152,7 +152,7 @@ describe('TrainingPage (3j)', () => {
         recovery: { started_at: null, total_s: null, remaining_s: null, percent_complete: null, ready_at: null },
         load: { seven_day_load: null, target_min: null, target_max: null, vs_target: null, acute: null, chronic: null, ratio: null, series_4w: [] },
         balance: null,
-        status: { status_code: null, label: null, since: null, since_is_lower_bound: false, fitness_trend_code: null, load_trend_code: null, as_of: null },
+        status: { status_code: null, label: null, kind: null, since: null, since_is_lower_bound: false, fitness_trend_code: null, load_trend_code: null, as_of: null },
         vo2max: { value: null, maximal_met: null, derived: true, measured_at: null, change_3m: null, series_3m: [] },
       }),
     });

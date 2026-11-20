@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { api } from '../api/client';
 import type { TrainingResponse } from '../api/generated';
 import { BarList, Card, CardHeader, DataList, RangeBar, Ring, SampleDataChip, SeriesChart, TopBar, Unavailable, ValueOrUnavailable } from '../components';
+import { Link } from 'react-router-dom';
 import { fmtShortDay } from '../lib/dates';
 import { fmtFixed, fmtInt } from '../lib/format';
 import { usePageTitle } from '../lib/hooks';
@@ -175,7 +176,7 @@ function StatusCard({ status }: { status: TrainingResponse['status'] }) {
   const since = sinceText(status);
   return (
     <Card padding="lg">
-      <CardHeader title="Training status" />
+      <CardHeader title="Training status" aside={<Link to="/training/status">History</Link>} />
       <span className="stat__value" style={{ fontSize: 28 }}>
         <ValueOrUnavailable value={view.headline} />
       </span>

@@ -53,8 +53,8 @@ export interface StatusView {
 }
 
 /**
- * The training status label is not known yet (the code-to-name table is unverified), so the
- * page shows the numeric state as it is and does not invent a word for it.
+ * The server names the status (label); a code nobody has verified comes as "Status N", so the
+ * number fallback below only covers a response without a label.
  */
 export function statusView(s: TrainingResponse['status']): StatusView {
   if (s.label) return { headline: s.label, note: null };

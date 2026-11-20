@@ -15,6 +15,7 @@ import { DayPage } from './pages/DayPage';
 import { DevicesPage } from './pages/DevicesPage';
 import { GalleryPage } from './pages/GalleryPage';
 import { HealthPage } from './pages/HealthPage';
+import { HrvPage } from './pages/HrvPage';
 import { LoginPage } from './pages/LoginPage';
 import { MovementPage } from './pages/MovementPage';
 import { NotFoundPage } from './pages/NotFoundPage';
@@ -24,6 +25,7 @@ import { SleepPage } from './pages/SleepPage';
 import { StrengthPage } from './pages/StrengthPage';
 import { TodayPage } from './pages/TodayPage';
 import { TrainingPage } from './pages/TrainingPage';
+import { TrainingStatusPage } from './pages/TrainingStatusPage';
 import { WorkoutPage } from './pages/WorkoutPage';
 
 export function App() {
@@ -77,6 +79,8 @@ export function App() {
           <Route path="day/:date?" element={<DayPage />} />
           <Route path="movement/:date?" element={<MovementPage />} />
           <Route path="training" element={<TrainingPage />} />
+          <Route path="training/status" element={<TrainingStatusPage />} />
+          <Route path="hrv" element={<HrvPage />} />
           <Route path="body" element={<BodyPage />} />
           <Route path="calendar/:month?" element={<CalendarPage />} />
           <Route path="workouts/new" element={<WorkoutPage />} />
