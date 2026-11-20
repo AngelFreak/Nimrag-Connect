@@ -1,6 +1,6 @@
 import { useEffect, useRef, type ReactNode } from 'react';
 import { Link, Outlet, useLocation } from 'react-router-dom';
-import { ActivitiesIcon, HealthIcon, StrengthIcon, TodayIcon } from './icons';
+import { ActivitiesIcon, HealthIcon, TodayIcon } from './icons';
 import { isNativeApp } from '../native';
 import { MainBar, ProfileLink, SyncAndWatch } from './SyncControls';
 
@@ -25,12 +25,11 @@ interface NavItem {
   icon?: ReactNode;
 }
 
-/** Bottom navigation on a phone: exactly Today, Activities, Health, Strength. */
+/** Bottom navigation on a phone: exactly Today, Activities, Health (Strength is an Activities filter). */
 const PHONE_NAV: NavItem[] = [
   { key: 'today', to: '/', label: 'Today', icon: <TodayIcon /> },
   { key: 'activities', to: '/activities', label: 'Activities', icon: <ActivitiesIcon /> },
   { key: 'health', to: '/health', label: 'Health', icon: <HealthIcon /> },
-  { key: 'strength', to: '/strength', label: 'Strength', icon: <StrengthIcon /> },
 ];
 
 /** Top navigation on the desktop dashboard, as drawn in Web.dc.html. */
@@ -45,10 +44,11 @@ const DESKTOP_NAV: NavItem[] = [
 
 /** Phone bottom navigation. */
 export function BottomNav({ active }: { active: NavKey }) {
+  const current = active === 'strength' ? 'activities' : active;
   return (
     <nav aria-label="Main" className="bottom-nav">
       {PHONE_NAV.map((n) => (
-        <Link key={n.key} to={n.to} aria-current={active === n.key ? 'page' : undefined}>
+        <Link key={n.key} to={n.to} aria-current={current === n.key ? 'page' : undefined}>
           {n.icon}
           {n.label}
         </Link>
@@ -72,7 +72,7 @@ export function DesktopNav({ active }: { active: NavKey }) {
 
 interface AppShellProps {
   /**
-   * Main tab pages (Today, Activities, Health, Strength) show the top bar with the profile,
+   * Main tab pages (Today, Activities, Health, and the Strength list) show the top bar with the profile,
    * sync and watch buttons and the bottom navigation on a phone. Detail pages show neither
    * and use their own back button.
    */

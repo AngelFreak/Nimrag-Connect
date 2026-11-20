@@ -8,13 +8,12 @@ import org.junit.jupiter.api.Test
 
 class RouteTabsTest {
     @Test
-    fun `the four web tabs send their paths`() {
+    fun `the three web tabs send their paths`() {
         assertEquals("/", RouteTabs.pathFor(MainTab.Today))
         assertEquals("/activities", RouteTabs.pathFor(MainTab.Activities))
         assertEquals("/health", RouteTabs.pathFor(MainTab.Health))
-        assertEquals("/strength", RouteTabs.pathFor(MainTab.Strength))
         assertNull(RouteTabs.pathFor(MainTab.Watch))
-        assertEquals(listOf(MainTab.Today, MainTab.Activities, MainTab.Health, MainTab.Strength), RouteTabs.webTabs)
+        assertEquals(listOf(MainTab.Today, MainTab.Activities, MainTab.Health), RouteTabs.webTabs)
         assertFalse(MainTab.Watch.isWeb)
         assertTrue(MainTab.Today.isWeb)
     }
@@ -25,17 +24,18 @@ class RouteTabsTest {
         assertEquals(MainTab.Activities, RouteTabs.tabForRoute("/activities"))
         assertEquals(MainTab.Activities, RouteTabs.tabForRoute("/activities/"))
         assertEquals(MainTab.Health, RouteTabs.tabForRoute("/health"))
-        assertEquals(MainTab.Strength, RouteTabs.tabForRoute("/strength"))
+        // Strength is an Activities filter, not a tab.
+        assertEquals(MainTab.Activities, RouteTabs.tabForRoute("/strength"))
     }
 
     @Test
     fun `detail routes follow the web app's own nav key`() {
         assertEquals(MainTab.Activities, RouteTabs.tabForRoute("/activities/abc123"))
-        assertEquals(MainTab.Strength, RouteTabs.tabForRoute("/activities/abc123/strength"))
-        assertEquals(MainTab.Strength, RouteTabs.tabForRoute("/activities?type=strength"))
-        assertEquals(MainTab.Strength, RouteTabs.tabForRoute("/activities?before=5&type=strength"))
+        assertEquals(MainTab.Activities, RouteTabs.tabForRoute("/activities/abc123/strength"))
+        assertEquals(MainTab.Activities, RouteTabs.tabForRoute("/activities?type=strength"))
+        assertEquals(MainTab.Activities, RouteTabs.tabForRoute("/activities?before=5&type=strength"))
         assertEquals(MainTab.Activities, RouteTabs.tabForRoute("/activities?type=run"))
-        assertEquals(MainTab.Strength, RouteTabs.tabForRoute("/workouts/new"))
+        assertEquals(MainTab.Activities, RouteTabs.tabForRoute("/workouts/new"))
         assertEquals(MainTab.Today, RouteTabs.tabForRoute("/day/2026-11-19"))
         assertEquals(MainTab.Today, RouteTabs.tabForRoute("/day"))
         assertEquals(MainTab.Today, RouteTabs.tabForRoute("/calendar/2026-11"))
@@ -48,7 +48,7 @@ class RouteTabsTest {
     fun `query and fragment do not change the path match`() {
         assertEquals(MainTab.Today, RouteTabs.tabForRoute("/?x=1"))
         assertEquals(MainTab.Health, RouteTabs.tabForRoute("/health#top"))
-        assertEquals(MainTab.Strength, RouteTabs.tabForRoute("/activities?type=strength#list"))
+        assertEquals(MainTab.Activities, RouteTabs.tabForRoute("/activities?type=strength#list"))
     }
 
     @Test
@@ -64,7 +64,7 @@ class RouteTabsTest {
         assertEquals(MainTab.Health, nav.highlighted)
         assertFalse(nav.inWatch)
         assertEquals(MainTab.Watch, nav.tapped(MainTab.Watch).highlighted)
-        assertEquals(MainTab.Strength, nav.tapped(MainTab.Watch).tapped(MainTab.Strength).highlighted)
+        assertEquals(MainTab.Activities, nav.tapped(MainTab.Watch).tapped(MainTab.Activities).highlighted)
     }
 
     @Test

@@ -1,11 +1,10 @@
 package dev.nimrag.app.ui.shell.logic
 
-/** The five destinations of the native bottom bar. The first four are the web view. */
+/** The four destinations of the native bottom bar. The first three are the web view. */
 enum class MainTab(val webPath: String?) {
     Today("/"),
     Activities("/activities"),
     Health("/health"),
-    Strength("/strength"),
     Watch(null),
     ;
 
@@ -27,14 +26,10 @@ object RouteTabs {
         if (route.isNullOrBlank()) return null
         val noFragment = route.substringBefore('#')
         val path = noFragment.substringBefore('?').trimEnd('/').ifEmpty { "/" }
-        val query = noFragment.substringAfter('?', "")
-        val strengthQuery = query.split('&').any { it == "type=strength" }
+        // Strength is a filter of Activities (no tab of its own).
         return when {
             path == "/" || under(path, "/day") || under(path, "/calendar") -> MainTab.Today
-            path == "/strength" -> MainTab.Strength
-            under(path, "/activities") ->
-                if (strengthQuery || path.endsWith("/strength")) MainTab.Strength else MainTab.Activities
-            under(path, "/workouts") -> MainTab.Strength
+            path == "/strength" || under(path, "/activities") || under(path, "/workouts") -> MainTab.Activities
             under(path, "/sleep") || under(path, "/health") || under(path, "/movement") ||
                 under(path, "/training") || under(path, "/body") -> MainTab.Health
             else -> null

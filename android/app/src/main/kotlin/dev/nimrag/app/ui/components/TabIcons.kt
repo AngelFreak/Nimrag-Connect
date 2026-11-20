@@ -58,14 +58,3 @@ val HealthIcon: ImageVector by lazy {
         moveTo(3f, 12f); horizontalLineTo(7f); lineTo(9f, 7f); lineTo(13f, 17f); lineTo(15f, 12f); horizontalLineTo(21f)
     }
 }
-
-/** A barbell. */
-val StrengthIcon: ImageVector by lazy {
-    lineIcon("Strength") {
-        moveTo(6f, 8f); verticalLineTo(16f)
-        moveTo(18f, 8f); verticalLineTo(16f)
-        moveTo(3f, 10f); verticalLineTo(14f)
-        moveTo(21f, 10f); verticalLineTo(14f)
-        moveTo(6f, 12f); horizontalLineTo(18f)
-    }
-}
