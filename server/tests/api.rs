@@ -43,7 +43,9 @@ async fn upload_requires_valid_token() {
 #[tokio::test]
 async fn revoked_token_is_rejected() {
     let e = env().await;
-    assert!(nimrag_server::tokens::revoke(&e.pool, 1, None).await.unwrap());
+    assert!(nimrag_server::tokens::revoke(&e.pool, 1, None)
+        .await
+        .unwrap());
     let (s, _) = e.upload("data_type=4", b"abc").await;
     assert_eq!(s, StatusCode::UNAUTHORIZED);
 }

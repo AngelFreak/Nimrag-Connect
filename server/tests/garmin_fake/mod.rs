@@ -443,8 +443,7 @@ pub async fn rig() -> Rig {
         .with_garmin(fake.config())
         .with_clock(move || c.load(Ordering::SeqCst));
     let app = api::router(state.clone());
-    let mut env =
-        super::common::Env::from_parts(dir, pool, app, token, Some(clock.clone()));
+    let mut env = super::common::Env::from_parts(dir, pool, app, token, Some(clock.clone()));
     env.user_id = user_id;
     env.adopt = std::sync::atomic::AtomicBool::new(true);
     let cookie = env.login().await;

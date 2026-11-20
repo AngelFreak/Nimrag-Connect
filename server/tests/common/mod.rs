@@ -371,7 +371,9 @@ impl Env {
                 "/api/login",
                 None,
                 false,
-                Some(serde_json::json!({ "username": username, "password": PASSWORD, "code": code })),
+                Some(
+                    serde_json::json!({ "username": username, "password": PASSWORD, "code": code }),
+                ),
             )
             .await;
         assert_eq!(s, StatusCode::OK, "login as {username}: {j}");

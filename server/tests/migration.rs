@@ -126,10 +126,12 @@ async fn old_database() -> Old {
         .execute(&pool)
         .await
         .unwrap();
-    sqlx::query("INSERT INTO sessions (id_hash, created_at, expires_at) VALUES ('abc', 1, 4000000000)")
-        .execute(&pool)
-        .await
-        .unwrap();
+    sqlx::query(
+        "INSERT INTO sessions (id_hash, created_at, expires_at) VALUES ('abc', 1, 4000000000)",
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
     for name in ["phone", "old tablet"] {
         sqlx::query("INSERT INTO tokens (name, hash) VALUES (?, ?)")
             .bind(name)
@@ -185,7 +187,11 @@ async fn old_database() -> Old {
     let mut before = Vec::new();
     for t in SAMPLE_TABLES {
         fill(&pool, t).await;
-        let cols: Vec<String> = column_names(&pool, t).await.into_iter().map(|c| c.0).collect();
+        let cols: Vec<String> = column_names(&pool, t)
+            .await
+            .into_iter()
+            .map(|c| c.0)
+            .collect();
         let rows = dump(&pool, t, &cols).await;
         assert_eq!(rows.len(), 2, "{t}");
         before.push((t.to_string(), cols, rows));
@@ -220,17 +226,23 @@ async fn owner_becomes_admin_and_nothing_is_lost() {
     assert!(a.get::<Option<String>, _>("totp_secret").is_none());
     assert_eq!(a.get::<i64, _>("must_change_password"), 0);
     assert!(a.get::<Option<i64>, _>("disabled_at").is_none());
-    let owner_gone: i64 = count(&pool, "SELECT COUNT(*) FROM sqlite_master WHERE name = 'owner'").await;
+    let owner_gone: i64 = count(
+        &pool,
+        "SELECT COUNT(*) FROM sqlite_master WHERE name = 'owner'",
+    )
+    .await;
     assert_eq!(owner_gone, 0);
 
     // Sessions are cleared.
     assert_eq!(count(&pool, "SELECT COUNT(*) FROM sessions").await, 0);
 
     // Device tokens survive, unassigned, still active, secrets untouched.
-    let toks = sqlx::query("SELECT name, hash, user_id, device_secret_hash, revoked_at FROM tokens ORDER BY id")
-        .fetch_all(&pool)
-        .await
-        .unwrap();
+    let toks = sqlx::query(
+        "SELECT name, hash, user_id, device_secret_hash, revoked_at FROM tokens ORDER BY id",
+    )
+    .fetch_all(&pool)
+    .await
+    .unwrap();
     assert_eq!(toks.len(), 2);
     assert_eq!(toks[0].get::<String, _>("hash"), "hash-of-phone");
     for t in &toks {
@@ -247,15 +259,20 @@ async fn owner_becomes_admin_and_nothing_is_lost() {
     // Every sample row is still there, unchanged, in the unassigned partition 0.
     for (table, cols, rows) in &old.before {
         assert_eq!(&dump(&pool, table, cols).await, rows, "{table}");
-        let moved = count(&pool, &format!("SELECT COUNT(*) FROM {table} WHERE user_id <> 0")).await;
+        let moved = count(
+            &pool,
+            &format!("SELECT COUNT(*) FROM {table} WHERE user_id <> 0"),
+        )
+        .await;
         assert_eq!(moved, 0, "{table}");
     }
 
     // Owner records are kept under user 0; the server-wide flag stays global.
-    let prefs: Vec<(String, String)> = sqlx::query_as("SELECT key, value FROM user_settings WHERE user_id = 0 ORDER BY key")
-        .fetch_all(&pool)
-        .await
-        .unwrap();
+    let prefs: Vec<(String, String)> =
+        sqlx::query_as("SELECT key, value FROM user_settings WHERE user_id = 0 ORDER BY key")
+            .fetch_all(&pool)
+            .await
+            .unwrap();
     assert_eq!(
         prefs,
         vec![
@@ -270,10 +287,31 @@ async fn owner_becomes_admin_and_nothing_is_lost() {
         .await
         .unwrap();
     assert_eq!(global, vec!["sample_data".to_string()]);
-    assert_eq!(count(&pool, "SELECT COUNT(*) FROM body_measurements WHERE user_id = 0 AND weight_kg = 80.5").await, 1);
+    assert_eq!(
+        count(
+            &pool,
+            "SELECT COUNT(*) FROM body_measurements WHERE user_id = 0 AND weight_kg = 80.5"
+        )
+        .await,
+        1
+    );
     assert_eq!(count(&pool, "SELECT COUNT(*) FROM strength_set_overrides WHERE user_id = 0 AND fields = '{\"reps\":10}'").await, 1);
-    assert_eq!(count(&pool, "SELECT COUNT(*) FROM garmin_account WHERE user_id = 0 AND di_token = 'tok'").await, 1);
-    assert_eq!(count(&pool, "SELECT COUNT(*) FROM garmin_uploads WHERE user_id = 0").await, 1);
+    assert_eq!(
+        count(
+            &pool,
+            "SELECT COUNT(*) FROM garmin_account WHERE user_id = 0 AND di_token = 'tok'"
+        )
+        .await,
+        1
+    );
+    assert_eq!(
+        count(
+            &pool,
+            "SELECT COUNT(*) FROM garmin_uploads WHERE user_id = 0"
+        )
+        .await,
+        1
+    );
 
     // Running the migrations again changes nothing (already applied).
     pool.close().await;
@@ -291,7 +329,13 @@ async fn migrated_admin_enrols_2fa_and_hands_the_old_data_to_a_user() {
         dir.path().to_path_buf(),
         nimrag_server::api::MAX_BODY_BYTES,
     );
-    let e = Env::from_parts(dir, pool.clone(), nimrag_server::api::router(state), String::new(), None);
+    let e = Env::from_parts(
+        dir,
+        pool.clone(),
+        nimrag_server::api::router(state),
+        String::new(),
+        None,
+    );
 
     // Setup is closed: the owner already exists.
     let (_, _, j) = e.call(Method::GET, "/api/setup", None, false, None).await;
@@ -333,17 +377,31 @@ async fn migrated_admin_enrols_2fa_and_hands_the_old_data_to_a_user() {
         .to_owned();
 
     // The admin has no data of their own.
-    let (s, _, _) = e.call(Method::GET, "/api/today", Some(&admin), false, None).await;
+    let (s, _, _) = e
+        .call(Method::GET, "/api/today", Some(&admin), false, None)
+        .await;
     assert_eq!(s, StatusCode::FORBIDDEN);
 
     // The old phone's token and file are unassigned and offered for assignment, with the old records.
     let (s, _, j) = e
-        .call(Method::GET, "/api/admin/unassigned", Some(&admin), false, None)
+        .call(
+            Method::GET,
+            "/api/admin/unassigned",
+            Some(&admin),
+            false,
+            None,
+        )
         .await;
     assert_eq!(s, StatusCode::OK);
     assert_eq!(j["tokens"].as_array().unwrap().len(), 2);
     let phone = j["tokens"][0].clone();
-    assert_eq!((phone["name"].as_str().unwrap(), phone["files"].as_i64().unwrap()), ("phone", 1));
+    assert_eq!(
+        (
+            phone["name"].as_str().unwrap(),
+            phone["files"].as_i64().unwrap()
+        ),
+        ("phone", 1)
+    );
     assert_eq!(j["legacy"]["body_entries"], 1);
     assert_eq!(j["legacy"]["garmin_account"], true);
 
@@ -364,13 +422,21 @@ async fn migrated_admin_enrols_2fa_and_hands_the_old_data_to_a_user() {
 
     // The user now has the old goals, body entry and Garmin Forward account.
     let me = e.login_as("alice").await;
-    let (_, _, settings) = e.call(Method::GET, "/api/settings", Some(&me), false, None).await;
+    let (_, _, settings) = e
+        .call(Method::GET, "/api/settings", Some(&me), false, None)
+        .await;
     assert_eq!(settings["step_goal"], 9000);
     assert_eq!(settings["timezone"], "Europe/Copenhagen");
-    let (_, _, body) = e.call(Method::GET, "/api/body", Some(&me), false, None).await;
+    let (_, _, body) = e
+        .call(Method::GET, "/api/body", Some(&me), false, None)
+        .await;
     assert_eq!(body["entries"].as_array().unwrap().len(), 1);
-    let (_, _, g) = e.call(Method::GET, "/api/garmin", Some(&me), false, None).await;
+    let (_, _, g) = e
+        .call(Method::GET, "/api/garmin", Some(&me), false, None)
+        .await;
     assert_eq!(g["state"], "connected");
-    let (_, _, st) = e.call(Method::GET, "/api/storage", Some(&me), false, None).await;
+    let (_, _, st) = e
+        .call(Method::GET, "/api/storage", Some(&me), false, None)
+        .await;
     assert_eq!(st["files"], 1);
 }

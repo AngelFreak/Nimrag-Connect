@@ -92,7 +92,9 @@ async fn register(e: &Env, user: &str, name: &str) -> Phone {
 }
 
 async fn alive(e: &Env, cookie: &str) -> bool {
-    let (s, _, _) = e.call(Method::GET, "/api/me", Some(cookie), false, None).await;
+    let (s, _, _) = e
+        .call(Method::GET, "/api/me", Some(cookie), false, None)
+        .await;
     s == StatusCode::OK
 }
 
@@ -131,30 +133,54 @@ async fn first_app_login_registers_the_phone_and_hands_out_credentials_once() {
     assert!(secret.starts_with("nrd_") && secret.len() >= 36, "{secret}");
     assert_ne!(token, secret);
     let cookie = cookie_of(&h);
-    assert!(alive(&e, &cookie).await, "the response carries a working session");
+    assert!(
+        alive(&e, &cookie).await,
+        "the response carries a working session"
+    );
 
     // Only hashes are stored, and the session is tied to the device token.
-    let (name, user, th, sh): (String, i64, String, String) = sqlx::query_as(
-        "SELECT name, user_id, hash, device_secret_hash FROM tokens WHERE id = ?",
-    )
-    .bind(id)
-    .fetch_one(&e.pool)
-    .await
-    .unwrap();
+    let (name, user, th, sh): (String, i64, String, String) =
+        sqlx::query_as("SELECT name, user_id, hash, device_secret_hash FROM tokens WHERE id = ?")
+            .bind(id)
+            .fetch_one(&e.pool)
+            .await
+            .unwrap();
     assert_eq!((name.as_str(), user), ("Pixel 9a", e.user_id));
     assert_eq!(th, tokens::hash_token(token));
     assert_eq!(sh, tokens::hash_token(secret));
     assert!(th != token && sh != secret);
     for plain in [token, secret] {
-        assert_eq!(count(&e, "SELECT COUNT(*) FROM tokens WHERE hash = ? OR device_secret_hash = ?", plain).await, 0);
+        assert_eq!(
+            count(
+                &e,
+                "SELECT COUNT(*) FROM tokens WHERE hash = ? OR device_secret_hash = ?",
+                plain
+            )
+            .await,
+            0
+        );
     }
-    let on_token: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM sessions WHERE token_id = ?").bind(id).fetch_one(&e.pool).await.unwrap();
+    let on_token: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM sessions WHERE token_id = ?")
+        .bind(id)
+        .fetch_one(&e.pool)
+        .await
+        .unwrap();
     assert_eq!(on_token, 1);
 
     // The token uploads as that user; the web list shows the phone but no secret.
-    let (s, up) = e.request(Method::POST, "/api/files?data_type=4&source=watch", Some(token), b"from the phone".to_vec()).await;
+    let (s, up) = e
+        .request(
+            Method::POST,
+            "/api/files?data_type=4&source=watch",
+            Some(token),
+            b"from the phone".to_vec(),
+        )
+        .await;
     assert_eq!(s, StatusCode::CREATED, "{up}");
-    let owner: i64 = sqlx::query_scalar("SELECT user_id FROM file_owners").fetch_one(&e.pool).await.unwrap();
+    let owner: i64 = sqlx::query_scalar("SELECT user_id FROM file_owners")
+        .fetch_one(&e.pool)
+        .await
+        .unwrap();
     assert_eq!(owner, e.user_id);
     let web = e.login().await;
     let list = e.get(&web, "/api/tokens").await.to_string();
@@ -179,49 +205,97 @@ async fn app_login_rejects_bad_credentials_alike_and_bad_accounts_for_their_reas
         answers.push(j);
     }
     assert!(answers.windows(2).all(|w| w[0] == w[1]), "{answers:?}");
-    assert_eq!(count(&e, "SELECT COUNT(*) FROM tokens WHERE name = ?", "p").await, 0);
+    assert_eq!(
+        count(&e, "SELECT COUNT(*) FROM tokens WHERE name = ?", "p").await,
+        0
+    );
 
     // A code works once: a replay is refused.
     let c = code(&e, USER).await;
     let body = json!({ "username": USER, "password": PASSWORD, "code": c, "device_name": "first" });
-    assert_eq!(app(&e, "/api/app/login", body.clone()).await.0, StatusCode::CREATED);
-    assert_eq!(app(&e, "/api/app/login", body).await.0, StatusCode::UNAUTHORIZED);
+    assert_eq!(
+        app(&e, "/api/app/login", body.clone()).await.0,
+        StatusCode::CREATED
+    );
+    assert_eq!(
+        app(&e, "/api/app/login", body).await.0,
+        StatusCode::UNAUTHORIZED
+    );
 
     // Device names: 1 to 64 characters.
     for name in ["", "   ", &"x".repeat(65)] {
         let c = code(&e, USER).await;
-        let (s, _, _) = app(&e, "/api/app/login", json!({ "username": USER, "password": PASSWORD, "code": c, "device_name": name })).await;
+        let (s, _, _) = app(
+            &e,
+            "/api/app/login",
+            json!({ "username": USER, "password": PASSWORD, "code": c, "device_name": name }),
+        )
+        .await;
         assert_eq!(s, StatusCode::BAD_REQUEST, "{name:?}");
     }
 
     // The app cannot enrol 2FA: an account without it counts as a wrong code.
     make_user(&e.pool, "fresh", Role::User, false).await;
-    let (s, _, _) = app(&e, "/api/app/login", json!({ "username": "fresh", "password": PASSWORD, "code": good, "device_name": "p" })).await;
+    let (s, _, _) = app(
+        &e,
+        "/api/app/login",
+        json!({ "username": "fresh", "password": PASSWORD, "code": good, "device_name": "p" }),
+    )
+    .await;
     assert_eq!(s, StatusCode::UNAUTHORIZED);
 
     // Admins have no data; users with a temporary password change it on the web first.
     e.add_user("boss", Role::Admin).await;
     let c = code(&e, "boss").await;
-    let (s, h, _) = app(&e, "/api/app/login", json!({ "username": "boss", "password": PASSWORD, "code": c, "device_name": "p" })).await;
+    let (s, h, _) = app(
+        &e,
+        "/api/app/login",
+        json!({ "username": "boss", "password": PASSWORD, "code": c, "device_name": "p" }),
+    )
+    .await;
     assert_eq!(s, StatusCode::FORBIDDEN);
     assert!(h.get(header::SET_COOKIE).is_none());
-    e.exec("UPDATE users SET must_change_password = 1 WHERE username = 'tester'").await;
+    e.exec("UPDATE users SET must_change_password = 1 WHERE username = 'tester'")
+        .await;
     let c = code(&e, USER).await;
-    let (s, _, _) = app(&e, "/api/app/login", json!({ "username": USER, "password": PASSWORD, "code": c, "device_name": "p" })).await;
+    let (s, _, _) = app(
+        &e,
+        "/api/app/login",
+        json!({ "username": USER, "password": PASSWORD, "code": c, "device_name": "p" }),
+    )
+    .await;
     assert_eq!(s, StatusCode::CONFLICT);
-    assert_eq!(count(&e, "SELECT COUNT(*) FROM tokens WHERE name = ?", "p").await, 0);
+    assert_eq!(
+        count(&e, "SELECT COUNT(*) FROM tokens WHERE name = ?", "p").await,
+        0
+    );
 }
 
 #[tokio::test]
 async fn the_active_token_cap_applies_to_phones_too() {
     let e = setup().await;
     for _ in 1..tokens::MAX_ACTIVE {
-        tokens::create(&e.pool, "filler", Some(e.user_id)).await.unwrap();
+        tokens::create(&e.pool, "filler", Some(e.user_id))
+            .await
+            .unwrap();
     }
     let c = code(&e, USER).await;
-    let (s, _, j) = app(&e, "/api/app/login", json!({ "username": USER, "password": PASSWORD, "code": c, "device_name": "one too many" })).await;
+    let (s, _, j) = app(
+        &e,
+        "/api/app/login",
+        json!({ "username": USER, "password": PASSWORD, "code": c, "device_name": "one too many" }),
+    )
+    .await;
     assert_eq!(s, StatusCode::CONFLICT, "{j}");
-    assert_eq!(count(&e, "SELECT COUNT(*) FROM tokens WHERE name = ?", "one too many").await, 0);
+    assert_eq!(
+        count(
+            &e,
+            "SELECT COUNT(*) FROM tokens WHERE name = ?",
+            "one too many"
+        )
+        .await,
+        0
+    );
 }
 
 // ---- unlock ---------------------------------------------------------------------------
@@ -230,12 +304,21 @@ async fn the_active_token_cap_applies_to_phones_too() {
 async fn unlock_needs_the_password_and_this_phones_secret_but_no_code() {
     let e = setup().await;
     let phone = register(&e, USER, "Pixel").await;
-    let (s, h, j) = app(&e, "/api/app/unlock", json!({ "username": USER, "password": PASSWORD, "device_secret": phone.secret })).await;
+    let (s, h, j) = app(
+        &e,
+        "/api/app/unlock",
+        json!({ "username": USER, "password": PASSWORD, "device_secret": phone.secret }),
+    )
+    .await;
     assert_eq!(s, StatusCode::OK, "{j}");
     assert_eq!(j["username"], USER);
     let cookie = cookie_of(&h);
     assert!(alive(&e, &cookie).await);
-    let on_token: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM sessions WHERE token_id = ?").bind(phone.device_id).fetch_one(&e.pool).await.unwrap();
+    let on_token: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM sessions WHERE token_id = ?")
+        .bind(phone.device_id)
+        .fetch_one(&e.pool)
+        .await
+        .unwrap();
     assert_eq!(on_token, 2, "both app sessions hang on the device token");
 
     let bea_id = e.add_user("bea", Role::User).await;
@@ -259,11 +342,21 @@ async fn unlock_needs_the_password_and_this_phones_secret_but_no_code() {
     }
     assert!(answers.windows(2).all(|w| w[0] == w[1]), "{answers:?}");
     // A missing secret is not a login at all.
-    let (s, h, _) = app(&e, "/api/app/unlock", json!({ "username": USER, "password": PASSWORD })).await;
+    let (s, h, _) = app(
+        &e,
+        "/api/app/unlock",
+        json!({ "username": USER, "password": PASSWORD }),
+    )
+    .await;
     assert!(s.is_client_error() && s != StatusCode::OK);
     assert!(h.get(header::SET_COOKIE).is_none());
     // Bea's own phone still works for her.
-    let (s, _, _) = app(&e, "/api/app/unlock", json!({ "username": "bea", "password": PASSWORD, "device_secret": bea.secret })).await;
+    let (s, _, _) = app(
+        &e,
+        "/api/app/unlock",
+        json!({ "username": "bea", "password": PASSWORD, "device_secret": bea.secret }),
+    )
+    .await;
     assert_eq!(s, StatusCode::OK);
     let _ = bea_id;
 }
@@ -274,7 +367,12 @@ async fn unlock_needs_the_password_and_this_phones_secret_but_no_code() {
 async fn resume_takes_the_device_secret_alone_and_never_a_bare_biometric_claim() {
     let e = setup().await;
     let phone = register(&e, USER, "Pixel").await;
-    let (s, h, j) = app(&e, "/api/app/resume", json!({ "device_secret": phone.secret })).await;
+    let (s, h, j) = app(
+        &e,
+        "/api/app/resume",
+        json!({ "device_secret": phone.secret }),
+    )
+    .await;
     assert_eq!(s, StatusCode::OK, "{j}");
     assert_eq!(j["username"], USER);
     assert!(alive(&e, &cookie_of(&h)).await);
@@ -290,8 +388,19 @@ async fn resume_takes_the_device_secret_alone_and_never_a_bare_biometric_claim()
         assert!(s.is_client_error(), "{body} -> {s}");
         assert!(h.get(header::SET_COOKIE).is_none(), "{body}");
     }
-    for secret in ["", "nrd_", &format!("nrd_{}", "0".repeat(64)), phone.token.as_str(), PASSWORD] {
-        let (s, h, _) = app(&e, "/api/app/resume", json!({ "device_secret": secret, "biometric": true })).await;
+    for secret in [
+        "",
+        "nrd_",
+        &format!("nrd_{}", "0".repeat(64)),
+        phone.token.as_str(),
+        PASSWORD,
+    ] {
+        let (s, h, _) = app(
+            &e,
+            "/api/app/resume",
+            json!({ "device_secret": secret, "biometric": true }),
+        )
+        .await;
         assert!(s.is_client_error(), "{secret:?} -> {s}");
         assert!(h.get(header::SET_COOKIE).is_none());
     }
@@ -304,7 +413,13 @@ async fn guessing_device_secrets_is_rate_limited_per_address() {
     let peer = "203.0.113.50";
     let mut limited_after = None;
     for i in 0..12 {
-        let (s, _, _) = post_from(&e, peer, "/api/app/resume", json!({ "device_secret": format!("nrd_{i:064}") })).await;
+        let (s, _, _) = post_from(
+            &e,
+            peer,
+            "/api/app/resume",
+            json!({ "device_secret": format!("nrd_{i:064}") }),
+        )
+        .await;
         if s == StatusCode::TOO_MANY_REQUESTS {
             limited_after = Some(i);
             break;
@@ -314,11 +429,23 @@ async fn guessing_device_secrets_is_rate_limited_per_address() {
     let n = limited_after.expect("the limiter must engage");
     assert!(n <= 8, "locked after {n} failures");
     // The guesser's address is locked out even with the right secret ...
-    let (s, h, _) = post_from(&e, peer, "/api/app/resume", json!({ "device_secret": phone.secret })).await;
+    let (s, h, _) = post_from(
+        &e,
+        peer,
+        "/api/app/resume",
+        json!({ "device_secret": phone.secret }),
+    )
+    .await;
     assert_eq!(s, StatusCode::TOO_MANY_REQUESTS);
     assert!(h.get(header::RETRY_AFTER).is_some());
     // ... while the phone, somewhere else, is not affected.
-    let (s, _, _) = post_from(&e, "203.0.113.51", "/api/app/resume", json!({ "device_secret": phone.secret })).await;
+    let (s, _, _) = post_from(
+        &e,
+        "203.0.113.51",
+        "/api/app/resume",
+        json!({ "device_secret": phone.secret }),
+    )
+    .await;
     assert_eq!(s, StatusCode::OK);
 }
 
@@ -328,33 +455,85 @@ async fn guessing_device_secrets_is_rate_limited_per_address() {
 async fn revoking_the_device_token_kills_its_secret_sessions_and_uploads() {
     let e = setup().await;
     let phone = register(&e, USER, "Pixel").await;
-    let (s, h, _) = app(&e, "/api/app/unlock", json!({ "username": USER, "password": PASSWORD, "device_secret": phone.secret })).await;
+    let (s, h, _) = app(
+        &e,
+        "/api/app/unlock",
+        json!({ "username": USER, "password": PASSWORD, "device_secret": phone.secret }),
+    )
+    .await;
     assert_eq!(s, StatusCode::OK);
     let second = cookie_of(&h);
     let other = register(&e, USER, "Second phone").await;
     assert!(alive(&e, &phone.cookie).await && alive(&e, &second).await);
-    let (s, _) = e.request(Method::POST, "/api/files?data_type=4&source=watch", Some(&phone.token), b"one".to_vec()).await;
+    let (s, _) = e
+        .request(
+            Method::POST,
+            "/api/files?data_type=4&source=watch",
+            Some(&phone.token),
+            b"one".to_vec(),
+        )
+        .await;
     assert_eq!(s, StatusCode::CREATED);
 
     let web = e.login().await;
-    let (s, _) = e.send(&web, Method::DELETE, &format!("/api/tokens/{}", phone.device_id), json!(null)).await;
+    let (s, _) = e
+        .send(
+            &web,
+            Method::DELETE,
+            &format!("/api/tokens/{}", phone.device_id),
+            json!(null),
+        )
+        .await;
     assert_eq!(s, StatusCode::NO_CONTENT);
 
-    assert!(!alive(&e, &phone.cookie).await, "the first app session ended");
+    assert!(
+        !alive(&e, &phone.cookie).await,
+        "the first app session ended"
+    );
     assert!(!alive(&e, &second).await, "so did the one made by unlock");
-    let (s, _, _) = app(&e, "/api/app/unlock", json!({ "username": USER, "password": PASSWORD, "device_secret": phone.secret })).await;
+    let (s, _, _) = app(
+        &e,
+        "/api/app/unlock",
+        json!({ "username": USER, "password": PASSWORD, "device_secret": phone.secret }),
+    )
+    .await;
     assert_eq!(s, StatusCode::UNAUTHORIZED);
-    let (s, _, _) = app(&e, "/api/app/resume", json!({ "device_secret": phone.secret })).await;
+    let (s, _, _) = app(
+        &e,
+        "/api/app/resume",
+        json!({ "device_secret": phone.secret }),
+    )
+    .await;
     assert_eq!(s, StatusCode::UNAUTHORIZED);
-    let (s, _) = e.request(Method::POST, "/api/files?data_type=4&source=watch", Some(&phone.token), b"two".to_vec()).await;
+    let (s, _) = e
+        .request(
+            Method::POST,
+            "/api/files?data_type=4&source=watch",
+            Some(&phone.token),
+            b"two".to_vec(),
+        )
+        .await;
     assert_eq!(s, StatusCode::UNAUTHORIZED);
-    let kept: Option<String> = sqlx::query_scalar("SELECT device_secret_hash FROM tokens WHERE id = ?").bind(phone.device_id).fetch_one(&e.pool).await.unwrap();
-    assert!(kept.is_none(), "the secret's hash is gone, not just ignored");
+    let kept: Option<String> =
+        sqlx::query_scalar("SELECT device_secret_hash FROM tokens WHERE id = ?")
+            .bind(phone.device_id)
+            .fetch_one(&e.pool)
+            .await
+            .unwrap();
+    assert!(
+        kept.is_none(),
+        "the secret's hash is gone, not just ignored"
+    );
 
     // Nothing else was touched: the web session and the other phone work.
     assert!(alive(&e, &web).await);
     assert!(alive(&e, &other.cookie).await);
-    let (s, _, _) = app(&e, "/api/app/resume", json!({ "device_secret": other.secret })).await;
+    let (s, _, _) = app(
+        &e,
+        "/api/app/resume",
+        json!({ "device_secret": other.secret }),
+    )
+    .await;
     assert_eq!(s, StatusCode::OK);
 }
 
@@ -367,28 +546,100 @@ async fn admin_actions_and_own_password_changes_end_every_trusted_phone() {
 
     // Reset 2FA.
     let phone = register(&e, USER, "a").await;
-    let (s, _) = e.send(&admin, Method::POST, &format!("/api/admin/users/{uid}/reset-2fa"), json!(null)).await;
+    let (s, _) = e
+        .send(
+            &admin,
+            Method::POST,
+            &format!("/api/admin/users/{uid}/reset-2fa"),
+            json!(null),
+        )
+        .await;
     assert_eq!(s, StatusCode::NO_CONTENT);
     assert!(!alive(&e, &phone.cookie).await);
-    assert_eq!(app(&e, "/api/app/resume", json!({ "device_secret": phone.secret })).await.0, StatusCode::UNAUTHORIZED);
+    assert_eq!(
+        app(
+            &e,
+            "/api/app/resume",
+            json!({ "device_secret": phone.secret })
+        )
+        .await
+        .0,
+        StatusCode::UNAUTHORIZED
+    );
 
     // Re-enrol through the web login so the account is whole again, then reset the password.
-    e.exec(&format!("UPDATE users SET totp_secret = '{TOTP_SECRET}', totp_enabled = 1 WHERE id = {uid}")).await;
+    e.exec(&format!(
+        "UPDATE users SET totp_secret = '{TOTP_SECRET}', totp_enabled = 1 WHERE id = {uid}"
+    ))
+    .await;
     let phone = register(&e, USER, "b").await;
-    let (s, j) = e.send(&admin, Method::POST, &format!("/api/admin/users/{uid}/reset-password"), json!(null)).await;
+    let (s, j) = e
+        .send(
+            &admin,
+            Method::POST,
+            &format!("/api/admin/users/{uid}/reset-password"),
+            json!(null),
+        )
+        .await;
     assert_eq!(s, StatusCode::OK, "{j}");
-    assert_eq!(app(&e, "/api/app/resume", json!({ "device_secret": phone.secret })).await.0, StatusCode::UNAUTHORIZED);
+    assert_eq!(
+        app(
+            &e,
+            "/api/app/resume",
+            json!({ "device_secret": phone.secret })
+        )
+        .await
+        .0,
+        StatusCode::UNAUTHORIZED
+    );
 
     // Disable (and enable again: the phone must sign in afresh). Put the known password back first.
     e.exec(&format!("UPDATE users SET must_change_password = 0, password_hash = (SELECT password_hash FROM users WHERE username = 'boss') WHERE id = {uid}")).await;
     let phone = register(&e, USER, "c").await;
-    let (s, _) = e.send(&admin, Method::POST, &format!("/api/admin/users/{uid}/disable"), json!(null)).await;
+    let (s, _) = e
+        .send(
+            &admin,
+            Method::POST,
+            &format!("/api/admin/users/{uid}/disable"),
+            json!(null),
+        )
+        .await;
     assert_eq!(s, StatusCode::NO_CONTENT);
-    assert_eq!(app(&e, "/api/app/resume", json!({ "device_secret": phone.secret })).await.0, StatusCode::UNAUTHORIZED);
-    let (s, _) = e.send(&admin, Method::POST, &format!("/api/admin/users/{uid}/enable"), json!(null)).await;
+    assert_eq!(
+        app(
+            &e,
+            "/api/app/resume",
+            json!({ "device_secret": phone.secret })
+        )
+        .await
+        .0,
+        StatusCode::UNAUTHORIZED
+    );
+    let (s, _) = e
+        .send(
+            &admin,
+            Method::POST,
+            &format!("/api/admin/users/{uid}/enable"),
+            json!(null),
+        )
+        .await;
     assert_eq!(s, StatusCode::NO_CONTENT);
-    assert_eq!(app(&e, "/api/app/resume", json!({ "device_secret": phone.secret })).await.0, StatusCode::UNAUTHORIZED);
-    let (s, _, _) = app(&e, "/api/app/unlock", json!({ "username": USER, "password": PASSWORD, "device_secret": phone.secret })).await;
+    assert_eq!(
+        app(
+            &e,
+            "/api/app/resume",
+            json!({ "device_secret": phone.secret })
+        )
+        .await
+        .0,
+        StatusCode::UNAUTHORIZED
+    );
+    let (s, _, _) = app(
+        &e,
+        "/api/app/unlock",
+        json!({ "username": USER, "password": PASSWORD, "device_secret": phone.secret }),
+    )
+    .await;
     assert_eq!(s, StatusCode::UNAUTHORIZED);
 
     // The user changing their own password.
@@ -403,7 +654,16 @@ async fn admin_actions_and_own_password_changes_end_every_trusted_phone() {
         )
         .await;
     assert_eq!(s, StatusCode::OK, "{j}");
-    assert_eq!(app(&e, "/api/app/resume", json!({ "device_secret": phone.secret })).await.0, StatusCode::UNAUTHORIZED);
+    assert_eq!(
+        app(
+            &e,
+            "/api/app/resume",
+            json!({ "device_secret": phone.secret })
+        )
+        .await
+        .0,
+        StatusCode::UNAUTHORIZED
+    );
 }
 
 #[tokio::test]
@@ -412,13 +672,39 @@ async fn deleting_a_user_unassigns_their_phones_and_ends_their_secrets() {
     e.add_user("boss", Role::Admin).await;
     let admin = e.login_as("boss").await;
     let phone = register(&e, USER, "Pixel").await;
-    let (s, _) = e.send(&admin, Method::DELETE, &format!("/api/admin/users/{}?confirm=true", e.user_id), json!(null)).await;
+    let (s, _) = e
+        .send(
+            &admin,
+            Method::DELETE,
+            &format!("/api/admin/users/{}?confirm=true", e.user_id),
+            json!(null),
+        )
+        .await;
     assert_eq!(s, StatusCode::NO_CONTENT);
-    assert_eq!(app(&e, "/api/app/resume", json!({ "device_secret": phone.secret })).await.0, StatusCode::UNAUTHORIZED);
+    assert_eq!(
+        app(
+            &e,
+            "/api/app/resume",
+            json!({ "device_secret": phone.secret })
+        )
+        .await
+        .0,
+        StatusCode::UNAUTHORIZED
+    );
     assert!(!alive(&e, &phone.cookie).await);
     // The token itself stays, unassigned, for the admin to hand to someone else.
-    let (s, _) = e.request(Method::POST, "/api/files?data_type=4&source=watch", Some(&phone.token), b"x".to_vec()).await;
+    let (s, _) = e
+        .request(
+            Method::POST,
+            "/api/files?data_type=4&source=watch",
+            Some(&phone.token),
+            b"x".to_vec(),
+        )
+        .await;
     assert_eq!(s, StatusCode::CREATED);
-    let owners: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM file_owners").fetch_one(&e.pool).await.unwrap();
+    let owners: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM file_owners")
+        .fetch_one(&e.pool)
+        .await
+        .unwrap();
     assert_eq!(owners, 0);
 }

@@ -457,7 +457,13 @@ async fn app_with(f: impl FnOnce(AppState) -> AppState) -> Env {
     make_user(&pool, USER, nimrag_server::users::Role::User, true).await;
     let state = AppState::new(pool.clone(), dir.path().to_path_buf(), MAX_BODY_BYTES)
         .with_clock(|| 1_800_000_000);
-    Env::from_parts(dir, pool, nimrag_server::api::router(f(state)), String::new(), None)
+    Env::from_parts(
+        dir,
+        pool,
+        nimrag_server::api::router(f(state)),
+        String::new(),
+        None,
+    )
 }
 
 /// POST /api/login from `peer` (as the TCP peer), optionally with an X-Forwarded-For.
