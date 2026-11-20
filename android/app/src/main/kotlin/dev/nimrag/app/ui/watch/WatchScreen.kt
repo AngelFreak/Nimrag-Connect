@@ -1,647 +1,280 @@
 package dev.nimrag.app.ui.watch
 
-import android.Manifest
-import android.bluetooth.BluetoothAdapter
-import android.content.Intent
-import android.net.Uri
-import android.os.Build
-import android.provider.Settings
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Warning
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Icon
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import dev.nimrag.app.R
+import dev.nimrag.app.engine.auth.logic.AuthPhase
+import dev.nimrag.app.model.AccountState
 import dev.nimrag.app.model.AppState
-import dev.nimrag.app.model.FoundDevice
-import dev.nimrag.app.model.GarminConnect
 import dev.nimrag.app.model.GarminConnectMode
-import dev.nimrag.app.model.LinkState
 import dev.nimrag.app.model.WatchController
 import dev.nimrag.app.model.WatchState
-import dev.nimrag.app.ui.components.BatteryIndicator
-import dev.nimrag.app.ui.components.CardTitle
-import dev.nimrag.app.ui.components.NimragButton
-import dev.nimrag.app.ui.components.NimragOutlinedButton
-import dev.nimrag.app.ui.components.DetailRow
-import dev.nimrag.app.ui.components.SectionCard
-import dev.nimrag.app.ui.components.SignalBars
-import dev.nimrag.app.ui.components.StatusChip
+import dev.nimrag.app.ui.components.BellIcon
+import dev.nimrag.app.ui.components.ConfirmDialog
+import dev.nimrag.app.ui.components.InfoIcon
+import dev.nimrag.app.ui.components.LinkIcon
+import dev.nimrag.app.ui.components.ListIcon
+import dev.nimrag.app.ui.components.PageColumn
+import dev.nimrag.app.ui.components.RowTone
+import dev.nimrag.app.ui.components.RowTrailing
+import dev.nimrag.app.ui.components.ServerIcon
+import dev.nimrag.app.ui.components.SettingsGroup
+import dev.nimrag.app.ui.components.SettingsPage
+import dev.nimrag.app.ui.components.SettingsRow
+import dev.nimrag.app.ui.components.ShieldIcon
+import dev.nimrag.app.ui.components.SignalIcon
+import dev.nimrag.app.ui.components.StatusBanner
+import dev.nimrag.app.ui.components.SyncIcon
 import dev.nimrag.app.ui.components.WatchIcon
-import dev.nimrag.app.ui.components.WithAbsoluteTime
-import dev.nimrag.app.ui.components.MessageCard
-import dev.nimrag.app.ui.components.relativeTime
-import dev.nimrag.app.ui.theme.status
-
-@Composable
-fun WatchScreen(
-    state: AppState,
-    controller: WatchController,
-    contentPadding: PaddingValues,
-    modifier: Modifier = Modifier,
-) {
-    val context = LocalContext.current
-    val permissions = state.permissions
-
-    // True once we have asked and something is still missing: Android then often shows no dialog
-    // any more, so the card also offers the app settings.
-    var askedOnce by rememberSaveable { mutableStateOf(false) }
-    val permissionLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestMultiplePermissions(),
-    ) {
-        askedOnce = true
-        controller.refreshPermissions()
-    }
-    val enableBluetoothLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.StartActivityForResult(),
-    ) { controller.refreshPermissions() }
-
-    val missing = buildList {
-        if (!permissions.bluetooth) {
-            add(Manifest.permission.BLUETOOTH_SCAN)
-            add(Manifest.permission.BLUETOOTH_CONNECT)
-        }
-        if (!permissions.notifications && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            add(Manifest.permission.POST_NOTIFICATIONS)
-        }
-    }
-
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(contentPadding)
-            .padding(horizontal = 20.dp, vertical = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
-    ) {
-        if (!permissions.bluetooth || !permissions.notifications) {
-            PermissionCard(
-                needsBluetooth = !permissions.bluetooth,
-                needsNotifications = !permissions.notifications,
-                askedOnce = askedOnce,
-                onGrant = { permissionLauncher.launch(missing.toTypedArray()) },
-                onOpenSettings = {
-                    context.startActivity(
-                        Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", context.packageName, null)),
-                    )
-                },
-            )
-        }
-        if (permissions.bluetooth && !permissions.bluetoothEnabled) {
-            BluetoothOffCard(onEnable = { enableBluetoothLauncher.launch(Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE)) })
-        }
-        val watchReady = (state.watch as? WatchState.Paired)?.link == LinkState.Ready
-        val openGarminConnectInfo = {
-            context.startActivity(
-                Intent(
-                    Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-                    Uri.fromParts("package", GARMIN_CONNECT_PACKAGE, null),
-                ),
-            )
-        }
-        if (state.garminConnect != GarminConnect.Absent) {
-            if (state.settings.garminConnectMode == GarminConnectMode.Alongside) {
-                // Not tied to the link: the point is that Connect stays supplied while we are connected.
-                AlongsideCard(
-                    bluetoothOff = state.garminConnect == GarminConnect.BluetoothOff,
-                    onOpenAppInfo = openGarminConnectInfo,
-                )
-            } else if (!watchReady) {
-                GarminConnectCard(
-                    bluetoothOff = state.garminConnect == GarminConnect.BluetoothOff,
-                    onOpenAppInfo = openGarminConnectInfo,
-                )
-            }
-        }
-
-        when (val watch = state.watch) {
-            WatchState.NotPaired -> NotPairedSection(
-                state = state,
-                canScan = permissions.bluetooth && permissions.bluetoothEnabled,
-                controller = controller,
-            )
-            is WatchState.Pairing -> PairingCard(watch)
-            is WatchState.Paired -> PairedCard(watch, syncRunning = state.sync.running, controller = controller)
-        }
-    }
-}
-
-// ---------------------------------------------------------------- permissions
-
-@Composable
-internal fun PermissionCard(
-    needsBluetooth: Boolean,
-    needsNotifications: Boolean,
-    askedOnce: Boolean,
-    onGrant: () -> Unit,
-    onOpenSettings: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    MessageCard(
-        icon = Icons.Filled.Info,
-        title = stringResource(R.string.permissions_title),
-        containerColor = MaterialTheme.colorScheme.secondaryContainer,
-        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-        modifier = modifier,
-        actions = {
-            NimragButton(onClick = onGrant) { Text(stringResource(R.string.permissions_grant)) }
-            if (askedOnce) {
-                TextButton(onClick = onOpenSettings) { Text(stringResource(R.string.permissions_open_settings)) }
-            }
-        },
-    ) {
-        if (needsBluetooth) {
-            Text(stringResource(R.string.permissions_bluetooth_why), style = MaterialTheme.typography.bodyMedium)
-        }
-        if (needsNotifications) {
-            Text(stringResource(R.string.permissions_notifications_why), style = MaterialTheme.typography.bodyMedium)
-        }
-        if (askedOnce) {
-            Text(stringResource(R.string.permissions_denied_hint), style = MaterialTheme.typography.bodySmall)
-        }
-    }
-}
-
-@Composable
-internal fun BluetoothOffCard(onEnable: () -> Unit, modifier: Modifier = Modifier) {
-    MessageCard(
-        icon = Icons.Filled.Warning,
-        title = stringResource(R.string.bluetooth_off_title),
-        containerColor = MaterialTheme.status.warnContainer,
-        contentColor = MaterialTheme.status.onWarnContainer,
-        modifier = modifier,
-        actions = { NimragButton(onClick = onEnable) { Text(stringResource(R.string.bluetooth_turn_on)) } },
-    ) {
-        Text(stringResource(R.string.bluetooth_off_body), style = MaterialTheme.typography.bodyMedium)
-    }
-}
-
-private const val GARMIN_CONNECT_PACKAGE = "com.garmin.android.apps.connectmobile"
+import dev.nimrag.app.ui.watch.logic.ServerHost
+import dev.nimrag.app.ui.watch.logic.WatchPage
+import dev.nimrag.app.ui.watch.logic.WatchProblem
+import dev.nimrag.app.ui.watch.logic.WatchProblems
 
 /**
- * Garmin Connect holds the watch's session whenever it runs, and the system restarts it when the
- * watch is in range, so Force stop does not last. Revoking its "Nearby devices" permission does.
+ * The Watch page: a banner when something blocks sync, the watch (a status card, or the setup
+ * checklist when none is paired), then the settings in three groups of one-line rows. Every
+ * explanation lives one tap further, on the page a row opens.
  */
 @Composable
-internal fun GarminConnectCard(bluetoothOff: Boolean, onOpenAppInfo: () -> Unit, modifier: Modifier = Modifier) {
-    val open: @Composable () -> Unit = {
-        NimragButton(onClick = onOpenAppInfo) { Text(stringResource(R.string.garmin_connect_open)) }
-    }
-    if (bluetoothOff) {
-        MessageCard(
-            icon = Icons.Filled.Info,
-            title = stringResource(R.string.garmin_connect_off_title),
-            containerColor = MaterialTheme.colorScheme.secondaryContainer,
-            contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-            modifier = modifier,
-            actions = open,
-        ) {
-            Text(stringResource(R.string.garmin_connect_off_body), style = MaterialTheme.typography.bodyMedium)
-        }
-        return
-    }
-    MessageCard(
-        icon = Icons.Filled.Warning,
-        title = stringResource(R.string.garmin_connect_title),
-        containerColor = MaterialTheme.status.warnContainer,
-        contentColor = MaterialTheme.status.onWarnContainer,
-        modifier = modifier,
-        actions = open,
-    ) {
-        Text(stringResource(R.string.garmin_connect_body), style = MaterialTheme.typography.bodyMedium)
-        Text(stringResource(R.string.garmin_connect_test), style = MaterialTheme.typography.bodyMedium)
-        Text(stringResource(R.string.garmin_connect_switch), style = MaterialTheme.typography.bodySmall)
-    }
-}
-
-/** Alongside mode: both apps share the watch. Warns when Connect has lost its Bluetooth access. */
-@Composable
-internal fun AlongsideCard(bluetoothOff: Boolean, onOpenAppInfo: () -> Unit, modifier: Modifier = Modifier) {
-    MessageCard(
-        icon = Icons.Filled.Info,
-        title = stringResource(R.string.garmin_alongside_title),
-        containerColor = MaterialTheme.colorScheme.secondaryContainer,
-        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-        modifier = modifier,
-        actions = if (bluetoothOff) {
-            { NimragButton(onClick = onOpenAppInfo) { Text(stringResource(R.string.garmin_connect_open)) } }
-        } else {
-            null
-        },
-    ) {
-        Text(stringResource(R.string.garmin_alongside_body), style = MaterialTheme.typography.bodyMedium)
-        if (bluetoothOff) {
-            Text(stringResource(R.string.garmin_alongside_off_body), style = MaterialTheme.typography.bodyMedium)
-        }
-    }
-}
-
-@Composable
-internal fun PairingFailedCard(reason: String, modifier: Modifier = Modifier) {
-    MessageCard(
-        icon = Icons.Filled.Warning,
-        title = stringResource(R.string.pairing_failed_title),
-        containerColor = MaterialTheme.colorScheme.errorContainer,
-        contentColor = MaterialTheme.colorScheme.onErrorContainer,
-        modifier = modifier,
-    ) {
-        Text(reason, style = MaterialTheme.typography.bodyMedium)
-        Text(stringResource(R.string.pairing_failed_hint), style = MaterialTheme.typography.bodySmall)
-    }
-}
-
-// ---------------------------------------------------------------- not paired
-
-@Composable
-private fun NotPairedSection(state: AppState, canScan: Boolean, controller: WatchController) {
-    var pendingDevice by rememberSaveable { mutableStateOf<String?>(null) }
-    var scannedOnce by rememberSaveable { mutableStateOf(false) }
-    val scan = state.scan
-
-    // Never leave a scan running when this section goes away (tab change, pairing started).
-    DisposableEffect(controller) { onDispose { controller.stopScan() } }
-
-    state.pairingError?.let { PairingFailedCard(it) }
-
-    NotPairedContent(
-        scanning = scan.scanning,
-        found = scan.found,
-        canScan = canScan,
-        scannedOnce = scannedOnce,
-        onScan = {
-            scannedOnce = true
-            controller.startScan()
-        },
-        onStop = controller::stopScan,
-        onPick = { pendingDevice = it.address },
-    )
-
-    val device = scan.found.firstOrNull { it.address == pendingDevice }
-    if (device != null) {
-        PairConfirmDialog(
-            device = device,
-            onConfirm = {
-                pendingDevice = null
-                controller.pair(device.address)
-            },
-            onDismiss = { pendingDevice = null },
-        )
-    }
-}
-
-@Composable
-internal fun NotPairedContent(
-    scanning: Boolean,
-    found: List<FoundDevice>,
-    canScan: Boolean,
-    scannedOnce: Boolean,
-    onScan: () -> Unit,
-    onStop: () -> Unit,
-    onPick: (FoundDevice) -> Unit,
+internal fun WatchScreen(
+    state: AppState,
+    account: AccountState,
+    controller: WatchController,
+    actions: WatchActions,
+    onOpen: (WatchPage) -> Unit,
+    onSignIn: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
-    SectionCard {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Icon(WatchIcon, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-            CardTitle(stringResource(R.string.pair_title))
-        }
-        Text(
-            stringResource(R.string.pair_instructions),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        if (scanning) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 3.dp)
-                Text(
-                    stringResource(R.string.scan_running),
-                    modifier = Modifier.weight(1f),
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-                NimragOutlinedButton(onClick = onStop) { Text(stringResource(R.string.scan_stop)) }
-            }
-        } else {
-            NimragButton(onClick = onScan, enabled = canScan, modifier = Modifier.fillMaxWidth()) {
-                Text(stringResource(if (scannedOnce) R.string.scan_again else R.string.scan_start))
-            }
-            if (!canScan) {
-                Text(
-                    stringResource(R.string.scan_unavailable),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
-    }
-
-    if (found.isNotEmpty()) {
-        Text(
-            stringResource(R.string.scan_found_title),
-            style = MaterialTheme.typography.titleSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(start = 4.dp),
-        )
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            found.forEach { device -> FoundDeviceRow(device, onClick = { onPick(device) }) }
-        }
-    } else if (scannedOnce && !scanning) {
-        Text(
-            stringResource(R.string.scan_none_found),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(horizontal = 4.dp),
-        )
-    }
-}
-
-@Composable
-private fun FoundDeviceRow(device: FoundDevice, onClick: () -> Unit) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
-        ) {
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text(device.name, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurface)
-                if (device.model != device.name) {
-                    Text(
-                        device.model,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                device.unsupportedReason?.let {
-                    Text(
-                        stringResource(R.string.cannot_sync_yet, it),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.status.warn,
-                    )
-                }
-            }
-            SignalBars(device.rssi)
-        }
-    }
-}
-
-@Composable
-private fun PairConfirmDialog(device: FoundDevice, onConfirm: () -> Unit, onDismiss: () -> Unit) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.pair_confirm_title, device.name)) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(stringResource(R.string.pair_confirm_body))
-                device.unsupportedReason?.let {
-                    Text(
-                        stringResource(R.string.cannot_sync_yet, it),
-                        color = MaterialTheme.status.warn,
-                    )
-                }
-            }
-        },
-        confirmButton = { TextButton(onClick = onConfirm) { Text(stringResource(R.string.pair_confirm)) } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) } },
-    )
-}
-
-// ---------------------------------------------------------------- pairing
-
-@Composable
-internal fun PairingCard(watch: WatchState.Pairing) {
-    SectionCard {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            CircularProgressIndicator(modifier = Modifier.size(32.dp), strokeWidth = 3.dp)
-            CardTitle(stringResource(R.string.pairing_title, watch.name))
-        }
-        Text(
-            stringResource(R.string.pairing_hint),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-    }
-}
-
-// ---------------------------------------------------------------- paired
-
-@Composable
-private fun PairedCard(watch: WatchState.Paired, syncRunning: Boolean, controller: WatchController) {
+    val watch = state.watch
+    val paired = watch as? WatchState.Paired
     var confirmForget by rememberSaveable { mutableStateOf(false) }
-    PairedCardContent(
-        watch = watch,
-        syncRunning = syncRunning,
-        onSync = controller::syncNow,
-        onForget = { confirmForget = true },
-        // Lost pairing: forgetting returns the screen to scanning, without a confirmation.
-        onPairAgain = controller::forget,
-    )
-    if (confirmForget) {
-        AlertDialog(
-            onDismissRequest = { confirmForget = false },
-            title = { Text(stringResource(R.string.forget_title, watch.name)) },
-            text = { Text(stringResource(R.string.forget_body)) },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        confirmForget = false
-                        controller.forget()
-                    },
-                    colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
-                ) { Text(stringResource(R.string.forget_confirm)) }
+    val settings = state.settings
+
+    SettingsPage(
+        title = stringResource(if (paired != null) R.string.watch_title else R.string.setup_title),
+        subtitle = if (paired == null) stringResource(R.string.setup_subtitle) else null,
+        modifier = modifier,
+    ) {
+        PageColumn {
+            WatchProblems.top(state)?.let { ProblemBanner(it, state, actions, controller, onOpen) }
+
+            when (watch) {
+                WatchState.NotPaired -> SetupSection(state, controller, actions)
+                is WatchState.Pairing -> PairingCard(watch.name)
+                is WatchState.Paired -> StatusCard(
+                    watch = watch,
+                    sync = state.sync,
+                    onSync = controller::syncNow,
+                    onPairAgain = controller::forget,
+                )
+            }
+
+            SettingsGroup(heading = stringResource(R.string.group_sync)) {
+                item {
+                    SettingsRow(
+                        title = stringResource(R.string.auto_sync_title),
+                        value = intervalLabel(settings.autoSyncMinutes),
+                        icon = SyncIcon,
+                        trailing = RowTrailing.Chevron,
+                        onClick = { onOpen(WatchPage.AutoSync) },
+                    )
+                }
+                item {
+                    SettingsRow(
+                        title = stringResource(R.string.server_mobile_data),
+                        value = stringResource(if (settings.allowMobileData) R.string.mobile_data_on else R.string.mobile_data_off),
+                        icon = SignalIcon,
+                        trailing = RowTrailing.Toggle(settings.allowMobileData, controller::setAllowMobileData),
+                    )
+                }
+                item {
+                    SettingsRow(
+                        title = stringResource(R.string.settings_garmin_connect_app),
+                        value = stringResource(
+                            if (settings.garminConnectMode == GarminConnectMode.Alongside) R.string.garmin_value_alongside else R.string.garmin_value_off,
+                        ),
+                        icon = LinkIcon,
+                        trailing = RowTrailing.Chevron,
+                        onClick = { onOpen(WatchPage.GarminConnect) },
+                    )
+                }
+            }
+
+            SettingsGroup(heading = stringResource(R.string.group_watch)) {
+                if (paired != null) {
+                    item {
+                        SettingsRow(
+                            title = stringResource(R.string.watch_details_title),
+                            value = stringResource(R.string.watch_details_value, paired.softwareVersion ?: stringResource(R.string.unknown)),
+                            icon = WatchIcon,
+                            trailing = RowTrailing.Chevron,
+                            onClick = { onOpen(WatchPage.WatchDetails) },
+                        )
+                    }
+                }
+                item {
+                    val files = state.uploads.storedTotal
+                    SettingsRow(
+                        title = stringResource(R.string.history_title),
+                        value = when {
+                            files == 0 -> stringResource(R.string.history_value_none)
+                            state.uploads.pending > 0 -> stringResource(
+                                R.string.history_value_waiting,
+                                pluralStringResource(R.plurals.files, files, files),
+                                pluralStringResource(R.plurals.files_waiting, state.uploads.pending, state.uploads.pending),
+                            )
+                            else -> stringResource(R.string.history_value_uploaded, pluralStringResource(R.plurals.files, files, files))
+                        },
+                        icon = ListIcon,
+                        trailing = RowTrailing.Chevron,
+                        onClick = { onOpen(WatchPage.SyncHistory) },
+                    )
+                }
+            }
+
+            val signedIn = account.phase == AuthPhase.SignedIn || account.phase == AuthPhase.Locked
+            SettingsGroup(heading = stringResource(R.string.group_phone)) {
+                item {
+                    SettingsRow(
+                        title = stringResource(R.string.settings_server),
+                        value = settings.serverUrl.takeIf { it.isNotBlank() }?.let(ServerHost::of) ?: stringResource(R.string.server_not_set_up),
+                        icon = ServerIcon,
+                        trailing = RowTrailing.Chevron,
+                        onClick = { onOpen(WatchPage.Server) },
+                    )
+                }
+                item {
+                    if (signedIn) {
+                        SettingsRow(
+                            title = account.username?.let { stringResource(R.string.account_signed_in_as, it) } ?: stringResource(R.string.account_signed_in),
+                            value = when {
+                                account.phase == AuthPhase.Locked -> stringResource(R.string.account_value_locked)
+                                account.biometricReady -> stringResource(R.string.account_value_fingerprint)
+                                else -> null
+                            },
+                            icon = ShieldIcon,
+                            trailing = RowTrailing.Chevron,
+                            onClick = { onOpen(WatchPage.Account) },
+                        )
+                    } else {
+                        SettingsRow(
+                            title = stringResource(R.string.account_sign_in),
+                            value = stringResource(R.string.account_value_signed_out),
+                            icon = ShieldIcon,
+                            trailing = RowTrailing.Chevron,
+                            onClick = onSignIn,
+                        )
+                    }
+                }
+                if (!state.permissions.notifications) {
+                    item {
+                        SettingsRow(
+                            title = stringResource(R.string.notifications_title),
+                            value = stringResource(R.string.notifications_value_off),
+                            icon = BellIcon,
+                            trailing = RowTrailing.Chevron,
+                            onClick = actions.allowNotifications,
+                        )
+                    }
+                }
+                item {
+                    SettingsRow(
+                        title = stringResource(R.string.settings_about_app),
+                        value = stringResource(R.string.about_value, appVersionName()),
+                        icon = InfoIcon,
+                        trailing = RowTrailing.Chevron,
+                        onClick = { onOpen(WatchPage.About) },
+                    )
+                }
+            }
+
+            if (paired != null) {
+                SettingsGroup {
+                    item {
+                        SettingsRow(
+                            title = stringResource(R.string.forget_watch),
+                            tone = RowTone.Danger,
+                            onClick = { confirmForget = true },
+                        )
+                    }
+                }
+            }
+
+            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                TextButton(onClick = { onOpen(WatchPage.Help) }, modifier = Modifier.heightIn(min = 48.dp)) {
+                    Text(stringResource(R.string.help_link), style = MaterialTheme.typography.labelLarge)
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+        }
+    }
+
+    if (confirmForget && paired != null) {
+        ConfirmDialog(
+            title = stringResource(R.string.forget_title, paired.name),
+            body = stringResource(R.string.forget_body),
+            confirmLabel = stringResource(R.string.forget_confirm),
+            destructive = true,
+            onConfirm = {
+                confirmForget = false
+                controller.forget()
             },
-            dismissButton = { TextButton(onClick = { confirmForget = false }) { Text(stringResource(R.string.cancel)) } },
+            onDismiss = { confirmForget = false },
         )
     }
 }
 
+/** The one problem, as a line and (when there is a fix) one button. */
 @Composable
-internal fun PairedCardContent(
-    watch: WatchState.Paired,
-    syncRunning: Boolean,
-    onSync: () -> Unit,
-    onForget: () -> Unit,
-    onPairAgain: () -> Unit = {},
+private fun ProblemBanner(
+    problem: WatchProblem,
+    state: AppState,
+    actions: WatchActions,
+    controller: WatchController,
+    onOpen: (WatchPage) -> Unit,
 ) {
-    SectionCard {
-        Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Icon(
-                WatchIcon,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier
-                    .padding(top = 2.dp)
-                    .size(32.dp),
-            )
-            Column(Modifier.weight(1f)) {
-                Text(watch.name, style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onSurface)
-                Text(
-                    watch.model,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            LinkChip(watch.link)
-        }
-        Text(
-            linkExplanation(watch.link),
-            style = MaterialTheme.typography.bodySmall,
-            color = if (watch.link == LinkState.BondLost) {
-                MaterialTheme.colorScheme.error
-            } else {
-                MaterialTheme.colorScheme.onSurfaceVariant
-            },
+    when (problem) {
+        WatchProblem.BluetoothPermission -> StatusBanner(
+            message = stringResource(R.string.banner_bluetooth_permission),
+            actionLabel = stringResource(R.string.banner_allow),
+            onAction = actions.allowBluetooth,
         )
-        watch.unsupportedReason?.let {
-            Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Icon(Icons.Filled.Warning, contentDescription = null, tint = MaterialTheme.status.warn)
-                Text(
-                    stringResource(R.string.cannot_sync_yet, it),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.status.warn,
-                )
-            }
-        }
-
-        DetailRow(stringResource(R.string.label_battery)) { BatteryValue(watch.batteryPercent, watch.batteryAtMs) }
-        DetailRow(stringResource(R.string.label_software), watch.softwareVersion ?: stringResource(R.string.unknown))
-        DetailRow(stringResource(R.string.label_last_connected)) {
-            val at = watch.lastConnectedAtMs
-            if (at == null) {
-                Text(stringResource(R.string.never), style = MaterialTheme.typography.bodyMedium)
-            } else {
-                WithAbsoluteTime(at) { Text(relativeTime(at), style = MaterialTheme.typography.bodyMedium) }
-            }
-        }
-
-        val canSync = watch.link == LinkState.Ready && !syncRunning && watch.unsupportedReason == null
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 4.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            if (watch.link == LinkState.BondLost) {
-                NimragButton(onClick = onPairAgain, modifier = Modifier.weight(1f)) {
-                    Text(stringResource(R.string.pair_again))
-                }
-            } else {
-                NimragButton(onClick = onSync, enabled = canSync, modifier = Modifier.weight(1f)) {
-                    Text(stringResource(if (syncRunning) R.string.sync_running_button else R.string.sync_now))
-                }
-            }
-            NimragOutlinedButton(
-                onClick = onForget,
-                modifier = Modifier.weight(1f),
-                colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
-            ) { Text(stringResource(R.string.forget_watch)) }
-        }
-    }
-}
-
-@Composable
-private fun linkExplanation(link: LinkState): String = stringResource(
-    when (link) {
-        LinkState.Offline -> R.string.link_offline_hint
-        LinkState.Waiting -> R.string.link_waiting_hint
-        LinkState.Connecting -> R.string.link_connecting_hint
-        LinkState.Ready -> R.string.link_ready_hint
-        LinkState.BondLost -> R.string.link_bond_lost_hint
-    },
-)
-
-@Composable
-internal fun LinkChip(link: LinkState, modifier: Modifier = Modifier) {
-    val scheme = MaterialTheme.colorScheme
-    val status = MaterialTheme.status
-    val label = stringResource(
-        when (link) {
-            LinkState.Offline -> R.string.link_offline
-            LinkState.Waiting -> R.string.link_waiting
-            LinkState.Connecting -> R.string.link_connecting
-            LinkState.Ready -> R.string.link_ready
-            LinkState.BondLost -> R.string.link_bond_lost
-        },
-    )
-    val description = stringResource(R.string.link_state_description, label)
-    when (link) {
-        LinkState.Offline -> StatusChip(label, scheme.surfaceContainerHighest, scheme.onSurfaceVariant, scheme.outline, modifier.semantics { contentDescription = description })
-        LinkState.Waiting -> StatusChip(label, status.warnContainer, status.onWarnContainer, status.warn, modifier.semantics { contentDescription = description })
-        LinkState.Connecting -> StatusChip(label, scheme.secondaryContainer, scheme.onSecondaryContainer, scheme.primary, modifier.semantics { contentDescription = description })
-        LinkState.Ready -> StatusChip(label, status.goodContainer, status.onGoodContainer, status.good, modifier.semantics { contentDescription = description })
-        LinkState.BondLost -> StatusChip(label, scheme.errorContainer, scheme.onErrorContainer, scheme.error, modifier.semantics { contentDescription = description })
-    }
-}
-
-@Composable
-private fun BatteryValue(percent: Int?, atMs: Long?) {
-    if (percent == null) {
-        Text(stringResource(R.string.unknown), style = MaterialTheme.typography.bodyMedium)
-        return
-    }
-    val low = percent <= 15
-    val color = if (low) MaterialTheme.colorScheme.error else MaterialTheme.status.good
-    Column(horizontalAlignment = Alignment.End) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            modifier = Modifier.semantics(mergeDescendants = true) {},
-        ) {
-            BatteryIndicator(percent, color)
-            Text(
-                stringResource(R.string.battery_percent, percent),
-                style = MaterialTheme.typography.bodyMedium,
-                color = if (low) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
-            )
-        }
-        if (atMs != null) {
-            WithAbsoluteTime(atMs) {
-                Text(
-                    stringResource(R.string.updated_ago, relativeTime(atMs)),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
+        WatchProblem.BluetoothOff -> StatusBanner(
+            message = stringResource(R.string.banner_bluetooth_off),
+            actionLabel = stringResource(R.string.banner_turn_on),
+            onAction = actions.turnOnBluetooth,
+        )
+        WatchProblem.UnsupportedWatch -> StatusBanner(
+            message = stringResource(R.string.cannot_sync_yet, (state.watch as? WatchState.Paired)?.unsupportedReason.orEmpty()),
+        )
+        WatchProblem.GarminConnect -> StatusBanner(
+            message = stringResource(
+                if (state.settings.garminConnectMode == GarminConnectMode.Alongside) R.string.banner_garmin_alongside else R.string.banner_garmin_connect,
+            ),
+            actionLabel = stringResource(R.string.banner_how_to_fix),
+            onAction = { onOpen(WatchPage.GarminHelp) },
+        )
+        WatchProblem.UploadFailing -> StatusBanner(
+            message = stringResource(R.string.banner_upload_failing),
+            actionLabel = stringResource(R.string.banner_retry),
+            onAction = controller::uploadNow,
+        )
     }
 }

@@ -2,17 +2,15 @@
 <resources>
     <string name="app_name">Nimrag Connect</string>
 
-    <!-- Navigation -->
+    <!-- Navigation and common words -->
     <string name="tab_watch">Watch</string>
-    <string name="tab_sync">Sync</string>
-    <string name="tab_settings">Settings</string>
     <string name="back">Back</string>
     <string name="cancel">Cancel</string>
     <string name="save">Save</string>
-    <string name="expand">Expand</string>
-    <string name="collapse">Collapse</string>
     <string name="unknown">Unknown</string>
     <string name="never">Never</string>
+    <string name="switch_on">On</string>
+    <string name="switch_off">Off</string>
     <string name="demo_banner">Demo mode: the sync engine is not installed, nothing here is real.</string>
 
     <!-- Relative times -->
@@ -20,42 +18,87 @@
     <string name="time_min_ago">%1$d min ago</string>
     <string name="time_hours_ago">%1$d h ago</string>
     <string name="time_days_ago">%1$d d ago</string>
-    <string name="updated_ago">updated %1$s</string>
 
-    <!-- Permissions -->
-    <string name="permissions_title">Permissions needed</string>
-    <string name="permissions_bluetooth_why">Bluetooth: to find your watch and talk to it. Nothing else is scanned or shared.</string>
-    <string name="permissions_notifications_why">Notifications: to show the small \"connected\" notice while the app syncs in the background.</string>
-    <string name="permissions_grant">Grant permissions</string>
-    <string name="permissions_open_settings">App settings</string>
-    <string name="permissions_denied_hint">If no dialog appears, Android has blocked the request. Open the app settings and allow the permissions there.</string>
-    <string name="bluetooth_off_title">Bluetooth is off</string>
-    <string name="bluetooth_off_body">Turn Bluetooth on so the phone can reach the watch.</string>
+    <!-- Watch page -->
+    <string name="watch_title">Watch</string>
+    <string name="group_sync">Sync</string>
+    <string name="group_watch">Watch</string>
+    <string name="group_phone">This phone</string>
+    <string name="help_link">Trouble connecting?</string>
+
+    <!-- Problem banners -->
+    <string name="banner_bluetooth_permission">Allow Bluetooth to sync your watch.</string>
+    <string name="banner_allow">Allow</string>
+    <string name="banner_bluetooth_off">Bluetooth is off. Sync waits.</string>
+    <string name="banner_turn_on">Turn on</string>
+    <string name="banner_garmin_connect">Garmin Connect may be holding the watch.</string>
+    <string name="banner_garmin_alongside">Garmin Connect can\'t reach the watch.</string>
+    <string name="banner_how_to_fix">How to fix</string>
+    <string name="banner_upload_failing">Uploads to your server are failing.</string>
+    <string name="banner_retry">Retry</string>
+    <string name="cannot_sync_yet">Can\'t sync yet: %1$s</string>
+
+    <!-- Status card -->
+    <string name="status_connected">Connected</string>
+    <string name="status_connecting">Connecting</string>
+    <string name="status_not_connected">Not connected</string>
+    <string name="status_syncing">Syncing</string>
+    <string name="status_sync_failed">Sync failed</string>
+    <string name="status_pairing_lost">Pairing lost</string>
+    <string name="status_description">Status: %1$s</string>
+    <string name="status_synced">Synced</string>
+    <string name="status_not_synced">Not synced yet</string>
+    <plurals name="status_new_files">
+        <item quantity="one">%d new file</item>
+        <item quantity="other">%d new files</item>
+    </plurals>
+    <plurals name="status_failed_files">
+        <item quantity="one">%d failed</item>
+        <item quantity="other">%d failed</item>
+    </plurals>
+    <string name="label_battery">Battery</string>
+    <string name="battery_percent">%1$d%%</string>
+    <string name="link_offline_hint">The background service is stopped or Bluetooth is off.</string>
+    <string name="link_waiting_hint">Waiting for the watch to come into range.</string>
+    <string name="link_connecting_hint">Connecting to the watch.</string>
+    <string name="link_bond_lost_hint">The phone or the watch forgot the pairing. Pair again to reconnect.</string>
+    <string name="pair_again">Pair again</string>
+    <string name="sync_now">Sync now</string>
+    <string name="sync_reading_list">Reading the file list…</string>
+    <plurals name="sync_pulling">
+        <item quantity="one">Pulling %1$d of %2$d file</item>
+        <item quantity="other">Pulling %1$d of %2$d files</item>
+    </plurals>
+    <string name="sync_bytes_of">%1$s of %2$s</string>
+    <string name="sync_progress_description">Sync progress: %1$d%%</string>
+    <string name="forget_watch">Forget watch</string>
+    <string name="forget_title">Forget %1$s?</string>
+    <string name="forget_body">The phone stops syncing with this watch and removes the pairing. Files already stored on the phone stay.</string>
+    <string name="forget_confirm">Forget</string>
+
+    <!-- Adding a watch -->
+    <string name="setup_title">Add your watch</string>
+    <string name="setup_subtitle">Takes about a minute</string>
+    <string name="setup_bluetooth_allow">Allow Bluetooth</string>
+    <string name="setup_bluetooth_turn_on">Turn on Bluetooth</string>
+    <string name="setup_bluetooth_ready">Bluetooth is ready</string>
+    <string name="setup_bluetooth_hint">Only used to talk to your watch</string>
+    <string name="setup_pairing_mode">Put the watch in pairing mode</string>
+    <string name="setup_pairing_mode_hint">Find \"Pair phone\" in the watch\'s settings (hold MENU)</string>
+    <string name="setup_find">Find and confirm</string>
+    <string name="setup_find_hint">Pick your watch, then accept on the phone and the watch</string>
+    <string name="setup_allow_button">Allow Bluetooth</string>
     <string name="bluetooth_turn_on">Turn on Bluetooth</string>
-
-    <!-- Pairing -->
-    <string name="pair_title">Pair your watch</string>
-    <string name="pair_instructions">Put the watch in phone-pairing mode and keep it next to the phone. It is usually a \"Pair phone\" entry in the watch\'s settings (try holding the menu button). Then tap Scan.</string>
+    <string name="step_done">Done</string>
+    <string name="step_now">Next step</string>
+    <string name="step_later">Later</string>
     <string name="scan_start">Scan for watches</string>
     <string name="scan_again">Scan again</string>
-    <string name="scan_stop">Stop</string>
-    <string name="scan_running">Looking for watches…</string>
-    <string name="scan_unavailable">Allow Bluetooth and turn it on to scan.</string>
+    <string name="scan_running">Scanning…</string>
     <string name="scan_found_title">Watches nearby</string>
     <string name="scan_none_found">No watch found. Check that it is in pairing mode and close by, then scan again.</string>
-    <string name="cannot_sync_yet">Can\'t sync yet: %1$s</string>
-    <string name="garmin_connect_title">Garmin Connect is using the watch</string>
-    <string name="garmin_connect_body">Only one app can talk to the watch at a time. Force stop does not help: Android restarts Garmin Connect whenever the watch is near.</string>
-    <string name="garmin_connect_test">To try Nimrag and keep Garmin Connect: open its app info, then Permissions → Nearby devices → Don\'t allow. Come back and pair here. Nimrag reuses the phone\'s existing Bluetooth pairing and leaves it in place. Allowing the permission again gives the watch back to Garmin Connect.</string>
-    <string name="garmin_connect_off_title">Garmin Connect is kept away from the watch</string>
-    <string name="garmin_connect_off_body">Its Nearby devices permission is off, so Nimrag can talk to the watch. To use Garmin Connect again, allow that permission in its app info.</string>
-    <string name="garmin_connect_switch">To switch for good: remove the watch in Garmin Connect (Devices), forget it in the phone\'s Bluetooth settings, then pair it here.</string>
-    <string name="garmin_connect_open">Open Garmin Connect app info</string>
-    <string name="garmin_alongside_title">Sharing the watch with Garmin Connect</string>
-    <string name="garmin_alongside_body">Both apps stay connected. Nimrag copies every file and leaves it on the watch, so Garmin Connect still gets everything and does the archiving.</string>
-    <string name="garmin_alongside_off_body">Garmin Connect\'s Nearby devices permission is off, so it gets no data from the watch until you allow that permission again.</string>
     <string name="pairing_failed_title">Pairing did not finish</string>
-    <string name="pairing_failed_hint">The Sync tab\'s log has the details. Share log sends it.</string>
+    <string name="pairing_failed_hint">Sync history has the log. Share log sends it.</string>
     <string name="pair_confirm_title">Pair with %1$s?</string>
     <string name="pair_confirm_body">The phone and the watch will each ask you to confirm. Accept both.</string>
     <string name="pair_confirm">Pair</string>
@@ -66,126 +109,161 @@
     <string name="signal_fair">Signal strength: fair</string>
     <string name="signal_weak">Signal strength: weak</string>
 
-    <!-- Paired watch -->
-    <string name="label_battery">Battery</string>
+    <!-- Sync settings -->
+    <string name="auto_sync_title">Automatic sync</string>
+    <string name="interval_off">Off</string>
+    <string name="interval_minutes">Every %1$d min</string>
+    <string name="interval_hour">Every hour</string>
+    <plurals name="interval_hours">
+        <item quantity="one">Every %d hour</item>
+        <item quantity="other">Every %d hours</item>
+    </plurals>
+    <string name="auto_sync_choice_off">Only when you tap Sync now</string>
+    <string name="auto_sync_choice_15">Freshest data, a little more battery</string>
+    <string name="auto_sync_hint">While the watch is connected, the phone asks it to sync this often, and when you open the app.</string>
+    <string name="auto_sync_off_hint">The phone syncs only when you tap Sync now, open the app, or the watch asks.</string>
+    <string name="server_mobile_data">Upload on mobile data</string>
+    <string name="mobile_data_off">Off · waits for Wi-Fi</string>
+    <string name="mobile_data_on">On · uses mobile data too</string>
+    <string name="settings_garmin_connect_app">Garmin Connect app</string>
+    <string name="garmin_value_off">Not used · Nimrag only</string>
+    <string name="garmin_value_alongside">Used alongside</string>
+    <string name="garmin_mode_off">Nimrag only</string>
+    <string name="garmin_mode_off_hint">Nimrag is the only sync app and archives each file after storing it.</string>
+    <string name="garmin_mode_alongside">Alongside Garmin Connect</string>
+    <string name="garmin_mode_alongside_hint">Both apps sync. Nimrag copies files and leaves them for Connect.</string>
+    <string name="garmin_mode_note">A change takes effect on the next connection, and the app reconnects right away.</string>
+    <string name="garmin_mode_alongside_note">In Alongside, Garmin Connect\'s Nearby devices permission must stay on. Without it Connect cannot reach the watch.</string>
+    <string name="garmin_help_row">Garmin Connect holding the watch?</string>
+    <string name="garmin_help_title">Garmin Connect and the watch</string>
+    <string name="garmin_help_absent">Garmin Connect is not installed on this phone, so there is nothing to fix.</string>
+    <string name="garmin_connect_title">Garmin Connect is using the watch</string>
+    <string name="garmin_connect_body">Only one app can talk to the watch at a time. Force stop does not help: Android restarts Garmin Connect whenever the watch is near.</string>
+    <string name="garmin_connect_test">To try Nimrag and keep Garmin Connect: open its app info, then Permissions → Nearby devices → Don\'t allow. Come back and pair here. Nimrag reuses the phone\'s existing Bluetooth pairing and leaves it in place. Allowing the permission again gives the watch back to Garmin Connect.</string>
+    <string name="garmin_connect_off_title">Garmin Connect is kept away from the watch</string>
+    <string name="garmin_connect_off_body">Its Nearby devices permission is off, so Nimrag can talk to the watch. To use Garmin Connect again, allow that permission in its app info.</string>
+    <string name="garmin_connect_switch">To switch for good: remove the watch in Garmin Connect (Devices), forget it in the phone\'s Bluetooth settings, then pair it here.</string>
+    <string name="garmin_connect_open">Open Garmin Connect app info</string>
+    <string name="garmin_alongside_title">Sharing the watch with Garmin Connect</string>
+    <string name="garmin_alongside_body">Both apps stay connected. Nimrag copies every file and leaves it on the watch, so Garmin Connect still gets everything and does the archiving.</string>
+    <string name="garmin_alongside_off_body">Garmin Connect\'s Nearby devices permission is off, so it gets no data from the watch until you allow that permission again.</string>
+
+    <!-- Watch details -->
+    <string name="watch_details_title">Watch details</string>
+    <string name="watch_details_value">Software %1$s</string>
+    <string name="label_model">Model</string>
     <string name="label_software">Software</string>
     <string name="label_last_connected">Last connected</string>
-    <string name="battery_percent">%1$d%%</string>
-    <string name="link_offline">Offline</string>
-    <string name="link_waiting">Waiting</string>
-    <string name="link_connecting">Connecting</string>
-    <string name="link_ready">Ready</string>
-    <string name="link_state_description">Connection: %1$s</string>
-    <string name="link_offline_hint">The background service is stopped or Bluetooth is off.</string>
-    <string name="link_waiting_hint">Waiting for the watch to come into range.</string>
-    <string name="link_connecting_hint">Connecting to the watch.</string>
-    <string name="link_ready_hint">Connected and ready to sync.</string>
-    <string name="link_bond_lost">Pairing lost</string>
-    <string name="link_bond_lost_hint">The phone or the watch forgot the pairing. Pair again to reconnect.</string>
-    <string name="pair_again">Pair again</string>
-    <string name="sync_now">Sync now</string>
-    <string name="sync_running_button">Syncing…</string>
-    <string name="forget_watch">Forget watch</string>
-    <string name="forget_title">Forget %1$s?</string>
-    <string name="forget_body">The phone stops syncing with this watch and removes the pairing. Files already stored on the phone stay.</string>
-    <string name="forget_confirm">Forget</string>
+    <string name="label_address">Bluetooth address</string>
+    <string name="battery_percent_updated">%1$d%% · updated %2$s</string>
+    <string name="pair_again_hint">Removes the current pairing and starts over with a new scan.</string>
+    <string name="pair_again_title">Pair %1$s again?</string>
+    <string name="pair_again_confirm">Pair again</string>
 
-    <!-- Sync -->
+    <!-- Sync history -->
+    <string name="history_title">Sync history</string>
+    <string name="history_value_none">Nothing synced yet</string>
+    <string name="history_value_waiting">%1$s · %2$s</string>
+    <plurals name="files_waiting">
+        <item quantity="one">%d waiting</item>
+        <item quantity="other">%d waiting</item>
+    </plurals>
+    <string name="history_value_uploaded">%1$s · all uploaded</string>
+    <plurals name="files">
+        <item quantity="one">%d file</item>
+        <item quantity="other">%d files</item>
+    </plurals>
     <string name="sync_title_running">Syncing</string>
     <string name="sync_title_last">Last sync</string>
-    <string name="sync_reading_list">Reading the file list…</string>
-    <string name="sync_file_of">File %1$d of %2$d</string>
-    <string name="sync_bytes_of">%1$s of %2$s</string>
-    <string name="sync_progress_description">Current file progress: %1$d%%</string>
     <string name="sync_result">Downloaded %1$d, archived %2$d, failed %3$d</string>
     <string name="sync_result_skipped">Downloaded %1$d, archived %2$d, failed %3$d, skipped %4$d</string>
     <string name="sync_result_alongside">Copied %1$d, failed %2$d</string>
     <string name="sync_result_alongside_skipped">Copied %1$d, failed %2$d, skipped %3$d</string>
     <string name="sync_left_for_connect">Copied while sharing, last 60 days: %1$d</string>
-    <string name="sync_none_yet">No sync yet. Tap Sync now on the Watch tab.</string>
-    <string name="sync_pair_first">Pair a watch on the Watch tab to start syncing.</string>
-
-    <!-- Uploads -->
+    <string name="sync_none_yet">No sync yet.</string>
+    <string name="sync_pair_first">Pair a watch to start syncing.</string>
     <string name="uploads_title">Uploads</string>
     <string name="uploads_not_configured">No server is set up, so files stay on the phone only.</string>
-    <string name="uploads_open_settings">Open settings</string>
+    <string name="uploads_open_server">Open server settings</string>
     <string name="stat_pending">Waiting</string>
     <string name="stat_uploaded">Uploaded</string>
     <string name="stat_stored">Stored</string>
     <string name="uploads_never">Nothing uploaded yet.</string>
     <string name="uploads_last">Last upload %1$s</string>
-    <string name="uploads_waiting_wifi">Waiting for Wi-Fi (mobile data is off in Settings)</string>
+    <string name="uploads_waiting_wifi">Waiting for Wi-Fi (mobile data is off)</string>
     <string name="uploads_waiting_network">Waiting for a network connection</string>
     <string name="uploads_last_error">Last error: %1$s</string>
     <string name="uploads_now">Upload now</string>
-
-    <!-- Stored files -->
     <string name="recent_title">Recent files</string>
     <string name="recent_empty">No files stored yet.</string>
     <string name="file_on_watch">watch time %1$s</string>
     <string name="file_received">Received %1$s</string>
     <string name="file_uploaded">Uploaded</string>
     <string name="file_pending">Pending</string>
-
-    <!-- Log -->
     <string name="log_title">Log (%1$d)</string>
     <string name="log_expand">Show log</string>
     <string name="log_collapse">Hide log</string>
     <string name="log_share">Share log</string>
     <string name="log_empty">Nothing logged yet.</string>
 
-    <!-- Settings -->
-    <string name="settings_server">Account and server</string>
-    <string name="account_server">Server</string>
-    <string name="account_user">Signed in as</string>
-    <string name="account_state_locked">Locked: unlock to see your data.</string>
+    <!-- This phone: server, account, notifications, about -->
+    <string name="settings_server">Server</string>
+    <string name="server_not_set_up">Not set up</string>
+    <string name="server_address">Address</string>
+    <string name="server_status">Status</string>
+    <string name="server_status_untested">Not tested yet</string>
+    <string name="server_status_testing">Testing…</string>
+    <string name="server_sign_in_hint">Sign in to connect this phone to your Nimrag server.</string>
+    <string name="server_test">Test connection</string>
+    <string name="server_test_error">The test could not be completed.</string>
+    <string name="server_test_ok">Reachable, and it accepted this phone</string>
+    <string name="server_test_failed">Test failed: %1$s</string>
+    <string name="account_title">Account</string>
+    <string name="account_signed_in_as">Signed in as %1$s</string>
+    <string name="account_signed_in">Signed in</string>
+    <string name="account_value_locked">Locked · unlock to see your data</string>
+    <string name="account_value_fingerprint">Fingerprint unlock on</string>
+    <string name="account_value_uploading">This phone uploads your files</string>
+    <string name="account_value_signed_out">Not signed in</string>
     <string name="account_state_out">Not signed in. Sign in to see your data and to upload from this phone.</string>
     <string name="account_sign_in">Sign in</string>
     <string name="account_sign_out">Sign out</string>
     <string name="account_sign_out_confirm">Sign out of this phone?</string>
     <string name="account_sign_out_hint">The phone stops uploading and forgets this account. Your data stays on the server.</string>
-    <string name="account_sign_out_yes">Yes, sign out</string>
-    <string name="account_cancel">Cancel</string>
-    <string name="server_mobile_data">Upload on mobile data</string>
-    <string name="server_mobile_data_hint">Off: uploads wait for Wi-Fi, Ethernet or VPN.</string>
-    <string name="server_test">Test connection</string>
-    <string name="server_test_error">The test could not be completed.</string>
-    <string name="server_test_ok">The server answered and accepted this phone.</string>
-    <string name="server_test_failed">Test failed: %1$s</string>
-    <string name="settings_sync">Sync</string>
-    <string name="auto_sync_label">Automatic sync interval</string>
-    <string name="interval_off">Off</string>
-    <string name="interval_minutes">%1$d min</string>
-    <string name="auto_sync_hint">While the watch is connected, the phone asks it to sync this often.</string>
-    <string name="auto_sync_off_hint">Off: the phone only syncs when you tap Sync now or the watch asks.</string>
-    <string name="settings_garmin_connect">Garmin Connect</string>
-    <string name="garmin_mode_off">Nimrag only</string>
-    <string name="garmin_mode_off_hint">Nimrag is the only sync app. It archives each file on the watch after storing it.</string>
-    <string name="garmin_mode_alongside">Alongside</string>
-    <string name="garmin_mode_alongside_hint">Keep using Garmin Connect too. Nimrag copies files and leaves them for Connect.</string>
-    <string name="garmin_mode_note">A change takes effect on the next connection, and the app reconnects right away.</string>
-    <string name="garmin_mode_alongside_note">In Alongside, Garmin Connect\'s Nearby devices permission must stay on. Without it Connect cannot reach the watch.</string>
-    <string name="settings_advanced">Advanced</string>
-    <string name="capabilities_label">Capability mask (hex)</string>
-    <string name="capabilities_hint">Takes effect on the next connection.</string>
-    <string name="capabilities_invalid">Not a valid hex mask.</string>
-    <string name="capabilities_saved">Saved. Takes effect on the next connection.</string>
-    <string name="settings_about">About</string>
+    <string name="account_sign_out_yes">Sign out</string>
+    <string name="notifications_title">Notifications</string>
+    <string name="notifications_value_off">Off · tap to allow</string>
+    <string name="settings_about_app">About Nimrag</string>
+    <string name="about_value">Version %1$s</string>
     <string name="about_core">Core</string>
     <string name="about_licence">Licence</string>
     <string name="about_source">Source code on GitHub</string>
     <string name="about_open_source">Open-source licences</string>
+    <string name="settings_advanced">Advanced</string>
+    <string name="advanced_value">Capability mask, for builders</string>
+    <string name="capabilities_label">Capability mask (hex)</string>
+    <string name="capabilities_hint">Takes effect on the next connection.</string>
+    <string name="capabilities_invalid">Not a valid hex mask.</string>
+    <string name="capabilities_saved">Saved. Takes effect on the next connection.</string>
     <string name="licences_intro">Nimrag Connect is free software. It bundles the components below; tap a licence name to read it on spdx.org.</string>
     <string name="licences_app">This app</string>
     <string name="licences_libraries">Libraries</string>
     <string name="licences_rust">Rust crates in libnimrag_ffi.so (%1$d)</string>
+    <string name="licences_fonts">Fonts</string>
+
+    <!-- Trouble connecting -->
+    <string name="help_title">Trouble connecting?</string>
+    <string name="help_step_close">Keep the watch next to the phone.</string>
+    <string name="help_step_bluetooth">Check that Bluetooth is on and Nimrag may use it.</string>
+    <string name="help_step_pairing_mode">Put the watch in pairing mode: \"Pair phone\" in its settings (hold MENU).</string>
+    <string name="help_step_one_app">Only one app can use the watch at a time. Close Garmin Connect or keep it away from the watch.</string>
+    <string name="help_log_row">Sync history and log</string>
+    <string name="help_log_value">Share the log to report a problem</string>
 
     <!-- Bottom bar and web shell (stage 3n) -->
     <string name="tab_today">Today</string>
     <string name="tab_activities">Activities</string>
     <string name="tab_health">Health</string>
-    <string name="devices_title">Devices and sync</string>
-    <string name="devices_subtitle">Watch, phone and your server</string>
     <!-- Sign-in and unlock -->
     <string name="signin_title">Sign in to Nimrag</string>
     <string name="signin_body">Use the account on your own Nimrag server. After signing in, this phone uploads your watch files in the background; there is nothing else to set up.</string>
@@ -231,5 +309,4 @@
     <string name="server_unreachable_retry">Retry</string>
     <string name="server_unreachable_retrying">Trying again…</string>
     <string name="web_preview_placeholder">Web view (not shown in previews)</string>
-    <string name="licences_fonts">Fonts</string>
 </resources>

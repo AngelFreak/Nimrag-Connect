@@ -2,12 +2,8 @@ package dev.nimrag.app.ui.settings
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -24,18 +20,13 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.withLink
 import androidx.compose.ui.unit.dp
 import dev.nimrag.app.R
+import dev.nimrag.app.ui.components.PageColumn
 import dev.nimrag.app.ui.components.SectionCard
 
+/** The open-source licences, as the body of a Watch tab page. */
 @Composable
-fun LicencesScreen(contentPadding: PaddingValues, modifier: Modifier = Modifier) {
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(contentPadding)
-            .padding(horizontal = 20.dp, vertical = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
-    ) {
+fun LicencesScreen(modifier: Modifier = Modifier) {
+    PageColumn(modifier) {
         Text(
             stringResource(R.string.licences_intro),
             style = MaterialTheme.typography.bodyMedium,
