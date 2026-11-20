@@ -6,6 +6,7 @@ import org.gradle.api.GradleException
 import org.gradle.api.file.ConfigurableFileCollection
 import org.gradle.api.file.DirectoryProperty
 import org.gradle.api.file.RegularFileProperty
+import org.gradle.api.provider.ListProperty
 import org.gradle.api.provider.Property
 import org.gradle.api.tasks.Input
 import org.gradle.api.tasks.InputFile
@@ -26,6 +27,14 @@ import org.gradle.process.ExecOperations
  * Android libraries, [verifyAndroidLibrary] greps the .so files themselves.
  */
 const val FIT_PROFILE_ENV = "NIMRAG_FIT_PROFILE"
+
+/**
+ * The explicit opt-in of the owner's personal build (flavor `personal`, never published) that
+ * core/build.rs and ffi/build.rs require before they accept a profile for an Android target.
+ * Keep the name and value in sync with those two files.
+ */
+const val ALLOW_ANDROID_PROFILE_ENV = "NIMRAG_ALLOW_ANDROID_FIT_PROFILE"
+const val ALLOW_ANDROID_PROFILE_VALUE = "personal-apk-never-published"
 
 /** Emitted into any binary that contains the profile; see core/build.rs (keep in sync). */
 const val FIT_PROFILE_MARKER = "NIMRAG-FIT-PROFILE-PRESENT-MARKER-7f3a9c"
@@ -67,11 +76,16 @@ private fun indexOf(haystack: ByteArray, needle: ByteArray, ignoreCase: Boolean)
 }
 
 /** Checks on the finished Android .so files: no profile, no test fixtures, no build-machine paths. */
-fun verifyAndroidLibrary(so: File, workspace: File) {
+fun verifyAndroidLibrary(so: File, workspace: File, personal: Boolean = false) {
     val bytes = so.readBytes()
     fun has(text: String, ignoreCase: Boolean = false) = indexOf(bytes, text.toByteArray(Charsets.ISO_8859_1), ignoreCase)
-    if (has(FIT_PROFILE_MARKER)) {
+    // Public: the profile must be absent. Personal: it must be present (else the build is not
+    // what it says and the local web app would show nothing).
+    if (!personal && has(FIT_PROFILE_MARKER)) {
         throw GradleException("$so contains the FIT profile marker (Garmin data)")
+    }
+    if (personal && !has(FIT_PROFILE_MARKER)) {
+        throw GradleException("$so is a personal build but does not contain the FIT profile")
     }
     if (has("scriptedwatch", ignoreCase = true)) {
         throw GradleException("$so contains the test-fixtures ScriptedWatch")
@@ -98,12 +112,46 @@ abstract class CargoTask : DefaultTask() {
     @get:PathSensitive(PathSensitivity.RELATIVE)
     abstract val rustSources: ConfigurableFileCollection
 
+    /**
+     * The owner's personal build: the generated FIT profile at [personalFitProfile] is compiled
+     * in. Only the `personal` flavor sets this; every other cargo call forces the profile off.
+     */
+    @get:Input
+    abstract val personalBuild: Property<Boolean>
+
+    /** Absolute path of the generated profile (personal build only; kept outside version control). */
+    @get:Internal
+    abstract val personalFitProfile: Property<String>
+
+    /** Cargo features for `-p nimrag-ffi` (the personal flavor adds `local-server`). */
+    @get:Input
+    abstract val ffiFeatures: ListProperty<String>
+
+    init {
+        personalBuild.convention(false)
+        ffiFeatures.convention(emptyList())
+    }
+
     protected open fun extraEnv(): Map<String, String> = emptyMap()
 
     protected fun cargo(vararg args: String) {
         exec.exec {
             workingDir = workspaceDir.get().asFile
-            environment(FIT_PROFILE_ENV, "none")
+            if (personalBuild.get()) {
+                val profile = personalFitProfile.orNull?.let(::File)
+                if (profile == null || !profile.isFile) {
+                    throw GradleException(
+                        "The personal flavor needs the generated FIT profile: set -Pnimrag.fitProfile=/path/to/profile_data.rs " +
+                            "or NIMRAG_FIT_PROFILE_FILE (see tools/fit-profile/README.md). Got: $profile",
+                    )
+                }
+                environment(FIT_PROFILE_ENV, profile.absolutePath)
+                environment(ALLOW_ANDROID_PROFILE_ENV, ALLOW_ANDROID_PROFILE_VALUE)
+            } else {
+                environment(FIT_PROFILE_ENV, "none")
+                // A leftover opt-in in the caller's environment must not reach a public build.
+                environment(ALLOW_ANDROID_PROFILE_ENV, "")
+            }
             environment(extraEnv())
             commandLine("cargo", *args)
         }
@@ -180,16 +228,19 @@ abstract class CargoNdkTask : CargoTask() {
         }
         val out = jniLibsDir.get().asFile
         out.deleteRecursively()
+        val features = ffiFeatures.get()
         cargo(
             "ndk", "-t", "arm64-v8a", "-t", "x86_64", "-o", out.absolutePath,
             "build", "--release", "--locked", "-p", "nimrag-ffi",
+            *(if (features.isEmpty()) emptyArray() else arrayOf("--features", features.joinToString(","))),
             "--target-dir", cargoTargetDir.get().asFile.absolutePath,
         )
-        verifyNoFitProfile(cargoTargetDir.get().asFile)
+        // Public: prove core's cfg(fit_profile) is off. Personal: the profile is meant to be in.
+        if (!personalBuild.get()) verifyNoFitProfile(cargoTargetDir.get().asFile)
         for (abi in listOf("arm64-v8a", "x86_64")) {
             val so = File(out, "$abi/libnimrag_ffi.so")
             if (!so.isFile) throw GradleException("cargo ndk did not produce $abi/libnimrag_ffi.so")
-            verifyAndroidLibrary(so, workspaceDir.get().asFile.canonicalFile)
+            verifyAndroidLibrary(so, workspaceDir.get().asFile.canonicalFile, personal = personalBuild.get())
         }
     }
 }

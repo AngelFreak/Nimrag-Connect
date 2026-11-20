@@ -11,12 +11,16 @@ compile_error!("the `test-fixtures` feature (fake watch) must never be built for
 mod convert;
 #[cfg(feature = "test-fixtures")]
 pub mod fixtures;
+#[cfg(feature = "local-server")]
+mod local_server;
 mod types;
 
 use std::sync::{Arc, Mutex};
 
 use nimrag_core::client as core;
 
+#[cfg(feature = "local-server")]
+pub use local_server::*;
 pub use types::*;
 
 uniffi::setup_scaffolding!();
