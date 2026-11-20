@@ -7,12 +7,18 @@ use std::fs;
 use std::io::Write;
 use std::path::PathBuf;
 
+/// Explicit opt-in for the owner's personal Android build (never published; Gradle flavor
+/// `personal`). Keep the value in sync with ffi/build.rs and android/buildSrc.
+const ALLOW_ANDROID_ENV: &str = "NIMRAG_ALLOW_ANDROID_FIT_PROFILE";
+const ALLOW_ANDROID_VALUE: &str = "personal-apk-never-published";
+
 /// Also searched for by android/buildSrc (CargoTasks.kt); keep in sync.
 const FIT_PROFILE_MARKER: &str = "NIMRAG-FIT-PROFILE-PRESENT-MARKER-7f3a9c";
 
 fn main() {
     println!("cargo::rustc-check-cfg=cfg(fit_profile)");
     println!("cargo::rerun-if-env-changed=NIMRAG_FIT_PROFILE");
+    println!("cargo::rerun-if-env-changed={ALLOW_ANDROID_ENV}");
     println!("cargo::rerun-if-changed=build.rs");
     println!("cargo::rerun-if-changed=src/fit/profile_empty.rs");
 
@@ -32,8 +38,13 @@ fn main() {
     };
 
     // Licence guard: a generated profile (Garmin data) must never reach an
-    // Android build. The Android Gradle tasks also set NIMRAG_FIT_PROFILE=none.
-    if chosen.is_some() && env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("android") {
+    // Android build. The Android Gradle tasks also set NIMRAG_FIT_PROFILE=none. The only
+    // way around is the explicit variable of the owner's personal build (flavor `personal`).
+    let personal_ok = env::var(ALLOW_ANDROID_ENV).as_deref() == Ok(ALLOW_ANDROID_VALUE);
+    if chosen.is_some()
+        && env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("android")
+        && !personal_ok
+    {
         panic!(
             "refusing to build core for Android with a FIT profile (Garmin data); \
              set NIMRAG_FIT_PROFILE=none"

@@ -427,3 +427,32 @@ fn poisoned_lock_fails_closed() {
     assert!(step.writes.is_empty() && step.events.is_empty() && step.wake_at_mono_ms.is_none());
     assert_eq!(client.phase(), Phase::Closed);
 }
+
+#[cfg(feature = "local-server")]
+#[test]
+fn local_server_starts_ingests_and_stops() {
+    let dir = std::env::temp_dir().join(format!("nimrag-ffi-local-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    let secret = "0123456789abcdef0123456789abcdef".to_string();
+    assert!(LocalServer::start(dir.display().to_string(), 0, "short".into()).is_err());
+    let server = LocalServer::start(dir.display().to_string(), 0, secret).unwrap();
+    assert_ne!(server.port(), 0);
+    assert_eq!(server.secret_cookie_name(), "nimrag_local");
+    let meta = LocalFileMeta {
+        data_type: 128,
+        sub_type: 32,
+        file_index: 0,
+        file_number: 1,
+        watch_timestamp: 0,
+    };
+    let bytes = b"arbitrary bytes".to_vec();
+    assert!(server.ingest_file(bytes.clone(), meta.clone()).unwrap());
+    assert!(!server.ingest_file(bytes, meta.clone()).unwrap());
+    assert!(server.summary().unwrap().contains("\"files\":1"));
+    server.stop();
+    assert!(matches!(
+        server.ingest_file(vec![1], meta),
+        Err(LocalServerError::Stopped)
+    ));
+    let _ = std::fs::remove_dir_all(&dir);
+}
