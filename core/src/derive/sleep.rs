@@ -4,10 +4,12 @@
 //! UNVERIFIED ON REAL FILES: no sleep file has been captured yet; this is built
 //! from the local profile and synthetic tests only.
 //!
-//! - `sleep_levels`: `sleep_level` value and enum label, at the message time.
+//! - `sleep_levels`: `sleep_level` value and enum label, at the message time. The
+//!   level is the stage of the period ENDING at that time (from the previous level or
+//!   the sleep start); see `server/src/web_api/daily.rs` `stages_of`.
 //! - `sleep_sessions`: one `SleepSession` per `sleep_summary` (explicit
-//!   `sleep_start_timestamp_utc` / `sleep_end_timestamp_utc`; no other source of
-//!   start/end is used, so they stay NULL without a start). A file such as the
+//!   `sleep_start_timestamp_utc` / `sleep_end_timestamp_utc`; without a summary,
+//!   the sleep events below). A file such as the
 //!   watch's backup holds a history of nights, so every summary becomes a row;
 //!   a second summary with the same start time within a file is dropped.
 //!   `sleep_assessment` (scores, no time of its own) is attached only when it

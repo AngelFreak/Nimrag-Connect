@@ -610,8 +610,9 @@ pub async fn run(pool: &SqlitePool, data_dir: &Path, opts: SeedOptions) -> Resul
                 buf.add(
                     "sleep_levels",
                     "ts, level, level_name, src",
+                    // A level row ends its period (see web_api::daily::stages_of).
                     vec![
-                        i(ts),
+                        i(ts + len),
                         i(level),
                         t(match level {
                             2 => "light",
@@ -629,11 +630,11 @@ pub async fn run(pool: &SqlitePool, data_dir: &Path, opts: SeedOptions) -> Resul
                 ts += len;
             }
             if ts < night.wake && rng.chance(0.55) {
-                let len = (rng.range(2.0, 6.0) * 60.0) as i64;
+                let len = ((rng.range(2.0, 6.0) * 60.0) as i64).min(night.wake - ts);
                 buf.add(
                     "sleep_levels",
                     "ts, level, level_name, src",
-                    vec![i(ts), i(1), t("awake"), i(SAMPLE_SRC)],
+                    vec![i(ts + len), i(1), t("awake"), i(SAMPLE_SRC)],
                 );
                 awakenings += 1;
                 ts += len;
