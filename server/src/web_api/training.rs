@@ -397,7 +397,8 @@ pub struct StatusRun {
     pub from: String,
     pub to: String,
     pub days: u32,
-    /// The run reaches the first day of the range, so it may have begun earlier.
+    /// The run starts on the first day of the range and the day before had the same status, so it
+    /// began earlier than the range shows.
     pub starts_before_range: bool,
     /// The run reaches today: the status the watch reports now.
     pub ongoing: bool,
@@ -460,14 +461,29 @@ async fn status_range(
             }
             (slot, code) => {
                 if let Some(o) = slot.take() {
-                    runs.push(run_of(o, from, today));
+                    runs.push(run_of(o, today));
                 }
                 open = code.map(|c| (c, d, d, 1));
             }
         }
     }
     if let Some(o) = open.take() {
-        runs.push(run_of(o, from, today));
+        runs.push(run_of(o, today));
+    }
+    // A run that starts on the first day may have begun earlier: it did when the last reading
+    // before the range, on the day before it, has the same status.
+    if let Some(first) = runs.first_mut().filter(|r| r.from == date_string(from)) {
+        let before: Option<(i64, i64)> = sqlx::query_as(
+            "SELECT ts, status FROM training_status WHERE user_id = ? AND ts < ? AND status IS NOT NULL ORDER BY ts DESC LIMIT 1",
+        )
+        .bind(ctx.uid)
+        .bind(lo)
+        .fetch_optional(&ctx.pool)
+        .await?;
+        first.starts_before_range = before.is_some_and(|(ts, code)| {
+            ctx.date(ts) == from - Duration::days(1)
+                && Some(code) == first.status.code.map(i64::from)
+        });
     }
     runs.reverse();
     let (current, load) = status_and_load(&ctx).await?;
@@ -484,17 +500,13 @@ async fn status_range(
     }))
 }
 
-fn run_of(
-    (code, a, b, days): (i64, NaiveDate, NaiveDate, u32),
-    from: NaiveDate,
-    today: NaiveDate,
-) -> StatusRun {
+fn run_of((code, a, b, days): (i64, NaiveDate, NaiveDate, u32), today: NaiveDate) -> StatusRun {
     StatusRun {
         status: status_info(code),
         from: date_string(a),
         to: date_string(b),
         days,
-        starts_before_range: a == from,
+        starts_before_range: false,
         ongoing: b == today,
     }
 }

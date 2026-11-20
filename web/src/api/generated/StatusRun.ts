@@ -10,7 +10,8 @@ export type StatusRun = { status: StatusInfo,
  */
 from: string, to: string, days: number, 
 /**
- * The run reaches the first day of the range, so it may have begun earlier.
+ * The run starts on the first day of the range and the day before had the same status, so it
+ * began earlier than the range shows.
  */
 starts_before_range: boolean, 
 /**

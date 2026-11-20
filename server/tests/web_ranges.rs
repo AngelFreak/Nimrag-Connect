@@ -114,7 +114,7 @@ async fn training_status_days_runs_legend_and_current() {
             run("Maintaining", "2026-11-19", "2026-11-19", 1, false, true),
             run("Recovery", "2026-11-18", "2026-11-18", 1, false, false),
             run("Strained", "2026-11-15", "2026-11-16", 2, false, false),
-            run("Recovery", "2026-11-14", "2026-11-14", 1, true, false),
+            run("Recovery", "2026-11-14", "2026-11-14", 1, false, false),
         ]
     );
 
@@ -142,6 +142,33 @@ async fn training_status_days_runs_legend_and_current() {
     assert_eq!(t["current"]["since"], "2026-11-19");
     assert_eq!(t["load"]["acute"], 310.0);
     assert_eq!(t["load"]["ratio"], 1.1);
+}
+
+#[tokio::test]
+async fn a_run_that_continues_from_before_the_range_says_so() {
+    let (e, c) = setup().await;
+    status_row(&e, at(12, 6, 30), "5").await;
+    status_row(&e, at(13, 6, 30), "5").await;
+    status_row(&e, at(14, 6, 30), "5").await;
+    status_row(&e, at(15, 6, 30), "8").await;
+    let t = e
+        .get(&c, "/api/training/status?from=2026-11-14&to=2026-11-15")
+        .await;
+    assert_eq!(t["runs"][1]["status"]["label"], "Recovery");
+    assert_eq!(t["runs"][1]["starts_before_range"], true);
+    assert_eq!(t["runs"][0]["starts_before_range"], false);
+    // The status the day before the range is another one: the run starts where the range does.
+    let t = e
+        .get(&c, "/api/training/status?from=2026-11-15&to=2026-11-15")
+        .await;
+    assert_eq!(t["runs"][0]["starts_before_range"], false);
+    // A day without a reading before the range ends the run, as it does inside the range.
+    status_row(&e, at(10, 6, 30), "8").await;
+    let t = e
+        .get(&c, "/api/training/status?from=2026-11-11&to=2026-11-13")
+        .await;
+    assert_eq!(t["runs"][0]["from"], "2026-11-12");
+    assert_eq!(t["runs"][0]["starts_before_range"], false);
 }
 
 #[tokio::test]
