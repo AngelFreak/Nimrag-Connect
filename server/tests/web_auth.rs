@@ -269,10 +269,10 @@ async fn csrf_header_is_required_for_changes_except_upload_and_login() {
     let (s, _, _) = e
         .call(
             Method::POST,
-            "/api/tokens",
+            "/api/me/2fa",
             Some(&cookie),
             false,
-            Some(json!({ "name": "x" })),
+            Some(json!({ "password": "x" })),
         )
         .await;
     assert_eq!(s, StatusCode::FORBIDDEN);
@@ -302,11 +302,11 @@ async fn csrf_header_is_required_for_changes_except_upload_and_login() {
     // A wrong header value does not count.
     let req = axum::http::Request::builder()
         .method(Method::POST)
-        .uri("/api/tokens")
+        .uri("/api/me/2fa")
         .header(header::COOKIE, &cookie)
         .header("x-nimrag", "0")
         .header(header::CONTENT_TYPE, "application/json")
-        .body(axum::body::Body::from(r#"{"name":"x"}"#))
+        .body(axum::body::Body::from(r#"{"password":"x"}"#))
         .unwrap();
     let resp = tower::ServiceExt::oneshot(e.app.clone(), req)
         .await
@@ -362,7 +362,8 @@ async fn sessions_expire_after_30_days() {
 async fn token_management_never_leaks_secrets_and_revokes() {
     let e = env_at(cph(2026, 11, 19, 20, 0)).await;
     let cookie = e.login().await;
-    let (s, created) = e
+    // A user cannot create a token over the web: tokens are issued by the app's sign-in.
+    let (s, _) = e
         .send(
             &cookie,
             Method::POST,
@@ -370,10 +371,11 @@ async fn token_management_never_leaks_secrets_and_revokes() {
             json!({ "name": "phone", "password": PASSWORD }),
         )
         .await;
-    assert_eq!(s, StatusCode::CREATED);
-    let secret = created["token"].as_str().unwrap().to_owned();
+    assert_eq!(s, StatusCode::METHOD_NOT_ALLOWED);
+    let (id, secret) = nimrag_server::tokens::create(&e.pool, "phone", Some(e.user_id))
+        .await
+        .unwrap();
     assert!(secret.starts_with("nrg_"));
-    let id = created["id"].as_i64().unwrap();
 
     let list = e.get(&cookie, "/api/tokens").await;
     let text = list.to_string();
@@ -398,16 +400,6 @@ async fn token_management_never_leaks_secrets_and_revokes() {
     assert_eq!(resp.status(), StatusCode::CREATED);
     let (s, _, _) = e.call(Method::GET, "/api/tokens", None, false, None).await;
     assert_eq!(s, StatusCode::UNAUTHORIZED);
-
-    let (s, _) = e
-        .send(
-            &cookie,
-            Method::POST,
-            "/api/tokens",
-            json!({ "name": "  ", "password": PASSWORD }),
-        )
-        .await;
-    assert_eq!(s, StatusCode::BAD_REQUEST);
 
     let (s, _) = e
         .send(
@@ -593,8 +585,8 @@ async fn login_body_is_capped_at_4_kib_and_json_at_64_kib() {
         .send(
             &cookie,
             Method::POST,
-            "/api/tokens",
-            json!({ "name": "x".repeat(70 * 1024), "password": PASSWORD }),
+            "/api/me/2fa",
+            json!({ "password": "x".repeat(70 * 1024) }),
         )
         .await;
     assert_eq!(s, StatusCode::PAYLOAD_TOO_LARGE);
@@ -629,34 +621,29 @@ async fn api_responses_are_not_cacheable() {
 }
 
 #[tokio::test]
-async fn token_creation_needs_the_password_and_shares_the_login_limiter() {
+async fn a_password_recheck_shares_the_login_limiter() {
     let e = env_at(cph(2026, 11, 19, 20, 0)).await;
     let cookie = e.login().await;
-    let wrong = json!({ "name": "p", "password": "not the password" });
+    let wrong = json!({ "password": "not the password" });
     // Missing password: malformed body.
     let (s, _) = e
-        .send(&cookie, Method::POST, "/api/tokens", json!({ "name": "p" }))
+        .send(&cookie, Method::POST, "/api/me/2fa", json!({}))
         .await;
     assert_eq!(s, StatusCode::BAD_REQUEST);
-    // Wrong password: 403, no token, and the session stays valid.
+    // Wrong password: 403, and the session stays valid.
     let (s, _) = e
-        .send(&cookie, Method::POST, "/api/tokens", wrong.clone())
+        .send(&cookie, Method::POST, "/api/me/2fa", wrong.clone())
         .await;
     assert_eq!(s, StatusCode::FORBIDDEN);
-    let n: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM tokens")
-        .fetch_one(&e.pool)
-        .await
-        .unwrap();
-    assert_eq!(n, 1); // only the fixture's token
     e.get(&cookie, "/api/me").await;
     // No session at all: 401 before any password check.
     let (s, _, _) = e
         .call(
             Method::POST,
-            "/api/tokens",
+            "/api/me/2fa",
             None,
             true,
-            Some(json!({ "name": "p", "password": PASSWORD })),
+            Some(json!({ "password": PASSWORD })),
         )
         .await;
     assert_eq!(s, StatusCode::UNAUTHORIZED);
@@ -664,7 +651,7 @@ async fn token_creation_needs_the_password_and_shares_the_login_limiter() {
     // right password waits.
     for _ in 0..4 {
         let (s, _) = e
-            .send(&cookie, Method::POST, "/api/tokens", wrong.clone())
+            .send(&cookie, Method::POST, "/api/me/2fa", wrong.clone())
             .await;
         assert_eq!(s, StatusCode::FORBIDDEN);
     }
@@ -672,50 +659,9 @@ async fn token_creation_needs_the_password_and_shares_the_login_limiter() {
         .send(
             &cookie,
             Method::POST,
-            "/api/tokens",
-            json!({ "name": "p", "password": PASSWORD }),
+            "/api/me/2fa",
+            json!({ "password": PASSWORD }),
         )
         .await;
     assert_eq!(s, StatusCode::TOO_MANY_REQUESTS);
-}
-
-#[tokio::test]
-async fn at_most_twenty_active_tokens_via_the_web() {
-    let e = env_at(cph(2026, 11, 19, 20, 0)).await;
-    let cookie = e.login().await;
-    // The fixture already holds one active token.
-    for i in 1..20 {
-        let (s, _) = e
-            .send(
-                &cookie,
-                Method::POST,
-                "/api/tokens",
-                json!({ "name": format!("t{i}"), "password": PASSWORD }),
-            )
-            .await;
-        assert_eq!(s, StatusCode::CREATED, "token {i}");
-    }
-    let (s, j) = e
-        .send(
-            &cookie,
-            Method::POST,
-            "/api/tokens",
-            json!({ "name": "one too many", "password": PASSWORD }),
-        )
-        .await;
-    assert_eq!(s, StatusCode::CONFLICT, "{j}");
-    // Revoking one frees a slot.
-    let (s, _) = e
-        .send(&cookie, Method::DELETE, "/api/tokens/1", json!(null))
-        .await;
-    assert_eq!(s, StatusCode::NO_CONTENT);
-    let (s, _) = e
-        .send(
-            &cookie,
-            Method::POST,
-            "/api/tokens",
-            json!({ "name": "again", "password": PASSWORD }),
-        )
-        .await;
-    assert_eq!(s, StatusCode::CREATED);
 }

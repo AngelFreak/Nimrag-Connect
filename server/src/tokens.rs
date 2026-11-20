@@ -2,11 +2,12 @@
 //!
 //! A token belongs to a user (`tokens.user_id`) or, for the ones that existed before accounts or
 //! were made by the CLI without `--user`, to nobody until the admin assigns it. Files a token
-//! uploads belong to its user. Created from the CLI (`token create`), from the web UI
-//! (`POST /api/tokens`, which needs a session and re-checks the user's password; at most
-//! [`MAX_ACTIVE`] active per user) or by the app's login (`POST /api/app/login`), which also
-//! gives the token a trusted-device secret (`device_secret_hash`, only its SHA-256 is stored).
-//! Revoking a token revokes its device secret and ends its app sessions.
+//! uploads belong to its user. A user never creates or sees a token: the app's login
+//! (`POST /api/app/login`) issues one in the background, together with a trusted-device secret
+//! (`device_secret_hash`, only its SHA-256 is stored), at most [`MAX_ACTIVE`] active per user.
+//! The web Settings list the user's phones and revoke them (`GET/DELETE /api/tokens`). The
+//! admin's CLI (`token create`) makes tokens for tools, which stay unassigned or belong to the
+//! named user. Revoking a token revokes its device secret and ends its app sessions.
 
 use anyhow::Result;
 use sha2::{Digest, Sha256};
@@ -14,7 +15,7 @@ use sqlx::{Row, SqlitePool};
 
 pub const TOKEN_PREFIX: &str = "nrg_";
 pub const DEVICE_SECRET_PREFIX: &str = "nrd_";
-/// Active tokens one user may have through the web UI or the app (the CLI is not capped).
+/// Active tokens one user may have through the app (the CLI is not capped).
 pub const MAX_ACTIVE: i64 = 20;
 
 pub fn hash_token(token: &str) -> String {

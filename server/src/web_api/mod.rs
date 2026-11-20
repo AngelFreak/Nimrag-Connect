@@ -256,8 +256,6 @@ pub fn export_types(dir: &Path) -> anyhow::Result<()> {
         account::TwoFactorConfirm,
         account::ChangeOwnPassword,
         account::TokenList,
-        account::NewToken,
-        account::NewTokenResponse,
         admin::UserInfo,
         admin::UserList,
         admin::UnassignedToken,

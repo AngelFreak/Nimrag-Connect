@@ -708,3 +708,61 @@ async fn deleting_a_user_unassigns_their_phones_and_ends_their_secrets() {
         .unwrap();
     assert_eq!(owners, 0);
 }
+
+#[tokio::test]
+async fn each_user_sees_and_signs_out_only_their_own_phones() {
+    let e = setup().await;
+    e.add_user("bea", Role::User).await;
+    let mine = register(&e, USER, "Pixel 9a").await;
+    let hers = register(&e, "bea", "Galaxy").await;
+    let (me, her) = (e.login().await, e.login_as("bea").await);
+
+    // The list names the phone and carries no secret, and only the user's own phones are in it.
+    let list = e.get(&me, "/api/tokens").await;
+    let text = list.to_string();
+    assert!(
+        text.contains("Pixel 9a") && !text.contains("Galaxy"),
+        "{text}"
+    );
+    for secret in [&mine.token, &mine.secret, &hers.token, &hers.secret] {
+        assert!(!text.contains(secret.as_str()));
+    }
+    let her_list = e.get(&her, "/api/tokens").await.to_string();
+    assert!(her_list.contains("Galaxy") && !her_list.contains("Pixel 9a"));
+
+    // Signing out someone else's phone is "not found" and changes nothing.
+    let (s, _) = e
+        .send(
+            &me,
+            Method::DELETE,
+            &format!("/api/tokens/{}", hers.device_id),
+            json!(null),
+        )
+        .await;
+    assert_eq!(s, StatusCode::NOT_FOUND);
+    let (s, _, _) = app(
+        &e,
+        "/api/app/resume",
+        json!({ "device_secret": hers.secret }),
+    )
+    .await;
+    assert_eq!(s, StatusCode::OK);
+
+    // Signing out one's own phone ends it.
+    let (s, _) = e
+        .send(
+            &me,
+            Method::DELETE,
+            &format!("/api/tokens/{}", mine.device_id),
+            json!(null),
+        )
+        .await;
+    assert_eq!(s, StatusCode::NO_CONTENT);
+    let (s, _, _) = app(
+        &e,
+        "/api/app/resume",
+        json!({ "device_secret": mine.secret }),
+    )
+    .await;
+    assert_eq!(s, StatusCode::UNAUTHORIZED);
+}
