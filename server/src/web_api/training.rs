@@ -1,13 +1,18 @@
 //! `GET /api/training`: recovery time, 7-day load against its target range, load
 //! by intensity, training status and VO2 max. The cards are shared with Today.
+//! `GET /api/training/status?from&to`: the training status day by day over a range, as runs.
 
 use super::daily::dates;
-use super::{round1, Ctx, DateValue};
+use super::{round1, Ctx, DateValue, RangeParams};
 use crate::api::{ApiError, AppState};
 use crate::auth::DataUser;
 use crate::settings::date_string;
-use axum::{extract::State, routing::get, Json, Router};
-use chrono::Duration;
+use axum::{
+    extract::{Query, State},
+    routing::get,
+    Json, Router,
+};
+use chrono::{Duration, NaiveDate};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use ts_rs::TS;
@@ -15,15 +20,70 @@ use ts_rs::TS;
 type Res<T> = Result<T, ApiError>;
 
 pub fn routes() -> Router<AppState> {
-    Router::new().route("/api/training", get(training))
+    Router::new()
+        .route("/api/training", get(training))
+        .route("/api/training/status", get(status_range))
+}
+
+// ---- status names ------------------------------------------------------------------------------
+
+/// How the UI colours a training status.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case")]
+pub enum StatusKind {
+    Detraining,
+    Maintaining,
+    Recovery,
+    Productive,
+    Strained,
+    /// Code 0, or a row without a status: the watch gave none.
+    None,
+    /// A code nobody has verified yet; shown as "Status N" in grey.
+    Unknown,
+}
+
+/// A training status as sent to the UI: the watch's number, its name and how to colour it.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct StatusInfo {
+    pub code: Option<i32>,
+    pub label: String,
+    pub kind: StatusKind,
+}
+
+/// The ONE place that names training status codes (FIT `training_status.status`, the same numbers
+/// as Garmin's API). Only these are verified against the owner's own history: 1 Detraining,
+/// 4 Maintaining, 5 Recovery, 7 Productive, 8 Strained; 0 is "No status". The others (2, 3, 6, 9)
+/// and anything else are NOT verified: they come out as "Status N" with no name. Do not guess names
+/// for them; add a code here only after checking it against a real history.
+pub fn status_info(code: i64) -> StatusInfo {
+    let (label, kind) = match code {
+        0 => ("No status".to_owned(), StatusKind::None),
+        1 => ("Detraining".to_owned(), StatusKind::Detraining),
+        4 => ("Maintaining".to_owned(), StatusKind::Maintaining),
+        5 => ("Recovery".to_owned(), StatusKind::Recovery),
+        7 => ("Productive".to_owned(), StatusKind::Productive),
+        8 => ("Strained".to_owned(), StatusKind::Strained),
+        n => (format!("Status {n}"), StatusKind::Unknown),
+    };
+    StatusInfo {
+        code: i32::try_from(code).ok(),
+        label,
+        kind,
+    }
+}
+
+/// Colour legend of the status timeline, in the order the UI shows it.
+fn status_legend() -> Vec<StatusInfo> {
+    [5, 8, 4, 7, 1, 0].into_iter().map(status_info).collect()
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 pub struct TrainingStatusCard {
-    /// Raw `training_status` code from the watch; the label mapping is not known yet.
+    /// Raw `training_status` code from the watch.
     pub status_code: Option<i32>,
-    /// Always `null` for now: the code-to-name table has not been verified.
+    /// Name of the status (see [`status_info`]; `Status N` for a code that is not verified).
     pub label: Option<String>,
+    pub kind: Option<StatusKind>,
     /// Local date of the first reading in the current run of the same status.
     pub since: Option<String>,
     /// True when the run reaches back to the oldest reading we hold (the real start may be earlier).
@@ -146,16 +206,18 @@ pub async fn status_and_load(ctx: &Ctx) -> Res<(TrainingStatusCard, TrainingLoad
         }
         None => (None, false),
     };
+    let info = latest.and_then(|l| l.1).map(status_info);
     let status = TrainingStatusCard {
         status_code: latest.and_then(|l| l.1).map(|v| v as i32),
-        label: None,
+        label: info.as_ref().map(|i| i.label.clone()),
+        kind: info.as_ref().map(|i| i.kind),
         since,
         since_is_lower_bound: lower,
         fitness_trend_code: latest.and_then(|l| l.5).map(|v| v as i32),
         load_trend_code: latest.and_then(|l| l.6).map(|v| v as i32),
         as_of: ctx.opt_ts(latest.map(|l| l.0)),
     };
-    let mut daily: BTreeMap<chrono::NaiveDate, f64> = BTreeMap::new();
+    let mut daily: BTreeMap<NaiveDate, f64> = BTreeMap::new();
     for r in &rows {
         if let Some(v) = r.2 {
             daily.insert(ctx.date(r.0), v);
@@ -316,4 +378,123 @@ async fn training(user: DataUser, State(state): State<AppState>) -> Res<Json<Tra
         vo2max: vo2max(&ctx).await?,
         readiness: None,
     }))
+}
+
+// ---- GET /api/training/status ---------------------------------------------------------------
+
+/// One local day of the status timeline; `status` is `null` when no reading exists for the day.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct StatusDay {
+    pub date: String,
+    pub status: Option<StatusInfo>,
+}
+
+/// Consecutive days with the same status code (a day without a reading ends a run).
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct StatusRun {
+    pub status: StatusInfo,
+    /// First and last local date of the run inside the range.
+    pub from: String,
+    pub to: String,
+    pub days: u32,
+    /// The run reaches the first day of the range, so it may have begun earlier.
+    pub starts_before_range: bool,
+    /// The run reaches today: the status the watch reports now.
+    pub ongoing: bool,
+}
+
+#[derive(Debug, Serialize, Deserialize, TS)]
+pub struct TrainingStatusRange {
+    pub sample: bool,
+    pub from: String,
+    pub to: String,
+    /// Today's local date (the range never goes past it).
+    pub today: String,
+    /// Every day of the range, oldest first; days without a reading have `status: null`.
+    pub days: Vec<StatusDay>,
+    /// Runs of equal status, newest first.
+    pub runs: Vec<StatusRun>,
+    /// The colour key of the timeline.
+    pub legend: Vec<StatusInfo>,
+    /// The latest status the watch reported (not limited to the range) and its load figures.
+    pub current: TrainingStatusCard,
+    pub load: TrainingLoadCard,
+}
+
+async fn status_range(
+    user: DataUser,
+    State(state): State<AppState>,
+    Query(p): Query<RangeParams>,
+) -> Res<Json<TrainingStatusRange>> {
+    let ctx = Ctx::new(&state, user.id).await?;
+    let (from, to) = ctx.range(&p)?;
+    let (lo, hi) = (ctx.day_bounds(from).0, ctx.day_bounds(to).1);
+    // Rows come from the table whatever their source (watch or an imported history). The last
+    // reading of a local day is the day's status.
+    let rows: Vec<(i64, i64)> = sqlx::query_as(
+        "SELECT ts, status FROM training_status WHERE user_id = ? AND ts >= ? AND ts < ? AND status IS NOT NULL ORDER BY ts",
+    )
+    .bind(ctx.uid)
+    .bind(lo)
+    .bind(hi)
+    .fetch_all(&ctx.pool)
+    .await?;
+    let by_day: BTreeMap<NaiveDate, i64> =
+        rows.into_iter().map(|(ts, s)| (ctx.date(ts), s)).collect();
+    let today = ctx.today();
+    let days: Vec<StatusDay> = dates(from, to)
+        .map(|d| StatusDay {
+            date: date_string(d),
+            status: by_day.get(&d).copied().map(status_info),
+        })
+        .collect();
+    let mut runs: Vec<StatusRun> = Vec::new();
+    // The run being built: (code, first day, last day, days).
+    let mut open: Option<(i64, NaiveDate, NaiveDate, u32)> = None;
+    for d in dates(from, to) {
+        let code = by_day.get(&d).copied();
+        match (&mut open, code) {
+            (Some((c, _, last, n)), Some(now)) if *c == now => {
+                *last = d;
+                *n += 1;
+            }
+            (slot, code) => {
+                if let Some(o) = slot.take() {
+                    runs.push(run_of(o, from, today));
+                }
+                open = code.map(|c| (c, d, d, 1));
+            }
+        }
+    }
+    if let Some(o) = open.take() {
+        runs.push(run_of(o, from, today));
+    }
+    runs.reverse();
+    let (current, load) = status_and_load(&ctx).await?;
+    Ok(Json(TrainingStatusRange {
+        sample: ctx.sample(),
+        from: date_string(from),
+        to: date_string(to),
+        today: date_string(today),
+        days,
+        runs,
+        legend: status_legend(),
+        current,
+        load,
+    }))
+}
+
+fn run_of(
+    (code, a, b, days): (i64, NaiveDate, NaiveDate, u32),
+    from: NaiveDate,
+    today: NaiveDate,
+) -> StatusRun {
+    StatusRun {
+        status: status_info(code),
+        from: date_string(a),
+        to: date_string(b),
+        days,
+        starts_before_range: a == from,
+        ongoing: b == today,
+    }
 }
