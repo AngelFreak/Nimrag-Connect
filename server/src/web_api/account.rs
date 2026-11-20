@@ -683,6 +683,9 @@ pub struct TokenInfo {
     pub last_used_at: Option<String>,
     pub revoked_at: Option<String>,
     pub active: bool,
+    /// `true` for the phone this request's session was started by (the Android app's web view);
+    /// always `false` in a browser, which has no phone behind it.
+    pub current: bool,
 }
 
 /// The signed-in user's phones and tokens. Never holds a secret: a token value is shown only to
@@ -700,18 +703,30 @@ pub(crate) fn token_info(tz: chrono_tz::Tz, t: tokens::TokenRow) -> TokenInfo {
         last_used_at: t.last_used_at.map(|s| settings::stored_rfc3339(tz, &s)),
         active: t.revoked_at.is_none(),
         revoked_at: t.revoked_at.map(|s| settings::stored_rfc3339(tz, &s)),
+        current: false,
     }
 }
 
 async fn list_tokens(
     user: DataUser,
     State(state): State<AppState>,
+    headers: HeaderMap,
 ) -> Result<Json<TokenList>, ApiError> {
     let tz = settings::load(&state.pool, user.id).await?.tz;
+    let current = match auth::session_cookie(&headers, state.insecure_cookies) {
+        Some(raw) => auth::session_token_id(&state.pool, &raw, state.now()).await?,
+        None => None,
+    };
     let tokens = tokens::list(&state.pool, tokens::Whose::User(user.id))
         .await?
         .into_iter()
-        .map(|t| token_info(tz, t))
+        .map(|t| {
+            let is_current = current == Some(t.id);
+            TokenInfo {
+                current: is_current,
+                ..token_info(tz, t)
+            }
+        })
         .collect();
     Ok(Json(TokenList { tokens }))
 }

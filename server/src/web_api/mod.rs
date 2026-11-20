@@ -292,6 +292,7 @@ pub fn export_types(dir: &Path) -> anyhow::Result<()> {
         body::BodyEntry,
         system::DevicesResponse,
         system::StorageResponse,
+        system::AboutResponse,
         garmin::GarminStatus,
         garmin::GarminLoginRequest,
         garmin::GarminLoginResponse,

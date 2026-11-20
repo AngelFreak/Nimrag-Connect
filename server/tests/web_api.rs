@@ -1521,3 +1521,22 @@ async fn home_cards_are_validated_and_normalised() {
     assert_eq!(j["home_cards"]["hidden"], json!(["energy", "vo2_max"]));
     assert_eq!(e.get(&c, url).await["home_cards"], j["home_cards"]);
 }
+
+#[tokio::test]
+async fn about_names_the_server_version_for_any_signed_in_session_only() {
+    let (e, cookie) = setup().await;
+    let j = e.get(&cookie, "/api/about").await;
+    assert_eq!(j["version"], env!("CARGO_PKG_VERSION"));
+
+    // An admin has no data but does have a profile page.
+    e.add_user("boss", nimrag_server::users::Role::Admin).await;
+    let admin_cookie = e.login_as("boss").await;
+    assert_eq!(
+        e.get(&admin_cookie, "/api/about").await["version"],
+        j["version"]
+    );
+
+    // Signed out: not public.
+    let (s, _, _) = e.call(Method::GET, "/api/about", None, false, None).await;
+    assert_eq!(s, StatusCode::UNAUTHORIZED);
+}

@@ -1,9 +1,9 @@
 //! `GET /api/devices` (watch battery and sync times, upload devices) and
-//! `GET /api/storage` (what the server holds).
+//! `GET /api/storage` (what the server holds) and `GET /api/about` (which server this is).
 
 use super::Ctx;
 use crate::api::{ApiError, AppState};
-use crate::auth::DataUser;
+use crate::auth::{AuthUser, DataUser};
 use crate::settings::stored_rfc3339;
 use crate::tokens;
 use axum::{extract::State, routing::get, Json, Router};
@@ -16,6 +16,22 @@ pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/api/devices", get(devices))
         .route("/api/storage", get(storage))
+        .route("/api/about", get(about))
+}
+
+/// What the profile page's About row shows.
+#[derive(Debug, Serialize, Deserialize, TS)]
+pub struct AboutResponse {
+    /// The server's own version (`CARGO_PKG_VERSION`), for example `0.1.0`.
+    pub version: String,
+}
+
+/// `GET /api/about`: for any signed-in session, admins included (they have no data, but they do
+/// have a profile page). A signed-out caller gets 401, so the version is not public.
+async fn about(_user: AuthUser) -> Json<AboutResponse> {
+    Json(AboutResponse {
+        version: env!("CARGO_PKG_VERSION").to_owned(),
+    })
 }
 
 #[derive(Debug, Serialize, Deserialize, TS)]

@@ -135,7 +135,7 @@ app on first run:
   files and tokens become unassigned, nothing on disk is deleted, their records are removed).
   Reset-password, reset-2fa, disable and delete end the user's sessions and trusted-phone
   credentials. The last active admin cannot be disabled or deleted (`409`), and the admin cannot
-  reset their own password or 2FA there (`400`: use Settings or the CLI).
+  reset their own password or 2FA there (`400`: use their Profile page or the CLI).
 - **Unassigned data**: `GET /api/admin/unassigned` lists active tokens nobody owns (with the
   number of unowned files each uploaded), `unattributed_files` (unowned files no such token
   uploaded) and `legacy` (settings, body entries, strength edits, Garmin account that predate
@@ -175,7 +175,7 @@ indistinguishable `401`:
   a bare `{biometric: true}` is not accepted, and neither is anything but the secret. Guessing is
   limited per address (`429` with `Retry-After`).
 
-Revoking the device token (web Settings, "Signed-in phones", "Sign out this phone", or the CLI)
+Revoking the device token (web Profile, "Signed-in phones", "Sign out", or the CLI)
 removes its device secret and ends the sessions it started, so the phone must sign in with
 username, password and code again. A phone whose upload comes back `401`/`403` forgets its
 credentials the same way and shows the sign-in. Disabling
@@ -238,7 +238,8 @@ duplicates and appends cards missing from `order`).
 | endpoint | what |
 |---|---|
 | `/api/login`, `/api/logout`, `/api/me`, `/api/setup`, `/api/me/password`, `/api/me/2fa`, `/api/app/*`, `/api/admin/*` | accounts: see "Accounts, 2FA and the app" |
-| `GET /api/tokens`, `DELETE /api/tokens/{id}` | the signed-in user's own phones (name, created, last used, active, revoked; never a token value): the web Settings list them as "Signed-in phones" and sign one out (delete revokes the token, its device secret and its sessions; another user's id is `404`). Tokens are issued only by the app's sign-in (at most 20 active per user, `409` beyond), not by this API |
+| `GET /api/tokens`, `DELETE /api/tokens/{id}` | the signed-in user's own phones (name, created, last used, active, revoked; never a token value): the web Profile lists them as "Signed-in phones" (`current` is true for the phone the request's session was started by, so the page can say "this phone"; false in a browser session) and signs one out (delete revokes the token, its device secret and its sessions; another user's id is `404`). Tokens are issued only by the app's sign-in (at most 20 active per user, `409` beyond), not by this API |
+| `GET /api/about` | `{ version }`: the server's version, for the Profile page's About row; any signed-in session (user or admin), `401` otherwise |
 | `GET /api/today` | the Today page: In focus (energy, last night, HRV), every At a glance card, last activity, training this week, `yesterday`, `last_7_days` |
 | `GET /api/days/{date}` | one day: heart rate, stress, energy, steps, intensity, the night that began that day, activities |
 | `GET /api/activities?type=&before=&limit=` | newest first, `type` is all, run, walk, hike, cycle, swim, strength, training, other; `next_before` is the cursor |

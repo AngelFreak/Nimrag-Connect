@@ -12,7 +12,7 @@
 //!   the bearer credential. Anyone who holds it can resume, which is why it lives behind the
 //!   Keystore and dies with the device token.
 //!
-//! Revoking the device token (web Settings) also revokes its device secret and ends the
+//! Revoking the device token (web Profile) also revokes its device secret and ends the
 //! sessions it started. Disabling the user, resetting their password or 2FA does the same for
 //! every device. Admin accounts have no data and cannot use the app.
 
