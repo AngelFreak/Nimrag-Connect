@@ -185,11 +185,6 @@ export function ActivityBody({ a }: { a: ActivityDetail }) {
     { label: 'Aerobic effect', value: fmtOne(a.aerobic_te) },
     { label: 'Anaerobic effect', value: fmtOne(a.anaerobic_te) },
     { label: 'Training load', value: fmtFixed(a.training_load, 0) },
-    {
-      label: 'VO2 max (derived)',
-      value: a.vo2max_derived === null ? null : `${a.vo2max_derived.toFixed(1)} ml/kg/min`,
-      sub: "Derived estimate from this file (maximal MET x 3.5), not Garmin's published value.",
-    },
   ];
   const more = visibleTiles(moreTiles, size);
 
@@ -282,6 +277,15 @@ export function ActivityBody({ a }: { a: ActivityDetail }) {
         </Card>
         <div className="acts-stack">
           {more.length ? <div className={gridClass}>{more}</div> : null}
+          {/* Full width: its note needs the room a third of the row does not give. */}
+          {a.vo2max_derived !== null ? (
+            <StatTile
+              size={size}
+              label="VO2 max (derived)"
+              value={`${a.vo2max_derived.toFixed(1)} ml/kg/min`}
+              sub="Estimated from this activity (maximal MET x 3.5), not Garmin's published value."
+            />
+          ) : null}
         </div>
       </div>
 
