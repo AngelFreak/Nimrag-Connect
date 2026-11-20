@@ -5,6 +5,7 @@ use super::daily::{
     dates, day_stats, energy_block, heart_rate_block, intensity_days, intensity_total, nights,
     stress_block, week_start, EnergyBlock, HeartRateBlock, NightSummary, StressBlock,
 };
+use super::metrics::{day_breathing, day_spo2, DayBreathing, DaySpo2};
 use super::{Ctx, DateValue};
 use crate::api::{ApiError, AppState};
 use crate::auth::DataUser;
@@ -43,6 +44,8 @@ pub struct DayResponse {
     pub steps: Option<f64>,
     pub step_goal: u32,
     pub intensity_minutes: Option<f64>,
+    pub breathing: DayBreathing,
+    pub spo2: DaySpo2,
     /// The night that ended on this date (the morning of waking up).
     pub sleep: Option<NightSummary>,
     pub activities: Vec<ActivityListItem>,
@@ -75,6 +78,8 @@ async fn day(
         steps: stats.steps,
         step_goal: ctx.prefs.step_goal,
         intensity_minutes: intensity_total(stats.moderate_min, stats.vigorous_min),
+        breathing: day_breathing(&ctx, d).await?,
+        spo2: day_spo2(&ctx, d).await?,
         sleep: nights(&ctx, d, d).await?.into_iter().next(),
         activities: activities_on(&ctx, d).await?,
     }))

@@ -1,5 +1,5 @@
-//! `GET /api/metrics/{metric}?range=7d|4w|1y&end=YYYY-MM-DD`: the data behind a metric detail
-//! page (heart rate, stress, energy, steps, intensity minutes, training load, VO2 max,
+//! `GET /api/metrics/{metric}?range=7d|4w|12w|6m|1y&end=YYYY-MM-DD`: the data behind a metric
+//! detail page (heart rate, stress, energy, steps, intensity minutes, training load, VO2 max,
 //! respiration, blood oxygen). One response holds the chart series, the summary figures and the
 //! goal or target lines for a period; the 1-day view is `/api/days/{date}`.
 //!
@@ -8,18 +8,21 @@
 //! and VO2 helpers), so a day shows the same number everywhere. Days are local days in the
 //! account's zone; a night belongs to the day it ends on. A day without data is `null`, never 0.
 //!
-//! Periods end on `end` (default and maximum: today). `7d` is the 7 days ending on `end` (day
-//! buckets), `4w` the 28 days ending on `end` (day buckets; intensity minutes use the 4 Monday
-//! to Sunday weeks ending with the week of `end`, week buckets), `1y` the 12 calendar months
-//! ending with the month of `end` (month buckets; the last month runs to `end`). A month bucket
-//! averages the days that have a value (intensity minutes: the month's total).
+//! Periods are rolling windows that end on `end` (default and maximum: today): `7d` is 7 days,
+//! `4w` 28 days (both in day buckets), `12w` 84 days, `6m` 182 days and `1y` 364 days (all in
+//! weekly buckets: 12, 26 and 52 buckets of 7 days, the last one ending on `end`). Intensity
+//! minutes follow the calendar instead: `7d` is the Monday to Sunday week that holds `end` (its
+//! last days may lie after today and are `null`), and the weekly buckets of `12w`, `6m` and `1y`
+//! start on Mondays (the last one runs to `end`). A bucket averages the days that have a value,
+//! except steps, distance and intensity minutes (the bucket's total) and the lowest blood oxygen
+//! (the bucket's lowest).
 
 use super::daily::{
     dates, day_stats, intensity_days, intensity_total, night_sessions, stress_block, week_start,
     DayStats,
 };
 use super::training::{status_rows, vo2_from_met, vo2_readings};
-use super::{mean, round1, series, Ctx, DateValue};
+use super::{mean, round1, series, Ctx, DateValue, TimedValue};
 use crate::api::{ApiError, AppState};
 use crate::auth::DataUser;
 use crate::settings::{date_string, parse_date};
@@ -28,7 +31,7 @@ use axum::{
     routing::get,
     Json, Router,
 };
-use chrono::{Datelike, Duration, Months, NaiveDate};
+use chrono::{Duration, NaiveDate};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use ts_rs::TS;
@@ -47,8 +50,8 @@ pub fn routes() -> Router<AppState> {
 #[serde(rename_all = "snake_case")]
 pub enum MetricBucket {
     Day,
+    /// Seven days, the first one dated by the bucket.
     Week,
-    Month,
 }
 
 /// One line or bar series of the chart.
@@ -130,6 +133,8 @@ impl Metric {
 enum Span {
     Week,
     FourWeeks,
+    TwelveWeeks,
+    SixMonths,
     Year,
 }
 
@@ -138,8 +143,10 @@ impl Span {
         match s {
             "7d" => Ok(Self::Week),
             "4w" => Ok(Self::FourWeeks),
+            "12w" => Ok(Self::TwelveWeeks),
+            "6m" => Ok(Self::SixMonths),
             "1y" => Ok(Self::Year),
-            _ => Err(ApiError::bad_request("range must be 7d, 4w or 1y")),
+            _ => Err(ApiError::bad_request("range must be 7d, 4w, 12w, 6m or 1y")),
         }
     }
 }
@@ -150,22 +157,29 @@ struct Params {
     end: Option<String>,
 }
 
-/// First day and bucket of the period ending on `end`.
-fn period(metric: Metric, span: Span, end: NaiveDate) -> (NaiveDate, MetricBucket) {
-    match span {
-        Span::Week => (end - Duration::days(6), MetricBucket::Day),
-        Span::FourWeeks if metric == Metric::IntensityMinutes => {
-            (week_start(end) - Duration::days(21), MetricBucket::Week)
+/// First and last day and the bucket of the period ending on `end`.
+fn period(metric: Metric, span: Span, end: NaiveDate) -> (NaiveDate, NaiveDate, MetricBucket) {
+    let calendar = metric == Metric::IntensityMinutes;
+    let weeks = match span {
+        Span::Week => {
+            return if calendar {
+                let monday = week_start(end);
+                (monday, monday + Duration::days(6), MetricBucket::Day)
+            } else {
+                (end - Duration::days(6), end, MetricBucket::Day)
+            };
         }
-        Span::FourWeeks => (end - Duration::days(27), MetricBucket::Day),
-        Span::Year => {
-            let first = end.with_day(1).unwrap_or(end);
-            (
-                first.checked_sub_months(Months::new(11)).unwrap_or(first),
-                MetricBucket::Month,
-            )
-        }
-    }
+        Span::FourWeeks => return (end - Duration::days(27), end, MetricBucket::Day),
+        Span::TwelveWeeks => 12,
+        Span::SixMonths => 26,
+        Span::Year => 52,
+    };
+    let from = if calendar {
+        week_start(end) - Duration::days(7 * (weeks - 1))
+    } else {
+        end - Duration::days(7 * weeks - 1)
+    };
+    (from, end, MetricBucket::Week)
 }
 
 // ---- bucketing --------------------------------------------------------------------------------
@@ -178,13 +192,15 @@ enum Agg {
     MeanWhole,
     /// Total of the days with a value.
     Sum,
+    /// Lowest of the days with a value.
+    Min,
 }
 
-fn bucket_start(d: NaiveDate, b: MetricBucket) -> NaiveDate {
+/// First day of the bucket that `d` falls in; weekly buckets count from `from`.
+fn bucket_start(d: NaiveDate, from: NaiveDate, b: MetricBucket) -> NaiveDate {
     match b {
         MetricBucket::Day => d,
-        MetricBucket::Week => week_start(d),
-        MetricBucket::Month => d.with_day(1).unwrap_or(d),
+        MetricBucket::Week => from + Duration::days((d - from).num_days().div_euclid(7) * 7),
     }
 }
 
@@ -198,7 +214,7 @@ fn points(
 ) -> Vec<DateValue> {
     let mut groups: BTreeMap<NaiveDate, Vec<f64>> = BTreeMap::new();
     for d in dates(from, to) {
-        let g = groups.entry(bucket_start(d, b)).or_default();
+        let g = groups.entry(bucket_start(d, from, b)).or_default();
         if let Some(v) = daily.get(&d) {
             g.push(*v);
         }
@@ -213,6 +229,7 @@ fn points(
                     Agg::Mean => round1(sum / v.len() as f64),
                     Agg::MeanWhole => (sum / v.len() as f64).round(),
                     Agg::Sum => round1(sum),
+                    Agg::Min => v.iter().copied().fold(f64::INFINITY, f64::min),
                 }
             }),
         })
@@ -399,8 +416,8 @@ async fn steps(p: &Period<'_>) -> Res<Built> {
     let distance = pick(&st, |s| s.distance_m);
     Ok(Built {
         series: vec![
-            p.series("steps", "Steps", "steps", &steps, Agg::MeanWhole),
-            p.series("distance_m", "Distance", "m", &distance, Agg::MeanWhole),
+            p.series("steps", "Steps", "steps", &steps, Agg::Sum),
+            p.series("distance_m", "Distance", "m", &distance, Agg::Sum),
         ],
         stats: vec![
             stat(
@@ -414,6 +431,12 @@ async fn steps(p: &Period<'_>) -> Res<Built> {
                 "Total steps",
                 "steps",
                 total(steps.values().copied()),
+            ),
+            stat(
+                "total_distance",
+                "Total distance",
+                "m",
+                total(distance.values().copied()),
             ),
         ],
         goal: Some(f64::from(p.ctx.prefs.step_goal)),
@@ -451,11 +474,22 @@ async fn intensity(p: &Period<'_>) -> Res<Built> {
     let per = match p.bucket {
         MetricBucket::Day => "day",
         MetricBucket::Week => "week",
-        MetricBucket::Month => "month",
     };
     Ok(Built {
         stats: vec![
             stat("total", "Total", "min", total(totals.iter().copied())),
+            stat(
+                "moderate",
+                "Moderate",
+                "min",
+                total(moderate.values().copied()),
+            ),
+            stat(
+                "vigorous",
+                "Vigorous",
+                "min",
+                total(vigorous.values().copied()),
+            ),
             stat(
                 "avg",
                 &format!("Avg per {per}"),
@@ -562,6 +596,9 @@ async fn vo2_max(p: &Period<'_>) -> Res<Built> {
     })
 }
 
+const BREATHING_SQL: &str = "SELECT ts, brpm FROM respiration WHERE user_id = ? AND brpm IS NOT NULL AND ts >= ? AND ts < ? ORDER BY ts";
+const SPO2_SQL: &str = "SELECT ts, percent FROM spo2 WHERE user_id = ? AND percent IS NOT NULL AND ts >= ? AND ts < ? ORDER BY ts";
+
 /// A reading of the period with the day it counts for: a reading taken during a night (its
 /// start to its end) belongs to the day the night ends on, any other to its local day. `asleep`
 /// says which of the two it was.
@@ -609,11 +646,7 @@ fn day_means(r: &[Reading], keep: impl Fn(&Reading) -> bool) -> Daily {
 }
 
 async fn respiration(p: &Period<'_>) -> Res<Built> {
-    let r = readings(
-        p,
-        "SELECT ts, brpm FROM respiration WHERE user_id = ? AND brpm IS NOT NULL AND ts >= ? AND ts < ? ORDER BY ts",
-    )
-    .await?;
+    let r = readings(p, BREATHING_SQL).await?;
     let asleep = day_means(&r, |x| x.asleep);
     let awake = day_means(&r, |x| !x.asleep);
     Ok(Built {
@@ -635,11 +668,7 @@ async fn respiration(p: &Period<'_>) -> Res<Built> {
 }
 
 async fn spo2(p: &Period<'_>) -> Res<Built> {
-    let r = readings(
-        p,
-        "SELECT ts, percent FROM spo2 WHERE user_id = ? AND percent IS NOT NULL AND ts >= ? AND ts < ? ORDER BY ts",
-    )
-    .await?;
+    let r = readings(p, SPO2_SQL).await?;
     let average = day_means(&r, |_| true);
     let mut low = Daily::new();
     for x in &r {
@@ -649,7 +678,7 @@ async fn spo2(p: &Period<'_>) -> Res<Built> {
     Ok(Built {
         series: vec![
             p.series("average", "Average", "%", &average, Agg::Mean),
-            p.series("low", "Lowest", "%", &low, Agg::Mean),
+            p.series("low", "Lowest", "%", &low, Agg::Min),
         ],
         stats: vec![
             stat("avg", "Avg", "%", avg(&average)),
@@ -666,6 +695,93 @@ async fn spo2(p: &Period<'_>) -> Res<Built> {
         )
         .await?,
         ..Built::default()
+    })
+}
+
+// ---- one day (the 1-day view of Respiration and Blood oxygen) ---------------------------------
+
+/// Breathing for one day; the night rule is the range view's.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct DayBreathing {
+    /// Lowest and highest reading of the day, the night that ended on it included.
+    pub lowest: Option<f64>,
+    pub highest: Option<f64>,
+    pub avg_awake: Option<f64>,
+    pub avg_asleep: Option<f64>,
+    /// Mean per local hour from midnight, dated by the hour's start.
+    pub hourly: Vec<TimedValue>,
+}
+
+/// Blood oxygen (percent) for one day.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct DaySpo2 {
+    pub average: Option<f64>,
+    pub lowest: Option<f64>,
+    /// Last reading between the day's midnights and when it was taken.
+    pub latest: Option<f64>,
+    pub latest_at: Option<String>,
+    pub avg_asleep: Option<f64>,
+    /// Mean per local hour from midnight, dated by the hour's start.
+    pub hourly: Vec<TimedValue>,
+}
+
+/// The readings that count for the local day `d`, the raw readings between its midnights, and
+/// their means per hour of that day (the chart's points).
+async fn day_readings(
+    ctx: &Ctx,
+    d: NaiveDate,
+    sql: &'static str,
+) -> Res<(Vec<Reading>, Vec<(i64, f64)>, Vec<TimedValue>)> {
+    let p = Period {
+        ctx,
+        from: d,
+        to: d,
+        bucket: MetricBucket::Day,
+    };
+    let r = readings(&p, sql).await?;
+    let (lo, hi) = ctx.day_bounds(d);
+    let window = series(ctx, sql, lo, hi).await?;
+    let mut hours: BTreeMap<i64, (f64, u32)> = BTreeMap::new();
+    for (ts, v) in &window {
+        let e = hours.entry((ts - lo).div_euclid(3600)).or_default();
+        e.0 += v;
+        e.1 += 1;
+    }
+    let hourly = hours
+        .into_iter()
+        .map(|(h, (sum, n))| TimedValue {
+            time: ctx.ts(lo + h * 3600),
+            value: Some(round1(sum / f64::from(n))),
+        })
+        .collect();
+    Ok((r, window, hourly))
+}
+
+fn mean_of(r: &[Reading], keep: impl Fn(&Reading) -> bool) -> Option<f64> {
+    mean(r.iter().filter(|x| keep(x)).map(|x| x.value))
+}
+
+pub async fn day_breathing(ctx: &Ctx, d: NaiveDate) -> Res<DayBreathing> {
+    let (r, _, hourly) = day_readings(ctx, d, BREATHING_SQL).await?;
+    Ok(DayBreathing {
+        lowest: r.iter().map(|x| x.value).reduce(f64::min),
+        highest: r.iter().map(|x| x.value).reduce(f64::max),
+        avg_awake: mean_of(&r, |x| !x.asleep),
+        avg_asleep: mean_of(&r, |x| x.asleep),
+        hourly,
+    })
+}
+
+pub async fn day_spo2(ctx: &Ctx, d: NaiveDate) -> Res<DaySpo2> {
+    let (r, window, hourly) = day_readings(ctx, d, SPO2_SQL).await?;
+    let latest = window.last().copied();
+    Ok(DaySpo2 {
+        average: mean_of(&r, |_| true),
+        lowest: r.iter().map(|x| x.value).reduce(f64::min),
+        latest: latest.map(|l| l.1),
+        latest_at: ctx.opt_ts(latest.map(|l| l.0)),
+        avg_asleep: mean_of(&r, |x| x.asleep),
+        hourly,
     })
 }
 
@@ -688,9 +804,10 @@ async fn metric_range(
     };
     let ctx = Ctx::new(&state, user.id).await?;
     let today = ctx.today();
-    // A period never goes past today.
-    let to = end.map_or(today, |e| e.min(today));
-    let (from, bucket) = period(metric, span, to);
+    // A period ends on `end` and never goes past today (an intensity minutes week is the
+    // exception: it runs to its Sunday).
+    let anchor = end.map_or(today, |e| e.min(today));
+    let (from, to, bucket) = period(metric, span, anchor);
     let p = Period {
         ctx: &ctx,
         from,

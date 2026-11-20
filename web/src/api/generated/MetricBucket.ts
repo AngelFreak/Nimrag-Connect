@@ -3,4 +3,4 @@
 /**
  * What one point of a series stands for.
  */
-export type MetricBucket = "day" | "week" | "month";
+export type MetricBucket = "day" | "week";

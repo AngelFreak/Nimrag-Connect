@@ -207,7 +207,7 @@ async fn heart_rate_resting_and_high_per_day() {
 }
 
 #[tokio::test]
-async fn heart_rate_4w_is_28_days_and_1y_is_12_monthly_averages() {
+async fn heart_rate_4w_is_28_days_and_longer_ranges_are_weekly() {
     let (e, c) = setup().await;
     heart_rows(&e).await;
     let m = e.get(&c, "/api/metrics/heart_rate?range=4w").await;
@@ -223,29 +223,62 @@ async fn heart_rate_4w_is_28_days_and_1y_is_12_monthly_averages() {
     );
     assert_eq!(values(&m, "resting")[25..], [n(54.0), n(55.0), n(53.0)]);
 
+    // 12w: 84 days in 12 weekly buckets, the last one ending today.
+    let w = e.get(&c, "/api/metrics/heart_rate?range=12w").await;
+    assert_eq!(
+        (w["from"].as_str(), w["to"].as_str()),
+        (Some("2026-08-28"), Some("2026-11-19"))
+    );
+    assert_eq!(w["bucket"], "week");
+    let d = dates(&w, "resting");
+    assert_eq!(
+        (d.len(), d[0].as_str(), d[11].as_str()),
+        (12, "2026-08-28", "2026-11-13")
+    );
+    assert_eq!(values(&w, "resting")[11], n(54.0));
+    assert_eq!(values(&w, "high")[11], n(114.7));
+
+    // 6m: 182 days, 26 weekly buckets.
+    let h = e.get(&c, "/api/metrics/heart_rate?range=6m").await;
+    assert_eq!(
+        (h["from"].as_str(), h["to"].as_str()),
+        (Some("2026-05-22"), Some("2026-11-19"))
+    );
+    let d = dates(&h, "resting");
+    assert_eq!(
+        (d.len(), d[0].as_str(), d[25].as_str()),
+        (26, "2026-05-22", "2026-11-13")
+    );
+    // June 10 falls in the bucket of June 5 to 11 (the third).
+    assert_eq!(d[2], "2026-06-05");
+    assert_eq!(values(&h, "resting")[2], n(60.0));
+
+    // 1y: 364 days, 52 weekly buckets averaging the days that have a value.
     let y = e.get(&c, "/api/metrics/heart_rate?range=1y").await;
     assert_eq!(
         (y["from"].as_str(), y["to"].as_str()),
-        (Some("2025-12-01"), Some("2026-11-19"))
+        (Some("2025-11-21"), Some("2026-11-19"))
     );
-    assert_eq!(y["bucket"], "month");
+    assert_eq!(y["bucket"], "week");
     let d = dates(&y, "resting");
-    assert_eq!(d.len(), 12);
     assert_eq!(
-        (d[0].as_str(), d[11].as_str()),
-        ("2025-12-01", "2026-11-01")
+        (d.len(), d[0].as_str(), d[51].as_str()),
+        (52, "2025-11-21", "2026-11-13")
     );
     let resting = values(&y, "resting");
-    // June has one resting value and no readings (high is null); November averages its days.
-    assert_eq!(resting[6], n(60.0), "{resting:?}");
-    assert_eq!(values(&y, "high")[6], NULL);
-    assert_eq!(resting[11], n(54.0));
-    assert_eq!(values(&y, "high")[11], n(114.7));
+    // June 10 has one resting value and no readings (high is null); the last week averages
+    // its three days.
+    assert_eq!(d[28], "2026-06-05");
+    assert_eq!(resting[28], n(60.0), "{resting:?}");
+    assert_eq!(values(&y, "high")[28], NULL);
+    assert_eq!(resting[51], n(54.0));
+    assert_eq!(values(&y, "high")[51], n(114.7));
     assert_eq!(
         resting.iter().filter(|v| !v.is_null()).count(),
         2,
-        "months without data are null"
+        "weeks without data are null"
     );
+    // The summary is over the days, not over the weeks.
     assert_eq!(stat(&y, "avg_resting"), n(55.5));
 }
 
@@ -300,13 +333,13 @@ async fn stress_average_and_seconds_per_level() {
     assert_eq!(d["stress"]["rest_s"], 180.0);
 
     let y = e.get(&c, "/api/metrics/stress?range=1y").await;
-    assert_eq!(y["bucket"], "month");
+    assert_eq!(y["bucket"], "week");
     assert_eq!(
-        values(&y, "average")[11],
+        values(&y, "average")[51],
         n(35.0),
-        "month = mean of the days' averages"
+        "week = mean of the days' averages"
     );
-    assert_eq!(values(&y, "rest_s")[11], n(180.0));
+    assert_eq!(values(&y, "rest_s")[51], n(180.0));
 }
 
 #[tokio::test]
@@ -393,15 +426,26 @@ async fn steps_distance_goal_and_buckets() {
     assert_eq!(stat(&w, "avg_steps"), n(8000.0));
     assert_eq!(stat(&w, "total_steps"), n(24_000.0));
 
-    // 1y: average steps per day with a value, per month.
+    // 12w: the total of each 7-day bucket; the last one is Nov 13 to 19.
+    let q = e.get(&c, "/api/metrics/steps?range=12w").await;
+    let v = values(&q, "steps");
+    assert_eq!(
+        (v.len(), v[8].clone(), v[11].clone()),
+        (12, n(10_000.0), n(14_000.0))
+    );
+    assert_eq!(values(&q, "distance_m")[11], n(11_000.0));
+
+    // 1y: 52 weekly totals.
     let y = e.get(&c, "/api/metrics/steps?range=1y").await;
     let v = values(&y, "steps");
     assert_eq!(
-        (v[6].clone(), v[10].clone(), v[11].clone()),
-        (n(12_000.0), n(10_000.0), n(7000.0))
+        (v.len(), v[28].clone(), v[48].clone(), v[51].clone()),
+        (52, n(12_000.0), n(10_000.0), n(14_000.0))
     );
     assert_eq!(v.iter().filter(|x| !x.is_null()).count(), 3);
     assert_eq!(stat(&y, "total_steps"), n(36_000.0));
+    assert_eq!(stat(&y, "total_distance"), n(11_000.0));
+    assert_eq!(stat(&y, "avg_steps"), n(9000.0), "per day with steps");
 
     // The goal follows the setting.
     let (s, _) = e
@@ -439,56 +483,105 @@ async fn intensity_rows(e: &Env) {
 }
 
 #[tokio::test]
-async fn intensity_minutes_day_week_and_month_buckets() {
+async fn intensity_minutes_follow_the_calendar_week() {
     let (e, c) = setup().await;
     intensity_rows(&e).await;
 
+    // 7d: the Monday to Sunday week that holds `end`; days after today are null.
     let m = e.get(&c, "/api/metrics/intensity_minutes?range=7d").await;
     assert_eq!(m["bucket"], "day");
+    assert_eq!(
+        (m["from"].as_str(), m["to"].as_str()),
+        (Some("2026-11-16"), Some("2026-11-22"))
+    );
     assert_eq!(keys(&m), ["moderate", "vigorous"]);
     assert_eq!(
         values(&m, "moderate"),
-        [NULL, NULL, NULL, n(10.0), n(15.0), NULL, n(15.0)]
+        [n(10.0), n(15.0), NULL, n(15.0), NULL, NULL, NULL]
     );
     // Vigorous is the raw minutes; the web counts it double.
     assert_eq!(
         values(&m, "vigorous"),
-        [NULL, NULL, NULL, n(0.0), n(5.0), NULL, n(0.0)]
+        [n(0.0), n(5.0), NULL, n(0.0), NULL, NULL, NULL]
     );
     assert_eq!(stat(&m, "total"), n(50.0), "moderate + 2 x vigorous");
     assert_eq!(stat(&m, "avg"), n(16.7));
+    assert_eq!(stat(&m, "moderate"), n(40.0));
+    assert_eq!(stat(&m, "vigorous"), n(5.0));
     assert_eq!(m["goal"], 150.0);
-
-    // 4w: the 4 Monday-to-Sunday weeks ending with the week of `end`.
-    let w = e.get(&c, "/api/metrics/intensity_minutes?range=4w").await;
-    assert_eq!(w["bucket"], "week");
+    // The week reaches today: there is no later one.
     assert_eq!(
-        (w["from"].as_str(), w["to"].as_str()),
-        (Some("2026-10-26"), Some("2026-11-19"))
+        (m["has_prev"].clone(), m["has_next"].clone()),
+        (json!(true), json!(false))
     );
-    assert_eq!(
-        dates(&w, "moderate"),
-        ["2026-10-26", "2026-11-02", "2026-11-09", "2026-11-16"]
-    );
-    assert_eq!(values(&w, "moderate"), [n(30.0), NULL, n(50.0), n(40.0)]);
-    assert_eq!(values(&w, "vigorous"), [n(0.0), NULL, n(10.0), n(5.0)]);
-    assert_eq!(stat(&w, "total"), n(150.0));
-    assert_eq!(stat(&w, "avg"), n(50.0));
-    assert_eq!(w["goal"], 150.0);
     // The week figures are the ones the Movement view gives.
     let mv = e.get(&c, "/api/movement/2026-11-19").await;
     assert_eq!(mv["intensity"]["moderate_min"], 40.0);
     assert_eq!(mv["intensity"]["total_min"], 50.0);
 
-    // 1y: monthly totals.
-    let y = e.get(&c, "/api/metrics/intensity_minutes?range=1y").await;
-    assert_eq!(y["bucket"], "month");
-    let v = values(&y, "moderate");
+    // Any day of an earlier week gives that week.
+    let p = e
+        .get(&c, "/api/metrics/intensity_minutes?range=7d&end=2026-11-12")
+        .await;
     assert_eq!(
-        (v.len(), v[9].clone(), v[10].clone(), v[11].clone()),
-        (12, NULL, n(30.0), n(90.0))
+        (p["from"].as_str(), p["to"].as_str()),
+        (Some("2026-11-09"), Some("2026-11-15"))
     );
-    assert_eq!(values(&y, "vigorous")[11], n(15.0));
+    assert_eq!(
+        values(&p, "moderate"),
+        [NULL, n(20.0), NULL, n(30.0), NULL, NULL, NULL]
+    );
+    assert_eq!(stat(&p, "total"), n(70.0));
+    assert_eq!(p["has_next"], true);
+
+    // 4w: 28 days, one point per day.
+    let w = e.get(&c, "/api/metrics/intensity_minutes?range=4w").await;
+    assert_eq!(w["bucket"], "day");
+    assert_eq!(
+        (w["from"].as_str(), w["to"].as_str()),
+        (Some("2026-10-23"), Some("2026-11-19"))
+    );
+    let v = values(&w, "moderate");
+    assert_eq!(
+        (
+            v.len(),
+            v[5].clone(),
+            v[18].clone(),
+            v[24].clone(),
+            v[27].clone()
+        ),
+        (28, n(30.0), n(20.0), n(10.0), n(15.0))
+    );
+    assert_eq!(stat(&w, "total"), n(150.0));
+
+    // 12w: 12 weekly totals from a Monday; the last bucket runs to today.
+    let q = e.get(&c, "/api/metrics/intensity_minutes?range=12w").await;
+    assert_eq!(q["bucket"], "week");
+    assert_eq!(
+        (q["from"].as_str(), q["to"].as_str()),
+        (Some("2026-08-31"), Some("2026-11-19"))
+    );
+    let d = dates(&q, "moderate");
+    assert_eq!(
+        (d.len(), d[8].as_str(), d[11].as_str()),
+        (12, "2026-10-26", "2026-11-16")
+    );
+    let v = values(&q, "moderate");
+    assert_eq!(v[8..], [n(30.0), NULL, n(50.0), n(40.0)]);
+    assert_eq!(values(&q, "vigorous")[8..], [n(0.0), NULL, n(10.0), n(5.0)]);
+    assert_eq!(stat(&q, "total"), n(150.0));
+    assert_eq!(stat(&q, "avg"), n(50.0), "per week with minutes");
+    assert_eq!(stat(&q, "moderate"), n(120.0));
+
+    // 1y: 52 weeks from a Monday.
+    let y = e.get(&c, "/api/metrics/intensity_minutes?range=1y").await;
+    assert_eq!(y["bucket"], "week");
+    let d = dates(&y, "moderate");
+    assert_eq!(
+        (d.len(), d[0].as_str(), d[51].as_str()),
+        (52, "2025-11-24", "2026-11-16")
+    );
+    assert_eq!(values(&y, "moderate")[51], n(40.0));
     assert_eq!(stat(&y, "total"), n(150.0));
 }
 
@@ -545,7 +638,7 @@ async fn training_load_acute_chronic_and_target() {
     assert_eq!(values(&old, "acute")[6], n(300.0));
 
     let y = e.get(&c, "/api/metrics/training_load?range=1y").await;
-    assert_eq!(values(&y, "acute")[11], n(305.0));
+    assert_eq!(values(&y, "acute")[51], n(305.0));
 }
 
 // ---- VO2 max -------------------------------------------------------------------------------------
@@ -578,7 +671,7 @@ async fn vo2_max_only_where_a_reading_exists() {
     assert_eq!(e.get(&c, "/api/today").await["vo2max"]["value"], 50.4);
     let y = e.get(&c, "/api/metrics/vo2_max?range=1y").await;
     let v = values(&y, "vo2_max");
-    assert_eq!((v[6].clone(), v[11].clone()), (n(45.5), n(49.7)));
+    assert_eq!((v[28].clone(), v[51].clone()), (n(45.5), n(49.7)));
 }
 
 // ---- respiration and blood oxygen -------------------------------------------------------------------
@@ -642,8 +735,8 @@ async fn respiration_asleep_and_awake_follow_the_night_that_ends_on_the_day() {
     assert_eq!(sleep["night"]["breathing_brpm"], 12.0, "{sleep}");
 
     let y = e.get(&c, "/api/metrics/respiration?range=1y").await;
-    assert_eq!(y["bucket"], "month");
-    assert_eq!(values(&y, "asleep")[11], n(11.5));
+    assert_eq!(y["bucket"], "week");
+    assert_eq!(values(&y, "asleep")[51], n(11.5));
 }
 
 #[tokio::test]
@@ -666,6 +759,92 @@ async fn spo2_average_and_lowest_per_day() {
     assert_eq!(stat(&m, "lowest"), n(93.0));
 }
 
+#[tokio::test]
+async fn weekly_lowest_blood_oxygen_is_the_weeks_lowest_not_a_mean() {
+    let (e, c) = setup().await;
+    night_rows(&e).await;
+    // Nov 18's lowest is 96 and Nov 19's 93: the week of Nov 13 to 19 has 93, not 94.5.
+    let y = e.get(&c, "/api/metrics/spo2?range=12w").await;
+    assert_eq!(y["bucket"], "week");
+    assert_eq!(values(&y, "low")[11], n(93.0));
+    assert_eq!(values(&y, "average")[11], n(95.5));
+    assert_eq!(stat(&y, "lowest"), n(93.0));
+}
+
+#[tokio::test]
+async fn the_day_view_has_breathing_and_blood_oxygen_by_the_hour() {
+    let (e, c) = setup().await;
+    night_rows(&e).await;
+    let d = e.get(&c, "/api/days/2026-11-19").await;
+    let b = &d["breathing"];
+    // The night that ended on the 19th (the 23:45 reading of the 18th included) is asleep.
+    assert_eq!(
+        (b["lowest"].clone(), b["highest"].clone()),
+        (n(10.0), n(17.0))
+    );
+    assert_eq!(
+        (b["avg_asleep"].clone(), b["avg_awake"].clone()),
+        (n(12.0), n(16.0))
+    );
+    // The chart's points are the hours of the local day only: the evening before is not one.
+    let hours: Vec<(&str, f64)> = b["hourly"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|p| {
+            (
+                p["time"].as_str().unwrap().get(..16).unwrap(),
+                p["value"].as_f64().unwrap(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        hours,
+        [
+            ("2026-11-19T01:00", 12.0),
+            ("2026-11-19T03:00", 14.0),
+            ("2026-11-19T10:00", 17.0),
+            ("2026-11-19T15:00", 15.0),
+        ]
+    );
+    let o = &d["spo2"];
+    assert_eq!(
+        (
+            o["average"].clone(),
+            o["lowest"].clone(),
+            o["latest"].clone()
+        ),
+        (n(94.0), n(93.0), n(93.0))
+    );
+    assert_eq!(o["avg_asleep"], 94.0);
+    assert!(o["latest_at"]
+        .as_str()
+        .unwrap()
+        .starts_with("2026-11-19T04:00"));
+    assert_eq!(o["hourly"].as_array().unwrap().len(), 2);
+
+    // The 18th: the night and the afternoon.
+    let d18 = e.get(&c, "/api/days/2026-11-18").await;
+    let o = &d18["spo2"];
+    assert_eq!(
+        (
+            o["average"].clone(),
+            o["lowest"].clone(),
+            o["latest"].clone()
+        ),
+        (n(97.0), n(96.0), n(98.0))
+    );
+
+    // A day without readings: nothing, not zeros.
+    let q = e.get(&c, "/api/days/2026-11-10").await;
+    for k in ["breathing", "spo2"] {
+        assert!(q[k]["hourly"].as_array().unwrap().is_empty(), "{k}");
+        assert!(q[k]["lowest"].is_null(), "{k}");
+    }
+    assert!(q["breathing"]["avg_awake"].is_null());
+    assert!(q["spo2"]["latest_at"].is_null());
+}
+
 // ---- shape, empty database, end and navigation ------------------------------------------------------
 
 #[tokio::test]
@@ -686,12 +865,13 @@ async fn every_metric_has_its_series_and_buckets_and_empty_days_are_null() {
         ("spo2", &["average", "low"]),
     ];
     for (metric, want) in series {
-        for (range, points, bucket) in [("7d", 7, "day"), ("4w", 28, "day"), ("1y", 12, "month")] {
-            let (points, bucket) = if metric == "intensity_minutes" && range == "4w" {
-                (4, "week")
-            } else {
-                (points, bucket)
-            };
+        for (range, points, bucket) in [
+            ("7d", 7, "day"),
+            ("4w", 28, "day"),
+            ("12w", 12, "week"),
+            ("6m", 26, "week"),
+            ("1y", 52, "week"),
+        ] {
             let m = e
                 .get(&c, &format!("/api/metrics/{metric}?range={range}"))
                 .await;
@@ -771,7 +951,7 @@ async fn end_has_prev_and_has_next() {
     assert_eq!(m["has_prev"], false);
     assert!(values(&m, "steps").iter().all(Value::is_null));
 
-    // A period before today's ends on its own last day; 4w and 1y go back by their own length.
+    // A period before today's ends on its own last day; the longer ones go back by their own length.
     let m = e
         .get(&c, "/api/metrics/steps?range=4w&end=2026-06-10")
         .await;
@@ -784,10 +964,10 @@ async fn end_has_prev_and_has_next() {
         .await;
     assert_eq!(
         (m["from"].as_str(), m["to"].as_str()),
-        (Some("2025-07-01"), Some("2026-06-10"))
+        (Some("2025-06-12"), Some("2026-06-10"))
     );
-    assert_eq!(m["bucket"], "month");
-    assert_eq!(values(&m, "steps")[11], n(12_000.0));
+    assert_eq!(m["bucket"], "week");
+    assert_eq!(values(&m, "steps")[51], n(12_000.0));
     assert_eq!(m["has_prev"], false);
 
     // An end after today is today: there is no later period.
@@ -798,15 +978,26 @@ async fn end_has_prev_and_has_next() {
         (m["to"].as_str(), m["has_next"].clone()),
         (Some("2026-11-19"), json!(false))
     );
-    // The 4w period of intensity minutes ending on a Sunday is 4 whole weeks.
+    // The weekly buckets of intensity minutes ending on a Sunday are whole weeks.
     let m = e
-        .get(&c, "/api/metrics/intensity_minutes?range=4w&end=2026-11-15")
+        .get(
+            &c,
+            "/api/metrics/intensity_minutes?range=12w&end=2026-11-15",
+        )
         .await;
     assert_eq!(
         (m["from"].as_str(), m["to"].as_str()),
-        (Some("2026-10-19"), Some("2026-11-15"))
+        (Some("2026-08-24"), Some("2026-11-15"))
     );
-    assert_eq!(dates(&m, "moderate").len(), 4);
+    assert_eq!(dates(&m, "moderate").len(), 12);
+    // A week that ends after today is the current one: it has no later period.
+    let m = e
+        .get(&c, "/api/metrics/intensity_minutes?range=7d&end=2026-11-22")
+        .await;
+    assert_eq!(
+        (m["to"].as_str(), m["has_next"].clone()),
+        (Some("2026-11-22"), json!(false))
+    );
 }
 
 #[tokio::test]
@@ -823,6 +1014,7 @@ async fn unknown_metric_is_404_and_bad_range_or_end_is_400() {
     for uri in [
         "/api/metrics/steps?range=1d",
         "/api/metrics/steps?range=3m",
+        "/api/metrics/steps?range=6M",
         "/api/metrics/steps?range=",
         "/api/metrics/steps?range=7D",
         "/api/metrics/steps?end=2026-13-01",
@@ -893,7 +1085,7 @@ async fn seeded_data_fills_every_metric_and_is_marked_as_sample() {
     e.user_id = report.user_id;
     let c = e.login_as("demo").await;
     for metric in METRICS {
-        for range in ["7d", "4w", "1y"] {
+        for range in ["7d", "4w", "12w", "6m", "1y"] {
             let m = e
                 .get(&c, &format!("/api/metrics/{metric}?range={range}"))
                 .await;
