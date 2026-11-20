@@ -282,6 +282,11 @@ pub async fn set_disabled(pool: &SqlitePool, id: i64, disabled: bool, now: i64) 
             .bind(id)
             .execute(&mut *tx)
             .await?;
+        // Enabling again does not bring the trusted phones back: they sign in once more.
+        sqlx::query("UPDATE tokens SET device_secret_hash = NULL WHERE user_id = ?")
+            .bind(id)
+            .execute(&mut *tx)
+            .await?;
     }
     tx.commit().await?;
     Ok(())
