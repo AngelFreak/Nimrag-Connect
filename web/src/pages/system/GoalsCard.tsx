@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import type { SettingsPatch, SettingsResponse } from '../../api/generated';
-import { Button, Card, CardHeader, TextField } from '../../components';
+import { Button, Card, TextField } from '../../components';
 import { errorMessage } from './errors';
 import { useSaveSettings } from './queries';
 
@@ -90,48 +90,55 @@ export function GoalsCard({ settings }: { settings: SettingsResponse }) {
   }
 
   return (
-    <Card padding="lg" aria-labelledby="goals-title">
-      <CardHeader title="Timezone and goals" id="goals-title" />
-      <form onSubmit={submit} noValidate style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-        <TextField
-          label="Timezone (IANA name)"
-          name="timezone"
-          list="timezone-names"
-          autoComplete="off"
-          autoCapitalize="off"
-          spellCheck={false}
-          value={form.timezone}
-          onChange={set('timezone')}
-          aria-invalid={errors.timezone ? true : undefined}
-          hint={errors.timezone ?? 'Days are local days in this timezone.'}
-        />
-        <datalist id="timezone-names">
-          {zoneNames().map((z) => (
-            <option key={z} value={z} />
-          ))}
-        </datalist>
-        <TextField
-          label="Daily step goal"
-          name="step_goal"
-          type="text"
-          inputMode="numeric"
-          autoComplete="off"
-          value={form.steps}
-          onChange={set('steps')}
-          aria-invalid={errors.steps ? true : undefined}
-          hint={errors.steps}
-        />
-        <TextField
-          label="Weekly intensity minutes goal"
-          name="intensity_goal_min"
-          type="text"
-          inputMode="numeric"
-          autoComplete="off"
-          value={form.intensity}
-          onChange={set('intensity')}
-          aria-invalid={errors.intensity ? true : undefined}
-          hint={errors.intensity}
-        />
+    <Card padding="lg" aria-label="Timezone and goal settings">
+      <form onSubmit={submit} noValidate className="form">
+        <div className="form__group">
+          <h3 className="form__group-title">Timezone</h3>
+          <TextField
+            label="Timezone (IANA name)"
+            name="timezone"
+            list="timezone-names"
+            autoComplete="off"
+            autoCapitalize="off"
+            spellCheck={false}
+            value={form.timezone}
+            onChange={set('timezone')}
+            aria-invalid={errors.timezone ? true : undefined}
+            hint={errors.timezone ?? 'Days are local days in this timezone.'}
+          />
+          <datalist id="timezone-names">
+            {zoneNames().map((z) => (
+              <option key={z} value={z} />
+            ))}
+          </datalist>
+        </div>
+        <div className="form__group">
+          <h3 className="form__group-title">Goals</h3>
+          <div className="form__row">
+            <TextField
+              label="Daily step goal"
+              name="step_goal"
+              type="text"
+              inputMode="numeric"
+              autoComplete="off"
+              value={form.steps}
+              onChange={set('steps')}
+              aria-invalid={errors.steps ? true : undefined}
+              hint={errors.steps}
+            />
+            <TextField
+              label="Weekly intensity minutes goal"
+              name="intensity_goal_min"
+              type="text"
+              inputMode="numeric"
+              autoComplete="off"
+              value={form.intensity}
+              onChange={set('intensity')}
+              aria-invalid={errors.intensity ? true : undefined}
+              hint={errors.intensity}
+            />
+          </div>
+        </div>
         <Button type="submit" size="lg" variant="primary" disabled={!changed || save.isPending} aria-busy={save.isPending}>
           {save.isPending ? 'Saving' : 'Save settings'}
         </Button>

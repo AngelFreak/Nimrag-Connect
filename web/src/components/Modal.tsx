@@ -81,7 +81,7 @@ export function Modal({ title, description, onClose, footer, children }: ModalPr
             {description}
           </p>
         ) : null}
-        <div className="sheet__body modal__body">{children}</div>
+        <div className="sheet__body modal__body" data-scroll="y">{children}</div>
         {footer ? <div className="sheet__foot">{footer}</div> : null}
       </div>
     </div>,

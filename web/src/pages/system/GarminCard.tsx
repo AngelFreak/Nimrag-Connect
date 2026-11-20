@@ -1,7 +1,7 @@
 import { useId, useRef, useState, type ChangeEvent, type FormEvent } from 'react';
 import type { GarminImportTokens, GarminStatus } from '../../api/generated';
 import type { GarminState } from '../../api/generated/GarminState';
-import { Button, Card, CardHeader, Chip, DataList, ErrorState, Skeleton, TextField } from '../../components';
+import { Button, Card, CardHeader, Chip, DataList, ErrorState, Notice, Skeleton, TextField } from '../../components';
 import { fmtInt } from '../../lib/format';
 import { fmtDateTime } from '../today/format';
 import { errorMessage } from './errors';
@@ -59,7 +59,7 @@ function LoginForm({ again, onLoggedIn }: { again: boolean; onLoggedIn: () => vo
   }
 
   return (
-    <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 12 }} aria-label="Log in to Garmin">
+    <form onSubmit={submit} className="form" aria-label="Log in to Garmin">
       <TextField label="Garmin email" type="email" autoComplete="off" value={email} onChange={(e) => setEmail(e.target.value)} required />
       <TextField
         label="Garmin password"
@@ -68,7 +68,7 @@ function LoginForm({ again, onLoggedIn }: { again: boolean; onLoggedIn: () => vo
         value={password}
         onChange={(e) => setPassword(e.target.value)}
         required
-        hint="Used once to log in, then forgotten. Only the login tokens are kept, on your server."
+        hint="Used once to log in, then forgotten."
       />
       <Button type="submit" variant="primary" size="lg" disabled={login.isPending || !email.trim() || !password} aria-busy={login.isPending}>
         {login.isPending ? 'Logging in' : again ? 'Log in to Garmin again' : 'Log in to Garmin'}
@@ -87,7 +87,7 @@ function MfaForm({ onRestart }: { onRestart: () => void }) {
         e.preventDefault();
         mfa.mutate({ code: code.trim() }, { onSettled: () => setCode('') });
       }}
-      style={{ display: 'flex', flexDirection: 'column', gap: 12 }}
+      className="form"
       aria-label="Garmin verification code"
     >
       <TextField
@@ -99,7 +99,7 @@ function MfaForm({ onRestart }: { onRestart: () => void }) {
         required
         hint="Garmin sent a code to your email or phone. It is good for 10 minutes."
       />
-      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+      <div className="form__actions">
         <Button type="submit" variant="primary" size="lg" disabled={mfa.isPending || !code.trim()} aria-busy={mfa.isPending}>
           {mfa.isPending ? 'Checking' : 'Send code'}
         </Button>
@@ -139,10 +139,10 @@ function ImportTokens() {
   return (
     <details className="garmin-import">
       <summary>Use a token file instead</summary>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 10, paddingTop: 10 }}>
-        <p className="stat__sub" id={hintId}>
+      <div className="form garmin-import__body">
+        <p className="card__intro" id={hintId}>
           If Garmin refuses the login from this server, log in with python-garminconnect on another computer and pick the <code>garmin_tokens.json</code> it
-          writes. The file is sent to your server once and is not shown here.
+          writes. The file goes to your server once and is not shown here.
         </p>
         <input
           ref={input}
@@ -191,7 +191,7 @@ function ConnectedTools({ status, timezone }: { status: GarminStatus; timezone: 
   return (
     <>
       <Counts s={status} timezone={timezone} />
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <div className="form__group" style={{ gap: 6 }}>
         <Button disabled={retry.isPending || status.failed === 0} onClick={() => retry.mutate()} aria-busy={retry.isPending}>
           Try the failed ones again
         </Button>
@@ -202,7 +202,7 @@ function ConnectedTools({ status, timezone }: { status: GarminStatus; timezone: 
           e.preventDefault();
           if (daysOk) backfill.mutate({ days: n });
         }}
-        style={{ display: 'flex', flexDirection: 'column', gap: 10 }}
+        className="form__group"
         aria-label="Send older activities"
       >
         <TextField
@@ -232,9 +232,9 @@ function ConnectedTools({ status, timezone }: { status: GarminStatus; timezone: 
         {backfill.isError ? <Failure error={backfill.error} /> : null}
       </form>
       {confirmLogout ? (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <p className="stat__sub">Stops sending activities to Garmin and deletes the stored login tokens from your server.</p>
-          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+        <div className="form__group" style={{ gap: 10 }}>
+          <p className="card__intro">Stops sending activities to Garmin and deletes the stored login tokens from your server.</p>
+          <div className="form__actions">
             <Button onClick={() => logout.mutate(undefined, { onSuccess: () => setConfirmLogout(false) })} disabled={logout.isPending}>
               Yes, log out of Garmin
             </Button>
@@ -260,15 +260,15 @@ export function GarminCard({ timezone }: { timezone: string }) {
 
   return (
     <Card padding="lg" aria-labelledby="garmin-title">
-      <CardHeader title="Garmin Connect (Forward)" id="garmin-title" aside={label ? <Chip>{label}</Chip> : undefined} />
-      <p className="stat__sub">
-        Sends the activities your watch records to your Garmin Connect account, so they show up there too. Activities only: Garmin&apos;s import takes no
-        all-day health, sleep or HRV data.
+      <CardHeader title="Garmin Connect (Forward)" id="garmin-title" level={3} aside={label ? <Chip>{label}</Chip> : undefined} />
+      <p className="card__intro">
+        Sends each activity your watch records on to your Garmin Connect account. Activities only: Garmin&apos;s import takes no sleep, HRV or other
+        health data.
       </p>
-      <p className="stat__sub">
-        The login is unofficial. It copies the sign-in of Garmin&apos;s phone app, may stop working without notice, and may conflict with Garmin&apos;s terms.
-        Your password is used once and never stored; only login tokens are kept, on your server.
-      </p>
+      <Notice tone="warn">
+        The login is unofficial: it copies Garmin&apos;s phone app, may stop working without notice and may conflict with Garmin&apos;s terms. Your password is
+        used once and never stored; only login tokens are kept, on your server.
+      </Notice>
       {query.isPending ? <Skeleton height={20} lines={3} /> : null}
       {query.isError && !s ? (
         <ErrorState title="Could not load the Garmin status" action={<Button onClick={() => void query.refetch()}>Try again</Button>}>
@@ -279,7 +279,7 @@ export function GarminCard({ timezone }: { timezone: string }) {
         <>
           {state === 'connected' ? <ConnectedTools status={s} timezone={timezone} /> : null}
           {state === 'needs_mfa' && !restart ? <MfaForm onRestart={() => setRestart(true)} /> : null}
-          {state === 'paused' ? <p className="stat__sub">Garmin kept refusing the stored login, so sending is paused. Log in again to carry on.</p> : null}
+          {state === 'paused' ? <p className="card__intro">Garmin kept refusing the stored login, so sending is paused. Log in again to carry on.</p> : null}
           {showLogin ? <LoginForm again={state !== 'off'} onLoggedIn={() => setRestart(false)} /> : null}
           {state !== 'connected' ? <ImportTokens /> : null}
           {s.last_error ? (

@@ -21,3 +21,4 @@ export * from './SyncControls';
 export * from './AppShell';
 export * from './ProfileMenu';
 export * from './Modal';
+export * from './Section';

@@ -24,8 +24,8 @@ function PasswordStep({ onStarted, onCancel }: { onStarted: (data: SetupStartRes
   }
 
   return (
-    <form onSubmit={submit} noValidate style={{ display: 'flex', flexDirection: 'column', gap: 12 }} aria-label="Confirm your password">
-      <p className="stat__sub">To set up two-factor again, confirm your password. The authenticator you use now keeps working until you finish.</p>
+    <form onSubmit={submit} noValidate className="form" aria-label="Confirm your password">
+      <p className="card__intro">Confirm your password to start. Your current authenticator keeps working until you finish.</p>
       <TextField
         ref={input}
         label="Your password"
@@ -36,7 +36,7 @@ function PasswordStep({ onStarted, onCancel }: { onStarted: (data: SetupStartRes
         value={password}
         onChange={(e) => setPassword(e.target.value)}
       />
-      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+      <div className="form__actions">
         <Button type="submit" variant="primary" disabled={!password || start.isPending} aria-busy={start.isPending}>
           {start.isPending ? 'Checking' : 'Continue'}
         </Button>
@@ -77,10 +77,10 @@ function CodeStep({ data, onDone, onRestart }: { data: SetupStartResponse; onDon
   }
 
   return (
-    <form onSubmit={submit} noValidate style={{ display: 'flex', flexDirection: 'column', gap: 14 }} aria-label="Set up the new authenticator">
+    <form onSubmit={submit} noValidate className="form" aria-label="Set up the new authenticator">
       <AuthenticatorPanel uri={data.otpauth_uri} secret={data.secret} />
       <CodeField ref={codeInput} value={code} onChange={setCode} hint="The code the new entry in your authenticator app shows." />
-      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+      <div className="form__actions">
         <Button type="submit" variant="primary" disabled={code.length !== 6 || confirm.isPending} aria-busy={confirm.isPending}>
           {confirm.isPending ? 'Checking' : 'Confirm'}
         </Button>
@@ -102,10 +102,10 @@ export function TwoFactorCard() {
 
   return (
     <Card padding="lg" aria-labelledby="two-factor-title">
-      <CardHeader title="Two-factor" id="two-factor-title" aside="Codes from an authenticator app" />
+      <CardHeader title="Two-factor" id="two-factor-title" level={3} />
       {phase.kind === 'idle' || phase.kind === 'done' ? (
         <>
-          <p className="stat__sub">Logging in asks for a 6-digit code from your authenticator app. Got a new phone? Set up two-factor again here.</p>
+          <p className="card__intro">Logging in asks for a 6-digit code from your authenticator app. Got a new phone? Set it up again here.</p>
           {phase.kind === 'done' ? (
             <p className="status-msg status-msg--ok" role="status">
               Two-factor is set up with the new authenticator. The old one no longer works.

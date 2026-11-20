@@ -26,7 +26,7 @@ interface FilterChipsProps<V extends string> {
 export function FilterChips<V extends string>({ label, options, value, onChange }: FilterChipsProps<V>) {
   const ref = useGroupArrows<HTMLDivElement>();
   return (
-    <div ref={ref} role="group" aria-label={label} className="filter-chips">
+    <div ref={ref} role="group" aria-label={label} className="filter-chips" data-scroll="x">
       {options.map((o) => (
         <button key={o.value} type="button" className="filter-chip" aria-pressed={o.value === value} onClick={() => onChange(o.value)}>
           {o.label}

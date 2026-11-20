@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../api/client';
 import type { CalendarResponse } from '../api/generated';
-import { Card, CardHeader, DataList, TopBar } from '../components';
+import { Card, CardHeader, DataList, LinkButton, TopBar } from '../components';
 import { addMonths, browserToday, fmtMonth, fmtShortDay, isIsoMonth } from '../lib/dates';
 import { fmtInt } from '../lib/format';
 import { usePageTitle } from '../lib/hooks';
@@ -156,7 +156,7 @@ export function CalendarBody({ month, data, today }: { month: string; data: Cale
           <Card padding="lg" aria-labelledby="cal-day-title">
             <CardHeader title={fmtShortDay(focusDay)} id="cal-day-title" />
             <DaySummary day={selected} />
-            <Link to={`/day/${focusDay}`}>Open day view</Link>
+            <LinkButton to={`/day/${focusDay}`}>Open day view</LinkButton>
           </Card>
           <Card padding="lg" aria-labelledby="cal-totals-title">
             <CardHeader title={isCurrentMonth ? 'Month so far' : 'Month totals'} id="cal-totals-title" />
