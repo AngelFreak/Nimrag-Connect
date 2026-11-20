@@ -106,7 +106,7 @@ async fn insert_run(e: &Env) -> String {
 /// Everything the Today fixture needs: a night, the day's energy, stress, steps, heart rate,
 /// intensity minutes, HRV, recovery, VO2 max and training status.
 async fn fixture(e: &Env) {
-    // Night of Wed 18 Nov: 22:30 to 06:00, with stage rows.
+    // Night of Wed 18 to Thu 19 Nov (Thu 19's sleep): 22:30 to 06:00, with stage rows.
     let (s, w) = (at(18, 22, 30), at(19, 6, 0));
     file(e, &sha('a'), w).await;
     e.exec(&format!(
@@ -288,7 +288,7 @@ async fn today_exact_values() {
 
     // In focus: last night.
     let sl = &t["sleep"];
-    assert_eq!(sl["date"], "2026-11-18");
+    assert_eq!(sl["date"], "2026-11-19");
     assert_eq!(sl["start"], "2026-11-18T22:30:00+01:00");
     assert_eq!(sl["duration_s"], 26400.0); // 5h20 light + 1h deep + 1h REM
     assert_eq!(sl["time_in_bed_s"], 27000.0);
@@ -435,13 +435,14 @@ async fn today_exact_values() {
     assert_eq!(t["training_this_week"]["duration_s"], 1800.0);
     let y = &t["yesterday"];
     assert_eq!(y["date"], "2026-11-18");
+    // The only night ends today, so yesterday (as on its Day view) has none.
     assert_eq!(
         (
             y["sleep_score"].as_f64(),
             y["sleep_duration_s"].as_f64(),
             y["resting_hr_bpm"].as_f64()
         ),
-        (Some(84.0), Some(26400.0), Some(51.0))
+        (None, None, Some(51.0))
     );
     assert!(y["steps"].is_null() && y["hr_high_bpm"].is_null() && y["energy_charged"].is_null());
     let l7 = &t["last_7_days"];
@@ -459,7 +460,7 @@ async fn today_exact_values() {
             l7["avg_sleep_score"].as_f64(),
             l7["avg_resting_hr_bpm"].as_f64()
         ),
-        (Some(84.0), Some(51.0))
+        (None, Some(51.0))
     );
     assert!(l7["avg_steps"].is_null() && l7["avg_stress"].is_null());
 }
@@ -560,7 +561,8 @@ async fn day_movement_calendar_sleep_trends_training_exact() {
     let y = e.get(&c, "/api/days/2026-11-18").await;
     assert_eq!(y["next_date"], "2026-11-19");
     assert_eq!(y["activities"].as_array().unwrap().len(), 1);
-    assert_eq!(y["sleep"]["duration_s"], 26400.0);
+    assert!(y["sleep"].is_null(), "the night ends on the 19th");
+    assert_eq!(d["sleep"]["duration_s"], 26400.0);
     assert_eq!(y["activities"][0]["start"], "2026-11-18T17:30:00+01:00");
     assert_eq!(
         e.call(Method::GET, "/api/days/2026-13-45", Some(&c), false, None)
@@ -621,9 +623,16 @@ async fn day_movement_calendar_sleep_trends_training_exact() {
             day18["sleep_duration_s"].as_f64(),
             day18["resting_hr_bpm"].as_f64()
         ),
-        (Some(84.0), Some(26400.0), Some(51.0))
+        (None, None, Some(51.0))
     );
     let day19 = &cal["days"][18];
+    assert_eq!(
+        (
+            day19["sleep_score"].as_f64(),
+            day19["sleep_duration_s"].as_f64()
+        ),
+        (Some(84.0), Some(26400.0))
+    );
     assert_eq!(
         (
             day19["steps"].as_f64(),
@@ -640,11 +649,12 @@ async fn day_movement_calendar_sleep_trends_training_exact() {
         StatusCode::BAD_REQUEST
     );
 
-    let n = e.get(&c, "/api/sleep/2026-11-18").await;
+    let n = e.get(&c, "/api/sleep/2026-11-19").await;
     assert_eq!(n["night"]["duration_s"], 26400.0);
+    assert_eq!(n["night"]["date"], "2026-11-19");
     assert_eq!(n["last_nights"].as_array().unwrap().len(), 1);
     assert_eq!(n["average_duration_s"], 26400.0);
-    assert!(e.get(&c, "/api/sleep/2026-11-19").await["night"].is_null());
+    assert!(e.get(&c, "/api/sleep/2026-11-18").await["night"].is_null());
     let l = e.get(&c, "/api/sleep?nights=7").await;
     assert_eq!(
         (

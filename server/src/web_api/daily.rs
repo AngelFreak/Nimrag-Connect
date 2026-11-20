@@ -337,7 +337,8 @@ pub struct SleepScores {
 /// One night, in full.
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 pub struct SleepNight {
-    /// Local date the night began on (a start before 06:00 counts for the day before).
+    /// Local date the night ends on, the morning of waking up (Garmin's convention): the night
+    /// from Thursday evening to Friday morning is dated Friday.
     pub date: String,
     pub start: String,
     pub end: String,
@@ -402,23 +403,23 @@ pub struct SessionRow {
 const SESSION_COLS: &str = "start_ts, end_ts, overall_score, quality_score, duration_score,
     recovery_score, deep_score, light_score, rem_score, awakenings_count, avg_stress,
     asleep_s, deep_s, light_s, rem_s, awake_s";
-const NIGHT_SHIFT_S: i64 = 6 * 3600;
 
-/// The local date a night belongs to: the day it began on, counting starts
-/// before 06:00 for the previous day.
-pub fn night_date(ctx: &Ctx, start_ts: i64) -> NaiveDate {
-    ctx.date(start_ts - NIGHT_SHIFT_S)
+/// The local date a night belongs to: the day it ENDS on (Garmin's convention), so the night
+/// from Thursday evening to Friday morning is Friday's sleep, in the account's time zone.
+pub fn night_date(ctx: &Ctx, end_ts: i64) -> NaiveDate {
+    ctx.date(end_ts)
 }
 
-async fn sessions_started(ctx: &Ctx, from: i64, to: i64) -> Res<Vec<SessionRow>> {
+/// Sessions of the nights whose date is in `from..=to`, i.e. that ended on those local days.
+async fn sessions_of_dates(ctx: &Ctx, from: NaiveDate, to: NaiveDate) -> Res<Vec<SessionRow>> {
     let sql = format!(
         "SELECT {SESSION_COLS} FROM sleep_sessions_current
-         WHERE user_id = ? AND start_ts >= ? AND start_ts < ? AND end_ts > start_ts ORDER BY start_ts"
+         WHERE user_id = ? AND end_ts >= ? AND end_ts < ? AND end_ts > start_ts ORDER BY end_ts"
     );
     Ok(sqlx::query_as(sqlx::AssertSqlSafe(sql))
         .bind(ctx.uid)
-        .bind(from)
-        .bind(to)
+        .bind(ctx.day_bounds(from).0)
+        .bind(ctx.day_bounds(to + Duration::days(1)).0)
         .fetch_all(&ctx.pool)
         .await?)
 }
@@ -429,11 +430,9 @@ pub async fn night_sessions(
     from: NaiveDate,
     to: NaiveDate,
 ) -> Res<Vec<(NaiveDate, SessionRow)>> {
-    let lo = ctx.day_bounds(from).0 + NIGHT_SHIFT_S;
-    let hi = ctx.day_bounds(to + Duration::days(1)).0 + NIGHT_SHIFT_S;
     let mut by: BTreeMap<NaiveDate, SessionRow> = BTreeMap::new();
-    for s in sessions_started(ctx, lo, hi).await? {
-        let d = night_date(ctx, s.start_ts);
+    for s in sessions_of_dates(ctx, from, to).await? {
+        let d = night_date(ctx, s.end_ts);
         if by
             .get(&d)
             .is_none_or(|o| s.end_ts - s.start_ts > o.end_ts - o.start_ts)
@@ -444,13 +443,9 @@ pub async fn night_sessions(
     Ok(by.into_iter().collect())
 }
 
-/// The night for a local date (the longest session starting in its window).
+/// The night for a local date (the longest session ending on it).
 pub async fn session_for_night(ctx: &Ctx, date: NaiveDate) -> Res<Option<SessionRow>> {
-    let (from, to) = (
-        ctx.day_bounds(date).0 + NIGHT_SHIFT_S,
-        ctx.day_bounds(date + Duration::days(1)).0 + NIGHT_SHIFT_S,
-    );
-    Ok(sessions_started(ctx, from, to)
+    Ok(sessions_of_dates(ctx, date, date)
         .await?
         .into_iter()
         .max_by_key(|s| s.end_ts - s.start_ts))
@@ -536,7 +531,7 @@ async fn levels(ctx: &Ctx, from: i64, to: i64) -> Res<Vec<(i64, i64)>> {
 fn summary(ctx: &Ctx, s: &SessionRow, lv: &[(i64, i64)]) -> NightSummary {
     let st = stages_of(lv, s.start_ts, s.end_ts);
     NightSummary {
-        date: crate::settings::date_string(night_date(ctx, s.start_ts)),
+        date: crate::settings::date_string(night_date(ctx, s.end_ts)),
         start: ctx.ts(s.start_ts),
         end: ctx.ts(s.end_ts),
         // Time asleep: from the stage rows of a watch night, else the totals an imported night
@@ -554,18 +549,20 @@ fn summary(ctx: &Ctx, s: &SessionRow, lv: &[(i64, i64)]) -> NightSummary {
     }
 }
 
-/// Nights whose local date is in `from..=to`, one per date (the longest), oldest first.
+/// Nights whose local date (the day they end on) is in `from..=to`, one per date (the longest),
+/// oldest first.
 pub async fn nights(ctx: &Ctx, from: NaiveDate, to: NaiveDate) -> Res<Vec<NightSummary>> {
-    let lo = ctx.day_bounds(from).0 + NIGHT_SHIFT_S;
-    let hi = ctx.day_bounds(to + Duration::days(1)).0 + NIGHT_SHIFT_S;
-    let sessions = sessions_started(ctx, lo, hi).await?;
-    let Some(max_end) = sessions.iter().map(|s| s.end_ts).max() else {
+    let sessions = sessions_of_dates(ctx, from, to).await?;
+    let (Some(min_start), Some(max_end)) = (
+        sessions.iter().map(|s| s.start_ts).min(),
+        sessions.iter().map(|s| s.end_ts).max(),
+    ) else {
         return Ok(vec![]);
     };
-    let lv = levels(ctx, lo, max_end).await?;
+    let lv = levels(ctx, min_start, max_end).await?;
     let mut by_date: BTreeMap<NaiveDate, (i64, NightSummary)> = BTreeMap::new();
     for s in &sessions {
-        let d = night_date(ctx, s.start_ts);
+        let d = night_date(ctx, s.end_ts);
         let len = s.end_ts - s.start_ts;
         if by_date.get(&d).is_none_or(|(l, _)| len > *l) {
             by_date.insert(d, (len, summary(ctx, s, &lv)));

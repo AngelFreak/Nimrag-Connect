@@ -2,7 +2,7 @@
 
 export type YesterdaySummary = { date: string, energy_charged: number | null, energy_drained: number | null, steps: number | null, 
 /**
- * The night that began yesterday evening.
+ * The night that ended yesterday morning (yesterday's sleep, as on the Day view).
  */
 sleep_score: number | null, sleep_duration_s: number | null, resting_hr_bpm: number | null, hr_high_bpm: number | null, stress_avg: number | null, 
 /**

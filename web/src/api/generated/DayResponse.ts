@@ -11,6 +11,6 @@ export type DayResponse = { sample: boolean, date: string, previous_date: string
  */
 next_date: string | null, heart_rate: HeartRateBlock, stress: StressBlock, energy: EnergyBlock, steps: number | null, step_goal: number, intensity_minutes: number | null, 
 /**
- * The night that began on this date.
+ * The night that ended on this date (the morning of waking up).
  */
 sleep: NightSummary | null, activities: Array<ActivityListItem>, };

@@ -2,8 +2,9 @@
 //! `GET /api/sleep?nights=7|14|30` and `GET /api/sleep/history?from&to&group=day|week|month`
 //! (scores and time asleep over a range, aggregated).
 //!
-//! A night belongs to the local date it began on (a start before 06:00 counts for
-//! the day before), so "night of Wed 18 Nov" runs from Wednesday evening to Thursday.
+//! A night belongs to the local date it ends on (Garmin's convention), so the sleep of
+//! Thu 19 Nov is the night from Wednesday evening to Thursday morning. Day, Calendar,
+//! Today and Sleep all pick nights through `daily::nights` / `session_for_night`.
 
 use super::daily::{
     dates, night_detail, nights, session_for_night, session_last_night, week_start, NightSummary,
@@ -89,7 +90,7 @@ async fn list(
     }
     let yesterday = ctx.today() - Duration::days(1);
     let end = match session_last_night(&ctx).await? {
-        Some(s) => super::daily::night_date(&ctx, s.start_ts)
+        Some(s) => super::daily::night_date(&ctx, s.end_ts)
             .max(yesterday)
             .min(ctx.today()),
         None => yesterday,

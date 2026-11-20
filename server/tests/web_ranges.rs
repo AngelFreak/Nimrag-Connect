@@ -381,14 +381,14 @@ async fn night(e: &Env, id: char, start: i64, hours: f64, score: Option<f64>) {
 }
 
 async fn six_nights(e: &Env) {
-    // Nights by the date they begin on: Oct 30 (8 h, 90), Nov 2 (6 h, 60), Nov 12 (8 h 30, 80),
-    // Nov 13 (7 h, 70), Nov 15 (7 h 30, no score), Nov 18 (9 h, 88).
-    night(e, 'a', cph(2026, 10, 30, 22, 0), 8.0, Some(90.0)).await;
-    night(e, 'b', at(2, 23, 0), 6.0, Some(60.0)).await;
-    night(e, 'c', at(12, 22, 0), 8.5, Some(80.0)).await;
-    night(e, 'd', at(13, 23, 0), 7.0, Some(70.0)).await;
-    night(e, 'e', at(15, 23, 30), 7.5, None).await;
-    night(e, 'f', at(18, 22, 0), 9.0, Some(88.0)).await;
+    // Nights by the date they end on (the morning of waking up): Oct 30 (8 h, 90), Nov 2 (6 h, 60),
+    // Nov 12 (8 h 30, 80), Nov 13 (7 h, 70), Nov 15 (7 h 30, no score), Nov 18 (9 h, 88).
+    night(e, 'a', cph(2026, 10, 29, 22, 0), 8.0, Some(90.0)).await;
+    night(e, 'b', at(1, 23, 0), 6.0, Some(60.0)).await;
+    night(e, 'c', at(11, 22, 0), 8.5, Some(80.0)).await;
+    night(e, 'd', at(12, 23, 0), 7.0, Some(70.0)).await;
+    night(e, 'e', at(14, 23, 30), 7.5, None).await;
+    night(e, 'f', at(17, 22, 0), 9.0, Some(88.0)).await;
 }
 
 #[tokio::test]

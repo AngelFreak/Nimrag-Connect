@@ -76,7 +76,7 @@ pub struct YesterdaySummary {
     pub energy_charged: Option<f64>,
     pub energy_drained: Option<f64>,
     pub steps: Option<f64>,
-    /// The night that began yesterday evening.
+    /// The night that ended yesterday morning (yesterday's sleep, as on the Day view).
     pub sleep_score: Option<f64>,
     pub sleep_duration_s: Option<f64>,
     pub resting_hr_bpm: Option<f64>,
