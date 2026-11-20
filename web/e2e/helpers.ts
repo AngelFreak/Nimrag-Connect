@@ -62,3 +62,17 @@ export async function expectAxeClean(page: Page) {
   const violations = results.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(' ')).slice(0, 4).join(' | ')}`);
   expect(violations, 'axe violations').toEqual([]);
 }
+
+/** Opens the profile from the avatar in the top bar (a link called "Profile"). */
+export async function openProfile(page: Page) {
+  await page.getByRole('link', { name: 'Profile', exact: true }).first().click();
+  await expect(page).toHaveURL(/\/profile$/);
+  await settled(page, 'Profile');
+}
+
+/** Log out from the profile page: the row asks first, then the session ends and the login page shows. */
+export async function logOutFromProfile(page: Page) {
+  await page.getByRole('button', { name: 'Log out' }).click();
+  await page.getByRole('dialog', { name: 'Log out?' }).getByRole('button', { name: 'Log out' }).click();
+  await expect(page).toHaveURL(/\/login/);
+}

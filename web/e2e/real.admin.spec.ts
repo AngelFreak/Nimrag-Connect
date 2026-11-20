@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process';
 import { expect, test, type Browser, type Page } from '@playwright/test';
-import { expectAxeClean, settled, VIEWPORTS, watch } from './helpers';
+import { expectAxeClean, logOutFromProfile, openProfile, settled, VIEWPORTS, watch } from './helpers';
 import { adminSessionFile, ORIGIN, readServerState } from './real-server';
 import { nextTotp } from './totp';
 
@@ -29,7 +29,7 @@ test('an admin has no data tabs: data routes lead to /admin, and the data API an
   await expect(page.getByRole('navigation', { name: 'Main' })).toHaveCount(0);
   for (const name of ['Activities', 'Strength', 'Health', 'Today', 'Overview']) await expect(page.getByRole('link', { name, exact: true })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Refresh' })).toHaveCount(0);
-  for (const path of ['/activities', '/settings', '/sleep', '/day', '/does-not-exist']) {
+  for (const path of ['/activities', '/sleep', '/day', '/devices', '/profile/phones', '/does-not-exist']) {
     await page.goto(path);
     await expect(page).toHaveURL(/\/admin$/);
   }
@@ -38,18 +38,22 @@ test('an admin has no data tabs: data routes lead to /admin, and the data API an
   expect(problems, 'console errors and failed requests').toEqual([]);
 });
 
-test('the profile menu of the admin shows the name and role, a link to the admin area and Log out', async ({ page }) => {
+test('the profile of the admin shows the name, only Account and Log out, and a row to the admin area', async ({ page }) => {
   await page.goto('/admin');
   await settled(page, 'Admin');
-  await page.getByRole('button', { name: 'Profile and account' }).first().click();
-  const menu = page.getByRole('group', { name: 'Account' }).first();
-  await expect(menu).toContainText('admin');
-  await expect(menu).toContainText('Admin');
-  await expect(menu.getByRole('link', { name: 'Admin area' })).toHaveAttribute('href', '/admin');
-  await expect(menu.getByRole('link', { name: 'Settings' })).toHaveCount(0);
-  await expect(menu.getByRole('button', { name: 'Log out' })).toBeVisible();
-  await page.keyboard.press('Escape');
-  await expect(menu).toHaveCount(0);
+  await openProfile(page);
+  const head = page.getByRole('region', { name: 'Your account' });
+  await expect(head).toContainText('admin');
+  await expect(head).toContainText('Admin');
+  await expect(page.getByRole('link', { name: 'Password' })).toBeVisible();
+  await expect(page.getByRole('link', { name: /^Two-step login/ })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Admin area' })).toHaveAttribute('href', '/admin');
+  for (const name of [/^Timezone/, /^Goals/, /^Signed-in phones/, /^Send activities/]) await expect(page.getByRole('link', { name })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Log out' })).toBeVisible();
+  await expectAxeClean(page);
+  // The sub-pages for people with data are not for an admin: they lead back to /admin.
+  await page.goto('/profile/timezone');
+  await expect(page).toHaveURL(/\/admin$/);
 });
 
 for (const vp of VIEWPORTS) {
@@ -100,12 +104,6 @@ async function logInAs(page: Page, username: string, password: string, code?: st
   await page.getByLabel('Password').fill(password);
   if (code) await page.getByLabel('6-digit code').fill(code);
   await page.getByRole('button', { name: 'Log in' }).click();
-}
-
-async function logOut(page: Page) {
-  await page.getByRole('button', { name: 'Profile and account' }).first().click();
-  await page.getByRole('group', { name: 'Account' }).first().getByRole('button', { name: 'Log out' }).click();
-  await expect(page).toHaveURL(/\/login/);
 }
 
 test.describe('a user created by the admin', () => {
@@ -199,34 +197,36 @@ test.describe('a user created by the admin', () => {
     await context.close();
   });
 
-  test('the user changes two-factor and password in Settings, then logs in with the new ones', async ({ browser }) => {
+  test('the user changes two-step login and password on the profile, then logs in with the new ones', async ({ browser }) => {
     const { context, page } = await guest(browser);
     await logInAs(page, USER, FIRST_PASSWORD, await nextTotp(secret));
     await expect(page).toHaveURL(/\/$/);
-    await page.goto('/settings');
-    await settled(page, 'Settings');
+    await openProfile(page);
+    await page.getByRole('link', { name: /^Two-step login/ }).click();
+    await settled(page, 'Two-step login');
 
-    const twoFactor = page.getByRole('heading', { name: 'Two-factor' }).locator('xpath=ancestor::section[1]');
-    await twoFactor.getByRole('button', { name: 'Set up two-factor again' }).click();
-    await twoFactor.getByLabel('Your password', { exact: true }).fill(FIRST_PASSWORD);
-    await twoFactor.getByRole('button', { name: 'Continue' }).click();
-    await expect(twoFactor.getByRole('img', { name: /QR code/ })).toBeVisible();
-    secondSecret = await twoFactor.getByLabel('Secret key').inputValue();
+    await page.getByRole('button', { name: 'Set up again' }).click();
+    await page.getByLabel('Your password', { exact: true }).fill(FIRST_PASSWORD);
+    await page.getByRole('button', { name: 'Continue' }).click();
+    await expect(page.getByRole('img', { name: /QR code/ })).toBeVisible();
+    secondSecret = await page.getByLabel('Secret key').inputValue();
     expect(secondSecret).not.toBe(secret);
-    await twoFactor.getByLabel('6-digit code').fill(await nextTotp(secondSecret));
-    await twoFactor.getByRole('button', { name: 'Confirm' }).click();
-    await expect(twoFactor.getByRole('status')).toContainText('Two-factor is set up with the new authenticator');
+    await page.getByLabel('6-digit code').fill(await nextTotp(secondSecret));
+    await page.getByRole('button', { name: 'Confirm' }).click();
+    await expect(page.getByRole('status')).toContainText('Two-step login is set up with the new authenticator');
     await expectAxeClean(page);
 
-    const password = page.getByRole('heading', { name: 'Change password' }).locator('xpath=ancestor::section[1]');
-    await password.getByLabel('Current password').fill(FIRST_PASSWORD);
-    await password.getByLabel('New password', { exact: true }).fill(SECOND_PASSWORD);
-    await password.getByLabel('New password again').fill(SECOND_PASSWORD);
-    await password.getByRole('button', { name: 'Change password' }).click();
-    await expect(password.getByRole('status')).toContainText('Password changed');
-    // The fresh session works: still signed in.
+    await page.goto('/profile/password');
+    await settled(page, 'Password');
+    await page.getByLabel('Current password').fill(FIRST_PASSWORD);
+    await page.getByLabel('New password', { exact: true }).fill(SECOND_PASSWORD);
+    await page.getByLabel('New password again').fill(SECOND_PASSWORD);
+    await page.getByRole('button', { name: 'Change password' }).click();
+    // Back on the profile with the notice; the fresh session works: still signed in.
+    await expect(page).toHaveURL(/\/profile$/);
+    await expect(page.getByRole('status')).toContainText('Password changed. Your other devices were logged out.');
     expect((await page.request.get('/api/me')).status()).toBe(200);
-    await logOut(page);
+    await logOutFromProfile(page);
 
     // The old authenticator and the old password no longer work; the new ones do.
     await logInAs(page, USER, SECOND_PASSWORD, await nextTotp(secondSecret));
