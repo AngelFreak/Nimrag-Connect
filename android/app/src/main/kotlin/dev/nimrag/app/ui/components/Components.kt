@@ -26,7 +26,12 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import dev.nimrag.app.ui.theme.NimragColors
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -235,12 +240,21 @@ fun NimragButton(
     enabled: Boolean = true,
     content: @Composable RowScope.() -> Unit,
 ) {
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    // The web's .btn--primary: the accent fill, the hover colour while pressed, dark text, no shadow or tint.
     Button(
         onClick = onClick,
         modifier = modifier.heightIn(min = 48.dp),
         enabled = enabled,
         shape = RoundedCornerShape(12.dp),
+        colors = ButtonDefaults.buttonColors(
+            containerColor = if (pressed) NimragColors.AccentHover else NimragColors.Accent,
+            contentColor = NimragColors.OnAccent,
+        ),
+        elevation = ButtonDefaults.buttonElevation(0.dp, 0.dp, 0.dp, 0.dp, 0.dp),
         contentPadding = PaddingValues(horizontal = 20.dp, vertical = 10.dp),
+        interactionSource = interaction,
         content = content,
     )
 }

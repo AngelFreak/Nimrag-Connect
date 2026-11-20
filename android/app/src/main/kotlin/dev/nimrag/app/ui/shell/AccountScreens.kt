@@ -4,13 +4,30 @@ import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.res.painterResource
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -40,7 +57,9 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.layout.ColumnScope
 import dev.nimrag.app.R
 import dev.nimrag.app.engine.auth.logic.AuthFailure
 import dev.nimrag.app.engine.auth.logic.LoginForm
@@ -55,6 +74,61 @@ import dev.nimrag.app.ui.components.SectionCard
  * password, code) and unlock (fingerprint or password). The password and the code live only in
  * `remember` (never saved instance state) and leave the screen with the call.
  */
+
+/** Below this window height (dp) the logo shrinks, so the form gets the room (landscape). */
+private const val COMPACT_HEIGHT_DP = 480
+
+/**
+ * The app's logo, as on the launcher: the icon's tile (background layer) with its foreground layer
+ * (wordmark and sync arrow) on top. Both layers are the existing launcher vectors, drawn at the
+ * zoom that fills a rounded tile (the adaptive layers keep a safe margin the tile does not need).
+ */
+@Composable
+fun BrandLogo(size: Dp, modifier: Modifier = Modifier) {
+    val description = stringResource(R.string.app_name)
+    Box(
+        modifier
+            .size(size)
+            .clip(RoundedCornerShape(size * 0.22f))
+            .semantics { contentDescription = description },
+    ) {
+        Box(Modifier.fillMaxSize().graphicsLayer { scaleX = 1.5f; scaleY = 1.5f }) {
+            Image(painterResource(R.drawable.ic_launcher_background), contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
+            Image(painterResource(R.drawable.ic_launcher_foreground), contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
+        }
+    }
+}
+
+/**
+ * The frame of every full-screen account step: scrolls when the content is taller than the window
+ * (landscape, large text), keeps clear of the keyboard and the system bars, and centres a card of
+ * at most 480 dp under the logo when there is room. Scrolling is the only way the whole form stays
+ * reachable at 130% text in landscape, so nothing in here may use a fixed height.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun AccountPage(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
+    BoxWithConstraints(
+        modifier
+            .fillMaxSize()
+            .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))
+            .imePadding(),
+    ) {
+        val compact = maxHeight < COMPACT_HEIGHT_DP.dp
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .heightIn(min = maxHeight)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp, vertical = if (compact) 12.dp else 20.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(if (compact) 12.dp else 20.dp, Alignment.CenterVertically),
+        ) {
+            BrandLogo(if (compact) 56.dp else 88.dp)
+            Column(Modifier.widthIn(max = 480.dp).fillMaxWidth(), content = content)
+        }
+    }
+}
 
 /** The one fixed sentence for a failure (never the server's own text). */
 @Composable
@@ -120,7 +194,7 @@ fun SignInScreen(
     LaunchedEffect(account.failure) { if (account.failure != null) code = "" }
     val submit = { if (!account.busy) onSignIn(server, username, password, code) }
 
-    Box(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp), contentAlignment = Alignment.Center) {
+    AccountPage(modifier) {
         SectionCard {
             CardTitle(stringResource(R.string.signin_title))
             Text(
@@ -200,7 +274,7 @@ fun UnlockScreen(
     }
     val submit = { if (!account.busy) onPassword(password) }
 
-    Box(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp), contentAlignment = Alignment.Center) {
+    AccountPage(modifier) {
         SectionCard {
             CardTitle(stringResource(R.string.unlock_title))
             Text(
