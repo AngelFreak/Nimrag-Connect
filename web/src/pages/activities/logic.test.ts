@@ -3,7 +3,7 @@ import type { ActivityListItem } from '../../api/generated/ActivityListItem';
 import type { ExerciseGroup } from '../../api/generated/ExerciseGroup';
 import type { StrengthSet } from '../../api/generated/StrengthSet';
 import { activityTitle, groupByPeriod, groupLabel, parseType, rowText, sortActivities, weekStart, whenLabel } from './format';
-import { minutesAxis, paceMinutes, spread, timedToMinutes, timeTicks } from './series';
+import { minutesAxis, paceMinutes, spread, timeLabels, timedToMinutes, timeTicks } from './series';
 import { buildPatch, compareExercises, deltaText, differsFromWatch, draftsOf, loadText, parseReps, parseWeight, repsText, validateAll } from './strengthModel';
 import { zoneEntries } from './ActivityBody';
 
@@ -235,5 +235,19 @@ describe('timeTicks', () => {
   it('has no ticks without a duration', () => {
     expect(timeTicks(0)).toEqual([]);
     expect(timeTicks(NaN)).toEqual([]);
+  });
+});
+
+describe('timeLabels', () => {
+  it('puts each time label at its minute on the chart x axis', () => {
+    expect(timeLabels(30)).toEqual([
+      { value: 0, text: '0' },
+      { value: 10, text: '10' },
+      { value: 20, text: '20' },
+      { value: 30, text: '30 min' },
+    ]);
+  });
+  it('has none without a duration', () => {
+    expect(timeLabels(0)).toEqual([]);
   });
 });

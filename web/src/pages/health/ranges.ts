@@ -2,7 +2,7 @@
 // draw. Missing values stay null (rendered as "unavailable"), never 0. Status names and kinds come
 // from the server; nothing here names a status code.
 
-import type { BandSeries, ChartMarker } from '../../components';
+import type { BandSeries, ChartMarker, XLabel } from '../../components';
 import { statusName } from '../../lib/format';
 import type { HrvDay } from '../../api/generated/HrvDay';
 import type { HrvRange } from '../../api/generated/HrvRange';
@@ -133,12 +133,22 @@ export function baselineShort(low: number | null, high: number | null): string |
   return a === null || b === null ? null : `${a}–${b}`;
 }
 
-/** Four evenly spaced date labels under a chart over `days` days from `from`. */
-export function dayAxis(from: string, count: number): string[] {
-  if (count < 2) return [fmtMonthDay(from)];
+/** Day offsets (0 is `from`) that get a date label under a chart over `count` days. */
+function dayAxisOffsets(count: number): number[] {
+  if (count < 2) return [0];
   // Up to four days: a label for each day (spacing four labels over three days would repeat one).
-  if (count <= 4) return Array.from({ length: count }, (_, i) => fmtMonthDay(addDays(from, i)));
-  return [0, 1, 2, 3].map((i) => fmtMonthDay(addDays(from, Math.round((i * (count - 1)) / 3))));
+  if (count <= 4) return Array.from({ length: count }, (_, i) => i);
+  return [0, 1, 2, 3].map((i) => Math.round((i * (count - 1)) / 3));
+}
+
+/** Four evenly spaced date labels under a chart over `days` days from `from`, each at its day's x. */
+export function dayAxisLabels(from: string, count: number): XLabel[] {
+  return dayAxisOffsets(count).map((i) => ({ value: i, text: fmtMonthDay(addDays(from, i)) }));
+}
+
+/** The text of `dayAxisLabels`. */
+export function dayAxis(from: string, count: number): string[] {
+  return dayAxisLabels(from, count).map((l) => l.text);
 }
 
 // ---- sleep history ----------------------------------------------------------------------------------
@@ -152,35 +162,36 @@ export interface SleepHistoryChart {
   /** Label under each bar (short weekday, month) or null when only a few date labels fit. */
   labels: string[] | null;
   axis: string[];
+  /** The same labels with the bucket (x) each sits under. */
+  axisLabels: XLabel[];
   /** Buckets with a night. */
   count: number;
 }
 
 const WEEKDAY = (day: string) => fmtDay(day, { weekday: 'short' });
 
-/** `n` evenly spaced entries of a list (first and last included). */
-function spread<T>(list: T[], n: number): T[] {
-  if (list.length <= n) return list;
-  return Array.from({ length: n }, (_, i) => list[Math.round((i * (list.length - 1)) / (n - 1))] as T);
+/** `n` evenly spaced indexes of a list of `length` (first and last included). */
+function spreadIndexes(length: number, n: number): number[] {
+  if (length <= n) return Array.from({ length }, (_, i) => i);
+  return Array.from({ length: n }, (_, i) => Math.round((i * (length - 1)) / (n - 1)));
 }
 
 export function sleepChart(h: Pick<SleepHistory, 'buckets' | 'group' | 'from'>): SleepHistoryChart {
   const b = h.buckets;
   const labels = h.group === 'month' ? b.map((x) => fmtMonthLetter(x.from)) : h.group === 'day' && b.length <= 7 ? b.map((x) => WEEKDAY(x.from)) : null;
+  const axisLabels: XLabel[] =
+    h.group === 'month'
+      ? spreadIndexes(b.length, 4).map((i) => ({ value: i, text: fmtMonthShort((b[i] as SleepBucket).from) }))
+      : h.group === 'day' && b.length <= 7
+        ? (labels ?? []).map((text, i) => ({ value: i, text }))
+        : dayAxisLabels(b[0]?.from ?? h.from, b.length);
   return {
     x: b.map((_, i) => i),
     score: b.map((x) => x.avg_score),
     minutes: b.map((x) => (isMissing(x.avg_duration_s) ? null : x.avg_duration_s / 60)),
     labels,
-    axis:
-      h.group === 'month'
-        ? spread(
-            b.map((x) => fmtMonthShort(x.from)),
-            4,
-          )
-        : h.group === 'day' && b.length <= 7
-          ? (labels ?? [])
-          : dayAxis(b[0]?.from ?? h.from, b.length),
+    axis: axisLabels.map((l) => l.text),
+    axisLabels,
     count: b.filter((x) => x.nights > 0).length,
   };
 }

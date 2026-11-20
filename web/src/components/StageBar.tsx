@@ -1,4 +1,6 @@
 import type { CSSProperties, ReactNode } from 'react';
+import { tickCountFor, unitTicks } from '../lib/ticks';
+import { evenLabels, PlotFrame, PlotXLabels, plotTicks, type PlotTick } from './PlotFrame';
 import { Unavailable } from './Unavailable';
 
 export interface LegendItem {
@@ -94,8 +96,15 @@ const STRESS_COLOR: Record<StressLevel, string> = {
   activity: 'var(--stress-activity)',
 };
 
-/** Stress across the day: one column per time bucket, coloured by level. Pair it with a Legend. */
-export function StressBars({ buckets, label }: { buckets: StressBucket[]; label: string }) {
+interface StressBarsProps {
+  buckets: StressBucket[];
+  label: string;
+  /** Labels under the bars, spread from the left edge to the right edge ("00", "06", "12", "18", "24"). */
+  xLabels?: string[];
+}
+
+/** Stress across the day: one column per time bucket, coloured by level, on a 0 to 100 scale. Pair it with a Legend. */
+export function StressBars({ buckets, label, xLabels }: StressBarsProps) {
   const slots = buckets.reduce((a, b) => a + (b.span ?? 1), 0);
   const anyData = buckets.some((b) => b.level === 'rest' || b.level === 'activity' || b.value !== null);
   if (slots === 0 || !anyData) {
@@ -111,9 +120,10 @@ export function StressBars({ buckets, label }: { buckets: StressBucket[]; label:
     starts.push(sum);
     return sum + (b.span ?? 1);
   }, 0);
+  const ticks = plotTicks(unitTicks(0, 100, tickCountFor(H, 16)), 'int', (v) => 1 - v / 100);
   return (
     <div className="chart">
-      <svg viewBox={`0 0 320 ${H}`} preserveAspectRatio="none" role="img" aria-label={label} style={{ height: H }}>
+      <PlotFrame ticks={ticks} viewW={320} viewH={H} label={label} xAxis={xLabels?.length ? <PlotXLabels labels={evenLabels(xLabels)} /> : undefined}>
         {buckets.map((b, i) => {
           const w = ((b.span ?? 1) / slots) * 320;
           const x = ((starts[i] ?? 0) / slots) * 320;
@@ -123,7 +133,7 @@ export function StressBars({ buckets, label }: { buckets: StressBucket[]; label:
           const h = Math.max(4, (b.value / 100) * H);
           return <rect key={i} x={x} y={H - h} width={w} height={h} style={{ fill: STRESS_COLOR[b.level] }} />;
         })}
-      </svg>
+      </PlotFrame>
     </div>
   );
 }
@@ -138,6 +148,9 @@ export interface StageSpan {
 }
 
 const STAGE_Y: Record<SleepStage, number> = { awake: 0, rem: 24, light: 48, deep: 72 };
+const STAGE_NAME: Record<SleepStage, string> = { awake: 'Awake', rem: 'REM', light: 'Light', deep: 'Deep' };
+const STAGE_ROW_H = 20;
+const STAGE_H = 96;
 const STAGE_COLOR: Record<SleepStage, string> = {
   awake: 'var(--stage-awake)',
   rem: 'var(--stage-rem)',
@@ -153,6 +166,12 @@ interface StageTimelineProps {
   ticks?: string[];
 }
 
+/** At most three time labels (first, middle, last): five clock times do not fit side by side at a large text size. */
+function thinned(ticks: string[]): string[] {
+  if (ticks.length <= 4) return ticks;
+  return [0, 1, 2].map((i) => ticks[Math.round((i * (ticks.length - 1)) / 2)] as string);
+}
+
 /** Sleep hypnogram: one row per stage (awake on top, deep at the bottom). */
 export function StageTimeline({ spans, totalMinutes, label, ticks }: StageTimelineProps) {
   if (spans.length === 0 || totalMinutes <= 0) {
@@ -163,20 +182,15 @@ export function StageTimeline({ spans, totalMinutes, label, ticks }: StageTimeli
     );
   }
   const x = (m: number) => (m / totalMinutes) * 320;
+  // The rows are the value axis: one label (and grid line) through the middle of each stage's row.
+  const rows: PlotTick[] = (['awake', 'rem', 'light', 'deep'] as const).map((st) => ({ label: STAGE_NAME[st], at: (STAGE_Y[st] + STAGE_ROW_H / 2) / STAGE_H }));
   return (
     <div className="chart">
-      <svg viewBox="0 0 320 96" preserveAspectRatio="none" role="img" aria-label={label} style={{ height: 96 }}>
+      <PlotFrame ticks={rows} viewW={320} viewH={STAGE_H} label={label} xAxis={ticks ? <PlotXLabels labels={evenLabels(thinned(ticks))} /> : undefined}>
         {spans.map((s, i) => (
-          <rect key={i} x={x(s.from)} y={STAGE_Y[s.stage]} width={Math.max(1.5, x(s.to) - x(s.from))} height={20} style={{ fill: STAGE_COLOR[s.stage] }} />
+          <rect key={i} x={x(s.from)} y={STAGE_Y[s.stage]} width={Math.max(1.5, x(s.to) - x(s.from))} height={STAGE_ROW_H} style={{ fill: STAGE_COLOR[s.stage] }} />
         ))}
-      </svg>
-      {ticks ? (
-        <div className="chart__axis" aria-hidden="true">
-          {ticks.map((t) => (
-            <span key={t}>{t}</span>
-          ))}
-        </div>
-      ) : null}
+      </PlotFrame>
     </div>
   );
 }

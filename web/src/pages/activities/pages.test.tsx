@@ -265,16 +265,13 @@ describe('ActivityDetailPage', () => {
     expect(map).toHaveAttribute('data-first', '[10.2,56.1]');
   });
 
-  it('labels the charts\' time axis and has no placeholder caption or "Minutes since" note', async () => {
+  it('has no placeholder caption or "Minutes since" note', async () => {
     handler = (url) => {
       if (url.pathname.endsWith('/track')) return { body: { sample: true, id: ID_RUN, available: true, points: [[56.1, 10.2], [56.2, 10.3]], start: null, end: null, bounds: null } };
       return { body: detail({ series: { elapsed_s: [0, 600, 1200, 1800], heart_rate_bpm: [100, 140, 150, 120], speed_mps: [2.5, 3, 2.8, 2.9], altitude_m: [10, 12, 11, 10], distance_m: [0, 100, 200, 300], cadence: [null, 80, 82, 81] } }) };
     };
     renderAt(`/activities/${ID_RUN}`);
     await screen.findByText('6.40 km');
-    const axes = document.querySelectorAll('.time-axis');
-    expect(axes).toHaveLength(3);
-    expect(Array.from(axes[0]!.querySelectorAll('span')).map((s) => s.textContent)).toEqual(['0', '10', '20', '30 min']);
     expect(screen.queryByText(/Minutes since the start/)).not.toBeInTheDocument();
     expect(screen.queryByText(/placeholder/i)).not.toBeInTheDocument();
   });

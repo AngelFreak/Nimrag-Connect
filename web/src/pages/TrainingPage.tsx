@@ -122,7 +122,7 @@ function LoadCard({ load }: { load: TrainingResponse['load'] }) {
         summary={seriesSummary('Seven-day load', 'over the last 4 weeks', load.series_4w)}
         x={load.series_4w.map((_, i) => i)}
         series={[{ label: 'Load', color: 'link', data: seriesValues(load.series_4w) }]}
-        height={64}
+        height={88}
       />
       <DataList
         items={[
@@ -201,7 +201,8 @@ function Vo2Card({ vo2 }: { vo2: TrainingResponse['vo2max'] }) {
         summary={seriesSummary('VO2 max', 'over the last 3 months', vo2.series_3m, 1)}
         x={vo2.series_3m.map((_, i) => i)}
         series={[{ label: 'VO2 max', color: 'linkSoft', data: seriesValues(vo2.series_3m) }]}
-        height={56}
+        yUnit="decimal"
+        height={88}
       />
     </Card>
   );

@@ -4,6 +4,7 @@ import { Card, CardHeader, MapView, SeriesChart, StatTile, Table, Unavailable, Z
 import { LinkButton } from '../../components';
 import { fmtFixed } from '../../lib/format';
 import { useIsDesktop } from '../../lib/hooks';
+import type { AxisUnit } from '../../lib/ticks';
 import { useTrack } from './api';
 import {
   DISTANCE_KINDS,
@@ -26,7 +27,7 @@ import {
   speedKmh,
   speedSummary,
   spread,
-  timeTicks,
+  timeLabels,
 } from './series';
 import './activities.css';
 
@@ -70,28 +71,6 @@ function MapCard({ id, hasTrack, height }: { id: string; hasTrack: boolean; heig
   );
 }
 
-/**
- * Time labels under an activity chart (0, 10, 20, 30 min). Each label sits at its share of the
- * duration, the first flush left and the last flush right, matching the chart's 6 px padding and
- * (desktop) 40 px value axis.
- */
-export function TimeAxis({ minutes, desktop }: { minutes: number; desktop: boolean }) {
-  const ticks = timeTicks(minutes);
-  if (ticks.length < 2) return null;
-  return (
-    <div className="time-axis" aria-hidden="true" style={{ marginLeft: desktop ? 46 : 6, marginRight: 6 }}>
-      {ticks.map((t) => {
-        const f = (t.minutes / minutes) * 100;
-        return (
-          <span key={t.minutes} style={{ left: `${f}%`, transform: `translateX(-${f}%)` }}>
-            {t.label}
-          </span>
-        );
-      })}
-    </div>
-  );
-}
-
 type Tile = { label: string; value: string | null; sub?: string };
 
 /** StatTiles for the entries that have a value; the others are left out. */
@@ -110,7 +89,7 @@ function ChartCard({
   data,
   color,
   height,
-  axes,
+  unit,
   area,
 }: {
   title: string;
@@ -121,14 +100,21 @@ function ChartCard({
   data: (number | null)[];
   color: 'heart' | 'link' | 'energy' | 'steps';
   height: number;
-  axes: boolean;
+  unit?: AxisUnit;
   area?: boolean;
 }) {
   return (
     <Card>
       <CardHeader title={title} tone="muted" aside={aside} />
-      <SeriesChart label={label} summary={summary} x={x} series={[{ label: title, color, data, area: area }]} height={height} axes={axes} />
-      {spread(data) !== null ? <TimeAxis minutes={x[x.length - 1] ?? 0} desktop={axes} /> : null}
+      <SeriesChart
+        label={label}
+        summary={summary}
+        x={x}
+        series={[{ label: title, color, data, area: area }]}
+        height={height}
+        xLabels={spread(data) !== null ? timeLabels(x[x.length - 1] ?? 0) : []}
+        {...(unit ? { yUnit: unit } : {})}
+      />
     </Card>
   );
 }
@@ -140,7 +126,7 @@ export function ActivityBody({ a }: { a: ActivityDetail }) {
   const paced = a.kind === 'run' || a.kind === 'walk' || a.kind === 'hike';
   const size = desktop ? 'md' : 'sm';
   const gridClass = desktop ? 'grid-tiles' : 'grid-3';
-  const chartHeight = desktop ? 170 : 80;
+  const chartHeight = desktop ? 170 : 96;
   const showMap = a.has_track || a.kind === 'run' || a.kind === 'hike' || a.kind === 'cycle' || a.kind === 'walk';
 
   const s = a.series;
@@ -226,7 +212,6 @@ export function ActivityBody({ a }: { a: ActivityDetail }) {
           data={hr}
           color="heart"
           height={chartHeight}
-          axes={desktop}
         />
         {paced ? (
           <ChartCard
@@ -238,7 +223,7 @@ export function ActivityBody({ a }: { a: ActivityDetail }) {
             data={pace}
             color="link"
             height={chartHeight}
-            axes={desktop}
+            unit="pace"
           />
         ) : hasSpeed && distanceKind ? (
           <ChartCard
@@ -250,7 +235,7 @@ export function ActivityBody({ a }: { a: ActivityDetail }) {
             data={speed}
             color="link"
             height={chartHeight}
-            axes={desktop}
+            unit="decimal"
           />
         ) : null}
         {distanceKind ? (
@@ -263,7 +248,6 @@ export function ActivityBody({ a }: { a: ActivityDetail }) {
             data={alt}
             color="energy"
             height={chartHeight}
-            axes={desktop}
             area
           />
         ) : null}

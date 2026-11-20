@@ -4,6 +4,7 @@ import type { TrendSeries } from '../../api/generated/TrendSeries';
 import type { TrendsResponse } from '../../api/generated/TrendsResponse';
 import { fmtFixed, fmtInt, withUnit } from '../../lib/format';
 import { useIsDesktop, usePageTitle } from '../../lib/hooks';
+import type { AxisUnit } from '../../lib/ticks';
 import {
   RANGES,
   breathingSummary,
@@ -11,8 +12,8 @@ import {
   hrvAside,
   hrvSummary,
   rangeAside,
-  rangeAxis,
   rangeLabel,
+  rangeXLabels,
   rhrSummary,
   scoreSummary,
   secToMin,
@@ -20,7 +21,7 @@ import {
   trendXY,
   type RangeKey,
 } from './model';
-import { CardSkeleton, ChartAxis, ChartSummary, HubLink, LoadError } from './parts';
+import { CardSkeleton, ChartSummary, HubLink, LoadError } from './parts';
 import { useTrends } from './queries';
 
 interface TrendChartProps {
@@ -35,12 +36,13 @@ interface TrendChartProps {
   scale?: number;
   band?: [number, number];
   width?: number;
-  /** Compact charts (tiles) have no date axis. */
+  /** Compact charts (tiles) have no date axis and only two value labels (lowest and highest). */
   compact?: boolean;
+  /** What the values are (default whole numbers). */
+  unit?: AxisUnit;
 }
 
-function TrendChart({ trends, series, name, summary, range, color, height, scale, band, width, compact }: TrendChartProps) {
-  const desktop = useIsDesktop();
+function TrendChart({ trends, series, name, summary, range, color, height, scale, band, width, compact, unit }: TrendChartProps) {
   const xy = trendXY(series, trends.from, trends.to, scale);
   return (
     <>
@@ -52,10 +54,10 @@ function TrendChart({ trends, series, name, summary, range, color, height, scale
           series={[{ label: name, color, data: xy?.y ?? [], ...(width ? { width } : {}) }]}
           height={height}
           {...(band ? { band } : {})}
-          axes={desktop && !compact ? 'y' : false}
+          {...(unit ? { yUnit: unit } : {})}
+          {...(compact ? { sparkline: true } : { xLabels: rangeXLabels(trends) })}
         />
       </div>
-      {xy && !compact ? <ChartAxis labels={rangeAxis(trends)} /> : null}
     </>
   );
 }
@@ -166,7 +168,7 @@ function Trends({ trends: t, range, fetching }: { trends: TrendsResponse; range:
             {withUnit(fmtFixed(breathing.average, 1), '/min') ?? <Unavailable />}
           </span>
           <span className="stat__sub">{t.breathing.awake_avg_brpm === null ? 'Asleep' : `Asleep · awake ${fmtFixed(t.breathing.awake_avg_brpm, 1)}`}</span>
-          <TrendChart trends={t} series={breathing} name="Breathing rate" summary={breathingSummary(breathing)} range={range} color="link" height={36} width={2} compact />
+          <TrendChart trends={t} series={breathing} name="Breathing rate" summary={breathingSummary(breathing)} range={range} color="link" height={36} width={2} compact unit="decimal" />
         </Card>
         <Card padding="tile" className="stat" aria-label="Blood oxygen">
           <h2 className="card__title card__title--muted">Blood oxygen</h2>
@@ -197,6 +199,7 @@ function Trends({ trends: t, range, fetching }: { trends: TrendsResponse; range:
           color="sleep"
           height={desktop ? 130 : 70}
           scale={1 / 3600}
+          unit="hours"
         />
       </ChartCard>
     </div>

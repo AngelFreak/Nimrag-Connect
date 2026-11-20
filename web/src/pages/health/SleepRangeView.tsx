@@ -5,7 +5,7 @@ import { BarSeries, Card, CardHeader, EmptyState, Legend, SampleDataChip, Series
 import { fmtInt } from '../../lib/format';
 import { useIsDesktop, usePageTitle } from '../../lib/hooks';
 import { fmtSeconds } from './model';
-import { CardSkeleton, ChartAxis, ChartSummary, LoadError } from './parts';
+import { CardSkeleton, ChartSummary, LoadError } from './parts';
 import { PeriodNav, RangeBar, usePeriod, type PeriodOption } from './period';
 import { useSleepHistory, type SleepGroup } from './queries';
 import { bucketName, durationChartSummary, scoreChartSummary, sleepChart, sleepStatLabels, sleepSummary } from './ranges';
@@ -73,22 +73,6 @@ function Body({ data }: { data: SleepHistory }) {
   );
 }
 
-/** Labels that sit under their own point or bar (one per slot). */
-function SlotAxis({ labels }: { labels: string[] }) {
-  const desktop = useIsDesktop();
-  return (
-    <div
-      className="chart__axis"
-      aria-hidden="true"
-      style={{ display: 'grid', gridTemplateColumns: `repeat(${labels.length}, 1fr)`, textAlign: 'center', paddingLeft: desktop ? 40 : 0 }}
-    >
-      {labels.map((t, i) => (
-        <span key={`${t}-${i}`}>{t}</span>
-      ))}
-    </div>
-  );
-}
-
 function ScoreCard({ data }: { data: SleepHistory }) {
   const desktop = useIsDesktop();
   const chart = sleepChart(data);
@@ -113,9 +97,8 @@ function ScoreCard({ data }: { data: SleepHistory }) {
         series={[{ label: 'Sleep score', color: 'sleep', data: chart.score, points: true, width: 2 }]}
         xRange={[-0.5, slots - 0.5]}
         height={desktop ? 170 : 130}
-        axes={desktop ? 'y' : false}
+        xLabels={chart.labels && chart.labels.length <= 13 ? chart.labels.map((text, value) => ({ value, text })) : chart.axisLabels}
       />
-      {chart.score.some((v) => v !== null) ? chart.labels && chart.labels.length <= 13 ? <SlotAxis labels={chart.labels} /> : <ChartAxis labels={chart.axis} /> : null}
       <ChartSummary hidden={chart.score.some((v) => v !== null)}>{summary}</ChartSummary>
     </Card>
   );
@@ -134,6 +117,7 @@ function DurationCard({ data }: { data: SleepHistory }) {
         labels={chart.labels ?? chart.minutes.map(() => '')}
         {...(chart.labels ? {} : { axisLabels: chart.axis })}
         label={`Time asleep per ${per}`}
+        yUnit="minutes"
         color="var(--good)"
         belowGoalColor="var(--accent)"
         goal={goalMin}

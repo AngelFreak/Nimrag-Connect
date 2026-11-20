@@ -1136,6 +1136,65 @@
   width: 100%;
   position: relative;
 }
+/* SVG chart with a value axis: labels in HTML on the left (they stay undistorted and follow the text
+   size), the plot beside them, and the x labels in the plot's own column so they line up with it. */
+.plot {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  column-gap: 6px;
+  width: 100%;
+  font-size: var(--fs-xs);
+  color: var(--text-2);
+  /* Half a label of room above the top tick, and below the bottom one when no x labels follow. */
+  padding-top: 0.6em;
+}
+.plot--bare {
+  padding-bottom: 0.6em;
+}
+.plot__y {
+  grid-column: 1;
+  grid-row: 1;
+  position: relative;
+  line-height: 1;
+  white-space: nowrap;
+  text-align: right;
+}
+/* Invisible copy of the widest label: it gives the column its width. */
+.plot__y-size {
+  display: block;
+  height: 0;
+  overflow: hidden;
+  visibility: hidden;
+}
+.plot__y-tick {
+  position: absolute;
+  right: 0;
+  transform: translateY(-50%);
+}
+.plot__area {
+  grid-column: 2;
+  grid-row: 1;
+  position: relative;
+  min-width: 0;
+}
+.plot__area svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+.plot__x {
+  grid-column: 2;
+  grid-row: 2;
+  min-width: 0;
+  /* Clear of the bottom value label, whose text reaches half a line below its grid line. */
+  padding-top: 0.4em;
+}
+
+/* The canvas takes its axis font from this element, so it follows the text size (and its zoom). */
+.series-chart__plot {
+  font-size: var(--fs-xs);
+}
 .series-chart .uplot,
 .series-chart .u-wrap {
   max-width: 100%;

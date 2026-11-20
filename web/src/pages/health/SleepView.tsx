@@ -216,6 +216,7 @@ function LastNights({
               labels={bars.labels}
               axisLabels={count === 7 ? undefined : axisDates(bars.dates)}
               label={`Sleep duration for the last ${count} nights`}
+              yUnit="minutes"
               color="var(--stage-deep)"
               highlightIndex={bars.values.length - 1}
               summary={summary ?? undefined}

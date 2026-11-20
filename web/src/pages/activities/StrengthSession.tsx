@@ -8,7 +8,7 @@ import { useIsDesktop } from '../../lib/hooks';
 import { useSaveStrength } from './api';
 import { fmtKg, fmtMinutes } from './format';
 import { errorText } from './PageStates';
-import { spread, timedToMinutes } from './series';
+import { spread, timedToMinutes, timeLabels } from './series';
 import { StrengthCompare } from './StrengthCompare';
 import {
   buildPatch,
@@ -346,8 +346,8 @@ export function StrengthSession({ data }: { data: StrengthResponse }) {
             summary={hrSummary}
             x={hr.x}
             series={[{ label: 'Heart rate', color: 'heart', data: hr.y }]}
-            height={desktop ? 120 : 60}
-            axes={desktop}
+            height={desktop ? 120 : 96}
+            xLabels={hrSpread ? timeLabels(hr.x[hr.x.length - 1] ?? 0) : []}
           />
         </Card>
 
