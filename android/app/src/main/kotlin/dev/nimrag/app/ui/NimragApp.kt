@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -34,6 +35,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
+import androidx.compose.material3.NavigationRail
+import androidx.compose.material3.NavigationRailItem
+import androidx.compose.material3.NavigationRailItemDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -86,12 +90,16 @@ import dev.nimrag.app.ui.shell.WebPreviewPlaceholder
 import dev.nimrag.app.ui.shell.logic.BridgeStatus
 import dev.nimrag.app.ui.shell.logic.MainTab
 import dev.nimrag.app.ui.shell.logic.RouteTabs
+import dev.nimrag.app.ui.shell.logic.NavStyle
 import dev.nimrag.app.ui.shell.logic.ServerOrigin
+import dev.nimrag.app.ui.shell.logic.ShellChrome
 import dev.nimrag.app.ui.shell.logic.ShellNav
 import dev.nimrag.app.ui.shell.logic.WebSource
 import dev.nimrag.app.ui.shell.logic.WebSourcePolicy
 import dev.nimrag.app.ui.shell.LocalCopyBanner
 import dev.nimrag.app.ui.shell.isOnline
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.platform.LocalContext
 import dev.nimrag.app.ui.shell.rememberWebShellState
 import dev.nimrag.app.ui.sync.SyncScreen
@@ -241,6 +249,25 @@ internal fun NimragShell(
     }
 
     val imeVisible = WindowInsets.isImeVisible
+    // The tab bar: hidden on the full-screen account steps, a side rail in landscape (short windows).
+    val density = LocalDensity.current
+    val windowHeightDp = with(density) { LocalWindowInfo.current.containerSize.height.toDp().value.toInt() }
+    val navStyle = ShellChrome.navStyle(
+        source = source,
+        hasTarget = target != null,
+        inWatch = nav.inWatch,
+        windowHeightDp = windowHeightDp,
+        imeVisible = imeVisible,
+    )
+    val onTab: (MainTab) -> Unit = { tab ->
+        nav = nav.tapped(tab)
+        if (tab == MainTab.Watch) {
+            showLicences = false
+        } else {
+            RouteTabs.pathFor(tab)?.let(webState::navigate)
+        }
+    }
+    val watchNeedsAttention = WatchSection.entries.any { needsAttention(it, state) }
 
     CompositionLocalProvider(LocalNowMs provides nowMs.longValue) {
         Column(
@@ -257,75 +284,77 @@ internal fun NimragShell(
                     forceRemote = true
                 })
             }
-            Box(Modifier.weight(1f).fillMaxWidth()) {
-                if (webShown && target != null) {
-                    ServerWebView(
-                        target = target,
-                        localWeb = if (onLocal) localWeb else null,
-                        state = webState,
-                        controller = controller,
-                        sessionEpoch = account.sessionEpoch,
-                        visible = webVisible,
-                        onOpenWatch = {
-                            nav = nav.openedWatch()
-                            sectionIndex = 0
-                            showLicences = false
-                        },
-                        onRoute = { nav = nav.routed(it) },
-                        modifier = Modifier.fillMaxSize(),
+            Row(Modifier.weight(1f).fillMaxWidth()) {
+                if (navStyle == NavStyle.Rail) {
+                    ShellRail(
+                        selected = nav.highlighted,
+                        watchNeedsAttention = watchNeedsAttention,
+                        onTab = onTab,
                     )
                 }
-                when {
-                    nav.inWatch -> WatchArea(
-                        state = state,
-                        controller = controller,
-                        section = section,
-                        onSection = {
-                            sectionIndex = it.ordinal
-                            showLicences = false
-                        },
-                        showLicences = showLicences,
-                        onShowLicences = { showLicences = it },
-                        onSignIn = {
-                            // From Settings: leave the Watch tab for the sign-in screen.
-                            forceRemote = true
-                            nav = nav.tapped(nav.webTab)
-                        },
-                    )
-                    source == WebSource.Unlock -> UnlockScreen(
-                        account = account,
-                        onFingerprint = { activity -> controller.account.unlockWithFingerprint(activity) },
-                        onPassword = { controller.account.unlockWithPassword(it) },
-                        onOtherAccount = { controller.account.signOut() },
-                        modifier = Modifier.background(MaterialTheme.colorScheme.background),
-                    )
-                    source == WebSource.Checking -> CheckingScreen(Modifier.background(MaterialTheme.colorScheme.background))
-                    source == WebSource.SignIn || target == null -> SignInScreen(
-                        account = account,
-                        savedServer = rawServerUrl,
-                        onSignIn = { server, username, password, code -> controller.account.signIn(server, username, password, code) },
-                        modifier = Modifier.background(MaterialTheme.colorScheme.background),
-                    )
-                    inspection -> WebPreviewPlaceholder()
-                    webState.unreachable -> ServerUnreachableScreen(
-                        retrying = webState.retrying,
-                        onRetry = webState::retry,
-                        modifier = Modifier.background(MaterialTheme.colorScheme.background),
-                    )
+                Box(Modifier.weight(1f).fillMaxHeight()) {
+                    if (webShown && target != null) {
+                        ServerWebView(
+                            target = target,
+                            localWeb = if (onLocal) localWeb else null,
+                            state = webState,
+                            controller = controller,
+                            sessionEpoch = account.sessionEpoch,
+                            visible = webVisible,
+                            onOpenWatch = {
+                                nav = nav.openedWatch()
+                                sectionIndex = 0
+                                showLicences = false
+                            },
+                            onRoute = { nav = nav.routed(it) },
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                    }
+                    when {
+                        nav.inWatch -> WatchArea(
+                            state = state,
+                            controller = controller,
+                            section = section,
+                            onSection = {
+                                sectionIndex = it.ordinal
+                                showLicences = false
+                            },
+                            showLicences = showLicences,
+                            onShowLicences = { showLicences = it },
+                            onSignIn = {
+                                // From Settings: leave the Watch tab for the sign-in screen.
+                                forceRemote = true
+                                nav = nav.tapped(nav.webTab)
+                            },
+                        )
+                        source == WebSource.Unlock -> UnlockScreen(
+                            account = account,
+                            onFingerprint = { activity -> controller.account.unlockWithFingerprint(activity) },
+                            onPassword = { controller.account.unlockWithPassword(it) },
+                            onOtherAccount = { controller.account.signOut() },
+                            modifier = Modifier.background(MaterialTheme.colorScheme.background),
+                        )
+                        source == WebSource.Checking -> CheckingScreen(Modifier.background(MaterialTheme.colorScheme.background))
+                        source == WebSource.SignIn || target == null -> SignInScreen(
+                            account = account,
+                            savedServer = rawServerUrl,
+                            onSignIn = { server, username, password, code -> controller.account.signIn(server, username, password, code) },
+                            modifier = Modifier.background(MaterialTheme.colorScheme.background),
+                        )
+                        inspection -> WebPreviewPlaceholder()
+                        webState.unreachable -> ServerUnreachableScreen(
+                            retrying = webState.retrying,
+                            onRetry = webState::retry,
+                            modifier = Modifier.background(MaterialTheme.colorScheme.background),
+                        )
+                    }
                 }
             }
-            if (!imeVisible) {
+            if (navStyle == NavStyle.Bar) {
                 ShellBar(
                     selected = nav.highlighted,
-                    watchNeedsAttention = WatchSection.entries.any { needsAttention(it, state) },
-                    onTab = { tab ->
-                        nav = nav.tapped(tab)
-                        if (tab == MainTab.Watch) {
-                            showLicences = false
-                        } else {
-                            RouteTabs.pathFor(tab)?.let(webState::navigate)
-                        }
-                    },
+                    watchNeedsAttention = watchNeedsAttention,
+                    onTab = onTab,
                 )
             }
         }
@@ -371,6 +400,38 @@ private fun ShellBar(selected: MainTab, watchNeedsAttention: Boolean, onTab: (Ma
                     selectedTextColor = NimragColors.Link,
                     unselectedIconColor = NimragColors.TextMuted,
                     unselectedTextColor = NimragColors.TextMuted,
+                    indicatorColor = Color.Transparent,
+                ),
+            )
+        }
+    }
+}
+
+/** The same tabs as [ShellBar] for landscape: a narrow rail on the start edge, icons only (labels are the accessibility names). */
+@Composable
+private fun ShellRail(selected: MainTab, watchNeedsAttention: Boolean, onTab: (MainTab) -> Unit) {
+    val line = NimragColors.Line
+    NavigationRail(
+        modifier = Modifier.fillMaxHeight().drawBehind { drawLine(line, Offset(size.width, 0f), Offset(size.width, size.height), strokeWidth = 1.dp.toPx()) },
+        containerColor = NimragColors.Raised,
+        contentColor = NimragColors.TextMuted,
+    ) {
+        BarItems.forEach { item ->
+            val label = stringResource(item.label)
+            NavigationRailItem(
+                selected = item.tab == selected,
+                onClick = { onTab(item.tab) },
+                icon = {
+                    if (item.tab == MainTab.Watch && watchNeedsAttention) {
+                        BadgedBox(badge = { Badge() }) { Icon(item.icon, contentDescription = label) }
+                    } else {
+                        Icon(item.icon, contentDescription = label)
+                    }
+                },
+                alwaysShowLabel = false,
+                colors = NavigationRailItemDefaults.colors(
+                    selectedIconColor = NimragColors.Link,
+                    unselectedIconColor = NimragColors.TextMuted,
                     indicatorColor = Color.Transparent,
                 ),
             )

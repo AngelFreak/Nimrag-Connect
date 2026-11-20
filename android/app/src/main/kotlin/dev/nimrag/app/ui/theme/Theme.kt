@@ -33,6 +33,11 @@ object NimragColors {
     val Text = Color(0xFFE8EDEE)
     val TextMuted = Color(0xFF9AA7AC)
     val Link = Color(0xFF7DBBFF)
+
+    /** The web app's primary colour (`--accent`, `--on-accent`, `--link-hover` in web/src/styles/tokens.css); ThemeTokensTest keeps them equal. */
+    val Accent = Color(0xFF7DBBFF)
+    val OnAccent = Color(0xFF0F1417)
+    val AccentHover = Color(0xFFA9D2FF)
     val Energy = Color(0xFF4FD1B5)
     val Heart = Color(0xFFFF6B6B)
     val Warn = Color(0xFFFFB066)
@@ -67,8 +72,8 @@ val MaterialTheme.status: StatusColors
     @Composable @ReadOnlyComposable get() = LocalStatusColors.current
 
 private val Scheme = darkColorScheme(
-    primary = NimragColors.Link,
-    onPrimary = NimragColors.Background,
+    primary = NimragColors.Accent,
+    onPrimary = NimragColors.OnAccent,
     primaryContainer = Color(0xFF1B3A57),
     onPrimaryContainer = Color(0xFFD3E8FF),
     secondary = NimragColors.TextMuted,
@@ -83,7 +88,8 @@ private val Scheme = darkColorScheme(
     onSurface = NimragColors.Text,
     surfaceVariant = NimragColors.Card,
     onSurfaceVariant = NimragColors.TextMuted,
-    surfaceTint = NimragColors.Link,
+    // No tonal tint: raised surfaces and buttons keep their exact colours, as on the web.
+    surfaceTint = Color.Transparent,
     outline = Color(0xFF66767D),
     outlineVariant = NimragColors.Line,
     error = NimragColors.Heart,
