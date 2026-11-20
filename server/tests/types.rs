@@ -70,6 +70,7 @@ fn every_api_type_is_exported() {
         "SleepNightResponse",
         "SleepNightsResponse",
         "TrendsResponse",
+        "MetricRange",
         "TrainingResponse",
         "BodyResponse",
         "NewBodyEntry",
