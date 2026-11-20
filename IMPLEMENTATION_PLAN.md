@@ -489,6 +489,17 @@ Each page renders from real synced data, shows "unavailable" correctly for missi
 ## Gate 4
 Final report: what works, what was verified and how, what is still unknown.
 
+## Multi-user (2026-11-20)
+**Goal**: several users on one server. The first-run setup creates the admin, who only sets the server up. Normal users are created by the admin and own all data. Sign-in is username, password and TOTP 2FA; on the phone the first login is the same and later unlocks use the password or the fingerprint.
+**Contract** (details in `server/README.md`, "Accounts, 2FA and the app"):
+- `users` (unique case-insensitive username, argon2id, role admin|user, TOTP RFC 6238 with replay rejection, `must_change_password`, `disabled_at`); sessions carry `user_id`; the admin gets 403 on every data endpoint.
+- Ownership: `tokens.user_id`, `file_owners(sha256, user_id)` filled at ingest and assign; sample tables have `user_id` in the primary key (0 = unassigned); settings, body entries, strength edits and Garmin Forward are per user; `reparse` keeps ownership. Single owner per file, first claim wins.
+- First run: `/api/setup` + `/api/setup/confirm` (closes only once 2FA is confirmed). Login: `/api/login` (indistinguishable failures, per-address and per-username limiter, enrol-2FA and change-password steps). Admin API for users and the unassigned data (`/api/admin/*`).
+- App API: `/api/app/login` (token + `device_secret`, 2FA once), `/api/app/unlock` (password + secret), `/api/app/resume` (secret only; the fingerprint gate lives on the phone in the Keystore). Revoking the token, or disabling the user or resetting their password or 2FA, kills the secret.
+- Migration 0010 is lossless: the owner becomes user `admin` (same hash, 2FA not enrolled), sessions are cleared, old tokens, files and records stay unassigned until the admin assigns them to a user.
+**Status**: Server and web done and tested (server integration tests for migration, accounts and 2FA, admin, isolation, app login and the CLI; web unit tests and Playwright against the real server). Android app not started (the API above is fixed for it).
+**Open**: file ownership is stored only in the database, so `rebuild-ledger` from sidecars yields unowned files; a user without 2FA can enrol with the password alone at first login (by design, so new users get their temporary password in person); a Garmin Forward account from before accounts (user 0) idles until an admin assigns it.
+
 # Appendix: contracts and reviewer notes
 
 ### Reviewer notes for stage 1d (parsers), recorded 2026-11-19

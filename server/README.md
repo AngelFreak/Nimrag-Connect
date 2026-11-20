@@ -1,6 +1,7 @@
 # nimrag-server
 
-Ingest server for nimrag. Single user, runs behind the owner's VPN, never calls Garmin.
+Ingest server for nimrag. Several users (one admin who sets the server up, normal users who own the
+data), runs behind the owner's VPN, never calls Garmin (except the opt-in Forward mode).
 
 **Files are the source of truth.** Everything under `DIR/files/` is written via
 temp file + fsync + rename, streamed to `files/.incoming/` first (64 MiB limit
@@ -16,7 +17,9 @@ enforced while streaming; the hash is computed server-side):
 NORMAL) holds:
 
 - **ledger** (never touched by `reparse`): `files`, `uploads` (mirror of the
-  sidecars; `rebuild-ledger` recreates them), `tokens` (database only);
+  sidecars; `rebuild-ledger` recreates them), `tokens` (database only),
+  `file_owners` (whose file a sha256 is; database only, so `rebuild-ledger` from sidecars
+  yields unowned files that an admin assigns again);
 - **derived** (deletable, rebuilt by `reparse`, no autoincrement ids or
   creation times): `file_parse` (parser_version, profile_version, status
   ok/partial/error, error, crc_status), `fit_files`, `fit_messages` (STRICT,
@@ -39,21 +42,28 @@ instead of appending, in both the sidecar and `uploads`.
 ```
 nimrag-server serve [--data-dir DIR] [--listen 127.0.0.1:8080] [--log-json]
                     [--insecure-cookies] [--trusted-proxy CIDR[,CIDR...]]
-nimrag-server token create --name NAME   # prints the token once on stdout
+nimrag-server token create --name NAME [--user USERNAME]   # prints the token once on stdout
 nimrag-server token list
 nimrag-server token revoke ID
 nimrag-server reparse                    # derived tables from the blobs
 nimrag-server rebuild-ledger             # files/uploads rows from the sidecars
-nimrag-server user set-password          # owner password from stdin (first line), argon2id
-nimrag-server dev-seed                   # 120 days of sample data into an empty data dir
+nimrag-server user list                  # accounts (no secrets)
+nimrag-server user set-password [--username NAME]   # new password from stdin (first line), argon2id
+nimrag-server user reset-2fa --username NAME        # the user enrols 2FA again at the next login
+nimrag-server dev-seed                   # 120 days of sample data, an admin and the user demo, into an empty data dir
 nimrag-server export-types [--out DIR]   # TypeScript for the JSON API (default web/src/api/generated)
 ```
 
-`serve` also takes `--insecure-cookies` and `--trusted-proxy` (see "Owner API"). Set the password
-without echoing it, e.g. `printf '%s\n' "$PW" | nimrag-server user set-password`
-or `nimrag-server user set-password < pwfile` (at least 10 characters, one line,
-at most 4096 bytes). Setting it again replaces it and signs every session out.
-`user set-password` does not take the data-dir lock; `dev-seed` does.
+`serve` also takes `--insecure-cookies` and `--trusted-proxy` (see "Owner API"). The first admin
+is created in the web app on first run (see "Accounts, 2FA and the app"); the CLI user commands
+are the recovery tools of whoever runs the server. Set a password without echoing it, e.g.
+`printf '%s\n' "$PW" | nimrag-server user set-password --username NAME` or
+`nimrag-server user set-password --username NAME < pwfile` (at least 10 characters, one line, at
+most 4096 bytes; without `--username` the only admin is meant, and with several admins the name is
+required). It signs the user's sessions and trusted phones out. `token create --user` and
+`import-export --user` give the token or the imported files to that user; without `--user` they
+stay unassigned until an admin assigns them in the web app. The `user` and `token` commands do not
+take the data-dir lock; `dev-seed` does.
 
 `--data-dir` defaults to `$NIMRAG_DATA_DIR`, else `./data`. Logs go to stderr
 (`RUST_LOG` filter; `--log-json` for structured JSON). `reparse` processes files
@@ -76,12 +86,103 @@ API (all but health need `Authorization: Bearer <token>`):
 - `GET /api/files/<sha256>`: metadata plus FIT summary.
 - `GET /api/health`.
 
+A device token belongs to one user (`tokens.user_id`; NULL = unassigned). The files it uploads are
+owned by that user (`file_owners`, first claim wins: the same bytes from a second user do not take
+the file over). `GET /api/files/<sha256>` only answers for files the token's own user owns.
+
+## Accounts, 2FA and the app
+
+Two roles. The **admin** sets the server up and manages accounts; the admin has no data and gets
+`403` on every data endpoint. **Users** are created by the admin and own all data (files, tokens,
+settings, body entries, strength edits, Garmin Forward). The first admin is created in the web
+app on first run:
+
+- `GET /api/setup` `{needed}`; `POST /api/setup` `{username, password}` (only while no user exists)
+  answers `{pending_token, otpauth_uri, secret}`; `POST /api/setup/confirm` `{pending_token, code}`
+  with a code from the authenticator app creates the admin and signs in. Setup closes only once the
+  code is confirmed, so an abandoned attempt leaves the server open for a new one; two racing
+  attempts cannot both succeed. Usernames are 3 to 32 characters of `a-z 0-9 . _ -`, stored
+  lower case (input is case-insensitive); passwords are at least 10 characters (argon2id).
+- **Two-factor** is TOTP (RFC 6238, SHA-1, 6 digits, 30 s, one step of drift either way). A code is
+  accepted once: the used step is stored with a compare-and-set, so replays and parallel uses fail.
+  Implemented with `totp-rs` (alloc only); the secret and the `otpauth://` URI come from the server
+  and the web app draws the QR code, so no secret leaves the server except in the enrol response.
+- `POST /api/login` `{username, password, code?}`. Unknown user, wrong password, wrong or missing
+  code, disabled user: all the same `401 {"error": "wrong username, password or code"}`, and an
+  unknown user still pays for a (dummy) password hash. A right password for a user without 2FA
+  continues with `{step: "enrol2fa", pending_token, otpauth_uri, secret, must_change_password}`:
+  show the QR code and send a code (and, with `must_change_password`, the new password) to
+  `POST /api/login/totp-enrol`. A temporary password with 2FA already set answers
+  `{step: "change_password", pending_token}` for `POST /api/login/change-password`. Success is
+  `{step: "done", ...Me}` and the session cookie. Pending steps live in memory for 10 minutes and
+  burn after 5 wrong codes. Note the consequence of enrolling at first login: a user without 2FA
+  (a fresh account, or the migrated admin) can enrol with the password alone, so hand new users
+  their temporary password personally.
+- Limits: the per-address limiter described below, plus a per-username one (nine free failures,
+  then the same doubling wait), so spreading guesses over many addresses does not help; a missing
+  code counts as a failure.
+- `GET /api/me` `{authenticated, username, role, timezone, sample}`; `POST /api/logout`;
+  `POST /api/me/password` `{current_password, new_password}` (ends every session and trusted
+  phone, then signs this browser in again); `POST /api/me/2fa` `{password}` +
+  `POST /api/me/2fa/confirm` `{pending_token, code}` replace the authenticator.
+- **Admin API** (`403` for users, `401` signed out): `GET/POST /api/admin/users`
+  (`{username, role?}` answers the user and a `temporary_password`, shown once; the user must
+  enrol 2FA and choose a password at the first login), `POST /api/admin/users/{id}/reset-password`
+  (a new temporary password), `.../reset-2fa`, `.../disable`, `.../enable`,
+  `DELETE /api/admin/users/{id}` (`409` while the user has data unless `?confirm=true`; their
+  files and tokens become unassigned, nothing on disk is deleted, their records are removed).
+  Reset-password, reset-2fa, disable and delete end the user's sessions and trusted-phone
+  credentials. The last active admin cannot be disabled or deleted (`409`), and the admin cannot
+  reset their own password or 2FA there (`400`: use Settings or the CLI).
+- **Unassigned data**: `GET /api/admin/unassigned` lists active tokens nobody owns (with the
+  number of unowned files each uploaded), `unattributed_files` (unowned files no such token
+  uploaded) and `legacy` (settings, body entries, strength edits, Garmin account that predate
+  accounts). `POST /api/admin/unassigned/assign` `{token_ids, user_id, include_unattributed?,
+  adopt_legacy?}` moves those tokens and their files to the user in one transaction and rebuilds
+  the derived rows of both owners. `adopt_legacy` is refused (`409`) when the user already has
+  records of their own, so nothing is silently merged.
+
+### Migration from the single-owner server
+
+Migration 0010 is lossless. The old owner becomes user `admin` (role admin, the same argon2id hash,
+2FA not enrolled: the first login enrols it, then sign-in is username + password + code).
+Sessions are cleared. Existing device tokens, files and sample rows are unassigned (`user_id`
+NULL/0) and keep working as unassigned uploaders; settings, body entries, strength edits and the
+Garmin account get `user_id` 0. The admin creates the user (for example the old owner's daily
+account), then assigns the old tokens (and `adopt_legacy`) to that user in `/admin`. Because the
+admin has no data, the web app's data pages stay empty until then.
+
+### The Android app (API; the app itself comes later)
+
+`X-Nimrag: 1` is required as for the web UI. Three calls, with the same limiter and the same
+indistinguishable `401`:
+
+- `POST /api/app/login` `{username, password, code, device_name}`: the first time on a phone.
+  `201 {me, device_id, token, device_secret}` and a session cookie. `token` is a normal device
+  token (upload credential) and `device_secret` (`nrd_...`, 256 random bits) is the trusted-device
+  credential; both are shown once and only their SHA-256 is stored. The app cannot enrol 2FA
+  (a user without 2FA gets `401`), admins get `403`, a temporary password `409` (change it in the
+  web app first), and the 20-active-token cap applies (`409`).
+- `POST /api/app/unlock` `{username, password, device_secret}`: later, on the same phone, the
+  password plus the secret starts a session; the secret stands in for the 2FA code.
+- `POST /api/app/resume` `{device_secret}`: the fingerprint path. The app keeps `device_secret` in
+  the Android Keystore behind a BiometricPrompt (`setUserAuthenticationRequired`). The server cannot
+  check a fingerprint, so the gate is on the phone and the 256-bit secret is itself the credential:
+  a bare `{biometric: true}` is not accepted, and neither is anything but the secret. Guessing is
+  limited per address (`429` with `Retry-After`).
+
+Revoking the device token (web Settings, or the CLI) removes its device secret and ends the
+sessions it started, so the phone must sign in with username, password and code again. Disabling
+the user, resetting their password or 2FA, or deleting them does the same for every device of
+that user.
+
 ## Owner API (stage 3a)
 
-The web app reads and edits through a second, owner-facing JSON API in the same
-router. Authentication is separate from the device tokens:
+The web app reads and edits through a second JSON API in the same router, for the signed-in user
+(everything below is filtered by that user; sign-in and the admin are described under "Accounts,
+2FA and the app"). Authentication is separate from the device tokens:
 
-- `POST /api/login` `{password}` checks the argon2id hash and sets the cookie
+- `POST /api/login` checks username, password and code and sets the cookie
   `__Host-nimrag_session`: a random 32-byte id, of which only the SHA-256 is
   stored (`sessions`). Flags: `HttpOnly; SameSite=Strict; Path=/; Max-Age=2592000`
   (30 days) and `Secure`. With `--insecure-cookies` the `Secure` flag is dropped
@@ -112,8 +213,8 @@ router. Authentication is separate from the device tokens:
 - Every `POST`, `PATCH` and `DELETE` under `/api` except `/api/files` and
   `/api/login` must carry `X-Nimrag: 1` (`403` otherwise), so a cross-site form
   cannot change anything even if a cookie were attached.
-- Device tokens only upload (`/api/files`, `/api/health`, file metadata). They
-  are rejected on every endpoint below, and a session cookie is rejected on the
+- Device tokens only upload (`/api/files`, `/api/health`, file metadata of their own user's
+  files). They are rejected on every endpoint below, and a session cookie is rejected on the
   device endpoints.
 - Errors are JSON `{"error": "..."}`; malformed bodies are 400 as well.
 
@@ -130,7 +231,7 @@ duplicates and appends cards missing from `order`).
 
 | endpoint | what |
 |---|---|
-| `POST /api/login`, `POST /api/logout`, `GET /api/me` | session |
+| `/api/login`, `/api/logout`, `/api/me`, `/api/setup`, `/api/me/password`, `/api/me/2fa`, `/api/app/*`, `/api/admin/*` | accounts: see "Accounts, 2FA and the app" |
 | `GET /api/tokens`, `POST /api/tokens` `{name, password}`, `DELETE /api/tokens/{id}` | device tokens for the web UI: create re-checks the owner's password (same limiter as login; wrong gives 401 and keeps the session) and allows at most 20 active tokens (409 beyond); the secret is returned once on create, never listed; delete revokes |
 | `GET /api/today` | the Today page: In focus (energy, last night, HRV), every At a glance card, last activity, training this week, `yesterday`, `last_7_days` |
 | `GET /api/days/{date}` | one day: heart rate, stress, energy, steps, intensity, the night that began that day, activities |
@@ -147,8 +248,12 @@ duplicates and appends cards missing from `order`).
 | `GET /api/devices`, `GET /api/storage` | watch battery, last data and sync; file and parse counts |
 | `GET /api/settings`, `PATCH /api/settings` | see above |
 
-Owner data (`owner`, `sessions`, `settings`, `strength_set_overrides`,
-`body_measurements`, migration 0008) lives in tables `reparse` never touches.
+Owner data (`users`, `sessions`, `user_settings`, `strength_set_overrides`,
+`body_measurements`, `file_owners`, migrations 0008 and 0010) lives in tables `reparse` never
+touches. Every derived sample table has `user_id` in its primary key (0 = unassigned); the
+`*_current` views carry the owner through `file_owners`, and a by-id endpoint (activity, track,
+strength) answers 404 for a file the session's user does not own.
+`reparse` re-derives from the files and keeps `file_owners`.
 Interpretation rules that are not obvious from the watch data (cumulative step
 counters, weekly intensity totals, night date, VO2 max from MET) are documented
 at the top of `src/web_api/daily.rs` and `src/web_api/training.rs`.
@@ -157,12 +262,16 @@ TypeScript types for every request and response are generated by ts-rs into
 `web/src/api/generated/` (`nimrag-server export-types`). `tests/types.rs` fails
 when the committed files differ from a fresh generation.
 
-`dev-seed` writes 120 days of deterministic sample data (GPS runs around a
+`dev-seed` creates two accounts, the admin `admin` (no data) and the user `demo`, both with 2FA
+enrolled, and gives `demo` 120 days of deterministic sample data (GPS runs around a
 neutral location, strength sessions with sets, walks, heart rate, steps, stress,
 energy, sleep with stages, HRV, resting HR, breathing, SpO2, training load, VO2
 max, recovery, battery) and sets `settings.sample_data`, which makes every
 response say `sample: true`. It refuses a data dir that holds uploaded files or
-was seeded already.
+was seeded already. Passwords and 2FA secrets are random unless given in
+`NIMRAG_SEED_ADMIN_PASSWORD`, `NIMRAG_SEED_ADMIN_TOTP`, `NIMRAG_SEED_USER_PASSWORD` and
+`NIMRAG_SEED_USER_TOTP` (base32); the generated ones are printed once on stdout for whoever ran
+the command, the supplied ones never, and nothing goes to the logs.
 
 ## Building (sqlx offline)
 
@@ -208,7 +317,8 @@ Versions verified on crates.io on 2026-11-19 (latest stable, not yanked).
 | anyhow | 1.0.104 | error context in a binary-style app |
 | getrandom | 0.4.3 | OS randomness for 256-bit device tokens (avoids the larger `rand` tree) |
 | zip | =9.6.1 (default-features off, `deflate` only) | read the Garmin export archive and the zips nested in it. Maintained (zip-rs/zip2, ~350M downloads, releases through 2026-11-19; 9.7.x was hours old at selection so 9.6.1 is pinned), `enclosed_name()` path-traversal protection built in. Server crate only; core stays std-only |
-| argon2 | 0.6.0 | owner password hash (argon2id, RustCrypto); built with opt-level 3 in dev profiles so tests stay fast |
+| argon2 | 0.6.0 | password hash (argon2id, RustCrypto); built with opt-level 3 in dev profiles so tests stay fast |
+| totp-rs | 6.0.0 (default features off, `alloc`) | TOTP codes (RFC 6238, SHA-1, 6 digits, 30 s); the replay guard and the secret generation are ours |
 | chrono / chrono-tz | 0.4.45 (std, now) / 0.10.4 | local days and DST-safe day bounds in the owner's IANA time zone |
 | iana-time-zone | 0.1.65 | default `timezone` from the system |
 | ts-rs | 12.0.1 (no-serde-warnings) | TypeScript types generated from the API structs |
