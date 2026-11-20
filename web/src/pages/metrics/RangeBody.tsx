@@ -1,0 +1,109 @@
+import { Link } from 'react-router-dom';
+import type { MetricRange } from '../../api/generated/MetricRange';
+import { BarSeries, Card, CardHeader, EmptyState, Legend, SeriesChart, StatTile, ValueOrUnavailable } from '../../components';
+import { useIsDesktop } from '../../lib/hooks';
+import { chartHasData, rangeChart, rangeRows, rangeSummary, statText, tileStats, type ChartSpec, type RangeRow } from './model';
+import { metricHref, type MetricDef } from './period';
+
+// A multi-day tab: the chart of the period, its figures, and a row for every day or week with a
+// value, newest first. A row opens that day (on 1d) or that week (on 7d).
+
+export function RangeBody({ def, data, today }: { def: MetricDef; data: MetricRange; today: string }) {
+  const spec = rangeChart(def.key, data, today);
+  const rows = rangeRows(def, data, today);
+  const tiles = tileStats(def.key, data);
+  const week = data.bucket === 'week';
+  return (
+    <>
+      <div className="metric-top">
+        <Card padding="lg">
+          <CardHeader title={week ? 'Week by week' : 'Day by day'} tone="muted" />
+          {chartHasData(spec) ? (
+            <Plot spec={spec} label={`${def.title} ${week ? 'by week' : 'by day'}`} summary={rangeSummary(def, data)} />
+          ) : (
+            <EmptyState title={`No ${def.title.toLowerCase()} in this period`}>The watch has not recorded any for these days. Try an earlier period.</EmptyState>
+          )}
+        </Card>
+        <div className="metric-tiles">
+          {tiles.map((s) => {
+            const t = statText(s);
+            return <StatTile key={s.key} size="sm" label={s.label} value={t.value} {...(t.unit ? { sub: t.unit } : {})} />;
+          })}
+        </div>
+      </div>
+      {rows.length > 0 ? (
+        <section aria-labelledby="metric-rows" className="page-stack">
+          <h2 className="section-label" id="metric-rows">
+            {week ? 'Weeks, newest first' : 'Days, newest first'}
+          </h2>
+          <div className="metric-rows">
+            {rows.map((r) => (
+              <Row key={r.start} def={def} row={r} today={today} />
+            ))}
+          </div>
+        </section>
+      ) : null}
+    </>
+  );
+}
+
+function Plot({ spec, label, summary }: { spec: ChartSpec; label: string; summary: string }) {
+  const desktop = useIsDesktop();
+  const height = desktop ? 240 : 150;
+  return (
+    <>
+      {spec.kind === 'line' ? (
+        <SeriesChart
+          label={label}
+          summary={summary}
+          x={spec.x}
+          series={spec.series}
+          xRange={spec.xRange}
+          xLabels={spec.xLabels}
+          yUnit={spec.yUnit}
+          {...(spec.yRange ? { yRange: spec.yRange } : {})}
+          {...(spec.band ? { band: spec.band } : {})}
+          height={height}
+        />
+      ) : (
+        <BarSeries
+          values={spec.values}
+          labels={spec.labels}
+          label={label}
+          summary={summary}
+          color={spec.color}
+          yUnit={spec.yUnit}
+          {...(spec.axisLabels ? { axisLabels: spec.axisLabels } : {})}
+          {...(spec.goal !== undefined ? { goal: spec.goal } : {})}
+          {...(spec.belowGoalColor ? { belowGoalColor: spec.belowGoalColor } : {})}
+          height={height}
+        />
+      )}
+      <Legend items={spec.legend} />
+    </>
+  );
+}
+
+function Row({ def, row, today }: { def: MetricDef; row: RangeRow; today: string }) {
+  const inner = (
+    <>
+      <span className="list-row__main">
+        <span className="list-row__title">{row.title}</span>
+        {row.sub ? <span className="list-row__sub">{row.sub}</span> : null}
+      </span>
+      <span className="list-row__end">
+        <span className="list-row__value">
+          <ValueOrUnavailable value={row.value} />
+        </span>
+        {row.valueSub ? <span className="list-row__sub">{row.valueSub}</span> : null}
+      </span>
+    </>
+  );
+  return row.target ? (
+    <Link to={metricHref(def.key, row.target.range, row.target.end, today)} className="list-row">
+      {inner}
+    </Link>
+  ) : (
+    <div className="list-row">{inner}</div>
+  );
+}

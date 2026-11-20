@@ -184,11 +184,13 @@ describe('Today on a phone', () => {
     await screen.findByRole('heading', { name: 'At a glance' });
     await waitFor(() => expect(glanceIds()).toHaveLength(12));
     const href = (id: string) => document.querySelector(`.glance-grid [data-card="${id}"]`)?.getAttribute('href');
-    expect(href('heart_rate')).toBe('/day');
-    expect(href('stress')).toBe('/day');
-    expect(href('steps')).toBe('/movement');
-    expect(href('training_load')).toBe('/training');
-    expect(href('intensity_minutes')).toBe('/training');
+    expect(href('heart_rate')).toBe('/metrics/heart_rate');
+    expect(href('stress')).toBe('/metrics/stress');
+    expect(href('steps')).toBe('/metrics/steps');
+    expect(href('training_load')).toBe('/metrics/training_load');
+    expect(href('intensity_minutes')).toBe('/metrics/intensity_minutes');
+    expect(href('vo2_max')).toBe('/metrics/vo2_max');
+    expect(href('recovery_time')).toBe('/training');
     expect(href('weight')).toBe('/body');
   });
 

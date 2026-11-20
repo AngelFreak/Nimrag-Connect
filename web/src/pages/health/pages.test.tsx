@@ -147,6 +147,8 @@ const dayResponse = (over: Partial<DayResponse> = {}): DayResponse => ({
   steps: 5609,
   step_goal: 8000,
   intensity_minutes: 19,
+  breathing: { lowest: null, highest: null, avg_awake: null, avg_asleep: null, hourly: [] },
+  spo2: { average: null, lowest: null, latest: null, latest_at: null, avg_asleep: null, hourly: [] },
   sleep: summary('2026-11-18', 7.5),
   activities: [
     {

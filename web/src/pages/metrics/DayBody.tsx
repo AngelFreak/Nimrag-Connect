@@ -1,0 +1,310 @@
+import type { ReactNode } from 'react';
+import type { DayResponse } from '../../api/generated/DayResponse';
+import type { MovementResponse } from '../../api/generated/MovementResponse';
+import { BarSeries, Card, CardHeader, Legend, Ring, SampleDataChip, SeriesChart, StatTile, ValueOrUnavailable } from '../../components';
+import { fmtDay, fmtMonthDay } from '../../lib/dates';
+import { fmtFixed, fmtInt, withUnit } from '../../lib/format';
+import { useIsDesktop } from '../../lib/hooks';
+import { fmtKcal, fmtKm } from '../body/movement';
+import { ActivitiesSection, EnergyCard, HOUR_LABELS, HeartRateCard, StressCard } from '../health/dayCards';
+import { fmtSeconds, hourSeries, stepsPercent } from '../health/model';
+import { CardSkeleton, LoadError } from '../health/parts';
+import { useDay } from '../health/queries';
+import { clock } from '../health/time';
+import { weekLine } from './model';
+import type { MetricKey } from './period';
+import { useMovementDay } from './queries';
+
+// The 1-day tab of a metric page: the day's own data (GET /api/days/{date}), with the day's
+// summary figures beside it. Heart rate, stress and energy draw the same cards as the Day view.
+
+const tile = (label: string, value: string | null, tone: 'energy' | 'sleep' | 'heart' | 'steps' | 'warn' | 'link' | 'muted' = 'muted', sub?: string) => (
+  <StatTile key={label} size="sm" label={label} value={value} tone={tone} {...(sub ? { sub } : {})} />
+);
+
+function Layout({ chart, tiles, children }: { chart: ReactNode; tiles: ReactNode; children?: ReactNode }) {
+  return (
+    <>
+      <div className="metric-top">
+        {chart}
+        <div className="metric-tiles">{tiles}</div>
+      </div>
+      {children}
+    </>
+  );
+}
+
+export function DayBody({ metric, date, today }: { metric: MetricKey; date: string; today: string }) {
+  const q = useDay(date);
+  if (q.isPending) {
+    return (
+      <>
+        <CardSkeleton lines={4} height={20} />
+        <CardSkeleton lines={2} height={20} />
+      </>
+    );
+  }
+  if (q.isError) return <LoadError what="this day" error={q.error} onRetry={() => void q.refetch()} />;
+  const day = q.data;
+  return (
+    <div className="page-stack">
+      {day.sample ? (
+        <div>
+          <SampleDataChip sample />
+        </div>
+      ) : null}
+      {metric === 'heart_rate' ? (
+        <HeartRateDay day={day} />
+      ) : metric === 'stress' ? (
+        <StressDay day={day} />
+      ) : metric === 'energy' ? (
+        <EnergyDay day={day} />
+      ) : metric === 'steps' ? (
+        <StepsDay day={day} />
+      ) : metric === 'intensity_minutes' ? (
+        <IntensityDay day={day} today={today} />
+      ) : metric === 'respiration' ? (
+        <BreathingDay day={day} />
+      ) : metric === 'spo2' ? (
+        <Spo2Day day={day} />
+      ) : null}
+    </div>
+  );
+}
+
+function HeartRateDay({ day }: { day: DayResponse }) {
+  const hr = day.heart_rate;
+  return (
+    <Layout
+      chart={<HeartRateCard day={day} />}
+      tiles={[
+        tile('Resting', withUnit(fmtInt(hr.resting_hr_bpm), 'bpm'), 'heart'),
+        tile('Highest', withUnit(fmtInt(hr.day.high_bpm), 'bpm')),
+        tile('Lowest', withUnit(fmtInt(hr.day.low_bpm), 'bpm')),
+        tile('7-day resting', withUnit(fmtInt(hr.avg_7d_resting_hr_bpm), 'bpm')),
+      ]}
+    >
+      <ActivitiesSection day={day} />
+    </Layout>
+  );
+}
+
+function StressDay({ day }: { day: DayResponse }) {
+  const st = day.stress;
+  return (
+    <Layout
+      chart={<StressCard day={day} />}
+      tiles={[
+        tile('Average', fmtInt(st.average), 'warn'),
+        tile('Rest', fmtSeconds(st.rest_s)),
+        tile('Low', fmtSeconds(st.low_s)),
+        tile('Medium', fmtSeconds(st.medium_s)),
+        tile('High', fmtSeconds(st.high_s)),
+        tile('Activity', fmtSeconds(st.activity_s)),
+      ]}
+    >
+      <ActivitiesSection day={day} />
+    </Layout>
+  );
+}
+
+function EnergyDay({ day }: { day: DayResponse }) {
+  const e = day.energy;
+  return (
+    <Layout
+      chart={<EnergyCard day={day} />}
+      tiles={[
+        tile('Highest', fmtInt(e.high), 'energy'),
+        tile('Lowest', fmtInt(e.low), 'warn'),
+        tile('Charged', e.charged === null ? null : `+${fmtInt(e.charged)}`, 'energy'),
+        tile('Drained', e.drained === null ? null : `-${fmtInt(e.drained)}`, 'warn'),
+      ]}
+    >
+      <ActivitiesSection day={day} />
+    </Layout>
+  );
+}
+
+// ---- steps ------------------------------------------------------------------------------------------
+
+function StepsDay({ day }: { day: DayResponse }) {
+  const m = useMovementDay(day.date, true);
+  const pct = stepsPercent(day.steps, day.step_goal);
+  const move: MovementResponse | undefined = m.data;
+  return (
+    <Layout
+      chart={
+        <Card padding="lg">
+          <CardHeader title="Steps today" tone="muted" />
+          <div className="metric-ring">
+            <Ring value={day.steps} max={day.step_goal} label="Steps against the daily goal" color="var(--steps)" size={112} strokeWidth={12} showValue={false} />
+            <div className="stat">
+              <span className="stat__value"><ValueOrUnavailable value={fmtInt(day.steps)} /></span>
+              <span className="stat__sub tone-steps">{pct === null ? `Goal ${fmtInt(day.step_goal)}` : `${pct}% of ${fmtInt(day.step_goal)}`}</span>
+            </div>
+          </div>
+        </Card>
+      }
+      tiles={[tile('Distance', fmtKm(move?.distance_m)), tile('Calories', fmtKcal(move?.calories.total_kcal))]}
+    >
+      {move ? <WeekSteps move={move} /> : null}
+    </Layout>
+  );
+}
+
+function WeekSteps({ move }: { move: MovementResponse }) {
+  const desktop = useIsDesktop();
+  const values = move.week_steps.map((d) => d.value);
+  return (
+    <Card padding="lg">
+      <CardHeader title="This week" tone="muted" />
+      <BarSeries
+        values={values}
+        labels={move.week_steps.map((d) => fmtDay(d.date, { weekday: 'short' }))}
+        label="Steps per day this week"
+        summary={`Steps per day this week: ${move.week_steps.map((d) => `${fmtDay(d.date, { weekday: 'long' })} ${fmtInt(d.value) ?? 'no data'}`).join(', ')}.`}
+        color="var(--steps)"
+        belowGoalColor="var(--steps-dim)"
+        goal={move.step_goal}
+        height={desktop ? 160 : 110}
+      />
+      <Legend
+        items={[
+          { key: 'met', label: 'Goal reached', color: 'var(--steps)' },
+          { key: 'below', label: 'Below goal', color: 'var(--steps-dim)' },
+          { key: 'goal', label: 'Goal', color: 'var(--text-2)', shape: 'dash' },
+        ]}
+      />
+    </Card>
+  );
+}
+
+// ---- intensity minutes ----------------------------------------------------------------------------
+
+function IntensityDay({ day, today }: { day: DayResponse; today: string }) {
+  const m = useMovementDay(day.date, true);
+  const desktop = useIsDesktop();
+  const week = m.data?.intensity;
+  const dayFigures = week?.days.find((d) => d.date === day.date);
+  const spec = week
+    ? weekLine(
+        week.days.map((d) => d.date),
+        week.days.map((d) => d.total_min),
+        week.goal_min,
+        today,
+        [0, 2, 4, 6].map((i) => ({ value: i, text: fmtMonthDay(week.days[i]?.date ?? week.week_start) })),
+      )
+    : null;
+  const pct = week && week.total_min !== null && week.goal_min > 0 ? Math.round((week.total_min / week.goal_min) * 100) : null;
+  return (
+    <Layout
+      chart={
+        <Card padding="lg">
+          <CardHeader title="Week so far" tone="muted" />
+          <div className="metric-ring">
+            <Ring value={week?.total_min ?? null} max={week?.goal_min ?? 150} label="Intensity minutes against the weekly goal" color="var(--energy)" size={112} strokeWidth={12} showValue={false} />
+            <div className="stat">
+              <span className="stat__value"><ValueOrUnavailable value={withUnit(fmtInt(week?.total_min), 'min')} /></span>
+              <span className="stat__sub tone-energy">{pct === null ? '' : `${pct}% of ${fmtInt(week?.goal_min)}`}</span>
+            </div>
+          </div>
+          {spec ? (
+            <>
+              <SeriesChart
+                label="Intensity minutes through the week"
+                summary={`Intensity minutes this week: ${fmtInt(week?.total_min) ?? 'none recorded'} of ${fmtInt(week?.goal_min)}.`}
+                x={spec.x}
+                series={spec.series}
+                xRange={spec.xRange}
+                xLabels={spec.xLabels}
+                {...(spec.yRange ? { yRange: spec.yRange } : {})}
+                height={desktop ? 180 : 120}
+              />
+              <Legend items={spec.legend} />
+            </>
+          ) : null}
+        </Card>
+      }
+      tiles={[
+        tile('Moderate', withUnit(fmtInt(dayFigures?.moderate_min), 'min'), 'energy'),
+        tile('Vigorous', withUnit(fmtInt(dayFigures?.vigorous_min), 'min'), 'energy', 'counts double'),
+        tile('Credited', withUnit(fmtInt(dayFigures?.total_min ?? day.intensity_minutes), 'min')),
+      ]}
+    />
+  );
+}
+
+// ---- breathing and blood oxygen -----------------------------------------------------------------
+
+const brpm = (v: number | null) => withUnit(fmtFixed(v, 1), 'brpm');
+
+function BreathingDay({ day }: { day: DayResponse }) {
+  const desktop = useIsDesktop();
+  const b = day.breathing;
+  const hours = hourSeries(day.date, b.hourly);
+  const summary =
+    b.lowest === null || b.highest === null
+      ? 'No breathing readings for this day.'
+      : `Breathing rate by the hour, from ${fmtFixed(b.lowest, 1)} to ${fmtFixed(b.highest, 1)} breaths a minute.`;
+  return (
+    <Layout
+      chart={
+        <Card>
+          <CardHeader title="Breathing by the hour" aside={b.avg_awake === null ? undefined : `Awake ${fmtFixed(b.avg_awake, 1)}`} />
+          <SeriesChart
+            label="Breathing rate across the day"
+            summary={summary}
+            summaryVisible
+            x={hours?.x ?? []}
+            xRange={[0, 24]}
+            series={[{ label: 'Breathing', color: 'link', data: hours?.y ?? [], points: true }]}
+            yUnit="decimal"
+            height={desktop ? 170 : 120}
+            xLabels={HOUR_LABELS}
+          />
+        </Card>
+      }
+      tiles={[tile('Lowest', brpm(b.lowest)), tile('Highest', brpm(b.highest)), tile('Awake avg', brpm(b.avg_awake), 'link'), tile('Asleep avg', brpm(b.avg_asleep), 'sleep')]}
+    />
+  );
+}
+
+function Spo2Day({ day }: { day: DayResponse }) {
+  const desktop = useIsDesktop();
+  const o = day.spo2;
+  const hours = hourSeries(day.date, o.hourly);
+  const low = o.hourly.flatMap((h) => (h.value === null ? [] : [h.value]));
+  const floor = low.length ? Math.min(90, Math.floor(Math.min(...low) / 5) * 5) : 90;
+  const pct = (v: number | null) => (v === null ? null : `${fmtInt(v)}%`);
+  const summary =
+    o.lowest === null || o.average === null
+      ? 'No blood oxygen readings for this day.'
+      : `Blood oxygen by the hour: average ${fmtInt(o.average)}%, lowest ${fmtInt(o.lowest)}%.`;
+  const at = clock(o.latest_at);
+  return (
+    <Layout
+      chart={
+        <Card>
+          <CardHeader title="Blood oxygen by the hour" aside={o.average === null ? undefined : `Avg ${fmtInt(o.average)}%`} />
+          <SeriesChart
+            label="Blood oxygen across the day"
+            summary={summary}
+            summaryVisible
+            x={hours?.x ?? []}
+            xRange={[0, 24]}
+            series={[{ label: 'Blood oxygen', color: 'link', data: hours?.y ?? [], points: true }]}
+            yRange={[floor, 100]}
+            height={desktop ? 170 : 120}
+            xLabels={HOUR_LABELS}
+          />
+        </Card>
+      }
+      tiles={[
+        tile('Average', pct(o.average), 'link'),
+        tile('Lowest', pct(o.lowest), 'warn'),
+        tile('Last reading', pct(o.latest), 'muted', at ? `at ${at}` : undefined),
+        tile('Asleep avg', pct(o.avg_asleep), 'sleep'),
+      ]}
+    />
+  );
+}

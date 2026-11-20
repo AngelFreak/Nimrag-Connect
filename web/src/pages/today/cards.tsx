@@ -35,19 +35,20 @@ export const CARD_LABEL: Record<HomeCard, string> = {
 
 /** Detail page each card opens. */
 export const CARD_LINK: Record<HomeCard, string> = {
-  energy: '/day',
-  heart_rate: '/day',
-  stress: '/day',
+  energy: '/metrics/energy',
+  heart_rate: '/metrics/heart_rate',
+  stress: '/metrics/stress',
   sleep: '/sleep',
   hrv: '/hrv',
   training_status: '/training/status',
-  intensity_minutes: '/training',
-  training_load: '/training',
-  steps: '/movement',
+  intensity_minutes: '/metrics/intensity_minutes',
+  training_load: '/metrics/training_load',
+  steps: '/metrics/steps',
+  // Recovery time is part of Training readiness; it has no page of its own.
   recovery_time: '/training',
-  vo2_max: '/training',
-  respiration: '/health',
-  spo2: '/health',
+  vo2_max: '/metrics/vo2_max',
+  respiration: '/metrics/respiration',
+  spo2: '/metrics/spo2',
   weight: '/body',
   training_readiness: '/training',
 };

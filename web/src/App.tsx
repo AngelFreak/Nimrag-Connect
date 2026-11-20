@@ -17,6 +17,7 @@ import { GalleryPage } from './pages/GalleryPage';
 import { HealthPage } from './pages/HealthPage';
 import { HrvPage } from './pages/HrvPage';
 import { LoginPage } from './pages/LoginPage';
+import { MetricPage } from './pages/MetricPage';
 import { MovementPage } from './pages/MovementPage';
 import { NotFoundPage } from './pages/NotFoundPage';
 import { SettingsPage } from './pages/SettingsPage';
@@ -78,6 +79,7 @@ export function App() {
           <Route path="sleep/:date?" element={<SleepPage />} />
           <Route path="day/:date?" element={<DayPage />} />
           <Route path="movement/:date?" element={<MovementPage />} />
+          <Route path="metrics/:metric" element={<MetricPage />} />
           <Route path="training" element={<TrainingPage />} />
           <Route path="training/status" element={<TrainingStatusPage />} />
           <Route path="hrv" element={<HrvPage />} />
