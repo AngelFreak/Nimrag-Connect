@@ -4,7 +4,8 @@
 //!   from disk on each request, so `npm run build` is enough while developing.
 //! * `web/dist` may be missing at compile time (`cargo test` without Node): the folder is
 //!   `allow_missing`, and requests then get a small "web interface not built" page.
-//! * Routing: `/api/*` and `/tiles/*` never fall back to the app (JSON / plain 404). A path
+//! * Routing: `/api/*` and `/tiles/*` never fall back to the app (JSON / plain 404; the tile
+//!   files themselves are served by `tiles.rs` when `--tiles-dir` is set). A path
 //!   that names a file (has an extension) is served or is a 404. Any other path is a
 //!   client-side route and gets `index.html` so React Router can take over.
 //! * Caching: files under `assets/` have content hashes in their names and are cached for a

@@ -1540,3 +1540,59 @@ async fn about_names_the_server_version_for_any_signed_in_session_only() {
     let (s, _, _) = e.call(Method::GET, "/api/about", None, false, None).await;
     assert_eq!(s, StatusCode::UNAUTHORIZED);
 }
+
+#[tokio::test]
+async fn training_load_tile_reads_the_newest_row_that_has_a_load() {
+    let (e, c) = setup().await;
+    let cols = "ts, status, weekly_load_sum, load_min, load_max, fitness_trend, load_trend, src";
+    // Yesterday's Garmin Connect row has the load and its target range; today's row from the
+    // watch has only a status.
+    values(
+        &e,
+        "training_status",
+        cols,
+        &[
+            format!("{}, 4, 2.0, 175, 328, 1, 1, 1", at(18, 0, 0)),
+            format!("{}, 5, NULL, NULL, NULL, NULL, NULL, 1", at(19, 6, 30)),
+        ],
+    )
+    .await;
+    for uri in ["/api/today", "/api/training"] {
+        let t = e.get(&c, uri).await;
+        let (status, load) = if uri == "/api/today" {
+            (&t["training_status"], &t["training_load"])
+        } else {
+            (&t["status"], &t["load"])
+        };
+        // The status is still the newest row's.
+        assert_eq!(status["status_code"], 5, "{uri}");
+        assert_eq!(status["since"], "2026-11-19", "{uri}");
+        assert_eq!(
+            (
+                load["seven_day_load"].as_f64(),
+                load["target_min"].as_f64(),
+                load["target_max"].as_f64()
+            ),
+            (Some(2.0), Some(175.0), Some(328.0)),
+            "{uri}"
+        );
+        assert_eq!(load["vs_target"], "below", "{uri}");
+    }
+
+    // A load more than a week old is no longer the 7-day load: unavailable, not stale.
+    e.exec("DELETE FROM training_status").await;
+    values(
+        &e,
+        "training_status",
+        cols,
+        &[
+            format!("{}, 4, 250, 240, 420, 1, 1, 1", at(10, 6, 30)),
+            format!("{}, 5, NULL, NULL, NULL, NULL, NULL, 1", at(19, 6, 30)),
+        ],
+    )
+    .await;
+    let t = e.get(&c, "/api/today").await;
+    let load = &t["training_load"];
+    assert!(load["seven_day_load"].is_null() && load["target_min"].is_null());
+    assert!(load["vs_target"].is_null());
+}

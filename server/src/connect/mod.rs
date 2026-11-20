@@ -18,6 +18,10 @@
 //! [`records`]) are folded into its envelope as a `records` member, so they are derived from the
 //! blob's bytes like everything else.
 //!
+//! Garmin's per-day summaries (`daily_stats/YYYY-MM.json`, kind `daily_stats`) fill the
+//! `connect_daily` table; the web API reads it only for a day, and a metric, that the watch has
+//! no data for (see `web_api/daily.rs`).
+//!
 //! A Connect source ranks below every FIT source (`sources.origin = 'connect'`, rank key
 //! starting with `-`), so a watch row wins whatever the import order. Rows that Connect gives
 //! only per date sit at the start of that local day, so any reading the watch made later the
@@ -35,7 +39,7 @@ use serde_json::Value;
 use sqlx::{Sqlite, Transaction};
 
 /// Sample tables only Connect files fill (the others are the watch's own tables).
-pub const SAMPLE_TABLES: &[&str] = &["daily_totals"];
+pub const SAMPLE_TABLES: &[&str] = &["daily_totals", "connect_daily"];
 
 /// The envelope always starts with this, so a head of [`SNIFF_LEN`] bytes decides.
 const MAGIC: &[u8] = br#"{"nimrag_connect":"#;
@@ -58,6 +62,9 @@ pub enum Kind {
     TrainingLoad,
     Vo2max,
     Stats,
+    /// A month of per-day summaries (`daily_stats/YYYY-MM.json`): stress, body battery,
+    /// respiration, intensity minutes, heart rate range, floors.
+    DailyStats,
     /// One activity: Connect's summary plus the decoded FIT messages, and (when its records were
     /// pulled) the track, series and time in zone.
     Activity,
@@ -75,6 +82,7 @@ impl Kind {
             Kind::TrainingLoad => "training_load",
             Kind::Vo2max => "vo2max",
             Kind::Stats => "stats",
+            Kind::DailyStats => "daily_stats",
             Kind::Activity => "activity",
             Kind::ActivitySummary => "activity_summary",
         }
@@ -89,6 +97,7 @@ impl Kind {
             Kind::TrainingLoad,
             Kind::Vo2max,
             Kind::Stats,
+            Kind::DailyStats,
             Kind::Activity,
             Kind::ActivitySummary,
         ]
@@ -165,6 +174,29 @@ pub struct DailyTotal {
     pub resting_kcal: Option<f64>,
 }
 
+/// Garmin's per-day summary for one local day (`daily_stats`). Every figure is `None` when
+/// Connect gave none; a day with no figure at all is not a row.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct DailyStat {
+    /// Start of the local day.
+    pub ts: i64,
+    pub steps: Option<f64>,
+    pub distance_m: Option<f64>,
+    pub floors_up: Option<f64>,
+    pub moderate_min: Option<f64>,
+    pub vigorous_min: Option<f64>,
+    pub hr_min: Option<f64>,
+    pub hr_max: Option<f64>,
+    pub stress_avg: Option<f64>,
+    pub bb_charged: Option<f64>,
+    pub bb_drained: Option<f64>,
+    pub bb_high: Option<f64>,
+    pub bb_low: Option<f64>,
+    pub resp_avg: Option<f64>,
+    pub resp_high: Option<f64>,
+    pub resp_low: Option<f64>,
+}
+
 /// The rows one envelope derives to.
 #[derive(Debug, Default)]
 pub struct Parsed {
@@ -174,6 +206,7 @@ pub struct Parsed {
     /// One entry per `derived.sleep_sessions`, in order.
     pub sleep_stages: Vec<SleepStages>,
     pub daily_totals: Vec<DailyTotal>,
+    pub daily_stats: Vec<DailyStat>,
     /// Latest instant any row refers to (for the rank key).
     pub last_ts: Option<i64>,
     /// Rows produced (for the rank key).
@@ -301,6 +334,56 @@ pub async fn write(tx: &mut Transaction<'_, Sqlite>, sha256: &str, p: &Parsed) -
         totals,
     )
     .await?;
+    let days: Vec<Vec<V>> = p
+        .daily_stats
+        .iter()
+        .map(|d| {
+            vec![
+                V::I(Some(d.ts)),
+                V::R(d.steps),
+                V::R(d.distance_m),
+                V::R(d.floors_up),
+                V::R(d.moderate_min),
+                V::R(d.vigorous_min),
+                V::R(d.hr_min),
+                V::R(d.hr_max),
+                V::R(d.stress_avg),
+                V::R(d.bb_charged),
+                V::R(d.bb_drained),
+                V::R(d.bb_high),
+                V::R(d.bb_low),
+                V::R(d.resp_avg),
+                V::R(d.resp_high),
+                V::R(d.resp_low),
+            ]
+        })
+        .collect();
+    upsert_samples(
+        tx,
+        "connect_daily",
+        &["ts"],
+        &[
+            "steps",
+            "distance_m",
+            "floors_up",
+            "moderate_min",
+            "vigorous_min",
+            "hr_min",
+            "hr_max",
+            "stress_avg",
+            "bb_charged",
+            "bb_drained",
+            "bb_high",
+            "bb_low",
+            "resp_avg",
+            "resp_high",
+            "resp_low",
+        ],
+        src,
+        uid,
+        days,
+    )
+    .await?;
     let status = if p.skipped > 0 { "partial" } else { "ok" };
     derived::write_file_derive(tx, sha256, status, None, p.skipped).await
 }
@@ -363,6 +446,38 @@ mod tests {
         );
         assert_eq!(p.daily_totals.len(), 1);
         assert_eq!(p.daily_totals[0].steps, Some(5.0));
+    }
+
+    #[test]
+    fn a_daily_summary_keeps_amounts_and_drops_what_was_not_measured() {
+        let p = parsed(
+            Kind::DailyStats,
+            r#"[
+                {"date": "2026-03-11", "steps": 0, "moderate_min": 0, "bb_low": 0, "hr_min": 0,
+                 "stress_avg": -1, "resp_avg": null, "resp_high": 17.5, "floors_down": 2},
+                {"date": "2026-03-12", "steps": null, "hr_max": null},
+                {"date": "2026-03-13"},
+                {"steps": 5},
+                {"date": "x", "steps": 5}
+            ]"#,
+        );
+        assert_eq!(p.error, None);
+        assert_eq!(p.skipped, 2, "a day without a valid date is not a day");
+        assert_eq!(p.daily_stats.len(), 1, "a day with no figure is no row");
+        let d = &p.daily_stats[0];
+        let tz: chrono_tz::Tz = "Europe/Copenhagen".parse().unwrap();
+        assert_eq!(
+            d.ts,
+            crate::settings::day_start(tz, "2026-03-11".parse().unwrap())
+        );
+        assert_eq!(
+            (d.steps, d.moderate_min, d.bb_low, d.resp_high),
+            (Some(0.0), Some(0.0), Some(0.0), Some(17.5))
+        );
+        assert_eq!((d.hr_min, d.stress_avg, d.resp_avg), (None, None, None));
+        assert_eq!(p.rows, 1);
+        let not_a_list = wrap(Kind::DailyStats, tz, "{}");
+        assert!(parse(&not_a_list).error.is_some());
     }
 
     #[test]

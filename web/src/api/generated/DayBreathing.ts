@@ -6,7 +6,8 @@ import type { TimedValue } from "./TimedValue";
  */
 export type DayBreathing = { 
 /**
- * Lowest and highest reading of the day, the night that ended on it included.
+ * Lowest and highest reading of the day, the night that ended on it included (a day the
+ * watch has no reading for: Garmin Connect's, with the awake average and no asleep one).
  */
 lowest: number | null, highest: number | null, avg_awake: number | null, avg_asleep: number | null, 
 /**

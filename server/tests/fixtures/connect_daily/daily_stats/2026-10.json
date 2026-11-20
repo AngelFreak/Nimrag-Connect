@@ -1,0 +1,3 @@
+[
+ {"date": "2026-10-31", "steps": 1000, "stress_avg": 40, "bb_charged": 10, "bb_drained": 30, "bb_high": 80, "bb_low": 20, "resp_avg": 12.0, "resp_high": 15.0, "resp_low": 9.0}
+]

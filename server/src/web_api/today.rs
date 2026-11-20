@@ -4,9 +4,9 @@
 
 use super::activities::{list_items, ActivityListItem};
 use super::daily::{
-    day_stats, energy_block, heart_rate_block, hr_window, hrv_block, intensity_total, night_detail,
-    session_last_night, stress_block, EnergyBlock, HeartRateBlock, HrWindow, HrvBlock, SleepNight,
-    StressBlock,
+    connect_day, day_stats, energy_block, heart_rate_block, hr_window, hrv_block, intensity_total,
+    night_detail, session_last_night, stress_block, EnergyBlock, HeartRateBlock, HrWindow,
+    HrvBlock, SleepNight, StressBlock,
 };
 use super::days::{intensity_week, IntensityWeek};
 use super::system::{last_data_ts, last_upload};
@@ -42,7 +42,7 @@ pub struct StepsCard {
 pub struct RespirationCard {
     pub latest_brpm: Option<f64>,
     pub latest_at: Option<String>,
-    /// Mean of today's readings.
+    /// Mean of today's readings (without any, Garmin Connect's average for the day if imported).
     pub day_avg_brpm: Option<f64>,
     /// Mean during last night's sleep.
     pub sleep_avg_brpm: Option<f64>,
@@ -257,7 +257,10 @@ async fn today(user: DataUser, State(state): State<AppState>) -> Res<Json<Today>
         respiration: RespirationCard {
             latest_brpm: resp.map(|r| r.1),
             latest_at: ctx.opt_ts(resp.map(|r| r.0)),
-            day_avg_brpm: day_resp.map(round1),
+            // The watch's mean of today's readings, else Connect's day average.
+            day_avg_brpm: day_resp.map(round1).or(connect_day(&ctx, d)
+                .await?
+                .and_then(|c| c.resp_avg.map(round1))),
             sleep_avg_brpm: night.as_ref().and_then(|n| n.breathing_brpm),
         },
         spo2: Spo2Card {

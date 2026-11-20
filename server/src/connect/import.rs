@@ -8,6 +8,10 @@
 //! has the records now) that outranks it by row count, so a re-run after the pull adds the track
 //! and the charts; the older blob stays stored and is hidden by `activities_current`.
 //!
+//! `DIR/daily_stats/YYYY-MM.json` (a month of Garmin's per-day summaries, read by
+//! `connect/rows.rs`) is optional too: it is found like any other JSON (by its shape, a list of
+//! days) and a directory without it imports exactly as before.
+//!
 //! Re-running is idempotent: identical input gives identical envelopes, so every blob is already
 //! stored and ledgered (the origin, the path inside the directory, folds repeats into the
 //! existing event), and nothing is derived twice. Files that are not recognised Connect JSON
@@ -102,8 +106,26 @@ impl Report {
     }
 }
 
+/// A field that only a `daily_stats` day has (a day of `stats.json` has none of them).
+const DAILY_STATS_KEYS: &[&str] = &[
+    "stress_avg",
+    "bb_high",
+    "resp_avg",
+    "hr_max",
+    "moderate_min",
+    "floors_up",
+];
+
 /// Decide what a parsed Connect JSON is, from its shape (never from its file name).
 pub fn classify(v: &Value) -> Option<Kind> {
+    // A month of per-day summaries (`daily_stats/YYYY-MM.json`): a list of days.
+    if let Some(days) = v.as_array() {
+        let looks = days.first().is_some_and(|d| {
+            d.get("date").is_some_and(Value::is_string)
+                && DAILY_STATS_KEYS.iter().any(|k| d.get(k).is_some())
+        });
+        return looks.then_some(Kind::DailyStats);
+    }
     let obj = v.as_object()?;
     if obj.contains_key("nights") {
         return Some(Kind::Sleep);
@@ -393,6 +415,12 @@ mod tests {
             Some(Kind::TrainingStatus)
         );
         assert_eq!(k(json!({"summary": {}, "fit": {}})), Some(Kind::Activity));
+        assert_eq!(
+            k(json!([{"date": "2026-01-01", "steps": 1, "stress_avg": 20}])),
+            Some(Kind::DailyStats)
+        );
+        assert_eq!(k(json!([{"date": "2026-01-01", "steps": 1}])), None);
+        assert_eq!(k(json!([])), None);
         assert_eq!(k(json!({"something": "else"})), None);
         assert_eq!(k(json!([1, 2])), None);
     }

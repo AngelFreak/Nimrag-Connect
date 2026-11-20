@@ -8,7 +8,7 @@ use std::path::PathBuf;
 const USAGE: &str = "\
 usage:
   nimrag-server serve [--data-dir DIR] [--listen ADDR] [--log-json] [--insecure-cookies]
-                      [--trusted-proxy CIDR[,CIDR...]]
+                      [--trusted-proxy CIDR[,CIDR...]] [--tiles-dir DIR]
   nimrag-server user set-password [--username NAME] [--data-dir DIR]
                                                    read the new password from stdin (default user: the only admin)
   nimrag-server user reset-2fa --username NAME [--data-dir DIR]
@@ -34,6 +34,8 @@ usage:
   needs it, and reads local dates and times in that user's timezone unless --timezone is given).
 --insecure-cookies drops the Secure flag from the session cookie (plain-http LAN use only) and
   uses the cookie name nimrag_session instead of __Host-nimrag_session.
+--tiles-dir (or $NIMRAG_TILES_DIR) serves the *.pmtiles files of DIR to signed-in users under
+  /tiles/<name>.pmtiles (map tiles for the web app); without it /tiles/* is a 404.
 --trusted-proxy (repeatable, or comma-separated) names the reverse-proxy networks whose
   X-Forwarded-For is believed for login rate limiting: only when the TCP peer is inside one, the
   rightmost entry outside all of them is the client. Without it the peer address is used.";
@@ -44,6 +46,7 @@ struct Opts {
     log_json: bool,
     insecure_cookies: bool,
     trusted_proxies: Vec<nimrag_server::auth::Cidr>,
+    tiles_dir: Option<PathBuf>,
     out: Option<PathBuf>,
     list_skipped: bool,
     limits: import::Limits,
@@ -66,6 +69,9 @@ fn parse_opts(args: &[String]) -> Result<Opts> {
         log_json: false,
         insecure_cookies: false,
         trusted_proxies: vec![],
+        tiles_dir: std::env::var_os("NIMRAG_TILES_DIR")
+            .filter(|v| !v.is_empty())
+            .map(Into::into),
         out: None,
         list_skipped: false,
         limits: import::Limits::default(),
@@ -95,6 +101,7 @@ fn parse_opts(args: &[String]) -> Result<Opts> {
                 nimrag_server::auth::parse_cidr_list(&value("--trusted-proxy")?)
                     .context("--trusted-proxy")?,
             ),
+            "--tiles-dir" => o.tiles_dir = Some(value("--tiles-dir")?.into()),
             "--out" => o.out = Some(value("--out")?.into()),
             "--list-skipped" => o.list_skipped = true,
             "--max-depth" => o.limits.max_depth = number(&value("--max-depth")?)?,
@@ -385,7 +392,23 @@ async fn serve(o: Opts) -> Result<()> {
     }
     let state = api::AppState::new(pool, o.data_dir, api::MAX_BODY_BYTES)
         .with_insecure_cookies(o.insecure_cookies)
-        .with_trusted_proxies(o.trusted_proxies.clone());
+        .with_trusted_proxies(o.trusted_proxies.clone())
+        .with_tiles_dir(o.tiles_dir.clone());
+    if let Some(dir) = &o.tiles_dir {
+        let files = std::fs::read_dir(dir).map(|d| {
+            d.flatten()
+                .filter(|e| nimrag_server::tiles::valid_name(&e.file_name().to_string_lossy()))
+                .count()
+        });
+        match files {
+            Ok(n) => tracing::info!(dir = %dir.display(), files = n, "serving map tiles at /tiles"),
+            Err(e) => tracing::warn!(
+                dir = %dir.display(),
+                error = %e,
+                "--tiles-dir cannot be read; /tiles answers 404 until it can"
+            ),
+        }
+    }
     if !o.trusted_proxies.is_empty() {
         tracing::info!(
             networks = o.trusted_proxies.len(),

@@ -189,6 +189,9 @@ pub async fn status_rows(ctx: &Ctx, from: i64, to: i64) -> Res<Vec<StatusRow>> {
     .await?)
 }
 
+/// A training status row older than this is not the current 7-day load.
+const LOAD_MAX_AGE_S: i64 = 7 * 86_400;
+
 pub async fn status_and_load(ctx: &Ctx) -> Res<(TrainingStatusCard, TrainingLoadCard)> {
     let today = ctx.today();
     let rows = status_rows(ctx, ctx.day_bounds(today - Duration::days(120)).0, ctx.now).await?;
@@ -225,7 +228,14 @@ pub async fn status_and_load(ctx: &Ctx) -> Res<(TrainingStatusCard, TrainingLoad
         }
     }
     let from = today - Duration::days(27);
-    let (load, tmin, tmax) = latest.map_or((None, None, None), |l| (l.2, l.3, l.4));
+    // The load tile reads the newest row that HAS a load, with that row's target range: the
+    // watch writes a row for today with only a status, and Garmin Connect's row of the day
+    // before carries the load. Rows older than a week are no longer "the 7-day load".
+    let (load, tmin, tmax) = rows
+        .iter()
+        .rev()
+        .find(|r| r.2.is_some() && r.0 >= ctx.now - LOAD_MAX_AGE_S)
+        .map_or((None, None, None), |l| (l.2, l.3, l.4));
     let vs = match (load, tmin, tmax) {
         (Some(v), Some(lo), _) if v < lo => Some("below"),
         (Some(v), _, Some(hi)) if v > hi => Some("above"),

@@ -7,6 +7,8 @@ export type BreathingTrend = {
  */
 asleep: TrendSeries, 
 /**
- * Mean over the readings outside sleep, for the whole range.
+ * Mean over the readings outside sleep, for the whole range (when the range has days the
+ * watch has no reading for, Garmin Connect's awake averages of those days count too, and
+ * the figure is the mean of the days' awake means).
  */
 awake_avg_brpm: number | null, };

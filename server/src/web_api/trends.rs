@@ -3,6 +3,7 @@
 //! local day. Days without a reading have no point.
 
 use super::daily::{hrv_by_day, night_sessions, nights as night_summaries, resting_by_day};
+use super::metrics::breathing_by_day;
 use super::{mean, round1, Ctx, DateValue};
 use crate::api::{ApiError, AppState};
 use crate::auth::DataUser;
@@ -59,7 +60,9 @@ pub struct HrvTrend {
 pub struct BreathingTrend {
     /// Mean breathing rate during each night's sleep.
     pub asleep: TrendSeries,
-    /// Mean over the readings outside sleep, for the whole range.
+    /// Mean over the readings outside sleep, for the whole range (when the range has days the
+    /// watch has no reading for, Garmin Connect's awake averages of those days count too, and
+    /// the figure is the mean of the days' awake means).
     pub awake_avg_brpm: Option<f64>,
 }
 
@@ -167,8 +170,24 @@ async fn trends(
     .fetch_one(&ctx.pool)
     .await?;
     let awake_n = all_n as f64 - asleep_n;
-    let awake_avg =
+    let mut awake_avg =
         (awake_n > 0.0).then(|| round1((all_sum.unwrap_or(0.0) - asleep_sum) / awake_n));
+    // With days the watch has no breathing reading for, Connect's daily averages count: the
+    // figure is then the mean of the days' awake means, the one the Respiration page shows.
+    let connect_resp: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM connect_daily WHERE user_id = ? AND ts >= ? AND ts < ? AND resp_avg IS NOT NULL",
+    )
+    .bind(ctx.uid)
+    .bind(lo)
+    .bind(hi)
+    .fetch_one(&ctx.pool)
+    .await?;
+    if connect_resp > 0 {
+        let days = breathing_by_day(&ctx, from, to).await?;
+        if !days.from_connect.is_empty() {
+            awake_avg = mean(days.awake.values().copied());
+        }
+    }
 
     Ok(Json(TrendsResponse {
         sample: ctx.sample(),

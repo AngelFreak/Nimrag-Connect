@@ -15,6 +15,7 @@ pub mod ledger;
 pub mod seed;
 pub mod settings;
 pub mod store;
+pub mod tiles;
 pub mod tokens;
 pub mod totp;
 pub mod users;
