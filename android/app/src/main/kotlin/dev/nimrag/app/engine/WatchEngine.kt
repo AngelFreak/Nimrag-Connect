@@ -1,9 +1,13 @@
 package dev.nimrag.app.engine
 
 import android.content.IntentSender
+import android.os.SystemClock
 import dev.nimrag.app.engine.ble.BleScanner
 import dev.nimrag.app.engine.ble.WatchLink
 import dev.nimrag.app.engine.logic.CapabilityHex
+import dev.nimrag.app.engine.logic.ServiceStartGate
+import dev.nimrag.app.engine.logic.StartDecision
+import dev.nimrag.app.engine.logic.StartRequest
 import dev.nimrag.app.engine.logic.UploadPolicy
 import dev.nimrag.app.model.AppState
 import dev.nimrag.app.model.GarminConnectMode
@@ -14,11 +18,16 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.withContext
 
 /** Who asked to start the watch service; written to the log so the path that ran is known. */
-enum class StartSource(val label: String) {
-    ProcessStart("app process start"),
-    Boot("boot or app update"),
-    CompanionPresence("companion presence (the watch came into range)"),
-    Permissions("permissions changed"),
+enum class StartSource(val label: String, val request: StartRequest) {
+    ProcessStart("app process start", StartRequest.ProcessStart),
+    Boot("boot or app update", StartRequest.Boot),
+    CompanionPresence("companion presence (the watch came into range)", StartRequest.Presence),
+
+    /** The permissions or the Bluetooth state really changed. */
+    Permissions("permissions changed", StartRequest.PermissionsChanged),
+
+    /** The app was brought to the foreground and the service was not running. */
+    AppOpened("app opened", StartRequest.AppOpened),
 }
 
 /**
@@ -35,6 +44,9 @@ enum class StartSource(val label: String) {
 class WatchEngine(private val hub: Hub) : WatchController {
     private val scanner = BleScanner(hub)
     private val link = WatchLink(hub, scanner)
+
+    /** One start at a time: see [ServiceStartGate]. */
+    private val startGate = ServiceStartGate()
 
     override val state: StateFlow<AppState> get() = hub.state
 
@@ -63,11 +75,27 @@ class WatchEngine(private val hub: Hub) : WatchController {
     fun startServiceIfPaired(source: StartSource = StartSource.ProcessStart) {
         val watch = hub.settings.watch ?: return
         if (!hub.hasBluetoothPermissions()) return
+        when (startGate.decide(source.request, SystemClock.elapsedRealtime())) {
+            StartDecision.Skip -> {
+                // Opening the app is routine and stays out of the log; a second start from the
+                // same boot or update is worth one line.
+                if (source != StartSource.AppOpened) {
+                    hub.log.info("Watch service start by ${source.label} skipped, it is already running or starting")
+                }
+                return
+            }
+            StartDecision.Nudge -> {
+                hub.handler.post { link.onWatchPresent() }
+                return
+            }
+            StartDecision.Start -> Unit
+        }
         val association = if (hub.companion.isAssociated(watch.address)) "with" else "without"
         if (WatchService.start(hub.app)) {
             ReopenNotice.cancel(hub.app)
             hub.log.info("Watch service started by ${source.label}, $association companion association")
         } else {
+            startGate.refused()
             hub.log.warn("Android refused to start the watch service from ${source.label}, $association companion association")
             ReopenNotice.post(hub.app)
         }
@@ -88,19 +116,23 @@ class WatchEngine(private val hub: Hub) : WatchController {
 
     /** From [WatchService.onStartCommand]; [onResult] false means there is nothing to keep alive. */
     fun onServiceStarted(onResult: (Boolean) -> Unit) {
+        startGate.started()
         hub.handler.post { onResult(link.start()) }
     }
 
     fun onServiceStopped() {
+        startGate.stopped()
         hub.handler.post { link.stop() }
     }
 
     // ---- WatchController ----
 
     override fun refreshPermissions() {
+        // The UI calls this on every resume. Only a real change counts as "permissions changed";
+        // otherwise the service is started only when it is not running (the app was opened).
         hub.handler.post {
-            hub.refreshPermissions()
-            startServiceIfPaired(StartSource.Permissions)
+            val changed = hub.refreshPermissions()
+            startServiceIfPaired(if (changed) StartSource.Permissions else StartSource.AppOpened)
         }
     }
 
