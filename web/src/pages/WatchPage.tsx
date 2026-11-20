@@ -16,7 +16,7 @@ import { fmtAgo, isStale } from './watch/format';
 // knows: the link to the watch, and the Sync now button). Inside the Android app the Watch tab is native;
 // this is the same page for a browser, and the same structure: a status card, then rows with values.
 
-/** The one status chip: the phone's own word when the app tells it, otherwise how fresh the server's data is. */
+/** The one status chip: the phone's own word when the app tells it, otherwise how fresh the server's data is (the last upload, or the newest watch data when nothing was uploaded, e.g. an import). */
 export function watchStatus(link: LinkState, lastSyncAt: string | null, now?: number): string {
   if (link === 'connected') return 'Connected';
   if (link === 'waiting') return 'Waiting to sync';
@@ -66,12 +66,12 @@ function StatusCard({ query, link }: { query: UseQueryResult<DevicesResponse>; l
           </span>
           <div className="watch-card__text">
             <h2 className="watch-card__name">{w.model ?? 'Garmin watch'}</h2>
-            <Chip>{watchStatus(link, d.last_sync_at)}</Chip>
+            <Chip>{watchStatus(link, d.last_sync_at ?? w.last_data_at)}</Chip>
           </div>
         </div>
         <dl className="watch-card__facts">
           <Fact label="Battery">{battery ?? <Unavailable />}</Fact>
-          <Fact label="Synced">{synced ?? <Unavailable />}</Fact>
+          <Fact label="Synced">{synced ?? 'Never'}</Fact>
           <Fact label="Latest data">{latest ?? <Unavailable />}</Fact>
           <Fact label="New files, 24 h">{fmtInt(d.new_files_24h)}</Fact>
         </dl>

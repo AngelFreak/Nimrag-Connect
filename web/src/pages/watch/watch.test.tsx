@@ -111,8 +111,16 @@ describe('Watch page', () => {
     renderApp('/devices');
     const card = await screen.findByRole('region', { name: 'Watch status' });
     expect(within(card).getByText('Battery', { selector: 'dt' }).nextElementSibling).toHaveTextContent('unavailable');
-    expect(within(card).getByText('Synced', { selector: 'dt' }).nextElementSibling).toHaveTextContent('unavailable');
+    expect(within(card).getByText('Synced', { selector: 'dt' }).nextElementSibling).toHaveTextContent('Never');
     expect(within(card).getByText('No data yet')).toBeInTheDocument();
+  });
+
+  it('judges freshness by the newest watch data when nothing was ever uploaded (an import)', async () => {
+    const recent = new Date(Date.now() - 3_600_000).toISOString();
+    mockApi(routes({ '/api/devices': devices({ watch: { model: null, firmware: null, battery_percent: 44, battery_at: recent, last_data_at: recent }, last_sync_at: null }) }));
+    renderApp('/devices');
+    const card = await screen.findByRole('region', { name: 'Watch status' });
+    expect(within(card).getByText('Up to date')).toBeInTheDocument();
   });
 
   it('shows Sync now only inside the app, where it asks the watch', async () => {
