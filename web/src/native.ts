@@ -126,3 +126,9 @@ export const NATIVE_STATUS_EVENT = 'nimrag:status';
 
 /** Event the app dispatches on `window` when one of its own tabs is tapped; `detail.path` is the page to show. */
 export const NATIVE_NAVIGATE_EVENT = 'nimrag:navigate';
+
+/**
+ * Event the app dispatches on `window` when new watch data reached the server (after a sync's files
+ * were uploaded); `src/dataRefresh.ts` refetches what the page shows.
+ */
+export const NATIVE_DATA_EVENT = 'nimrag:data';

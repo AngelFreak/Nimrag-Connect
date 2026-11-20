@@ -132,6 +132,17 @@ class WatchEngine(private val hub: Hub) : WatchController {
         hub.handler.post { onResult(link.start()) }
     }
 
+    /** The auto-sync alarm went off ([AutoSyncReceiver]); [done] ends the broadcast once the link has looked at it. */
+    fun onAutoSyncAlarm(done: () -> Unit) {
+        hub.handler.post {
+            try {
+                link.onAutoSyncAlarm()
+            } finally {
+                done()
+            }
+        }
+    }
+
     fun onServiceStopped() {
         startGate.stopped()
         hub.handler.post { link.stop() }
@@ -146,6 +157,10 @@ class WatchEngine(private val hub: Hub) : WatchController {
             val changed = hub.refreshPermissions()
             startServiceIfPaired(if (changed) StartSource.Permissions else StartSource.AppOpened)
         }
+    }
+
+    override fun appOpened() {
+        hub.handler.post { link.onAppOpened() }
     }
 
     override fun startScan() {

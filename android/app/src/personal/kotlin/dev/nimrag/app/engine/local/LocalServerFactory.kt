@@ -25,8 +25,9 @@ object LocalServerFactory {
         db: EngineDb,
         store: FileStore,
         log: EngineLog,
+        onData: () -> Unit,
         onRunning: (Int?) -> Unit,
-    ): LocalServerHost = EmbeddedLocalServer(app, db, store, log, onRunning)
+    ): LocalServerHost = EmbeddedLocalServer(app, db, store, log, onData, onRunning)
 }
 
 private class EmbeddedLocalServer(
@@ -34,6 +35,8 @@ private class EmbeddedLocalServer(
     private val db: EngineDb,
     private val store: FileStore,
     private val log: EngineLog,
+    /** The local server took files: the page (when it shows the local server) fetches again. */
+    private val onData: () -> Unit,
     private val onRunning: (Int?) -> Unit,
 ) : LocalServerHost {
     private val worker = Executors.newSingleThreadExecutor { r -> Thread(r, "nimrag-local").apply { isDaemon = true } }
@@ -118,6 +121,7 @@ private class EmbeddedLocalServer(
             val ms = SystemClock.elapsedRealtime() - t0
             log.info("Local server took $n file(s) in $ms ms")
             Log.i(TAG, "ingested $n files in $ms ms")
+            onData()
         }
     }
 

@@ -99,6 +99,18 @@ app through `window.NimragApp` (document-start script, server origin only) over 
 `NimragAppNative` JavaScript interface; the pure rules (origin checks, URL validation, route to tab,
 status JSON) live in `ui/shell/logic` with unit tests. See IMPLEMENTATION_PLAN.md, stage 3n.
 
+## New data soon (stage 3q, 0.5.1)
+
+The auto-sync interval (default 15 minutes, Settings) is kept by an inexact alarm that is allowed in
+Doze (`AlarmManager.setAndAllowWhileIdle`, `ELAPSED_REALTIME_WAKEUP`; no exact-alarm permission), not
+by a `Handler` delay: Handler time stops in deep sleep, which stretched an hour to many.
+`AutoSyncReceiver` hands the alarm to `WatchLink.onAutoSyncAlarm()`, which syncs when due, hurries a
+waiting reconnect and sets the next alarm. The same due-check (`LinkRules.shouldStartAutoSync`) also
+runs after the handshake and after any watch event. Opening the app starts a sync when the link is
+ready and the last finished sync is older than 5 minutes (`LinkRules.shouldSyncOnOpen`, not when
+auto-sync is Off). After an upload pass took a file, the shell dispatches `nimrag:data` in the web
+view (`AppState.dataVersion`) and the page fetches again (`web/src/dataRefresh.ts`).
+
 ## Signing in (stage 3p)
 
 The only way to connect the app to a server is to sign in: server address, username, password and

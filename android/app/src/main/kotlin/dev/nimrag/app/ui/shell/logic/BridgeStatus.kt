@@ -86,6 +86,9 @@ object BridgeScripts {
     fun statusEvent(statusJson: String): String =
         "window.dispatchEvent(new CustomEvent('nimrag:status',{detail:$statusJson}));"
 
+    /** Tells the page new watch data reached the server; it fetches what it shows again (web/src/dataRefresh.ts). */
+    const val DATA_EVENT_SCRIPT = "window.dispatchEvent(new CustomEvent('nimrag:data'));"
+
     /** Tells the page's router to go to [path] (a native tab was tapped). */
     fun navigateEvent(path: String): String =
         "window.dispatchEvent(new CustomEvent('nimrag:navigate',{detail:{path:${jsString(path)}}}));"

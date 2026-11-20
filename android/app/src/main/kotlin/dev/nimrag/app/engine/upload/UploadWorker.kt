@@ -41,6 +41,8 @@ class UploadWorker(
     private val onState: (UploadState) -> Unit,
     /** An upload came back 401 or 403: the phone's token no longer works. */
     private val onTokenRejected: () -> Unit = {},
+    /** A pass over the due files finished and the server took at least one: new data is there to show. */
+    private val onUploaded: () -> Unit = {},
     private val clock: () -> Long = System::currentTimeMillis,
 ) {
     private val connectivity = context.getSystemService(ConnectivityManager::class.java)
@@ -54,6 +56,9 @@ class UploadWorker(
     @Volatile private var lastError: String? = null
 
     @Volatile private var waitingForNetwork = false
+
+    /** Files the server took in the current pass (worker thread only). */
+    private var uploadedInPass = 0
 
     fun start() {
         synchronized(startLock) {
@@ -149,12 +154,15 @@ class UploadWorker(
 
     private fun loop() {
         while (true) {
+            uploadedInPass = 0
             val waitMs = try {
                 runOnce()
             } catch (t: Throwable) {
                 log.error("Upload worker error: ${t.javaClass.simpleName}")
                 RETRY_AFTER_ERROR_MS
             }
+            // Once per pass, not per file: a sync stores many files and the page needs one refresh.
+            if (uploadedInPass > 0) runCatching { onUploaded() }
             signal.tryAcquire(waitMs, TimeUnit.MILLISECONDS)
             signal.drainPermits()
         }
@@ -226,6 +234,7 @@ class UploadWorker(
         when (outcome) {
             UploadPolicy.Outcome.Uploaded -> {
                 db.markUploaded(row.sha256, clock())
+                uploadedInPass++
                 lastError = null
                 log.info("Uploaded a $kind file (${row.size} bytes)")
             }

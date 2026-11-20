@@ -17,6 +17,7 @@ import './styles/account.css';
 
 import { App } from './App';
 import { queryClient } from './api/queryClient';
+import { listenForFreshData } from './dataRefresh';
 
 const root = document.getElementById('root');
 if (!root) throw new Error('missing #root');
@@ -30,6 +31,10 @@ createRoot(root).render(
     </QueryClientProvider>
   </StrictMode>,
 );
+
+// The page stays open for days in the Android app: refetch after the app says new data arrived and
+// when the page comes back to the foreground.
+listenForFreshData(queryClient);
 
 // Offline shell. The worker is only generated in production builds. The browser checks for a new
 // worker only on navigation, and the Android app keeps one page open for days, so also check when
