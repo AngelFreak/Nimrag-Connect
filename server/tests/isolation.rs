@@ -389,10 +389,11 @@ async fn samples_with_the_same_timestamp_from_two_users_coexist() {
         )
         .await;
     assert_eq!(s, StatusCode::CREATED);
-    let rows: Vec<(i64, i64)> = sqlx::query_as("SELECT user_id, bpm FROM mon_hr ORDER BY user_id")
-        .fetch_all(&e.pool)
-        .await
-        .unwrap();
+    let rows: Vec<(i64, i64)> =
+        sqlx::query_as("SELECT user_id, CAST(bpm AS INTEGER) FROM mon_hr ORDER BY user_id")
+            .fetch_all(&e.pool)
+            .await
+            .unwrap();
     assert_eq!(
         rows,
         vec![
