@@ -265,6 +265,42 @@ describe('ActivityDetailPage', () => {
     expect(map).toHaveAttribute('data-first', '[10.2,56.1]');
   });
 
+  it('labels the charts\' time axis and has no placeholder caption or "Minutes since" note', async () => {
+    handler = (url) => {
+      if (url.pathname.endsWith('/track')) return { body: { sample: true, id: ID_RUN, available: true, points: [[56.1, 10.2], [56.2, 10.3]], start: null, end: null, bounds: null } };
+      return { body: detail({ series: { elapsed_s: [0, 600, 1200, 1800], heart_rate_bpm: [100, 140, 150, 120], speed_mps: [2.5, 3, 2.8, 2.9], altitude_m: [10, 12, 11, 10], distance_m: [0, 100, 200, 300], cadence: [null, 80, 82, 81] } }) };
+    };
+    renderAt(`/activities/${ID_RUN}`);
+    await screen.findByText('6.40 km');
+    const axes = document.querySelectorAll('.time-axis');
+    expect(axes).toHaveLength(3);
+    expect(Array.from(axes[0]!.querySelectorAll('span')).map((s) => s.textContent)).toEqual(['0', '10', '20', '30 min']);
+    expect(screen.queryByText(/Minutes since the start/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/placeholder/i)).not.toBeInTheDocument();
+  });
+
+  it('leaves out tiles that have no value instead of saying "unavailable"', async () => {
+    handler = () => ({ body: detail({ avg_cadence: null, descent_m: null, aerobic_te: null, anaerobic_te: null, training_load: null, vo2max_derived: null, avg_hr_bpm: null, ascent_m: null, calories_kcal: null }) });
+    renderAt(`/activities/${ID_RUN}`);
+    await screen.findByText('6.40 km');
+    for (const label of ['Cadence', 'Descent', 'Aerobic effect', 'Anaerobic effect', 'Training load', 'VO2 max (derived)', 'Avg HR', 'Climb', 'Energy']) {
+      expect(screen.queryByText(label)).not.toBeInTheDocument();
+    }
+    // What is there stays: distance, time, pace, max heart rate.
+    expect(screen.getAllByText('Distance').length).toBeGreaterThan(0);
+    expect(screen.getByText('Max HR')).toBeInTheDocument();
+    // The only "unavailable" left are the heart rate zones the file does not list.
+    expect(screen.getAllByText('unavailable')).toHaveLength(3);
+  });
+
+  it('shows no tile grid and no tiles for an activity with no stats at all', async () => {
+    handler = () => ({ body: detail({ has_track: false, series: null, vo2max_derived: null, aerobic_te: null, training_load: null, avg_cadence: null, descent_m: null, avg_hr_bpm: null, max_hr_bpm: null, ascent_m: null, calories_kcal: null, hr_zones: [], laps: [] }) });
+    renderAt(`/activities/${ID_RUN}`);
+    expect(await screen.findByText('This activity has no GPS track.')).toBeInTheDocument();
+    expect(screen.queryByText('Aerobic effect')).not.toBeInTheDocument();
+    expect(screen.queryByText('Cadence')).not.toBeInTheDocument();
+  });
+
   it('shows unavailable for missing metrics and no map for an activity without a track', async () => {
     handler = () => ({
       body: detail({ has_track: false, series: null, vo2max_derived: null, aerobic_te: null, training_load: null, avg_hr_bpm: null, hr_zones: [], laps: [], ascent_m: null }),
@@ -437,10 +473,11 @@ describe('StrengthPage', () => {
 });
 
 describe('WorkoutPage', () => {
-  it('says the builder comes in stage 4a and shows no sample steps', () => {
+  it('says the builder is not available yet (no project jargon) and shows no sample steps', () => {
     handler = () => ({ body: {} });
     renderAt('/workouts/new');
-    expect(screen.getByText('Coming in stage 4a')).toBeInTheDocument();
+    expect(screen.getAllByText('Not available yet').length).toBeGreaterThan(0);
+    expect(document.body.textContent).not.toMatch(/stage \d/i);
     expect(screen.queryByText('Warm-up')).not.toBeInTheDocument();
     expect(screen.queryByText('Sample data')).not.toBeInTheDocument();
   });

@@ -1,6 +1,7 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { addDays, addMonths, fmtShortDay, isIsoDay, isIsoMonth } from './dates';
-import { fmtClock, fmtDurationMin, fmtInt, isMissing, withUnit } from './format';
+import { fmtClock, fmtDurationMin, fmtInt, isMissing, statusName, withUnit } from './format';
+import { browserZone, isUtcZone, sameZone, suggestedZone, zoneOptions } from './timezone';
 import { readNativeStatus } from '../native';
 import { safeNext } from '../pages/LoginPage';
 
@@ -74,5 +75,58 @@ describe('login redirect target', () => {
     expect(safeNext('//evil.example')).toBe('/');
     expect(safeNext('/login')).toBe('/');
     expect(safeNext(null)).toBe('/');
+  });
+});
+
+describe('statusName', () => {
+  it('never lets a raw watch code through', () => {
+    expect(statusName('Status 9')).toBe('Other status');
+    expect(statusName('status 12')).toBe('Other status');
+    expect(statusName('Maintaining')).toBe('Maintaining');
+    expect(statusName(null)).toBeNull();
+    expect(statusName('')).toBeNull();
+  });
+});
+
+describe('timezone helpers', () => {
+  afterEach(() => vi.restoreAllMocks());
+  const browserIs = (timeZone: string) => vi.spyOn(Intl.DateTimeFormat.prototype, 'resolvedOptions').mockReturnValue({ timeZone } as Intl.ResolvedDateTimeFormatOptions);
+
+  it('treats every UTC spelling as the same zone', () => {
+    expect(isUtcZone('Etc/UTC')).toBe(true);
+    expect(isUtcZone('UTC')).toBe(true);
+    expect(isUtcZone('Europe/Copenhagen')).toBe(false);
+    expect(sameZone('Etc/UTC', 'UTC')).toBe(true);
+    expect(sameZone('Europe/Paris', 'Europe/Copenhagen')).toBe(false);
+  });
+
+  it('suggests the browser zone only when it differs from the saved one', () => {
+    browserIs('Europe/Copenhagen');
+    expect(browserZone()).toBe('Europe/Copenhagen');
+    expect(suggestedZone('Etc/UTC')).toBe('Europe/Copenhagen');
+    expect(suggestedZone('Europe/Copenhagen')).toBeNull();
+    browserIs('UTC');
+    expect(suggestedZone('Etc/UTC')).toBeNull();
+  });
+
+  it('lists zones sorted, always with UTC and the zones passed in', () => {
+    const list = zoneOptions('Etc/Custom', null);
+    expect(list).toContain('UTC');
+    expect(list).toContain('Etc/Custom');
+    expect(list).toContain('Europe/Copenhagen');
+    expect([...list].sort()).toEqual(list);
+    expect(new Set(list).size).toBe(list.length);
+  });
+
+  it('falls back to a short list when the browser cannot list zones', () => {
+    const original = (Intl as unknown as { supportedValuesOf?: unknown }).supportedValuesOf;
+    (Intl as unknown as { supportedValuesOf?: unknown }).supportedValuesOf = undefined;
+    try {
+      const list = zoneOptions();
+      expect(list).toContain('Europe/Copenhagen');
+      expect(list.length).toBeGreaterThan(20);
+    } finally {
+      (Intl as unknown as { supportedValuesOf?: unknown }).supportedValuesOf = original;
+    }
   });
 });

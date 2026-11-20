@@ -33,7 +33,7 @@ test('gallery renders every component and makes no third-party request', async (
   await expect(page.getByRole('img', { name: 'Overnight HRV over 4 weeks' })).toBeVisible();
   await expect(page.getByText('unavailable').first()).toBeVisible();
   await expect(page.locator('.uplot canvas').first()).toBeVisible();
-  await expect(page.getByText('Map placeholder. Tiles served from your own server.')).toBeVisible();
+  await expect(page.getByRole('img', { name: 'Route map' }).first()).toBeVisible();
 
   // Fonts are self-hosted and actually load.
   const fonts = await page.evaluate(async () => {

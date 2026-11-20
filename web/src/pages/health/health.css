@@ -138,19 +138,6 @@
 }
 
 /* HRV: the on/off switch above the chart and a card per day. */
-.toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  min-height: var(--touch);
-  font-size: var(--fs-base);
-  align-self: flex-start;
-}
-.toggle input {
-  width: 22px;
-  height: 22px;
-  accent-color: var(--link);
-}
 .mark {
   flex: none;
 }

@@ -1,6 +1,6 @@
 import type { TrainingResponse } from '../../api/generated';
 import { fmtShortDay } from '../../lib/dates';
-import { fmtFixed, fmtInt, isMissing } from '../../lib/format';
+import { fmtFixed, fmtInt, isMissing, statusName } from '../../lib/format';
 import type { DateValue } from './types';
 
 /** Seconds left as "14 h" or "35 min"; "0 h" is shown as "Recovered" by the caller. */
@@ -46,20 +46,23 @@ export function seriesSummary(name: string, span: string, series: DateValue[], d
 }
 
 export interface StatusView {
-  /** Headline: the watch's own label, or the numeric state when no label exists. */
+  /** Headline: the watch's own name for the status; null when there is none. */
   headline: string | null;
-  /** Said under the headline when only a code exists. */
+  /** Said under the headline when the status has no name. */
   note: string | null;
 }
 
 /**
- * The server names the status (label); a code nobody has verified comes as "Status N", so the
- * number fallback below only covers a response without a label.
+ * The server names the status (label). A code nobody has verified comes as "Status N" and a
+ * response may have only the code: neither is shown as a number, the headline reads "Other status"
+ * (or nothing) and the raw code stays out of the page.
  */
 export function statusView(s: TrainingResponse['status']): StatusView {
-  if (s.label) return { headline: s.label, note: null };
+  const name = statusName(s.label);
+  if (name === 'Other status') return { headline: name, note: 'The watch reports a status that has no name here yet.' };
+  if (name) return { headline: name, note: null };
   if (s.status_code !== null && s.status_code !== undefined) {
-    return { headline: `Status code ${s.status_code}`, note: 'The watch reports a number; its name is not known yet.' };
+    return { headline: 'Other status', note: 'The watch reports a status that has no name here yet.' };
   }
   return { headline: null, note: null };
 }

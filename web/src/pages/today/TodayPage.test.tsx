@@ -88,6 +88,7 @@ const glanceIds = (root: ParentNode = document) => Array.from(root.querySelector
 
 beforeEach(() => setDesktop(false));
 afterEach(() => {
+  vi.restoreAllMocks();
   vi.unstubAllGlobals();
   document.body.style.overflow = '';
 });
@@ -113,6 +114,56 @@ describe('Today on a phone', () => {
     expect(document.body.textContent).not.toMatch(/body battery/i);
   });
 
+  it('shows no metric twice: Energy, Sleep and HRV are in In focus and left out of At a glance', async () => {
+    mockApi({ '/api/today': () => json(makeToday()), '/api/settings': () => json(makeSettings({ home_cards: { order: makeSettings().home_cards.order, hidden: [] } })) });
+    renderPage();
+    await screen.findByRole('heading', { name: 'At a glance' });
+    await waitFor(() => expect(glanceIds().length).toBeGreaterThan(0));
+    for (const id of ['energy', 'sleep', 'hrv']) expect(glanceIds()).not.toContain(id);
+    // The one Energy figure is the focus slide's.
+    expect(screen.getAllByText('Energy')).toHaveLength(1);
+  });
+
+  it('writes the training status date like the rest of the app, not as an ISO date', async () => {
+    const status = { ...makeToday().training_status, label: 'Maintaining', kind: 'maintaining' as const };
+    mockApi({ '/api/today': () => json(makeToday({ training_status: status })), '/api/settings': () => json(makeSettings({ home_cards: { order: makeSettings().home_cards.order, hidden: [] } })) });
+    renderPage();
+    const card = await waitFor(() => {
+      const el = document.querySelector('.glance-grid [data-card="training_status"]');
+      if (!el) throw new Error('no card');
+      return el as HTMLElement;
+    });
+    expect(card).toHaveTextContent('Since Sun 1 Nov');
+    expect(document.body.textContent).not.toMatch(/\d{4}-\d{2}-\d{2}/);
+  });
+
+  it('keeps the Yesterday and Last 7 days labels short enough for large text', async () => {
+    mockApi({ '/api/today': () => json(makeToday()), '/api/settings': () => json(makeSettings()) });
+    renderPage();
+    const yesterday = await screen.findByRole('heading', { name: 'Yesterday' });
+    const labels = Array.from(yesterday.closest('section')!.querySelectorAll('dt')).map((dt) => dt.textContent ?? '');
+    expect(labels.length).toBeGreaterThan(0);
+    for (const l of labels) expect(l.length).toBeLessThanOrEqual(16);
+    const last7 = screen.getByRole('heading', { name: 'Last 7 days' });
+    for (const dt of Array.from(last7.closest('section')!.querySelectorAll('dt'))) expect((dt.textContent ?? '').length).toBeLessThanOrEqual(16);
+  });
+
+  it('says the days follow UTC, with a link to Settings, when the account is on UTC and the browser is not', async () => {
+    vi.spyOn(Intl.DateTimeFormat.prototype, 'resolvedOptions').mockReturnValue({ timeZone: 'Europe/Copenhagen' } as Intl.ResolvedDateTimeFormatOptions);
+    mockApi({ '/api/today': () => json(makeToday({ timezone: 'Etc/UTC' })), '/api/settings': () => json(makeSettings()) });
+    renderPage();
+    expect(await screen.findByText(/Your days follow UTC time\./)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Set your timezone' })).toHaveAttribute('href', '/settings');
+  });
+
+  it('shows no timezone notice when the browser is on UTC too, or the account is not', async () => {
+    vi.spyOn(Intl.DateTimeFormat.prototype, 'resolvedOptions').mockReturnValue({ timeZone: 'UTC' } as Intl.ResolvedDateTimeFormatOptions);
+    mockApi({ '/api/today': () => json(makeToday({ timezone: 'Etc/UTC' })), '/api/settings': () => json(makeSettings()) });
+    renderPage();
+    await screen.findByRole('heading', { name: 'In focus' });
+    expect(screen.queryByText(/follow UTC time/)).not.toBeInTheDocument();
+  });
+
   it('shows the cards in the order of home_cards and leaves hidden ones out', async () => {
     const settings = makeSettings({
       home_cards: { order: ['steps', 'sleep', 'weight', 'energy', 'heart_rate', 'stress', 'hrv', 'training_status', 'intensity_minutes', 'training_load', 'recovery_time', 'vo2_max', 'respiration', 'spo2', 'training_readiness'], hidden: ['sleep', 'stress', 'respiration', 'spo2', 'training_readiness'] },
@@ -120,7 +171,8 @@ describe('Today on a phone', () => {
     mockApi({ '/api/today': () => json(makeToday()), '/api/settings': () => json(settings) });
     renderPage();
     await screen.findByRole('heading', { name: 'At a glance' });
-    await waitFor(() => expect(glanceIds().slice(0, 3)).toEqual(['steps', 'weight', 'energy']));
+    // Energy sits in In focus, so At a glance skips it.
+    await waitFor(() => expect(glanceIds().slice(0, 3)).toEqual(['steps', 'weight', 'heart_rate']));
     expect(glanceIds()).not.toContain('sleep');
     expect(glanceIds()).not.toContain('stress');
   });
@@ -130,10 +182,8 @@ describe('Today on a phone', () => {
     mockApi({ '/api/today': () => json(makeToday()), '/api/settings': () => json(makeSettings({ home_cards: all })) });
     renderPage();
     await screen.findByRole('heading', { name: 'At a glance' });
-    await waitFor(() => expect(glanceIds()).toHaveLength(15));
+    await waitFor(() => expect(glanceIds()).toHaveLength(12));
     const href = (id: string) => document.querySelector(`.glance-grid [data-card="${id}"]`)?.getAttribute('href');
-    expect(href('sleep')).toBe('/sleep');
-    expect(href('hrv')).toBe('/hrv');
     expect(href('heart_rate')).toBe('/day');
     expect(href('stress')).toBe('/day');
     expect(href('steps')).toBe('/movement');
@@ -146,8 +196,8 @@ describe('Today on a phone', () => {
     mockApi({ '/api/today': () => json(makeEmptyToday()), '/api/settings': () => json(makeSettings({ home_cards: { order: makeSettings().home_cards.order, hidden: [] } })) });
     renderPage();
     await screen.findByRole('heading', { name: 'At a glance' });
-    await waitFor(() => expect(glanceIds()).toHaveLength(15));
-    expect(screen.getAllByText('unavailable').length).toBeGreaterThan(15);
+    await waitFor(() => expect(glanceIds()).toHaveLength(12));
+    expect(screen.getAllByText('unavailable').length).toBeGreaterThan(10);
     expect(screen.queryByText(/^0$/)).not.toBeInTheDocument();
     expect(screen.getByText('No watch data yet')).toBeInTheDocument();
     // The sleep slide says so instead of showing a zero night.
@@ -172,7 +222,7 @@ describe('Today on a phone', () => {
     mockApi({ '/api/today': () => json(makeToday()), '/api/settings': () => json({ error: 'nope' }, 500) });
     renderPage();
     await screen.findByText(/saved card layout could not be loaded/);
-    expect(glanceIds()[0]).toBe('energy');
+    expect(glanceIds()[0]).toBe('heart_rate');
     expect(glanceIds()).not.toContain('weight');
     expect(screen.getByRole('button', { name: 'Edit home' })).toBeDisabled();
   });
@@ -304,7 +354,7 @@ describe('Edit home', () => {
 
     // The dialog is gone and the grid already follows the new layout while the request is pending.
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-    await waitFor(() => expect(glanceIds().slice(0, 2)).toEqual(['heart_rate', 'energy']));
+    await waitFor(() => expect(glanceIds().slice(0, 2)).toEqual(['heart_rate', 'stress']));
     expect(glanceIds()).not.toContain('steps');
 
     const patch = calls.find((c) => c.init?.method === 'PATCH');
@@ -364,7 +414,9 @@ describe('Overview on a desktop', () => {
     expect(screen.getByText('3 sessions')).toBeInTheDocument();
     expect(screen.getByText('2h 31m total')).toBeInTheDocument();
     expect(screen.getByText('Range 55 to 70')).toBeInTheDocument();
-    expect(glanceIds()[0]).toBe('energy');
+    // The tiles above already show Energy, Sleep and HRV.
+    expect(glanceIds()[0]).toBe('heart_rate');
+    expect(glanceIds()).not.toContain('energy');
 
     expect(await screen.findByRole('heading', { name: 'HRV, last 4 weeks' })).toBeInTheDocument();
     const hrv = screen.getByRole('region', { name: 'HRV, last 4 weeks' });
@@ -382,9 +434,8 @@ describe('Overview on a desktop', () => {
 
     expect(await screen.findByText('1,284 original files · 212 MB')).toBeInTheDocument();
     expect(screen.getByText('Battery 74%')).toBeInTheDocument();
-    // Backups are not built yet: the API sends null, the page says so.
-    const backup = screen.getByText('Last backup');
-    expect(backup.nextElementSibling).toHaveTextContent('unavailable');
+    // Backups are not built yet: the API sends null, so the row is left out instead of saying "unavailable".
+    expect(screen.queryByText('Last backup')).not.toBeInTheDocument();
     expect(calls.map((c) => c.url)).toEqual(expect.arrayContaining(['/api/activities?limit=5', '/api/trends?range=4w', '/api/sleep?nights=14', '/api/storage', '/api/devices']));
   });
 

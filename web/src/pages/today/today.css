@@ -148,6 +148,10 @@
   grid-template-columns: 1fr 1fr;
   gap: var(--gap);
 }
+/* An odd last card spans the row instead of standing alone next to an empty cell. */
+.glance-grid > :last-child:nth-child(odd) {
+  grid-column: 1 / -1;
+}
 .glance__note {
   font-size: var(--fs-xs);
   color: var(--text-2);
@@ -172,6 +176,9 @@
   font-size: var(--fs-sm);
   color: var(--text-2);
 }
+.today-tz a {
+  text-decoration: underline;
+}
 .today-alert {
   border: 1px solid var(--warn);
   border-radius: var(--radius-control);
@@ -190,6 +197,9 @@
   .glance-grid {
     grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
     gap: 16px;
+  }
+  .glance-grid > :last-child:nth-child(odd) {
+    grid-column: auto;
   }
   .today-actions {
     flex-direction: row;

@@ -3,6 +3,7 @@
 // from the server; nothing here names a status code.
 
 import type { BandSeries, ChartMarker } from '../../components';
+import { statusName } from '../../lib/format';
 import type { HrvDay } from '../../api/generated/HrvDay';
 import type { HrvRange } from '../../api/generated/HrvRange';
 import type { HrvStatusKind } from '../../api/generated/HrvStatusKind';
@@ -39,7 +40,7 @@ export function runDates(run: Pick<StatusRun, 'from' | 'to' | 'ongoing' | 'start
 export function timelineSummary(t: Pick<TrainingStatusRange, 'from' | 'to' | 'runs' | 'days'>): string {
   const period = fmtPeriod(t.from, t.to);
   if (t.runs.length === 0) return `Training status ${period}: no status recorded.`;
-  const parts = t.runs.map((r) => `${r.status.label} ${runDates(r).replace(/^Since/, 'since')}`);
+  const parts = t.runs.map((r) => `${statusName(r.status.label) ?? r.status.label} ${runDates(r).replace(/^Since/, 'since')}`);
   const known = t.days.filter((d) => d.status !== null).length;
   return `Training status ${period}: ${parts.join(', ')}. ${known} of ${t.days.length} days have a status.`;
 }
@@ -113,7 +114,10 @@ export function hrvChartSummary(t: Pick<HrvRange, 'days' | 'from' | 'to'>, mode:
   const last = withValue[withValue.length - 1] as HrvDay;
   const status = last.status_label ? ` (${last.status_label})` : '';
   const range = last.baseline_low_ms !== null && last.baseline_high_ms !== null ? ` Balanced range ${fmtInt(last.baseline_low_ms)} to ${fmtInt(last.baseline_high_ms)} ms.` : '';
-  return `${name} ${fmtPeriod(t.from, t.to)}: ${withValue.length} of ${t.days.length} days with a reading, between ${fmtInt(Math.min(...vals))} and ${fmtInt(Math.max(...vals))} ms, latest ${fmtInt(hrvValue(last, mode))} ms on ${fmtMonthDay(last.date)}${status}.${range}`;
+  const lo = fmtInt(Math.min(...vals));
+  const hi = fmtInt(Math.max(...vals));
+  const spread = lo === hi ? (withValue.length === 1 ? `${lo} ms` : `${lo} ms every day`) : `between ${lo} and ${hi} ms`;
+  return `${name} ${fmtPeriod(t.from, t.to)}: ${withValue.length} of ${t.days.length} days with a reading, ${spread}, latest ${fmtInt(hrvValue(last, mode))} ms on ${fmtMonthDay(last.date)}${status}.${range}`;
 }
 
 export function baselineText(low: number | null, high: number | null): string | null {

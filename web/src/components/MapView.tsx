@@ -62,7 +62,7 @@ interface MapViewProps {
 
 function Placeholder() {
   return (
-    <svg viewBox="0 0 350 150" preserveAspectRatio="none" role="img" aria-label="Route map placeholder: a loop route drawn on self-hosted map tiles">
+    <svg viewBox="0 0 350 150" preserveAspectRatio="none" role="img" aria-label="Route map">
       <rect width="350" height="150" fill="#141b1f" />
       <path d="M0 40H350M0 80H350M0 120H350M60 0V150M130 0V150M200 0V150M270 0V150" stroke="#1f292e" strokeWidth="1" />
       <path d="M40 110C70 60 110 40 150 52S220 30 262 44S318 92 286 112S190 128 150 118S70 132 40 110Z" fill="none" stroke="#7dbbff" strokeWidth="3" strokeLinejoin="round" />
@@ -141,7 +141,7 @@ export function MapView({ track, tilesUrl = DEFAULT_TILES_URL, label = 'Route ma
       ) : (
         <>
           <Placeholder />
-          <p className="map__caption">{mode === 'checking' ? 'Loading map.' : 'Map placeholder. Tiles served from your own server.'}</p>
+          {mode === 'checking' ? <p className="map__caption">Loading map.</p> : null}
         </>
       )}
     </div>

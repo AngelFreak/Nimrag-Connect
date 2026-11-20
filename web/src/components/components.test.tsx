@@ -22,8 +22,10 @@ import {
   Skeleton,
   StatTile,
   SyncButton,
+  MapView,
   Table,
   TextField,
+  Toggle,
   TopBar,
   Unavailable,
   WatchLink,
@@ -493,5 +495,77 @@ describe('Section and Notice', () => {
     expect(screen.getByText('The login is unofficial.')).toBeInTheDocument();
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
     expect(container.querySelector('svg')).not.toBeNull();
+  });
+});
+
+describe('StatTile and DataList hide what has no value', () => {
+  it('StatTile hideWhenMissing renders nothing for null, undefined, NaN and an empty string', () => {
+    const { container } = render(
+      <>
+        <StatTile label="Cadence" value={null} hideWhenMissing />
+        <StatTile label="VO2" value={undefined} hideWhenMissing />
+        <StatTile label="Pace" value={Number.NaN} hideWhenMissing />
+        <StatTile label="Time" value="" hideWhenMissing />
+      </>,
+    );
+    expect(container).toBeEmptyDOMElement();
+  });
+
+  it('StatTile hideWhenMissing keeps a tile with a value, and a real zero', () => {
+    render(
+      <>
+        <StatTile label="Distance" value="6.4 km" hideWhenMissing />
+        <StatTile label="Climb" value={0} hideWhenMissing />
+      </>,
+    );
+    expect(screen.getByText('6.4 km')).toBeInTheDocument();
+    expect(screen.getByText('Climb')).toBeInTheDocument();
+  });
+
+  it('DataList: optional rows and hideMissing leave out empty rows, other rows still say "unavailable"', () => {
+    render(
+      <DataList
+        items={[
+          { label: 'Model', value: null, optional: true },
+          { label: 'Firmware', value: '21.3', optional: true },
+          { label: 'Battery', value: null },
+        ]}
+      />,
+    );
+    expect(screen.queryByText('Model')).not.toBeInTheDocument();
+    expect(screen.getByText('21.3')).toBeInTheDocument();
+    expect(screen.getByText('Battery').nextElementSibling).toHaveTextContent('unavailable');
+  });
+
+  it('DataList hideMissing shows the empty text when nothing is left, and nothing without it', () => {
+    const { container, rerender } = render(<DataList hideMissing empty="No data." items={[{ label: 'Steps', value: null }]} />);
+    expect(screen.getByText('No data.')).toBeInTheDocument();
+    rerender(<DataList hideMissing items={[{ label: 'Steps', value: null }]} />);
+    expect(container).toBeEmptyDOMElement();
+  });
+});
+
+describe('Toggle', () => {
+  it('is a labelled switch that follows the checkbox state and keeps no native look', async () => {
+    function Host() {
+      const [on, setOn] = useState(false);
+      return <Toggle label="Overnight averages" checked={on} onChange={(e) => setOn(e.target.checked)} />;
+    }
+    render(<Host />);
+    const sw = screen.getByRole('switch', { name: 'Overnight averages' });
+    expect(sw).not.toBeChecked();
+    await userEvent.click(sw);
+    expect(sw).toBeChecked();
+    expect(sw).toHaveClass('toggle__input');
+  });
+});
+
+describe('MapView without tiles', () => {
+  it('draws the route placeholder without any developer caption', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('<html></html>', { status: 200, headers: { 'content-type': 'text/html' } })));
+    render(<MapView tilesUrl="/tiles/none.pmtiles" />);
+    expect(await screen.findByRole('img', { name: 'Route map' })).toBeInTheDocument();
+    expect(screen.queryByText(/placeholder|your own server/i)).not.toBeInTheDocument();
+    vi.unstubAllGlobals();
   });
 });

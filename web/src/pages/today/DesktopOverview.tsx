@@ -25,7 +25,7 @@ import { EditHome } from './EditHome';
 import { activityDetail, activityTitle, fmtBytes, fmtDateTime, fmtLongDay, fmtSeconds, signed, syncLine, unit } from './format';
 import { TodayFailed, TodayLoading } from './PhoneToday';
 import { useDevices, useRecentActivities, useSleepNights, useStorage, useTrends, type TrendRange } from './queries';
-import { AtAGlance, Last7DaysCard, YesterdayCard } from './Sections';
+import { AtAGlance, Last7DaysCard, TimezoneNotice, YesterdayCard } from './Sections';
 
 const RANGES = [
   { value: '7d', label: 'Week' },
@@ -200,8 +200,8 @@ function SyncPanel({ timezone }: { timezone: string }) {
                   { label: 'Latest watch data', value: fmtDateTime(d.watch.last_data_at, timezone) },
                   { label: 'New files, last 24 hours', value: fmtInt(d.new_files_24h) },
                   { label: 'Files stored', value: `${fmtInt(s.files)} original files \u00b7 ${fmtBytes(s.bytes)}` },
-                  { label: 'Database', value: fmtBytes(s.database_bytes) },
-                  { label: 'Last backup', value: fmtDateTime(s.last_backup_at, timezone) },
+                  { label: 'Database', value: fmtBytes(s.database_bytes), optional: true },
+                  { label: 'Last backup', value: fmtDateTime(s.last_backup_at, timezone), optional: true },
                 ]}
               />
             )}
@@ -281,6 +281,7 @@ export function DesktopOverview({ today, settings }: Props) {
         <TodayLoading />
       ) : t ? (
         <div className="page">
+          <TimezoneNotice timezone={t.timezone} />
           {tiles}
           <AtAGlance today={t} settings={settings.data} />
           {settings.isError ? <p className="today-note">Your saved card layout could not be loaded, so the default one is shown.</p> : null}

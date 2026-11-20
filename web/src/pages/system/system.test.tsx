@@ -48,6 +48,7 @@ const tokens = (): TokenList => ({
 });
 
 afterEach(() => {
+  vi.restoreAllMocks();
   vi.unstubAllGlobals();
   delete window.NimragApp;
 });
@@ -64,21 +65,18 @@ describe('Devices page', () => {
     expect(screen.getByText('Read in part').nextElementSibling).toHaveTextContent('3');
   });
 
-  it('shows "unavailable" for what the server does not know, never 0', async () => {
+  it('shows "unavailable" for status it should know, and leaves out model, firmware, database and backup rows it does not', async () => {
     mockApi({
       '/api/devices': devices({ watch: { model: null, firmware: null, battery_percent: null, battery_at: null, last_data_at: null }, last_sync_at: null }),
       '/api/storage': storage({ database_bytes: null }),
       '/api/settings': settings,
     });
     renderAt(<DevicesPage />, '/devices');
-    await screen.findByText('Firmware');
+    await screen.findByText('Latest watch data');
     const row = (label: string) => screen.getByText(label, { selector: 'dt' }).nextElementSibling as HTMLElement;
-    expect(row('Model')).toHaveTextContent('unavailable');
-    expect(row('Firmware')).toHaveTextContent('unavailable');
+    for (const label of ['Model', 'Firmware', 'Database', 'Last backup']) expect(screen.queryByText(label, { selector: 'dt' })).not.toBeInTheDocument();
     expect(row('Battery')).toHaveTextContent('unavailable');
     expect(row('Last sync')).toHaveTextContent('unavailable');
-    expect(row('Database')).toHaveTextContent('unavailable');
-    expect(row('Last backup')).toHaveTextContent('unavailable');
     expect(screen.getByLabelText('Battery unavailable')).toBeInTheDocument();
   });
 
@@ -167,11 +165,44 @@ describe('Settings: timezone and goals', () => {
   it('shows the server message when it refuses', async () => {
     mockApi({ ...settingsRoutes(), 'PATCH /api/settings': () => json({ error: 'timezone must be an IANA name such as Europe/Copenhagen' }, { status: 400 }) });
     renderAt(<SettingsPage />, '/settings');
-    const field = await screen.findByLabelText('Timezone (IANA name)');
-    await userEvent.clear(field);
-    await userEvent.type(field, 'Europe/Paris');
+    const field = await screen.findByLabelText('Timezone');
+    await userEvent.selectOptions(field, 'Europe/Paris');
     await userEvent.click(screen.getByRole('button', { name: 'Save settings' }));
     expect(await screen.findByText(/must be an IANA name/)).toBeInTheDocument();
+  });
+
+  it('picks the timezone from a list of IANA zones, not free text', async () => {
+    mockApi(settingsRoutes());
+    renderAt(<SettingsPage />, '/settings');
+    const field = await screen.findByLabelText('Timezone');
+    expect(field.tagName).toBe('SELECT');
+    expect(field).toHaveValue('Europe/Copenhagen');
+    expect(within(field).getByRole('option', { name: 'Europe/Paris' })).toBeInTheDocument();
+    expect(within(field).getByRole('option', { name: 'UTC' })).toBeInTheDocument();
+  });
+
+  it('keeps a saved zone the browser does not list ("Etc/UTC") selectable', async () => {
+    mockApi(settingsRoutes({ '/api/settings': { ...settings, timezone: 'Etc/UTC' } }));
+    renderAt(<SettingsPage />, '/settings');
+    expect(await screen.findByLabelText('Timezone')).toHaveValue('Etc/UTC');
+  });
+
+  it('offers a one-tap "Use <browser zone>" when the saved zone differs, and saves it', async () => {
+    vi.spyOn(Intl.DateTimeFormat.prototype, 'resolvedOptions').mockReturnValue({ timeZone: 'Europe/Copenhagen' } as Intl.ResolvedDateTimeFormatOptions);
+    const saved = { ...settings, timezone: 'Europe/Copenhagen' };
+    const { calls } = mockApi({ ...settingsRoutes({ '/api/settings': { ...settings, timezone: 'Etc/UTC' } }), 'PATCH /api/settings': saved });
+    renderAt(<SettingsPage />, '/settings');
+    await userEvent.click(await screen.findByRole('button', { name: 'Use Europe/Copenhagen' }));
+    await waitFor(() => expect(calls.find((c) => c.init?.method === 'PATCH')).toBeDefined());
+    expect(JSON.parse(String(calls.find((c) => c.init?.method === 'PATCH')?.init?.body))).toEqual({ timezone: 'Europe/Copenhagen' });
+  });
+
+  it('has no "Use" button when the saved zone is the browser zone', async () => {
+    vi.spyOn(Intl.DateTimeFormat.prototype, 'resolvedOptions').mockReturnValue({ timeZone: 'Europe/Copenhagen' } as Intl.ResolvedDateTimeFormatOptions);
+    mockApi(settingsRoutes());
+    renderAt(<SettingsPage />, '/settings');
+    await screen.findByLabelText('Timezone');
+    expect(screen.queryByRole('button', { name: /^Use / })).not.toBeInTheDocument();
   });
 });
 

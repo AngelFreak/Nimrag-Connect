@@ -26,6 +26,7 @@ import {
   speedKmh,
   speedSummary,
   spread,
+  timeTicks,
 } from './series';
 import './activities.css';
 
@@ -69,6 +70,37 @@ function MapCard({ id, hasTrack, height }: { id: string; hasTrack: boolean; heig
   );
 }
 
+/**
+ * Time labels under an activity chart (0, 10, 20, 30 min). Each label sits at its share of the
+ * duration, the first flush left and the last flush right, matching the chart's 6 px padding and
+ * (desktop) 40 px value axis.
+ */
+export function TimeAxis({ minutes, desktop }: { minutes: number; desktop: boolean }) {
+  const ticks = timeTicks(minutes);
+  if (ticks.length < 2) return null;
+  return (
+    <div className="time-axis" aria-hidden="true" style={{ marginLeft: desktop ? 46 : 6, marginRight: 6 }}>
+      {ticks.map((t) => {
+        const f = (t.minutes / minutes) * 100;
+        return (
+          <span key={t.minutes} style={{ left: `${f}%`, transform: `translateX(-${f}%)` }}>
+            {t.label}
+          </span>
+        );
+      })}
+    </div>
+  );
+}
+
+type Tile = { label: string; value: string | null; sub?: string };
+
+/** StatTiles for the entries that have a value; the others are left out. */
+function visibleTiles(tiles: (Tile | null)[], size: 'sm' | 'md') {
+  return tiles
+    .filter((t): t is Tile & { value: string } => t !== null && t.value !== null && t.value !== '')
+    .map((t) => <StatTile key={t.label} size={size} label={t.label} value={t.value} {...(t.sub ? { sub: t.sub } : {})} />);
+}
+
 function ChartCard({
   title,
   aside,
@@ -96,7 +128,7 @@ function ChartCard({
     <Card>
       <CardHeader title={title} tone="muted" aside={aside} />
       <SeriesChart label={label} summary={summary} x={x} series={[{ label: title, color, data, area: area }]} height={height} axes={axes} />
-      <p className="acts-note">Minutes since the start.</p>
+      {spread(data) !== null ? <TimeAxis minutes={x[x.length - 1] ?? 0} desktop={axes} /> : null}
     </Card>
   );
 }
@@ -122,39 +154,44 @@ export function ActivityBody({ a }: { a: ActivityDetail }) {
   const hasSpeed = spread(speed) !== null;
   const elapsed = s?.elapsed_s ?? [];
 
-  const speedOrPace = paced ? (
-    <StatTile size={size} label="Pace" value={fmtPace(a.avg_pace_s_per_km)} />
-  ) : a.kind === 'cycle' ? (
-    <StatTile size={size} label="Speed" value={fmtSpeed(a.avg_speed_mps)} />
-  ) : null;
+  // A tile without a value is left out: "unavailable" on every missing stat made the page look empty.
+  const speedOrPace = paced
+    ? { label: 'Pace', value: fmtPace(a.avg_pace_s_per_km) }
+    : a.kind === 'cycle'
+      ? { label: 'Speed', value: fmtSpeed(a.avg_speed_mps) }
+      : null;
 
-  const primary = distanceKind ? (
-    <>
-      <StatTile size={size} label="Distance" value={fmtDistance(a.distance_m, 2)} />
-      <StatTile size={size} label="Time" value={fmtClock(a.duration_s)} />
-      {speedOrPace}
-      <StatTile size={size} label="Avg HR" value={fmtBpm(a.avg_hr_bpm)} />
-      <StatTile size={size} label="Climb" value={fmtMeters(a.ascent_m)} />
-      <StatTile size={size} label="Energy" value={fmtKcal(a.calories_kcal)} />
-    </>
-  ) : (
-    <>
-      <StatTile size={size} label="Time" value={fmtClock(a.duration_s)} />
-      <StatTile size={size} label="Avg HR" value={fmtBpm(a.avg_hr_bpm)} />
-      <StatTile size={size} label="Max HR" value={fmtBpm(a.max_hr_bpm)} />
-      <StatTile size={size} label="Energy" value={fmtKcal(a.calories_kcal)} />
-    </>
-  );
+  const primaryTiles: (Tile | null)[] = distanceKind
+    ? [
+        { label: 'Distance', value: fmtDistance(a.distance_m, 2) },
+        { label: 'Time', value: fmtClock(a.duration_s) },
+        speedOrPace,
+        { label: 'Avg HR', value: fmtBpm(a.avg_hr_bpm) },
+        { label: 'Climb', value: fmtMeters(a.ascent_m) },
+        { label: 'Energy', value: fmtKcal(a.calories_kcal) },
+      ]
+    : [
+        { label: 'Time', value: fmtClock(a.duration_s) },
+        { label: 'Avg HR', value: fmtBpm(a.avg_hr_bpm) },
+        { label: 'Max HR', value: fmtBpm(a.max_hr_bpm) },
+        { label: 'Energy', value: fmtKcal(a.calories_kcal) },
+      ];
+  const primary = visibleTiles(primaryTiles, size);
 
-  const more: { label: string; value: string | null; sub?: string; show: boolean }[] = [
-    { label: 'Max HR', value: fmtBpm(a.max_hr_bpm), show: distanceKind },
-    { label: 'Descent', value: fmtMeters(a.descent_m), show: distanceKind || a.descent_m !== null },
-    { label: 'Cadence', value: a.avg_cadence === null ? null : `${Math.round(a.avg_cadence)} /min`, show: distanceKind || a.avg_cadence !== null },
-    { label: 'Aerobic effect', value: fmtOne(a.aerobic_te), show: true },
-    { label: 'Anaerobic effect', value: fmtOne(a.anaerobic_te), show: true },
-    { label: 'Training load', value: fmtFixed(a.training_load, 0), show: true },
+  const moreTiles: Tile[] = [
+    { label: 'Max HR', value: distanceKind ? fmtBpm(a.max_hr_bpm) : null },
+    { label: 'Descent', value: fmtMeters(a.descent_m) },
+    { label: 'Cadence', value: a.avg_cadence === null ? null : `${Math.round(a.avg_cadence)} /min` },
+    { label: 'Aerobic effect', value: fmtOne(a.aerobic_te) },
+    { label: 'Anaerobic effect', value: fmtOne(a.anaerobic_te) },
+    { label: 'Training load', value: fmtFixed(a.training_load, 0) },
+    {
+      label: 'VO2 max (derived)',
+      value: a.vo2max_derived === null ? null : `${a.vo2max_derived.toFixed(1)} ml/kg/min`,
+      sub: "Derived estimate from this file (maximal MET x 3.5), not Garmin's published value.",
+    },
   ];
-  const showVo2 = a.vo2max_derived !== null || distanceKind;
+  const more = visibleTiles(moreTiles, size);
 
   const zones = zoneEntries(a);
   const belowZone1 = fmtMinutes(a.hr_below_zone1_s);
@@ -174,13 +211,13 @@ export function ActivityBody({ a }: { a: ActivityDetail }) {
         <div className="acts-panels">
           {showMap ? <MapCard id={a.id} hasTrack={a.has_track} height={300} /> : null}
           <div className="acts-stack">
-            <div className={gridClass}>{primary}</div>
+            {primary.length ? <div className={gridClass}>{primary}</div> : null}
           </div>
         </div>
       ) : (
         <>
           {showMap ? <MapCard id={a.id} hasTrack={a.has_track} height={220} /> : null}
-          <div className={gridClass}>{primary}</div>
+          {primary.length ? <div className={gridClass}>{primary}</div> : null}
         </>
       )}
 
@@ -244,21 +281,7 @@ export function ActivityBody({ a }: { a: ActivityDetail }) {
           {belowZone1 ? <p className="acts-note">Below zone 1: {belowZone1}</p> : null}
         </Card>
         <div className="acts-stack">
-          <div className={gridClass}>
-            {more
-              .filter((m) => m.show)
-              .map((m) => (
-                <StatTile key={m.label} size={size} label={m.label} value={m.value} />
-              ))}
-          </div>
-          {showVo2 ? (
-            <StatTile
-              size={size}
-              label="VO2 max (derived)"
-              value={a.vo2max_derived === null ? null : `${a.vo2max_derived.toFixed(1)} ml/kg/min`}
-              sub="Derived estimate from this file (maximal MET x 3.5), not Garmin's published value."
-            />
-          ) : null}
+          {more.length ? <div className={gridClass}>{more}</div> : null}
         </div>
       </div>
 

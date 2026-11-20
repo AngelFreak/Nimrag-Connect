@@ -4,7 +4,7 @@ import { Button, Card, ErrorState, SampleDataChip, Skeleton, TopBar } from '../.
 import { EditHome } from './EditHome';
 import { FocusCarousel } from './FocusCarousel';
 import { fmtLongDay, syncLine } from './format';
-import { AtAGlance, Last7DaysCard, YesterdayCard } from './Sections';
+import { AtAGlance, Last7DaysCard, TimezoneNotice, YesterdayCard } from './Sections';
 
 export function TodayLoading() {
   return (
@@ -70,6 +70,7 @@ export function PhoneToday({ today, settings }: Props) {
         <TodayLoading />
       ) : t ? (
         <div className="page">
+          <TimezoneNotice timezone={t.timezone} />
           <FocusCarousel today={t} />
           <AtAGlance today={t} settings={settings.data} />
           {settings.isError ? <p className="today-note">Your saved card layout could not be loaded, so the default one is shown.</p> : null}

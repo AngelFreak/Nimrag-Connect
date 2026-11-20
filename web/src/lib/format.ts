@@ -41,3 +41,12 @@ export function fmtClock(seconds: Maybe<number>): string | null {
 export function withUnit(value: string | null, unit: string): string | null {
   return value === null ? null : `${value} ${unit}`;
 }
+
+/**
+ * A status the server cannot name arrives as "Status 9" (a raw watch code). The number means
+ * nothing to the owner, so it reads "Other status"; a real name passes through, empty gives `null`.
+ */
+export function statusName(label: Maybe<string>): string | null {
+  if (!label) return null;
+  return /^status\s+\d+$/i.test(label.trim()) ? 'Other status' : label;
+}
