@@ -14,8 +14,10 @@ import {
   Legend,
   navKeyFor,
   ProgressBar,
+  Notice,
   Ring,
   SampleDataChip,
+  Section,
   SegmentedControl,
   Skeleton,
   StatTile,
@@ -445,5 +447,51 @@ describe('navKeyFor', () => {
     expect(navKeyFor('/movement/2026-11-18', '')).toBe('health');
     expect(navKeyFor('/devices', '')).toBe('devices');
     expect(navKeyFor('/settings', '')).toBe('other');
+  });
+});
+
+describe('Table in a narrow box', () => {
+  it('labels every cell with its column name so a wide table can stack, and leaves an actions column unlabelled', () => {
+    const rows = [{ id: 1, name: 'pixel8a', used: 'Never' }];
+    render(
+      <Table
+        caption="Phones"
+        wide
+        columns={[
+          { key: 'name', header: 'Name', cell: (r: (typeof rows)[number]) => r.name },
+          { key: 'used', header: 'Last used', cell: (r: (typeof rows)[number]) => r.used },
+          { key: 'act', header: <span className="sr-only">Actions</span>, cell: () => <button type="button">Revoke</button> },
+        ]}
+        rows={rows}
+        rowKey={(r) => String(r.id)}
+      />,
+    );
+    expect(screen.getByRole('table')).toHaveClass('table--wide');
+    expect(screen.getByRole('cell', { name: 'pixel8a' })).toHaveAttribute('data-label', 'Name');
+    expect(screen.getByRole('cell', { name: 'Never' })).toHaveAttribute('data-label', 'Last used');
+    expect(screen.getByRole('button', { name: 'Revoke' }).closest('td')).not.toHaveAttribute('data-label');
+  });
+});
+
+describe('Section and Notice', () => {
+  it('Section is a named group: an h2 title, an optional hint, the cards inside', () => {
+    render(
+      <Section title="Phones" hint="Phones that send files.">
+        <Card>
+          <p>one</p>
+        </Card>
+      </Section>,
+    );
+    const group = screen.getByRole('region', { name: 'Phones' });
+    expect(within(group).getByRole('heading', { level: 2, name: 'Phones' })).toBeInTheDocument();
+    expect(within(group).getByText('Phones that send files.')).toBeInTheDocument();
+    expect(within(group).getByText('one')).toBeInTheDocument();
+  });
+
+  it('Notice is plain text, not an alert; the warning tone adds an icon', () => {
+    const { container } = render(<Notice tone="warn">The login is unofficial.</Notice>);
+    expect(screen.getByText('The login is unofficial.')).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(container.querySelector('svg')).not.toBeNull();
   });
 });
