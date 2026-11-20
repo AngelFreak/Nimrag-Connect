@@ -157,7 +157,7 @@ export function SetupPage() {
   }
 
   return (
-    <div className="center-page">
+    <main className="center-page">
       {pending ? (
         <CodeStep
           username={pending.username}
@@ -179,6 +179,6 @@ export function SetupPage() {
           }}
         />
       )}
-    </div>
+    </main>
   );
 }

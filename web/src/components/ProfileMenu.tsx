@@ -13,7 +13,8 @@ export function ProfileMenu({ align = 'start' }: { align?: 'start' | 'end' }) {
   const root = useRef<HTMLDivElement>(null);
   const button = useRef<HTMLButtonElement>(null);
   const panelId = useId();
-  const me = useMe();
+  // Only asks the server once the panel is open; the route guard has normally cached the answer already.
+  const me = useMe(open);
   const logout = useLogout();
   const who = me.data;
 

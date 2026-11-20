@@ -50,25 +50,30 @@ function AssignForm({ data, users, timezone, setDone }: { data: UnassignedRespon
     setTokens((t) => (t.includes(id) ? t.filter((x) => x !== id) : [...t, id]));
   }
 
-  function submit(e: FormEvent) {
+  async function submit(e: FormEvent) {
     e.preventDefault();
     const user = targets.find((u) => String(u.id) === target);
     if (!user || !something || assign.isPending) return;
     const body: AssignRequest = { token_ids: picked, user_id: user.id };
     if (unattributed && data.unattributed_files > 0) body.include_unattributed = true;
     if (legacy && legacyLeft) body.adopt_legacy = true;
-    assign.mutate(body, {
-      onSuccess: (res) => {
-        setDone(assignSummary(res, user.username));
-        setTokens([]);
-        setUnattributed(false);
-        setLegacy(false);
-      },
-    });
+    try {
+      // mutateAsync, not mutate(..., { onSuccess }): when the last item is handed over this form
+      // unmounts (the card turns into "Nothing is unassigned") and per-call callbacks of an
+      // unmounted component never run, which would swallow the confirmation. The error shows in
+      // `assign.isError` below.
+      const res = await assign.mutateAsync(body);
+      setDone(assignSummary(res, user.username));
+      setTokens([]);
+      setUnattributed(false);
+      setLegacy(false);
+    } catch {
+      // Shown by the alert below.
+    }
   }
 
   return (
-    <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }} aria-label="Assign unassigned data">
+    <form onSubmit={(e) => void submit(e)} style={{ display: 'flex', flexDirection: 'column', gap: 14 }} aria-label="Assign unassigned data">
       <p className="stat__sub">
         Device tokens made before accounts, or on the command line, wait here with the files they uploaded. Give them to the user they belong to: their phone then uploads into that user&apos;s account.
       </p>

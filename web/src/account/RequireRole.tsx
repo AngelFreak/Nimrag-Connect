@@ -18,9 +18,9 @@ export function RequireRole({ allow }: { allow: Role }) {
 
   if (me.isPending) {
     return (
-      <div className="center-page" aria-busy="true">
+      <main className="center-page" aria-busy="true">
         <Skeleton height={20} width="160px" />
-      </div>
+      </main>
     );
   }
   if (me.data === null) {

@@ -48,7 +48,7 @@ function UserRow({ user, self, onOpen }: { user: UserInfo; self: boolean; onOpen
           <Button aria-label={`Reset password of ${user.username}`} onClick={() => onOpen({ kind: 'reset-password', user })}>
             Reset password
           </Button>
-          <Button aria-label={`Reset two-factor of ${user.username}`} onClick={() => onOpen({ kind: 'reset-2fa', user })}>
+          <Button aria-label={`Reset 2FA of ${user.username}`} onClick={() => onOpen({ kind: 'reset-2fa', user })}>
             Reset 2FA
           </Button>
           {user.disabled ? (

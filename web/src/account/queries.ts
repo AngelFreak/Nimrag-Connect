@@ -12,11 +12,13 @@ function isMe(value: unknown): value is Me {
 
 /**
  * GET /api/me: who is signed in. `null` means nobody (401). Anything that is not a `Me`
- * (a static host answering with its index page) counts as nobody too.
+ * (a static host answering with its index page) counts as nobody too. `enabled: false` only
+ * reads what is cached (the component gallery shows a profile button without a server).
  */
-export function useMe() {
+export function useMe(enabled = true) {
   return useQuery({
     queryKey: ME_KEY,
+    enabled,
     queryFn: async ({ signal }): Promise<Me | null> => {
       try {
         const me = await apiFetch<unknown>('/api/me', { signal, redirectOn401: false });

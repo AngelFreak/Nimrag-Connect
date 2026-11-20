@@ -204,7 +204,7 @@ export function LoginPage() {
   }
 
   return (
-    <div className="center-page">
+    <main className="center-page">
       {step.kind === 'enrol' ? (
         <EnrolStep data={step.data} onDone={done} onRestart={restart} />
       ) : step.kind === 'change' ? (
@@ -212,6 +212,6 @@ export function LoginPage() {
       ) : (
         <CredentialsStep notice={notice} onNext={setStep} onDone={done} />
       )}
-    </div>
+    </main>
   );
 }

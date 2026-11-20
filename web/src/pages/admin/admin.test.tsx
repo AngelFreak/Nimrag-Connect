@@ -71,7 +71,7 @@ describe('Admin: users', () => {
     const other = within(list).getAllByRole('listitem')[1]!;
     expect(within(other).getAllByRole('button').map((b) => b.getAttribute('aria-label'))).toEqual([
       'Reset password of demo',
-      'Reset two-factor of demo',
+      'Reset 2FA of demo',
       'Disable demo',
       'Delete demo',
     ]);
@@ -131,7 +131,7 @@ describe('Admin: users', () => {
   it('resets two-factor after a confirmation', async () => {
     const { calls } = open({ 'POST /api/admin/users/2/reset-2fa': () => new Response(null, { status: 204 }) });
     const u = userEvent.setup();
-    await u.click(await screen.findByRole('button', { name: 'Reset two-factor of demo' }));
+    await u.click(await screen.findByRole('button', { name: 'Reset 2FA of demo' }));
     const confirm = await screen.findByRole('dialog', { name: 'Reset two-factor for demo?' });
     await u.click(within(confirm).getByRole('button', { name: 'Reset two-factor' }));
     expect(await screen.findByRole('dialog', { name: 'Two-factor reset' })).toBeInTheDocument();
@@ -223,6 +223,28 @@ describe('Admin: unassigned data', () => {
     expect(await within(card).findByText('Gave 1 device token, 316 files, the records from before accounts to demo.')).toBeInTheDocument();
     const call = calls.find((c) => c.url === '/api/admin/unassigned/assign');
     expect(JSON.parse(String(call?.init?.body))).toEqual({ token_ids: [7], user_id: 2, include_unattributed: true, adopt_legacy: true });
+  });
+
+  it('still confirms the handover when it was the last item and the form is gone', async () => {
+    // After the POST the list is refetched empty: the form unmounts while the answer is processed.
+    let handed = false;
+    open(
+      {
+        'POST /api/admin/unassigned/assign': () => {
+          handed = true;
+          return json({ tokens_moved: 1, files_moved: 0, legacy_adopted: false });
+        },
+        'GET /api/admin/unassigned': () => json(handed ? NOTHING : unassigned({ unattributed_files: 0, legacy: NOTHING.legacy })),
+      },
+      users(admin, user()),
+    );
+    const u = userEvent.setup();
+    const card = await unassignedCard();
+    await u.click(within(card).getByRole('checkbox', { name: /Pixel 9a/ }));
+    await u.selectOptions(within(card).getByLabelText('Give to'), 'demo');
+    await u.click(within(card).getByRole('button', { name: 'Assign' }));
+    expect(await screen.findByText('Nothing is unassigned')).toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent('Gave 1 device token, 0 files to demo.');
   });
 
   it('assigns just a token and shows the server\'s refusal for a conflict', async () => {
