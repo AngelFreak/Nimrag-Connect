@@ -9,7 +9,7 @@ use super::daily::{
 };
 use super::{mean, round1, Ctx};
 use crate::api::{ApiError, AppState};
-use crate::auth::Owner;
+use crate::auth::DataUser;
 use crate::settings::date_string;
 use axum::{
     extract::{Path, Query, State},
@@ -48,11 +48,11 @@ pub struct SleepNightsResponse {
 }
 
 async fn night(
-    _: Owner,
+    user: DataUser,
     State(state): State<AppState>,
     Path(date): Path<String>,
 ) -> Res<Json<SleepNightResponse>> {
-    let ctx = Ctx::new(&state).await?;
+    let ctx = Ctx::new(&state, user.id).await?;
     let d = Ctx::parse_date(&date)?;
     let night = match session_for_night(&ctx, d).await? {
         Some(s) => Some(night_detail(&ctx, &s).await?),
@@ -74,11 +74,11 @@ struct ListParams {
 }
 
 async fn list(
-    _: Owner,
+    user: DataUser,
     State(state): State<AppState>,
     Query(p): Query<ListParams>,
 ) -> Res<Json<SleepNightsResponse>> {
-    let ctx = Ctx::new(&state).await?;
+    let ctx = Ctx::new(&state, user.id).await?;
     let n = p.nights.unwrap_or(7);
     if ![7, 14, 30].contains(&n) {
         return Err(ApiError::bad_request("nights must be 7, 14 or 30"));

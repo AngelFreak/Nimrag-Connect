@@ -1,12 +1,12 @@
-//! The owner's Garmin endpoints. Session cookie on every call, `X-Nimrag: 1` on
-//! the writes (the shared CSRF guard covers everything under `/api`).
+//! The signed-in user's own Garmin endpoints (a normal user; admins have no data). Session
+//! cookie on every call, `X-Nimrag: 1` on the writes (the shared CSRF guard covers everything under `/api`).
 //!
 //! No response and no error text ever holds a password or a token.
 
 use super::auth::{self, AuthError, LoginStep, TokenCheck, Tokens};
 use super::queue::{self, AccountStatus};
 use crate::api::{ApiError, AppState};
-use crate::auth::Owner;
+use crate::auth::DataUser;
 use crate::settings;
 use crate::web_api::ApiJson;
 use axum::{
@@ -130,12 +130,12 @@ impl std::fmt::Debug for GarminImportTokens {
 
 // ---- handlers -----------------------------------------------------------------------
 
-async fn build_status(state: &AppState) -> Result<GarminStatus, ApiError> {
+async fn build_status(state: &AppState, uid: i64) -> Result<GarminStatus, ApiError> {
     let now = state.now();
-    let account = queue::load_account(&state.pool).await?;
-    let counts = queue::counts(&state.pool).await?;
-    let tz = settings::load(&state.pool).await?.tz;
-    let st = if state.garmin.pending_since(now).is_some() {
+    let account = queue::load_account(&state.pool, uid).await?;
+    let counts = queue::counts(&state.pool, uid).await?;
+    let tz = settings::load(&state.pool, uid).await?.tz;
+    let st = if state.garmin.pending_since(uid, now).is_some() {
         GarminState::NeedsMfa
     } else {
         match account.as_ref().map(|a| a.status) {
@@ -147,10 +147,10 @@ async fn build_status(state: &AppState) -> Result<GarminStatus, ApiError> {
     };
     let last_error = match account.and_then(|a| a.last_error) {
         Some(e) => Some(e),
-        None => queue::last_item_error(&state.pool).await?,
+        None => queue::last_item_error(&state.pool, uid).await?,
     };
     let next = if account_connected(&st) {
-        queue::next_attempt_at(&state.pool).await?
+        queue::next_attempt_at(&state.pool, uid).await?
     } else {
         None
     };
@@ -168,8 +168,11 @@ fn account_connected(s: &GarminState) -> bool {
     matches!(s, GarminState::Connected)
 }
 
-async fn status(_: Owner, State(state): State<AppState>) -> Result<Json<GarminStatus>, ApiError> {
-    Ok(Json(build_status(&state).await?))
+async fn status(
+    user: DataUser,
+    State(state): State<AppState>,
+) -> Result<Json<GarminStatus>, ApiError> {
+    Ok(Json(build_status(&state, user.id).await?))
 }
 
 fn auth_error(e: AuthError) -> ApiError {
@@ -212,7 +215,7 @@ fn auth_error(e: AuthError) -> ApiError {
 }
 
 /// A token set just obtained: prove Garmin accepts it, store it, switch Forward on.
-async fn finish_login(state: &AppState, tokens: Tokens) -> Result<(), ApiError> {
+async fn finish_login(state: &AppState, uid: i64, tokens: Tokens) -> Result<(), ApiError> {
     let g = &state.garmin;
     if let Ok(TokenCheck::Unauthorized) = auth::check_token(&g.cfg, g.api().as_ref(), &tokens).await
     {
@@ -223,15 +226,15 @@ async fn finish_login(state: &AppState, tokens: Tokens) -> Result<(), ApiError> 
     }
     // A failed check for another reason (network, 429) does not undo a login that just worked.
     let _lock = g.token_lock.lock().await;
-    queue::save_login(&state.pool, &tokens, state.now()).await?;
-    g.clear_pending();
+    queue::save_login(&state.pool, uid, &tokens, state.now()).await?;
+    g.clear_pending(uid);
     g.wake();
-    tracing::info!("garmin forward switched on");
+    tracing::info!(user_id = uid, "garmin forward switched on");
     Ok(())
 }
 
 async fn login(
-    _: Owner,
+    user: DataUser,
     State(state): State<AppState>,
     ApiJson(body): ApiJson<GarminLoginRequest>,
 ) -> Result<Json<GarminLoginResponse>, ApiError> {
@@ -246,27 +249,27 @@ async fn login(
     }
     let g = &state.garmin;
     let _one = g.login_lock.lock().await;
-    g.clear_pending();
+    g.clear_pending(user.id);
     match auth::begin_login(&g.cfg, email, &body.password)
         .await
         .map_err(auth_error)?
     {
         LoginStep::Done(tokens) => {
             drop(body);
-            finish_login(&state, tokens).await?;
+            finish_login(&state, user.id, tokens).await?;
             Ok(Json(GarminLoginResponse {
                 mfa_required: false,
             }))
         }
         LoginStep::Mfa(p) => {
-            g.set_pending(p, state.now());
+            g.set_pending(user.id, p, state.now());
             Ok(Json(GarminLoginResponse { mfa_required: true }))
         }
     }
 }
 
 async fn mfa(
-    _: Owner,
+    user: DataUser,
     State(state): State<AppState>,
     ApiJson(body): ApiJson<GarminMfaRequest>,
 ) -> Result<Json<GarminStatus>, ApiError> {
@@ -276,7 +279,7 @@ async fn mfa(
     }
     let g = &state.garmin;
     let _one = g.login_lock.lock().await;
-    let Some(pending) = g.pending(state.now()) else {
+    let Some(pending) = g.pending(user.id, state.now()) else {
         return Err(ApiError::new(
             StatusCode::CONFLICT,
             "no login is waiting for a code (it expires after 10 minutes); log in again",
@@ -285,21 +288,24 @@ async fn mfa(
     let tokens = auth::verify_mfa(&g.cfg, &pending, code)
         .await
         .map_err(auth_error)?;
-    finish_login(&state, tokens).await?;
-    Ok(Json(build_status(&state).await?))
+    finish_login(&state, user.id, tokens).await?;
+    Ok(Json(build_status(&state, user.id).await?))
 }
 
-async fn logout(_: Owner, State(state): State<AppState>) -> Result<StatusCode, ApiError> {
+async fn logout(user: DataUser, State(state): State<AppState>) -> Result<StatusCode, ApiError> {
     let g = &state.garmin;
     let _lock = g.token_lock.lock().await;
-    g.clear_pending();
-    queue::delete_account(&state.pool).await?;
-    tracing::info!("garmin forward switched off");
+    g.clear_pending(user.id);
+    queue::delete_account(&state.pool, user.id).await?;
+    tracing::info!(user_id = user.id, "garmin forward switched off");
     Ok(StatusCode::NO_CONTENT)
 }
 
-async fn retry(_: Owner, State(state): State<AppState>) -> Result<Json<GarminStatus>, ApiError> {
-    match queue::load_account(&state.pool).await? {
+async fn retry(
+    user: DataUser,
+    State(state): State<AppState>,
+) -> Result<Json<GarminStatus>, ApiError> {
+    match queue::load_account(&state.pool, user.id).await? {
         None => return Err(ApiError::new(StatusCode::CONFLICT, "Garmin is not set up")),
         Some(a) if a.status == AccountStatus::NeedsLogin => {
             return Err(ApiError::new(
@@ -309,24 +315,24 @@ async fn retry(_: Owner, State(state): State<AppState>) -> Result<Json<GarminSta
         }
         Some(_) => {}
     }
-    queue::retry(&state.pool, state.now()).await?;
+    queue::retry(&state.pool, user.id, state.now()).await?;
     state.garmin.wake();
-    Ok(Json(build_status(&state).await?))
+    Ok(Json(build_status(&state, user.id).await?))
 }
 
 async fn backfill(
-    _: Owner,
+    user: DataUser,
     State(state): State<AppState>,
     ApiJson(body): ApiJson<GarminBackfillRequest>,
 ) -> Result<Json<GarminBackfillResponse>, ApiError> {
     if !(1..=3650).contains(&body.days) {
         return Err(ApiError::bad_request("days must be between 1 and 3650"));
     }
-    if queue::load_account(&state.pool).await?.is_none() {
+    if queue::load_account(&state.pool, user.id).await?.is_none() {
         return Err(ApiError::new(StatusCode::CONFLICT, "Garmin is not set up"));
     }
     let now = state.now();
-    let queued = queue::backfill(&state.pool, now - body.days * 86_400, now).await?;
+    let queued = queue::backfill(&state.pool, user.id, now - body.days * 86_400, now).await?;
     state.garmin.wake();
     Ok(Json(GarminBackfillResponse {
         queued: queued as i64,
@@ -334,7 +340,7 @@ async fn backfill(
 }
 
 async fn import_tokens(
-    _: Owner,
+    user: DataUser,
     State(state): State<AppState>,
     ApiJson(body): ApiJson<GarminImportTokens>,
 ) -> Result<Json<GarminStatus>, ApiError> {
@@ -387,10 +393,13 @@ async fn import_tokens(
         ));
     }
     let _lock = g.token_lock.lock().await;
-    queue::save_login(&state.pool, &tokens, state.now()).await?;
-    g.clear_pending();
+    queue::save_login(&state.pool, user.id, &tokens, state.now()).await?;
+    g.clear_pending(user.id);
     g.wake();
-    tracing::info!("garmin forward switched on (tokens imported)");
+    tracing::info!(
+        user_id = user.id,
+        "garmin forward switched on (tokens imported)"
+    );
     drop(_lock);
-    Ok(Json(build_status(&state).await?))
+    Ok(Json(build_status(&state, user.id).await?))
 }

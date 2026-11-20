@@ -2,8 +2,9 @@
 //! used by ingest and reparse alike.
 //!
 //! Entity tables (keyed by sha256) are replaced per file. Sample tables are keyed
-//! by natural key with `src` = `sources.src_id` and are upserted only when the
-//! new source outranks the stored one, so ingest order never matters.
+//! by `(user_id, natural key)` with `src` = `sources.src_id` and are upserted only when the
+//! new source outranks the stored one, so ingest order never matters. `user_id` is the owner
+//! of the source file (`file_owners`; 0 when it has none), so two users' samples never collide.
 
 pub mod activity;
 pub mod wellness;
@@ -108,17 +109,24 @@ pub enum V {
     T(Option<String>),
 }
 
-/// Upsert rows into a sample table. Each row holds the key values followed by the
-/// value columns; `src` is appended. Updates only when the incoming source outranks.
+/// Upsert rows into a sample table of the partition `uid`. Each row holds the key values
+/// followed by the value columns; `user_id` and `src` are added. Updates only when the incoming
+/// source outranks.
 pub async fn upsert_samples(
     tx: &mut Transaction<'_, Sqlite>,
     table: &str,
     keys: &[&str],
     vals: &[&str],
     src: i64,
+    uid: i64,
     rows: impl IntoIterator<Item = Vec<V>>,
 ) -> Result<()> {
-    let cols: Vec<&str> = keys.iter().chain(vals).copied().chain(["src"]).collect();
+    let cols: Vec<&str> = ["user_id"]
+        .into_iter()
+        .chain(keys.iter().copied())
+        .chain(vals.iter().copied())
+        .chain(["src"])
+        .collect();
     let marks = vec!["?"; cols.len()].join(", ");
     let sets: Vec<String> = vals
         .iter()
@@ -126,7 +134,7 @@ pub async fn upsert_samples(
         .map(|c| format!("{c} = excluded.{c}"))
         .collect();
     let sql = format!(
-        "INSERT INTO {table} ({}) VALUES ({marks}) ON CONFLICT ({}) DO UPDATE SET {} WHERE {}",
+        "INSERT INTO {table} ({}) VALUES ({marks}) ON CONFLICT (user_id, {}) DO UPDATE SET {} WHERE {}",
         cols.join(", "),
         keys.join(", "),
         sets.join(", "),
@@ -134,7 +142,7 @@ pub async fn upsert_samples(
     );
     for row in rows {
         debug_assert_eq!(row.len(), keys.len() + vals.len());
-        let mut q = sqlx::query(sqlx::AssertSqlSafe(sql.as_str()));
+        let mut q = sqlx::query(sqlx::AssertSqlSafe(sql.as_str())).bind(uid);
         for v in row {
             q = match v {
                 V::I(x) => q.bind(x),
@@ -147,11 +155,26 @@ pub async fn upsert_samples(
     Ok(())
 }
 
-pub async fn clear_samples(tx: &mut Transaction<'_, Sqlite>) -> Result<()> {
+/// Empty the sample tables: all of them, or only the partitions `uids` (0 = unassigned).
+pub async fn clear_samples(tx: &mut Transaction<'_, Sqlite>, uids: Option<&[i64]>) -> Result<()> {
     for t in sample_tables() {
-        sqlx::query(sqlx::AssertSqlSafe(format!("DELETE FROM {t}")))
-            .execute(&mut **tx)
-            .await?;
+        match uids {
+            None => {
+                sqlx::query(sqlx::AssertSqlSafe(format!("DELETE FROM {t}")))
+                    .execute(&mut **tx)
+                    .await?;
+            }
+            Some(uids) => {
+                for uid in uids {
+                    sqlx::query(sqlx::AssertSqlSafe(format!(
+                        "DELETE FROM {t} WHERE user_id = ?"
+                    )))
+                    .bind(uid)
+                    .execute(&mut **tx)
+                    .await?;
+                }
+            }
+        }
     }
     Ok(())
 }
@@ -213,6 +236,12 @@ pub async fn persist(
     }
     let ok = decoded.files.iter().all(|f| f.complete && f.crc == Crc::Ok);
     let src = src_id(sha256);
+    // Whose file this is: the partition its samples go to.
+    let uid: i64 = sqlx::query_scalar("SELECT user_id FROM file_owners WHERE sha256 = ?")
+        .bind(sha256)
+        .fetch_optional(&mut **tx)
+        .await?
+        .unwrap_or(0);
     let key = rank_key(ok, facts.last_ts, facts.msg_count);
     let msg_count = facts.msg_count as i64;
     sqlx::query!(
@@ -231,7 +260,7 @@ pub async fn persist(
     .execute(&mut **tx)
     .await?;
     for d in derived {
-        wellness::write(tx, sha256, src, d).await?;
+        wellness::write(tx, sha256, src, uid, d).await?;
         activity::write(tx, sha256, d).await?;
     }
     write_file_derive(tx, sha256, status, error.as_deref(), skipped).await

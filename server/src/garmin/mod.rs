@@ -1,10 +1,10 @@
-//! Forward mode (Stage 2g): upload the owner's activity files (FIT 128/4) to
-//! their Garmin Connect account.
+//! Forward mode (Stage 2g): upload a user's activity files (FIT 128/4) to their own Garmin
+//! Connect account. Every user has their own account row, queue rows and pending MFA login.
 //!
 //! * [`auth`]: unofficial mobile SSO login (+ MFA), DI OAuth2 tokens, refresh.
 //! * [`upload`]: POST one FIT file, classify the answer.
 //! * [`queue`]: the `garmin_account` row, the `garmin_uploads` queue, the worker.
-//! * [`api`]: the owner's endpoints under `/api/garmin`.
+//! * [`api`]: the signed-in user's endpoints under `/api/garmin`.
 //! * [`http`]: the `GarminHttp` seam (plain reqwest today).
 //!
 //! Hard rules: the password is used once in memory and never stored or logged;
@@ -22,6 +22,7 @@ use crate::api::AppState;
 use crate::ledger::Meta;
 use auth::PendingMfa;
 use http::{GarminHttp, HttpFactory, ReqwestHttp};
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex, OnceLock};
 
 /// How long a login waits for its MFA code (the cookie jar lives in memory only).
@@ -109,7 +110,8 @@ pub struct Garmin {
     pub cfg: GarminConfig,
     api: OnceLock<Arc<dyn GarminHttp>>,
     wake: tokio::sync::Notify,
-    pending: Mutex<Option<PendingLogin>>,
+    /// Pending MFA logins by user id.
+    pending: Mutex<HashMap<i64, PendingLogin>>,
     /// One login at a time.
     pub(crate) login_lock: tokio::sync::Mutex<()>,
     /// Serialises refresh and token writes so a rotated refresh token is never lost.
@@ -122,7 +124,7 @@ impl Garmin {
             cfg,
             api: OnceLock::new(),
             wake: tokio::sync::Notify::new(),
-            pending: Mutex::new(None),
+            pending: Mutex::new(HashMap::new()),
             login_lock: Default::default(),
             token_lock: Default::default(),
         }
@@ -142,33 +144,41 @@ impl Garmin {
         self.wake.notified().await;
     }
 
-    pub(crate) fn set_pending(&self, mfa: PendingMfa, now: i64) {
-        *self.pending.lock().unwrap_or_else(|e| e.into_inner()) = Some(PendingLogin {
-            mfa: Arc::new(mfa),
-            created_at: now,
-        });
-    }
-
-    /// The pending MFA login, unless it expired (then it is dropped).
-    pub(crate) fn pending(&self, now: i64) -> Option<Arc<PendingMfa>> {
+    pub(crate) fn set_pending(&self, uid: i64, mfa: PendingMfa, now: i64) {
         let mut p = self.pending.lock().unwrap_or_else(|e| e.into_inner());
-        if p.as_ref().is_some_and(|l| now - l.created_at >= MFA_TTL_S) {
-            *p = None;
-        }
-        p.as_ref().map(|l| l.mfa.clone())
+        p.retain(|_, l| now - l.created_at < MFA_TTL_S);
+        p.insert(
+            uid,
+            PendingLogin {
+                mfa: Arc::new(mfa),
+                created_at: now,
+            },
+        );
     }
 
-    pub(crate) fn pending_since(&self, now: i64) -> Option<i64> {
-        self.pending(now)?;
+    /// The user's pending MFA login, unless it expired (then it is dropped).
+    pub(crate) fn pending(&self, uid: i64, now: i64) -> Option<Arc<PendingMfa>> {
+        let mut p = self.pending.lock().unwrap_or_else(|e| e.into_inner());
+        if p.get(&uid).is_some_and(|l| now - l.created_at >= MFA_TTL_S) {
+            p.remove(&uid);
+        }
+        p.get(&uid).map(|l| l.mfa.clone())
+    }
+
+    pub(crate) fn pending_since(&self, uid: i64, now: i64) -> Option<i64> {
+        self.pending(uid, now)?;
         self.pending
             .lock()
             .unwrap_or_else(|e| e.into_inner())
-            .as_ref()
+            .get(&uid)
             .map(|l| l.created_at)
     }
 
-    pub(crate) fn clear_pending(&self) {
-        *self.pending.lock().unwrap_or_else(|e| e.into_inner()) = None;
+    pub(crate) fn clear_pending(&self, uid: i64) {
+        self.pending
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(&uid);
     }
 }
 
@@ -178,14 +188,23 @@ impl Default for Garmin {
     }
 }
 
-/// Ingest hook: a file was just stored. Queues it when it is a new activity
-/// FIT file (`data_type 128`, `sub_type 4`) and Forward is on. Never fails the
-/// ingest; imports (no upload metadata) are not queued, backfill covers them.
-pub async fn on_stored(state: &AppState, sha256: &str, meta: &Meta, is_fit: bool, created: bool) {
+/// Ingest hook: a file was just stored for `owner`. Queues it when it is a new activity
+/// FIT file (`data_type 128`, `sub_type 4`), the file has an owner and that user has Forward
+/// on. Never fails the ingest; imports (no upload metadata) are not queued, backfill covers
+/// them.
+pub async fn on_stored(
+    state: &AppState,
+    sha256: &str,
+    owner: Option<i64>,
+    meta: &Meta,
+    is_fit: bool,
+    created: bool,
+) {
+    let Some(owner) = owner else { return };
     if !(created && is_fit && meta.data_type == Some(128) && meta.sub_type == Some(4)) {
         return;
     }
-    match queue::enqueue(&state.pool, sha256, state.now()).await {
+    match queue::enqueue(&state.pool, owner, sha256, state.now()).await {
         Ok(true) => state.garmin.wake(),
         Ok(false) => {}
         Err(e) => tracing::warn!(error = format!("{e:#}"), "garmin: queueing a file failed"),

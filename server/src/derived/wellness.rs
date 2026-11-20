@@ -33,9 +33,9 @@ pub const ENTITY_TABLES: &[&str] = &["mon_info", "sleep_sessions"];
 /// Collect the rows before awaiting: holding a borrowing iterator across the
 /// await makes the handler future fail rustc's higher-ranked Send check.
 macro_rules! up {
-    ($tx:expr, $t:expr, $k:expr, $v:expr, $src:expr, $rows:expr $(,)?) => {{
+    ($tx:expr, $t:expr, $k:expr, $v:expr, $src:expr, $uid:expr, $rows:expr $(,)?) => {{
         let rows: Vec<Vec<V>> = $rows.collect();
-        upsert_samples($tx, $t, $k, $v, $src, rows).await?;
+        upsert_samples($tx, $t, $k, $v, $src, $uid, rows).await?;
     }};
 }
 
@@ -56,6 +56,7 @@ pub async fn write(
     tx: &mut Transaction<'_, Sqlite>,
     sha256: &str,
     src: i64,
+    uid: i64,
     d: &Derived,
 ) -> Result<()> {
     up!(
@@ -64,6 +65,7 @@ pub async fn write(
         &["ts"],
         &["bpm"],
         src,
+        uid,
         d.mon_hr.iter().map(|x: &MonHr| vec![i(x.ts), r(x.bpm)]),
     );
     up!(
@@ -79,6 +81,7 @@ pub async fn write(
             "intensity",
         ],
         src,
+        uid,
         d.mon_activity.iter().map(|x: &MonActivity| {
             vec![
                 i(x.ts),
@@ -103,6 +106,7 @@ pub async fn write(
             "vigorous_total_min"
         ],
         src,
+        uid,
         d.mon_extra.iter().map(|x: &MonExtra| {
             vec![
                 i(x.ts),
@@ -124,6 +128,7 @@ pub async fn write(
             "body_battery_status",
         ],
         src,
+        uid,
         d.stress.iter().map(|x: &Stress| {
             vec![
                 i(x.ts),
@@ -140,6 +145,7 @@ pub async fn write(
         &["ts"],
         &["brpm", "brpm_raw"],
         src,
+        uid,
         d.respiration
             .iter()
             .map(|x: &Respiration| vec![i(x.ts), or(x.brpm), or(x.brpm_raw)]),
@@ -150,6 +156,7 @@ pub async fn write(
         &["ts"],
         &["percent", "confidence", "mode"],
         src,
+        uid,
         d.spo2
             .iter()
             .map(|x: &Spo2| vec![i(x.ts), or(x.percent), or(x.confidence), oi(x.mode)]),
@@ -160,6 +167,7 @@ pub async fn write(
         &["ts"],
         &["rhr", "current_day_rhr"],
         src,
+        uid,
         d.resting_hr
             .iter()
             .map(|x: &RestingHr| vec![i(x.ts), or(x.rhr), or(x.current_day_rhr)]),
@@ -170,6 +178,7 @@ pub async fn write(
         &["ts"],
         &["level", "level_name"],
         src,
+        uid,
         d.sleep_levels.iter().map(|x: &SleepLevel| vec![
             i(x.ts),
             i(x.level),
@@ -182,6 +191,7 @@ pub async fn write(
         &["ts"],
         &["rmssd_ms"],
         src,
+        uid,
         d.hrv_values
             .iter()
             .map(|x: &HrvValue| vec![i(x.ts), r(x.rmssd_ms)]),
@@ -200,6 +210,7 @@ pub async fn write(
             "status",
         ],
         src,
+        uid,
         d.hrv_summary.iter().map(|x: &HrvSummary| {
             vec![
                 i(x.ts),
@@ -219,6 +230,7 @@ pub async fn write(
         &["ts"],
         &["acute", "chronic", "acwr", "acwr_percent", "status"],
         src,
+        uid,
         d.training_load.iter().map(|x: &TrainingLoad| {
             vec![
                 i(x.ts),
@@ -243,6 +255,7 @@ pub async fn write(
             "load_trend",
         ],
         src,
+        uid,
         d.training_status.iter().map(|x: &TrainingStatus| {
             vec![
                 i(x.ts),
@@ -271,6 +284,7 @@ pub async fn write(
             "anaerobic_target_max",
         ],
         src,
+        uid,
         d.training_balance.iter().map(|x: &TrainingBalance| {
             vec![
                 i(x.ts),
@@ -292,6 +306,7 @@ pub async fn write(
         &["start_ts"],
         &["minutes"],
         src,
+        uid,
         d.recovery_time
             .iter()
             .map(|x: &RecoveryTime| vec![i(x.start_ts), r(x.minutes)]),
@@ -303,6 +318,7 @@ pub async fn write(
         &["ts"],
         &["maximal_met", "sport"],
         src,
+        uid,
         d.vo2max
             .iter()
             .map(|x: &Vo2max| vec![i(x.ts), r(x.maximal_met), oi(x.sport)])
@@ -314,6 +330,7 @@ pub async fn write(
         &["ts"],
         &["percent"],
         src,
+        uid,
         d.battery
             .iter()
             .map(|x: &Battery| vec![i(x.ts), r(x.percent)])

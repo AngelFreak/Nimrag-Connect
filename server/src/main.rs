@@ -2,24 +2,32 @@
 //! three flags do not justify a parser dependency.
 
 use anyhow::{bail, Context, Result};
-use nimrag_server::{api, db, derive, import, ledger, tokens};
+use nimrag_server::{api, db, derive, import, ledger, tokens, users};
 use std::path::PathBuf;
 
 const USAGE: &str = "\
 usage:
   nimrag-server serve [--data-dir DIR] [--listen ADDR] [--log-json] [--insecure-cookies]
                       [--trusted-proxy CIDR[,CIDR...]]
-  nimrag-server user set-password [--data-dir DIR]  read the owner password from stdin
-  nimrag-server dev-seed [--data-dir DIR]          fill an empty data dir with 120 days of sample data
+  nimrag-server user set-password [--username NAME] [--data-dir DIR]
+                                                   read the new password from stdin (default user: the only admin)
+  nimrag-server user reset-2fa --username NAME [--data-dir DIR]
+                                                   the user enrols 2FA again at the next login
+  nimrag-server user list [--data-dir DIR]
+  nimrag-server dev-seed [--data-dir DIR]          fill an empty data dir with 120 days of sample data, an admin
+                                                   and the user demo (credentials are printed unless given in
+                                                   NIMRAG_SEED_{ADMIN,USER}_{PASSWORD,TOTP})
   nimrag-server export-types [--out DIR]           write the API's TypeScript types (default web/src/api/generated)
-  nimrag-server token create --name NAME [--data-dir DIR]
+  nimrag-server token create --name NAME [--user USERNAME] [--data-dir DIR]
   nimrag-server token list [--data-dir DIR]
   nimrag-server token revoke ID [--data-dir DIR]
   nimrag-server reparse [--data-dir DIR]          rebuild derived tables from the files
-  nimrag-server import-export [--data-dir DIR] [--list-skipped]
+  nimrag-server import-export [--data-dir DIR] [--user USERNAME] [--list-skipped]
                       [--max-depth N] [--max-entries N] [--max-total-bytes N] <archive.zip | extracted-dir>
   nimrag-server rebuild-ledger [--data-dir DIR]   recreate files/uploads rows from sidecars
 --data-dir defaults to $NIMRAG_DATA_DIR or ./data; --listen to 127.0.0.1:8080.
+--user on token create and import-export names the user who owns the token or the imported files;
+  without it they stay unassigned until an admin assigns them in the web app.
 --insecure-cookies drops the Secure flag from the session cookie (plain-http LAN use only) and
   uses the cookie name nimrag_session instead of __Host-nimrag_session.
 --trusted-proxy (repeatable, or comma-separated) names the reverse-proxy networks whose
@@ -36,6 +44,8 @@ struct Opts {
     list_skipped: bool,
     limits: import::Limits,
     name: Option<String>,
+    user: Option<String>,
+    username: Option<String>,
     positional: Vec<String>,
 }
 
@@ -55,6 +65,8 @@ fn parse_opts(args: &[String]) -> Result<Opts> {
         list_skipped: false,
         limits: import::Limits::default(),
         name: None,
+        user: None,
+        username: None,
         positional: vec![],
     };
     let mut it = args.iter();
@@ -68,6 +80,8 @@ fn parse_opts(args: &[String]) -> Result<Opts> {
             "--data-dir" => o.data_dir = value("--data-dir")?.into(),
             "--listen" => o.listen = value("--listen")?,
             "--name" => o.name = Some(value("--name")?),
+            "--user" => o.user = Some(value("--user")?),
+            "--username" => o.username = Some(value("--username")?),
             "--log-json" => o.log_json = true,
             "--insecure-cookies" => o.insecure_cookies = true,
             "--trusted-proxy" => o.trusted_proxies.extend(
@@ -140,12 +154,16 @@ async fn main() -> Result<()> {
         "user" => user(o).await,
         "dev-seed" => {
             let pool = db::open(&o.data_dir).await?;
-            let r = nimrag_server::seed::run(
-                &pool,
-                &o.data_dir,
-                nimrag_server::seed::SeedOptions::today(),
-            )
-            .await?;
+            let env = |k: &str| std::env::var(k).ok().filter(|v| !v.is_empty());
+            let given = nimrag_server::seed::SeedAccounts {
+                admin_password: env("NIMRAG_SEED_ADMIN_PASSWORD"),
+                admin_totp_secret: env("NIMRAG_SEED_ADMIN_TOTP"),
+                user_password: env("NIMRAG_SEED_USER_PASSWORD"),
+                user_totp_secret: env("NIMRAG_SEED_USER_TOTP"),
+            };
+            let mut opts = nimrag_server::seed::SeedOptions::today();
+            opts.accounts = given.clone();
+            let r = nimrag_server::seed::run(&pool, &o.data_dir, opts).await?;
             println!(
                 "seeded {} days ({} to {}), {} activities, in {}",
                 r.days,
@@ -153,6 +171,26 @@ async fn main() -> Result<()> {
                 r.last_date,
                 r.activities,
                 o.data_dir.display()
+            );
+            // Credentials go to stdout, to whoever ran the command; only the ones the caller did
+            // not supply themselves.
+            let show = |l: &nimrag_server::seed::SeedLogin, pw: bool, totp: bool| {
+                if pw {
+                    println!("{} password: {}", l.username, l.password);
+                }
+                if totp {
+                    println!("{} 2FA secret (base32): {}", l.username, l.totp_secret);
+                }
+            };
+            show(
+                &r.admin,
+                given.admin_password.is_none(),
+                given.admin_totp_secret.is_none(),
+            );
+            show(
+                &r.user,
+                given.user_password.is_none(),
+                given.user_totp_secret.is_none(),
             );
             Ok(())
         }
@@ -194,16 +232,26 @@ async fn token(o: Opts) -> Result<()> {
     match o.positional.first().map(String::as_str) {
         Some("create") => {
             let name = o.name.context("token create needs --name NAME")?;
-            let (id, token) = tokens::create(&pool, &name).await?;
+            let owner = match &o.user {
+                Some(u) => Some(find_user(&pool, u).await?.id),
+                None => {
+                    eprintln!(
+                        "note: no --user given; the token is unassigned until an admin assigns it"
+                    );
+                    None
+                }
+            };
+            let (id, token) = tokens::create(&pool, &name, owner).await?;
             eprintln!("device {id} ({name}) created; this token is shown once, store it now:");
             println!("{token}");
         }
         Some("list") => {
-            for d in tokens::list(&pool).await? {
+            for d in tokens::list(&pool, tokens::Whose::All).await? {
                 println!(
-                    "{}\t{}\tcreated {}\tlast used {}\t{}",
+                    "{}\t{}\t{}\tcreated {}\tlast used {}\t{}",
                     d.id,
                     d.name,
+                    d.username.unwrap_or_else(|| "(unassigned)".into()),
                     d.created_at,
                     d.last_used_at.unwrap_or_else(|| "never".into()),
                     d.revoked_at
@@ -218,7 +266,7 @@ async fn token(o: Opts) -> Result<()> {
                 .context("token revoke needs ID")?
                 .parse()
                 .context("ID must be a number")?;
-            if !tokens::revoke(&pool, id).await? {
+            if !tokens::revoke(&pool, id, None).await? {
                 bail!("no active device with id {id}");
             }
             println!("revoked device {id}");
@@ -228,27 +276,90 @@ async fn token(o: Opts) -> Result<()> {
     Ok(())
 }
 
-/// `user set-password`: the password is read from stdin (first line), never from argv.
+async fn find_user(pool: &sqlx::SqlitePool, name: &str) -> Result<users::User> {
+    users::by_username(pool, name)
+        .await?
+        .with_context(|| format!("no user named {name}"))
+}
+
+/// `user set-password` (the password is read from stdin, first line, never from argv),
+/// `user reset-2fa` and `user list`: the recovery tools of whoever runs the server.
 async fn user(o: Opts) -> Result<()> {
     use std::io::{IsTerminal, Read};
-    if o.positional.first().map(String::as_str) != Some("set-password") {
-        bail!("{USAGE}");
-    }
-    let mut input = String::new();
-    if std::io::stdin().is_terminal() {
-        eprint!(
-            "New password (typed text is visible; at least {} characters): ",
-            nimrag_server::auth::MIN_PASSWORD_LEN
-        );
-    }
-    std::io::stdin().take(4096).read_to_string(&mut input)?;
-    let password = input.lines().next().unwrap_or("");
     let pool = db::open(&o.data_dir).await?;
-    let now = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map_or(0, |d| d.as_secs() as i64);
-    nimrag_server::auth::set_password(&pool, password, now).await?;
-    eprintln!("owner password set; existing sessions were signed out");
+    match o.positional.first().map(String::as_str) {
+        Some("set-password") => {
+            let target = match &o.username {
+                Some(n) => find_user(&pool, n).await?,
+                None => {
+                    let admins: Vec<_> = users::list(&pool)
+                        .await?
+                        .into_iter()
+                        .filter(|u| u.role == users::Role::Admin)
+                        .collect();
+                    match <[users::User; 1]>::try_from(admins) {
+                        Ok([only]) => only,
+                        Err(_) => {
+                            bail!("--username NAME is needed: there is not exactly one admin")
+                        }
+                    }
+                }
+            };
+            let mut input = String::new();
+            if std::io::stdin().is_terminal() {
+                eprint!(
+                    "New password for {} (typed text is visible; at least {} characters): ",
+                    target.username,
+                    nimrag_server::auth::MIN_PASSWORD_LEN
+                );
+            }
+            std::io::stdin().take(4096).read_to_string(&mut input)?;
+            let password = input.lines().next().unwrap_or("").to_owned();
+            if password.chars().count() < nimrag_server::auth::MIN_PASSWORD_LEN {
+                bail!(
+                    "the password must have at least {} characters",
+                    nimrag_server::auth::MIN_PASSWORD_LEN
+                );
+            }
+            let hash =
+                tokio::task::spawn_blocking(move || nimrag_server::auth::hash_password(&password))
+                    .await??;
+            users::set_password(&pool, target.id, &hash, false).await?;
+            eprintln!(
+                "password of {} set; its sessions and trusted devices were signed out",
+                target.username
+            );
+        }
+        Some("reset-2fa") => {
+            let name = o
+                .username
+                .as_deref()
+                .context("user reset-2fa needs --username NAME")?;
+            let target = find_user(&pool, name).await?;
+            users::reset_totp(&pool, target.id).await?;
+            eprintln!(
+                "2FA of {} cleared; they enrol again at the next login",
+                target.username
+            );
+        }
+        Some("list") => {
+            for u in users::list(&pool).await? {
+                let twofa = if u.totp_enabled { "on" } else { "not enrolled" };
+                let state = if u.disabled_at.is_some() {
+                    "disabled"
+                } else {
+                    "active"
+                };
+                println!(
+                    "{}\t{}\t{}\t2FA {twofa}\t{state}",
+                    u.id,
+                    u.username,
+                    u.role.as_str()
+                );
+            }
+        }
+        _ => bail!("{USAGE}"),
+    }
     Ok(())
 }
 
@@ -267,7 +378,7 @@ async fn serve(o: Opts) -> Result<()> {
             "trusting X-Forwarded-For from the configured proxy networks"
         );
     }
-    // Forward mode: uploads queued activity files to Garmin Connect (idle until the owner logs in).
+    // Forward mode: uploads queued activity files to Garmin Connect (idle until a user logs in to Garmin).
     nimrag_server::garmin::queue::spawn_worker(state.clone());
     let app = api::router(state);
     if o.insecure_cookies {
@@ -296,7 +407,11 @@ async fn import_export(o: Opts) -> Result<()> {
     };
     let pool = db::open(&o.data_dir).await?;
     let state = api::AppState::new(pool, o.data_dir.clone(), api::MAX_BODY_BYTES);
-    let r = import::run(&state, std::path::Path::new(input), o.limits.clone()).await?;
+    let owner = match &o.user {
+        Some(u) => Some(find_user(&state.pool, u).await?.id),
+        None => None,
+    };
+    let r = import::run(&state, std::path::Path::new(input), o.limits.clone(), owner).await?;
     println!("entries scanned:      {}", r.scanned);
     println!("FIT imported new:     {}", r.fit_new);
     println!("FIT already present:  {}", r.fit_present);

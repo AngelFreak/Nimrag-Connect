@@ -5,7 +5,7 @@
 use super::daily::{hrv_by_day, night_sessions, nights as night_summaries, resting_by_day};
 use super::{mean, round1, Ctx, DateValue};
 use crate::api::{ApiError, AppState};
-use crate::auth::Owner;
+use crate::auth::DataUser;
 use crate::settings::{date_string, parse_date};
 use axum::{
     extract::{Query, State},
@@ -91,11 +91,11 @@ struct Params {
 }
 
 async fn trends(
-    _: Owner,
+    user: DataUser,
     State(state): State<AppState>,
     Query(p): Query<Params>,
 ) -> Res<Json<TrendsResponse>> {
-    let ctx = Ctx::new(&state).await?;
+    let ctx = Ctx::new(&state, user.id).await?;
     let range = p.range.unwrap_or_else(|| "4w".into());
     let days: i64 = match range.as_str() {
         "7d" => 7,
@@ -130,8 +130,9 @@ async fn trends(
         }
         let w = (s.start_ts, s.end_ts);
         let (sum, n, avg): (Option<f64>, i64, Option<f64>) = sqlx::query_as(
-            "SELECT SUM(brpm), COUNT(brpm), AVG(brpm) FROM respiration WHERE ts >= ? AND ts <= ?",
+            "SELECT SUM(brpm), COUNT(brpm), AVG(brpm) FROM respiration WHERE user_id = ? AND ts >= ? AND ts <= ?",
         )
+        .bind(ctx.uid)
         .bind(w.0)
         .bind(w.1)
         .fetch_one(&ctx.pool)
@@ -141,12 +142,14 @@ async fn trends(
             asleep_sum += sum.unwrap_or(0.0);
             asleep_n += n as f64;
         }
-        let (avg, low): (Option<f64>, Option<f64>) =
-            sqlx::query_as("SELECT AVG(percent), MIN(percent) FROM spo2 WHERE ts >= ? AND ts <= ?")
-                .bind(w.0)
-                .bind(w.1)
-                .fetch_one(&ctx.pool)
-                .await?;
+        let (avg, low): (Option<f64>, Option<f64>) = sqlx::query_as(
+            "SELECT AVG(percent), MIN(percent) FROM spo2 WHERE user_id = ? AND ts >= ? AND ts <= ?",
+        )
+        .bind(ctx.uid)
+        .bind(w.0)
+        .bind(w.1)
+        .fetch_one(&ctx.pool)
+        .await?;
         if let Some(a) = avg {
             spo2.insert(*d, round1(a));
         }
@@ -155,12 +158,14 @@ async fn trends(
             (a, b) => a.or(b),
         };
     }
-    let (all_sum, all_n): (Option<f64>, i64) =
-        sqlx::query_as("SELECT SUM(brpm), COUNT(brpm) FROM respiration WHERE ts >= ? AND ts < ?")
-            .bind(lo)
-            .bind(hi)
-            .fetch_one(&ctx.pool)
-            .await?;
+    let (all_sum, all_n): (Option<f64>, i64) = sqlx::query_as(
+        "SELECT SUM(brpm), COUNT(brpm) FROM respiration WHERE user_id = ? AND ts >= ? AND ts < ?",
+    )
+    .bind(ctx.uid)
+    .bind(lo)
+    .bind(hi)
+    .fetch_one(&ctx.pool)
+    .await?;
     let awake_n = all_n as f64 - asleep_n;
     let awake_avg =
         (awake_n > 0.0).then(|| round1((all_sum.unwrap_or(0.0) - asleep_sum) / awake_n));

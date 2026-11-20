@@ -1,7 +1,8 @@
 //! The owner's JSON API (everything under `/api` except the device upload).
 //!
-//! Conventions: every handler takes the [`Owner`](crate::auth::Owner) extractor
-//! (session cookie; a device token never passes); metric units are in the field
+//! Conventions: every data handler takes the [`DataUser`](crate::auth::DataUser) extractor
+//! (session cookie of a user with data; a device token never passes, an admin session gets 403)
+//! and reads and writes only that user's rows (`Ctx::uid`); metric units are in the field
 //! names (`distance_m`, `resting_hr_bpm`, `duration_s`); a metric that does not
 //! exist is `null`, never 0; timestamps are RFC 3339 in the owner's zone, dates
 //! `YYYY-MM-DD`; data responses carry `sample: true` for `dev-seed` data.
@@ -10,6 +11,8 @@
 
 pub mod account;
 pub mod activities;
+pub mod admin;
+pub mod app;
 pub mod body;
 pub mod daily;
 pub mod days;
@@ -37,6 +40,8 @@ use ts_rs::{Config, TS};
 pub fn router() -> Router<AppState> {
     Router::new()
         .merge(account::routes())
+        .merge(admin::routes())
+        .merge(app::routes())
         .merge(prefs::routes())
         .merge(today::routes())
         .merge(days::routes())
@@ -52,19 +57,22 @@ pub fn router() -> Router<AppState> {
 
 // ---- request context ----------------------------------------------------------
 
-/// Preferences plus the pool and the current time, loaded once per request.
+/// The signed-in user's preferences plus the pool and the current time, loaded once per request.
+/// `uid` is the user whose rows every query must be limited to.
 pub struct Ctx {
     pub pool: SqlitePool,
     pub prefs: Prefs,
     pub now: i64,
+    pub uid: i64,
 }
 
 impl Ctx {
-    pub async fn new(state: &AppState) -> Result<Self, ApiError> {
+    pub async fn new(state: &AppState, uid: i64) -> Result<Self, ApiError> {
         Ok(Self {
             pool: state.pool.clone(),
-            prefs: settings::load(&state.pool).await?,
+            prefs: settings::load(&state.pool, uid).await?,
             now: state.now(),
+            uid,
         })
     }
     pub fn tz(&self) -> Tz {
@@ -139,17 +147,18 @@ pub fn mean(v: impl IntoIterator<Item = f64>) -> Option<f64> {
     (n > 0).then(|| round1(s / f64::from(n)))
 }
 
-/// `(ts, value)` rows from a static query taking `(from, to)`.
+/// `(ts, value)` rows from a static query taking `(user_id, from, to)`.
 pub async fn series(
-    pool: &SqlitePool,
+    ctx: &Ctx,
     sql: &'static str,
     from: i64,
     to: i64,
 ) -> Result<Vec<(i64, f64)>, ApiError> {
     Ok(sqlx::query_as::<_, (i64, f64)>(sql)
+        .bind(ctx.uid)
         .bind(from)
         .bind(to)
-        .fetch_all(pool)
+        .fetch_all(&ctx.pool)
         .await?)
 }
 
@@ -194,11 +203,32 @@ pub fn export_types(dir: &Path) -> anyhow::Result<()> {
         &cfg,
         account::Me,
         account::LoginRequest,
+        account::LoginResponse,
+        account::EnrolRequest,
+        account::ChangePasswordRequest,
         account::SetupStatus,
-        account::SetupRequest,
+        account::SetupStartRequest,
+        account::SetupStartResponse,
+        account::SetupConfirmRequest,
+        account::TwoFactorStart,
+        account::TwoFactorConfirm,
+        account::ChangeOwnPassword,
         account::TokenList,
         account::NewToken,
         account::NewTokenResponse,
+        admin::UserInfo,
+        admin::UserList,
+        admin::UnassignedToken,
+        admin::NewUser,
+        admin::NewUserResponse,
+        admin::TemporaryPassword,
+        admin::UnassignedResponse,
+        admin::AssignRequest,
+        admin::AssignResponse,
+        app::AppLoginRequest,
+        app::AppLoginResponse,
+        app::AppUnlockRequest,
+        app::AppResumeRequest,
         prefs::SettingsResponse,
         prefs::SettingsPatch,
         today::Today,

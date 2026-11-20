@@ -8,7 +8,7 @@
 use super::activities::{hr_points, records, summary_of, valid_id};
 use super::{Ctx, TimedValue};
 use crate::api::{ApiError, AppState};
-use crate::auth::Owner;
+use crate::auth::DataUser;
 use axum::{
     extract::{Path, State},
     routing::get,
@@ -98,8 +98,9 @@ fn humanise(category_name: &str) -> String {
 
 async fn overrides(ctx: &Ctx, ident: &str) -> Res<HashMap<i64, Map<String, Value>>> {
     let rows: Vec<(i64, String)> = sqlx::query_as(
-        "SELECT set_idx, fields FROM strength_set_overrides WHERE activity_ident = ?",
+        "SELECT set_idx, fields FROM strength_set_overrides WHERE user_id = ? AND activity_ident = ?",
     )
+    .bind(ctx.uid)
     .bind(ident)
     .fetch_all(&ctx.pool)
     .await?;
@@ -229,9 +230,12 @@ async fn ident_of(ctx: &Ctx, id: &str) -> Res<String> {
     if !valid_id(id) {
         return Err(ApiError::not_found("no such activity"));
     }
+    // Joining file_owners makes someone else's activity a 404 on every by-id route.
     sqlx::query_scalar::<_, String>(
-        "SELECT COALESCE(activity_key, sha256) FROM activities WHERE sha256 = ?",
+        "SELECT COALESCE(a.activity_key, a.sha256) FROM activities a
+         JOIN file_owners o ON o.sha256 = a.sha256 AND o.user_id = ? WHERE a.sha256 = ?",
     )
+    .bind(ctx.uid)
     .bind(id)
     .fetch_optional(&ctx.pool)
     .await?
@@ -269,11 +273,11 @@ async fn build(ctx: &Ctx, id: &str) -> Res<StrengthResponse> {
 }
 
 async fn read(
-    _: Owner,
+    user: DataUser,
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> Res<Json<StrengthResponse>> {
-    let ctx = Ctx::new(&state).await?;
+    let ctx = Ctx::new(&state, user.id).await?;
     Ok(Json(build(&ctx, &id).await?))
 }
 
@@ -327,12 +331,12 @@ fn check_number(name: &str, v: Option<f64>, max: f64, whole: bool) -> Result<(),
 }
 
 async fn patch(
-    _: Owner,
+    user: DataUser,
     State(state): State<AppState>,
     Path(id): Path<String>,
     super::ApiJson(body): super::ApiJson<StrengthPatch>,
 ) -> Res<Json<StrengthResponse>> {
-    let ctx = Ctx::new(&state).await?;
+    let ctx = Ctx::new(&state, user.id).await?;
     let ident = ident_of(&ctx, &id).await?;
     if body.sets.is_empty() || body.sets.len() > 500 {
         return Err(ApiError::bad_request("sets must hold 1 to 500 edits"));
@@ -360,8 +364,9 @@ async fn patch(
         let idx = i64::from(p.idx);
         if p.reset == Some(true) {
             sqlx::query(
-                "DELETE FROM strength_set_overrides WHERE activity_ident = ? AND set_idx = ?",
+                "DELETE FROM strength_set_overrides WHERE user_id = ? AND activity_ident = ? AND set_idx = ?",
             )
+            .bind(ctx.uid)
             .bind(&ident)
             .bind(idx)
             .execute(&mut *tx)
@@ -369,8 +374,9 @@ async fn patch(
             continue;
         }
         let current: Option<String> = sqlx::query_scalar(
-            "SELECT fields FROM strength_set_overrides WHERE activity_ident = ? AND set_idx = ?",
+            "SELECT fields FROM strength_set_overrides WHERE user_id = ? AND activity_ident = ? AND set_idx = ?",
         )
+        .bind(ctx.uid)
         .bind(&ident)
         .bind(idx)
         .fetch_optional(&mut *tx)
@@ -392,10 +398,11 @@ async fn patch(
             continue;
         }
         sqlx::query(
-            "INSERT INTO strength_set_overrides (activity_ident, set_idx, fields, updated_at) VALUES (?, ?, ?, ?)
-             ON CONFLICT (activity_ident, set_idx) DO UPDATE SET fields = excluded.fields,
+            "INSERT INTO strength_set_overrides (user_id, activity_ident, set_idx, fields, updated_at) VALUES (?, ?, ?, ?, ?)
+             ON CONFLICT (user_id, activity_ident, set_idx) DO UPDATE SET fields = excluded.fields,
                                                                   updated_at = excluded.updated_at",
         )
+        .bind(ctx.uid)
         .bind(&ident)
         .bind(idx)
         .bind(Value::Object(fields).to_string())

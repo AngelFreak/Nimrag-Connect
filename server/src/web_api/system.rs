@@ -3,7 +3,7 @@
 
 use super::Ctx;
 use crate::api::{ApiError, AppState};
-use crate::auth::Owner;
+use crate::auth::DataUser;
 use crate::settings::stored_rfc3339;
 use crate::tokens;
 use axum::{extract::State, routing::get, Json, Router};
@@ -52,31 +52,42 @@ pub struct DevicesResponse {
 }
 
 pub async fn last_upload(ctx: &Ctx) -> Res<Option<String>> {
-    let at: Option<String> = sqlx::query_scalar("SELECT MAX(at) FROM uploads")
-        .fetch_one(&ctx.pool)
-        .await?;
+    let at: Option<String> = sqlx::query_scalar(
+        "SELECT MAX(u.at) FROM uploads u JOIN file_owners o ON o.sha256 = u.sha256 AND o.user_id = ?",
+    )
+    .bind(ctx.uid)
+    .fetch_one(&ctx.pool)
+    .await?;
     Ok(at.map(|s| stored_rfc3339(ctx.tz(), &s)))
 }
 
 pub async fn last_data_ts(ctx: &Ctx) -> Res<Option<i64>> {
-    Ok(sqlx::query_scalar("SELECT MAX(last_ts) FROM sources")
-        .fetch_one(&ctx.pool)
-        .await?)
+    Ok(sqlx::query_scalar(
+        "SELECT MAX(s.last_ts) FROM sources s JOIN file_owners o ON o.sha256 = s.sha256 AND o.user_id = ?",
+    )
+    .bind(ctx.uid)
+    .fetch_one(&ctx.pool)
+    .await?)
 }
 
-async fn devices(_: Owner, State(state): State<AppState>) -> Res<Json<DevicesResponse>> {
-    let ctx = Ctx::new(&state).await?;
-    let battery: Option<(i64, f64)> =
-        sqlx::query_as("SELECT ts, percent FROM battery ORDER BY ts DESC LIMIT 1")
-            .fetch_optional(&ctx.pool)
-            .await?;
+async fn devices(user: DataUser, State(state): State<AppState>) -> Res<Json<DevicesResponse>> {
+    let ctx = Ctx::new(&state, user.id).await?;
+    let battery: Option<(i64, f64)> = sqlx::query_as(
+        "SELECT ts, percent FROM battery WHERE user_id = ? ORDER BY ts DESC LIMIT 1",
+    )
+    .bind(ctx.uid)
+    .fetch_optional(&ctx.pool)
+    .await?;
     let since =
         crate::settings::rfc3339(chrono_tz::Tz::UTC, ctx.now - 86_400).replace("+00:00", "Z");
-    let new_files: i64 =
-        sqlx::query_scalar("SELECT COUNT(*) FROM uploads WHERE created = 1 AND at >= ?")
-            .bind(since)
-            .fetch_one(&ctx.pool)
-            .await?;
+    let new_files: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM uploads u JOIN file_owners o ON o.sha256 = u.sha256 AND o.user_id = ?
+             WHERE u.created = 1 AND u.at >= ?",
+    )
+    .bind(ctx.uid)
+    .bind(since)
+    .fetch_one(&ctx.pool)
+    .await?;
     let tz = ctx.tz();
     Ok(Json(DevicesResponse {
         sample: ctx.sample(),
@@ -89,7 +100,7 @@ async fn devices(_: Owner, State(state): State<AppState>) -> Res<Json<DevicesRes
         },
         last_sync_at: last_upload(&ctx).await?,
         new_files_24h: new_files as u32,
-        upload_devices: tokens::list(&state.pool)
+        upload_devices: tokens::list(&state.pool, tokens::Whose::User(user.id))
             .await?
             .into_iter()
             .map(|t| UploadDevice {
@@ -126,16 +137,23 @@ pub struct StorageResponse {
     pub last_backup_at: Option<String>,
 }
 
-async fn storage(_: Owner, State(state): State<AppState>) -> Res<Json<StorageResponse>> {
-    let ctx = Ctx::new(&state).await?;
+async fn storage(user: DataUser, State(state): State<AppState>) -> Res<Json<StorageResponse>> {
+    let ctx = Ctx::new(&state, user.id).await?;
     let by: Vec<(String, i64, i64)> =
-        sqlx::query_as("SELECT source, COUNT(*), COALESCE(SUM(size), 0) FROM files GROUP BY source ORDER BY source")
-            .fetch_all(&ctx.pool)
+        sqlx::query_as(
+            "SELECT f.source, COUNT(*), COALESCE(SUM(f.size), 0) FROM files f
+             JOIN file_owners o ON o.sha256 = f.sha256 AND o.user_id = ? GROUP BY f.source ORDER BY f.source",
+        )
+        .bind(ctx.uid)
+        .fetch_all(&ctx.pool)
             .await?;
-    let parse: Vec<(String, i64)> =
-        sqlx::query_as("SELECT status, COUNT(*) FROM file_parse GROUP BY status")
-            .fetch_all(&ctx.pool)
-            .await?;
+    let parse: Vec<(String, i64)> = sqlx::query_as(
+        "SELECT p.status, COUNT(*) FROM file_parse p
+             JOIN file_owners o ON o.sha256 = p.sha256 AND o.user_id = ? GROUP BY p.status",
+    )
+    .bind(ctx.uid)
+    .fetch_all(&ctx.pool)
+    .await?;
     let n = |s: &str| parse.iter().find(|p| p.0 == s).map_or(0, |p| p.1 as u32);
     let mut db_bytes = None;
     for suffix in ["", "-wal"] {

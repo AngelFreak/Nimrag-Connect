@@ -357,7 +357,8 @@ async fn write_unreadable(
 /// tables and a failure rolls everything back. Writers (uploads) wait for the
 /// lock while it runs. A missing or corrupt
 /// blob is recorded as a `file_parse` error and the run continues; callers
-/// should treat `unreadable > 0` as failure.
+/// should treat `unreadable > 0` as failure. File ownership (`file_owners`) is ledger data and
+/// is kept: every file is derived into its owner's partition.
 pub async fn reparse(pool: &SqlitePool, data_dir: &Path) -> Result<ReparseReport> {
     // Derived rows whose file is no longer in the ledger.
     let mut tx = pool.begin_with("BEGIN IMMEDIATE").await?;
@@ -371,28 +372,63 @@ pub async fn reparse(pool: &SqlitePool, data_dir: &Path) -> Result<ReparseReport
         .execute(&mut *tx)
         .await?;
     // Sample tables are rebuilt from scratch: clear, then upsert every file in sha256 order.
-    crate::derived::clear_samples(&mut tx).await?;
-
-    let rows = sqlx::query!(r#"SELECT sha256 as "sha256!" FROM files ORDER BY sha256"#)
+    crate::derived::clear_samples(&mut tx, None).await?;
+    let shas: Vec<String> = sqlx::query_scalar("SELECT sha256 FROM files ORDER BY sha256")
         .fetch_all(&mut *tx)
         .await?;
+    let report = reparse_files(&mut tx, data_dir, shas).await?;
+    tx.commit().await?;
+    Ok(report)
+}
+
+/// Rebuild the derived rows of the files owned by the partitions `uids` (0 = files without an
+/// owner), inside the caller's transaction. Used when files change owner (assign, delete a user,
+/// a claim at upload): the sample rows of both partitions are cleared and re-derived, so rows
+/// that lost a rank contest to a file that moved away come back.
+pub async fn reparse_partitions(
+    tx: &mut Transaction<'_, Sqlite>,
+    data_dir: &Path,
+    uids: &[i64],
+) -> Result<ReparseReport> {
+    crate::derived::clear_samples(tx, Some(uids)).await?;
+    let mut shas = Vec::new();
+    for uid in uids {
+        let rows: Vec<String> = sqlx::query_scalar(
+            "SELECT f.sha256 FROM files f LEFT JOIN file_owners o ON o.sha256 = f.sha256
+             WHERE COALESCE(o.user_id, 0) = ?",
+        )
+        .bind(uid)
+        .fetch_all(&mut **tx)
+        .await?;
+        shas.extend(rows);
+    }
+    shas.sort();
+    shas.dedup();
+    reparse_files(tx, data_dir, shas).await
+}
+
+async fn reparse_files(
+    tx: &mut Transaction<'_, Sqlite>,
+    data_dir: &Path,
+    shas: Vec<String>,
+) -> Result<ReparseReport> {
     let mut report = ReparseReport {
-        files: rows.len() as u64,
+        files: shas.len() as u64,
         ..Default::default()
     };
-    for row in rows {
-        let (dir, sha) = (data_dir.to_path_buf(), row.sha256.clone());
+    for sha in shas {
+        let (dir, sha_owned) = (data_dir.to_path_buf(), sha.clone());
         let read = tokio::task::spawn_blocking(move || -> Result<Option<Parsed>> {
-            let bytes = crate::store::read_verified(&dir, &sha)?;
+            let bytes = crate::store::read_verified(&dir, &sha_owned)?;
             Ok(looks_like_fit(&bytes).then(|| parse(&bytes)))
         })
         .await?;
         match read {
             Err(e) => {
                 report.unreadable += 1;
-                write_unreadable(&mut tx, &row.sha256, &format!("{e:#}")).await?;
+                write_unreadable(tx, &sha, &format!("{e:#}")).await?;
             }
-            Ok(None) => clear(&mut tx, &row.sha256).await?,
+            Ok(None) => clear(tx, &sha).await?,
             Ok(Some(parsed)) => {
                 report.fit_inputs += 1;
                 report.fit_files += parsed.decoded.files.len() as u64;
@@ -403,10 +439,9 @@ pub async fn reparse(pool: &SqlitePool, data_dir: &Path) -> Result<ReparseReport
                     .map(|f| f.messages.len() as u64)
                     .sum::<u64>();
                 report.parse_errors += parsed.error.is_some() as u64;
-                write(&mut tx, &row.sha256, &parsed).await?;
+                write(tx, &sha, &parsed).await?;
             }
         }
     }
-    tx.commit().await?;
     Ok(report)
 }

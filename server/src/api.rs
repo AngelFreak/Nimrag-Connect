@@ -21,7 +21,7 @@ use std::sync::Arc;
 pub const MAX_BODY_BYTES: usize = 64 * 1024 * 1024;
 /// Largest JSON body on the owner API (everything but the device upload).
 pub const MAX_JSON_BYTES: usize = 64 * 1024;
-/// `POST /api/login` carries one password.
+/// The login bodies carry a password and a code.
 pub const MAX_LOGIN_BYTES: usize = 4 * 1024;
 
 #[derive(Clone)]
@@ -33,7 +33,12 @@ pub struct AppState {
     pub(crate) ledger_lock: Arc<tokio::sync::Mutex<()>>,
     /// Session cookies without `Secure` (plain-http LAN use; `--insecure-cookies`).
     pub insecure_cookies: bool,
+    /// Failed logins per client address.
     pub limiter: Arc<crate::auth::LoginLimiter>,
+    /// Failed logins per username.
+    pub username_limiter: Arc<crate::auth::UsernameLimiter>,
+    /// Pending steps of the login (2FA enrolment, forced password change, first-run setup).
+    pub(crate) pending: Arc<crate::auth::PendingStore>,
     /// One permit: password checks (argon2, 19 MiB each) run one at a time.
     pub(crate) login_gate: Arc<tokio::sync::Semaphore>,
     /// Networks whose `X-Forwarded-For` is believed (`--trusted-proxy`); empty by default.
@@ -52,6 +57,8 @@ impl AppState {
             ledger_lock: Default::default(),
             insecure_cookies: false,
             limiter: Default::default(),
+            username_limiter: Arc::new(crate::auth::username_limiter()),
+            pending: Default::default(),
             login_gate: Arc::new(tokio::sync::Semaphore::new(1)),
             trusted_proxies: Default::default(),
             garmin: Default::default(),
@@ -149,10 +156,12 @@ impl IntoResponse for ApiError {
 
 // ---- auth ---------------------------------------------------------------
 
-/// Authenticated device id (from `Authorization: Bearer <token>`).
+/// Authenticated device (from `Authorization: Bearer <token>`).
 pub struct Device {
     pub id: i64,
     pub name: String,
+    /// The user the token belongs to; `None` for an unassigned token.
+    pub user_id: Option<i64>,
 }
 
 impl<S> FromRequestParts<S> for Device
@@ -172,7 +181,11 @@ where
             .ok_or_else(unauthorized)?;
         let state = AppState::from_ref(state);
         match tokens::authenticate(&state.pool, token).await? {
-            Some((id, name)) => Ok(Device { id, name }),
+            Some(a) => Ok(Device {
+                id: a.id,
+                name: a.name,
+                user_id: a.user_id,
+            }),
             None => Err(unauthorized()),
         }
     }
@@ -265,6 +278,7 @@ async fn upload(
         &state,
         &received,
         Some((device.id, device.name)),
+        device.user_id,
         meta,
         None,
     )
@@ -313,7 +327,7 @@ struct FileInfo {
 }
 
 async fn file_info(
-    _device: Device,
+    device: Device,
     State(state): State<AppState>,
     Path(sha256): Path<String>,
 ) -> Result<Json<FileInfo>, ApiError> {
@@ -321,6 +335,14 @@ async fn file_info(
         return Err(ApiError::bad_request(
             "sha256 must be 64 lowercase hex characters",
         ));
+    }
+    // A device only sees files of its own user (an unassigned token, unassigned files).
+    let owner: Option<i64> = sqlx::query_scalar("SELECT user_id FROM file_owners WHERE sha256 = ?")
+        .bind(&sha256)
+        .fetch_optional(&state.pool)
+        .await?;
+    if owner != device.user_id {
+        return Err(ApiError(StatusCode::NOT_FOUND, "no such file".into()));
     }
     let f = sqlx::query!(
         r#"SELECT sha256 as "sha256!", size, received_at, source, data_type, sub_type,

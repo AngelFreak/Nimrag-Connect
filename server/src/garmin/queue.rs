@@ -1,5 +1,9 @@
 //! The Garmin account row, the upload queue and the background worker.
 //!
+//! One Garmin account per user (`garmin_account.user_id`); a queued file belongs to the user who
+//! owns it (`garmin_uploads.user_id`). The pre-multi-user account sits under user 0 and is not
+//! worked until an admin assigns it to a user.
+//!
 //! Queue contract (IMPLEMENTATION_PLAN.md, Stage 2g): table `garmin_uploads`;
 //! every activity file stored while Forward is on is queued; transient errors
 //! back off 1 min doubling to 6 h; 429 honours Retry-After; 401 gets one
@@ -52,7 +56,7 @@ impl AccountStatus {
     }
 }
 
-/// The one account row. `Debug` shows no token (see [`Tokens`]).
+/// A user's account row. `Debug` shows no token (see [`Tokens`]).
 #[derive(Debug, Clone)]
 pub struct Account {
     pub tokens: Option<Tokens>,
@@ -60,11 +64,12 @@ pub struct Account {
     pub last_error: Option<String>,
 }
 
-pub async fn load_account(pool: &SqlitePool) -> Result<Option<Account>> {
+pub async fn load_account(pool: &SqlitePool, uid: i64) -> Result<Option<Account>> {
     let row = sqlx::query(
         "SELECT di_token, di_refresh_token, di_client_id, status, last_error
-         FROM garmin_account WHERE id = 1",
+         FROM garmin_account WHERE user_id = ?",
     )
+    .bind(uid)
     .fetch_optional(pool)
     .await?;
     Ok(row.map(|r| {
@@ -82,16 +87,17 @@ pub async fn load_account(pool: &SqlitePool) -> Result<Option<Account>> {
 }
 
 /// Store the tokens of a fresh login or import: Forward is now on and connected.
-pub async fn save_login(pool: &SqlitePool, t: &Tokens, now: i64) -> Result<()> {
+pub async fn save_login(pool: &SqlitePool, uid: i64, t: &Tokens, now: i64) -> Result<()> {
     sqlx::query(
         "INSERT INTO garmin_account
-             (id, di_token, di_refresh_token, di_client_id, status, last_error, enabled_at, updated_at)
-         VALUES (1, ?, ?, ?, 'connected', NULL, ?, ?)
-         ON CONFLICT (id) DO UPDATE SET
+             (user_id, di_token, di_refresh_token, di_client_id, status, last_error, enabled_at, updated_at)
+         VALUES (?, ?, ?, ?, 'connected', NULL, ?, ?)
+         ON CONFLICT (user_id) DO UPDATE SET
              di_token = excluded.di_token, di_refresh_token = excluded.di_refresh_token,
              di_client_id = excluded.di_client_id, status = 'connected', last_error = NULL,
              updated_at = excluded.updated_at",
     )
+    .bind(uid)
     .bind(&t.di_token)
     .bind(&t.di_refresh_token)
     .bind(&t.di_client_id)
@@ -103,15 +109,16 @@ pub async fn save_login(pool: &SqlitePool, t: &Tokens, now: i64) -> Result<()> {
 }
 
 /// Store refreshed (possibly rotated) tokens without touching the status.
-pub async fn save_tokens(pool: &SqlitePool, t: &Tokens, now: i64) -> Result<()> {
+pub async fn save_tokens(pool: &SqlitePool, uid: i64, t: &Tokens, now: i64) -> Result<()> {
     sqlx::query(
         "UPDATE garmin_account SET di_token = ?, di_refresh_token = ?, di_client_id = ?, updated_at = ?
-         WHERE id = 1",
+         WHERE user_id = ?",
     )
     .bind(&t.di_token)
     .bind(&t.di_refresh_token)
     .bind(&t.di_client_id)
     .bind(now)
+    .bind(uid)
     .execute(pool)
     .await?;
     Ok(())
@@ -119,72 +126,81 @@ pub async fn save_tokens(pool: &SqlitePool, t: &Tokens, now: i64) -> Result<()> 
 
 pub async fn set_status(
     pool: &SqlitePool,
+    uid: i64,
     status: AccountStatus,
     error: Option<&str>,
     now: i64,
 ) -> Result<()> {
     sqlx::query(
-        "UPDATE garmin_account SET status = ?, last_error = ?, updated_at = ? WHERE id = 1",
+        "UPDATE garmin_account SET status = ?, last_error = ?, updated_at = ? WHERE user_id = ?",
     )
     .bind(status.as_str())
     .bind(error)
     .bind(now)
+    .bind(uid)
     .execute(pool)
     .await?;
     Ok(())
 }
 
 /// The refresh token is dead: forget the tokens (they are useless) and ask for a new login.
-pub async fn expire_login(pool: &SqlitePool, error: &str, now: i64) -> Result<()> {
+pub async fn expire_login(pool: &SqlitePool, uid: i64, error: &str, now: i64) -> Result<()> {
     sqlx::query(
         "UPDATE garmin_account SET di_token = '', di_refresh_token = '', status = 'needs_login',
-                last_error = ?, updated_at = ? WHERE id = 1",
+                last_error = ?, updated_at = ? WHERE user_id = ?",
     )
     .bind(error)
     .bind(now)
+    .bind(uid)
     .execute(pool)
     .await?;
     Ok(())
 }
 
 /// Forward off: the tokens and every file not yet sent are forgotten; done rows stay.
-pub async fn delete_account(pool: &SqlitePool) -> Result<()> {
+pub async fn delete_account(pool: &SqlitePool, uid: i64) -> Result<()> {
     let mut tx = pool.begin().await?;
-    sqlx::query("DELETE FROM garmin_account")
+    sqlx::query("DELETE FROM garmin_account WHERE user_id = ?")
+        .bind(uid)
         .execute(&mut *tx)
         .await?;
-    sqlx::query("DELETE FROM garmin_uploads WHERE status != 'done'")
+    sqlx::query("DELETE FROM garmin_uploads WHERE status != 'done' AND user_id = ?")
+        .bind(uid)
         .execute(&mut *tx)
         .await?;
     tx.commit().await?;
     Ok(())
 }
 
-/// Queue one file if Forward is on. True when a row was added.
-pub async fn enqueue(pool: &SqlitePool, sha256: &str, now: i64) -> Result<bool> {
+/// Queue one file of user `uid` if that user has Forward on. True when a row was added.
+pub async fn enqueue(pool: &SqlitePool, uid: i64, sha256: &str, now: i64) -> Result<bool> {
     let r = sqlx::query(
-        "INSERT INTO garmin_uploads (file_sha256, status, attempts, next_attempt_at, created_at)
-         SELECT ?, 'pending', 0, ?, ? WHERE EXISTS (SELECT 1 FROM garmin_account)
+        "INSERT INTO garmin_uploads (file_sha256, status, attempts, next_attempt_at, created_at, user_id)
+         SELECT ?, 'pending', 0, ?, ?, ? WHERE EXISTS (SELECT 1 FROM garmin_account WHERE user_id = ?)
          ON CONFLICT (file_sha256) DO NOTHING",
     )
     .bind(sha256)
     .bind(now)
     .bind(now)
+    .bind(uid)
+    .bind(uid)
     .execute(pool)
     .await?;
     Ok(r.rows_affected() > 0)
 }
 
-/// Queue the best file of every activity that started at or after `since_ts`.
-pub async fn backfill(pool: &SqlitePool, since_ts: i64, now: i64) -> Result<u64> {
+/// Queue the best file of every activity of user `uid` that started at or after `since_ts`.
+pub async fn backfill(pool: &SqlitePool, uid: i64, since_ts: i64, now: i64) -> Result<u64> {
     let r = sqlx::query(
-        "INSERT INTO garmin_uploads (file_sha256, status, attempts, next_attempt_at, created_at)
-         SELECT sha256, 'pending', 0, ?, ? FROM activities_current
-         WHERE COALESCE(start_ts, ts, time_created) >= ?
+        "INSERT INTO garmin_uploads (file_sha256, status, attempts, next_attempt_at, created_at, user_id)
+         SELECT sha256, 'pending', 0, ?, ?, ? FROM activities_current
+         WHERE user_id = ? AND COALESCE(start_ts, ts, time_created) >= ?
          ON CONFLICT (file_sha256) DO NOTHING",
     )
     .bind(now)
     .bind(now)
+    .bind(uid)
+    .bind(uid)
     .bind(since_ts)
     .execute(pool)
     .await?;
@@ -198,10 +214,13 @@ pub struct Counts {
     pub failed: i64,
 }
 
-pub async fn counts(pool: &SqlitePool) -> Result<Counts> {
-    let rows = sqlx::query("SELECT status, COUNT(*) FROM garmin_uploads GROUP BY status")
-        .fetch_all(pool)
-        .await?;
+pub async fn counts(pool: &SqlitePool, uid: i64) -> Result<Counts> {
+    let rows = sqlx::query(
+        "SELECT status, COUNT(*) FROM garmin_uploads WHERE user_id = ? GROUP BY status",
+    )
+    .bind(uid)
+    .fetch_all(pool)
+    .await?;
     let mut c = Counts::default();
     for r in rows {
         let n: i64 = r.get(1);
@@ -215,44 +234,51 @@ pub async fn counts(pool: &SqlitePool) -> Result<Counts> {
 }
 
 /// The most telling error: a failed file first, then the newest waiting one.
-pub async fn last_item_error(pool: &SqlitePool) -> Result<Option<String>> {
+pub async fn last_item_error(pool: &SqlitePool, uid: i64) -> Result<Option<String>> {
     Ok(sqlx::query_scalar(
-        "SELECT last_error FROM garmin_uploads WHERE last_error IS NOT NULL AND status != 'done'
+        "SELECT last_error FROM garmin_uploads
+         WHERE user_id = ? AND last_error IS NOT NULL AND status != 'done'
          ORDER BY (status = 'failed') DESC, created_at DESC LIMIT 1",
     )
+    .bind(uid)
     .fetch_optional(pool)
     .await?)
 }
 
-pub async fn next_attempt_at(pool: &SqlitePool) -> Result<Option<i64>> {
+pub async fn next_attempt_at(pool: &SqlitePool, uid: i64) -> Result<Option<i64>> {
     Ok(sqlx::query_scalar(
-        "SELECT MIN(next_attempt_at) FROM garmin_uploads WHERE status = 'pending'",
+        "SELECT MIN(next_attempt_at) FROM garmin_uploads WHERE status = 'pending' AND user_id = ?",
     )
+    .bind(uid)
     .fetch_one(pool)
     .await?)
 }
 
-/// Owner action: failed files get a fresh set of tries; a paused queue resumes.
-pub async fn retry(pool: &SqlitePool, now: i64) -> Result<u64> {
+/// User action: failed files get a fresh set of tries; a paused queue resumes.
+pub async fn retry(pool: &SqlitePool, uid: i64, now: i64) -> Result<u64> {
     let mut tx = pool.begin().await?;
     let r = sqlx::query(
         "UPDATE garmin_uploads SET status = 'pending', attempts = 0, next_attempt_at = ?, last_error = NULL
-         WHERE status = 'failed'",
+         WHERE status = 'failed' AND user_id = ?",
     )
     .bind(now)
+    .bind(uid)
     .execute(&mut *tx)
     .await?;
     sqlx::query(
-        "UPDATE garmin_uploads SET next_attempt_at = MIN(next_attempt_at, ?) WHERE status = 'pending'",
+        "UPDATE garmin_uploads SET next_attempt_at = MIN(next_attempt_at, ?)
+         WHERE status = 'pending' AND user_id = ?",
     )
     .bind(now)
+    .bind(uid)
     .execute(&mut *tx)
     .await?;
     sqlx::query(
         "UPDATE garmin_account SET status = 'connected', last_error = NULL, updated_at = ?
-         WHERE id = 1 AND status = 'paused'",
+         WHERE user_id = ? AND status = 'paused'",
     )
     .bind(now)
+    .bind(uid)
     .execute(&mut *tx)
     .await?;
     tx.commit().await?;
@@ -269,17 +295,9 @@ pub fn spawn_worker(state: AppState) -> tokio::task::JoinHandle<()> {
             let mut wait = 3600;
             match run_due(&state).await {
                 Ok(_) => {
-                    let connected = matches!(
-                        load_account(&state.pool).await,
-                        Ok(Some(Account {
-                            status: AccountStatus::Connected,
-                            ..
-                        }))
-                    );
-                    if connected {
-                        if let Ok(Some(at)) = next_attempt_at(&state.pool).await {
-                            wait = (at - state.now()).clamp(1, 3600);
-                        }
+                    // The soonest waiting file of any connected account.
+                    if let Ok(Some(at)) = next_attempt_any(&state.pool).await {
+                        wait = (at - state.now()).clamp(1, 3600);
                     }
                 }
                 Err(e) => {
@@ -295,40 +313,68 @@ pub fn spawn_worker(state: AppState) -> tokio::task::JoinHandle<()> {
     })
 }
 
-/// Process every file that is due now. Returns how many files were handled.
-/// Stops early when the account is not connected or Garmin pushes back.
+/// The soonest waiting file among connected accounts of real users.
+async fn next_attempt_any(pool: &SqlitePool) -> Result<Option<i64>> {
+    Ok(sqlx::query_scalar(
+        "SELECT MIN(u.next_attempt_at) FROM garmin_uploads u
+         JOIN garmin_account a ON a.user_id = u.user_id
+         WHERE u.status = 'pending' AND a.status = 'connected' AND a.user_id > 0",
+    )
+    .fetch_one(pool)
+    .await?)
+}
+
+/// Process every file that is due now, for every user with a connected account. Returns how
+/// many files were handled. A user's pass stops early when the account is not connected or
+/// Garmin pushes back; the other users go on. The pre-multi-user account (user 0) waits until
+/// an admin assigns it to a user.
 pub async fn run_due(state: &AppState) -> Result<usize> {
+    let uids: Vec<i64> = sqlx::query_scalar(
+        "SELECT user_id FROM garmin_account WHERE status = 'connected' AND user_id > 0 ORDER BY user_id",
+    )
+    .fetch_all(&state.pool)
+    .await?;
+    let mut handled = 0;
+    for uid in uids {
+        handled += run_due_user(state, uid).await?;
+    }
+    Ok(handled)
+}
+
+/// [`run_due`] for one user.
+pub async fn run_due_user(state: &AppState, uid: i64) -> Result<usize> {
     let mut handled = 0;
     loop {
         let now = state.now();
-        let Some(account) = load_account(&state.pool).await? else {
+        let Some(account) = load_account(&state.pool, uid).await? else {
             break;
         };
         if account.status != AccountStatus::Connected {
             break;
         }
         let Some(tokens) = account.tokens else {
-            expire_login(&state.pool, "no stored login", now).await?;
+            expire_login(&state.pool, uid, "no stored login", now).await?;
             break;
         };
-        let Some((sha, attempts)) = next_due(&state.pool, now).await? else {
+        let Some((sha, attempts)) = next_due(&state.pool, uid, now).await? else {
             break;
         };
         handled += 1;
-        if let Flow::Stop = process(state, tokens, &sha, attempts, now).await? {
+        if let Flow::Stop = process(state, uid, tokens, &sha, attempts, now).await? {
             break;
         }
     }
     Ok(handled)
 }
 
-async fn next_due(pool: &SqlitePool, now: i64) -> Result<Option<(String, i64)>> {
+async fn next_due(pool: &SqlitePool, uid: i64, now: i64) -> Result<Option<(String, i64)>> {
     let row = sqlx::query(
         "SELECT file_sha256, attempts FROM garmin_uploads
-         WHERE status = 'pending' AND next_attempt_at <= ?
+         WHERE status = 'pending' AND next_attempt_at <= ? AND user_id = ?
          ORDER BY next_attempt_at, created_at, file_sha256 LIMIT 1",
     )
     .bind(now)
+    .bind(uid)
     .fetch_optional(pool)
     .await?;
     Ok(row.map(|r| (r.get(0), r.get(1))))
@@ -348,11 +394,11 @@ enum Refreshed {
 }
 
 /// Refresh under the token lock and store the (possibly rotated) result.
-async fn refresh_tokens(state: &AppState, current: &Tokens) -> Result<Refreshed> {
+async fn refresh_tokens(state: &AppState, uid: i64, current: &Tokens) -> Result<Refreshed> {
     let g = &state.garmin;
     let _lock = g.token_lock.lock().await;
     // Someone may have refreshed while we waited for the lock.
-    let stored = load_account(&state.pool)
+    let stored = load_account(&state.pool, uid)
         .await?
         .and_then(|a| a.tokens)
         .filter(|t| t != current);
@@ -364,41 +410,50 @@ async fn refresh_tokens(state: &AppState, current: &Tokens) -> Result<Refreshed>
     let now = state.now();
     match auth::refresh(&g.cfg, g.api().as_ref(), current).await {
         Ok(new) => {
-            save_tokens(&state.pool, &new, now).await?;
+            save_tokens(&state.pool, uid, &new, now).await?;
             Ok(Refreshed::Fresh(new))
         }
         Err(AuthError::Rejected) => {
             tracing::warn!("garmin refresh token was refused; login needed");
-            expire_login(&state.pool, "Garmin login expired; log in again", now).await?;
+            expire_login(&state.pool, uid, "Garmin login expired; log in again", now).await?;
             Ok(Refreshed::LoginExpired)
         }
         Err(AuthError::RateLimited(ra)) => {
             let wait = ra.map_or(BACKOFF_FIRST_S, |s| (s as i64).clamp(1, RETRY_AFTER_MAX_S));
-            note_error(&state.pool, "Garmin rate limited the token refresh", now).await?;
+            note_error(
+                &state.pool,
+                uid,
+                "Garmin rate limited the token refresh",
+                now,
+            )
+            .await?;
             Ok(Refreshed::Later(wait))
         }
         Err(e) => {
             tracing::warn!(error = %e, "garmin refresh failed");
-            note_error(&state.pool, &format!("token refresh failed: {e}"), now).await?;
+            note_error(&state.pool, uid, &format!("token refresh failed: {e}"), now).await?;
             Ok(Refreshed::Later(BACKOFF_FIRST_S))
         }
     }
 }
 
-async fn note_error(pool: &SqlitePool, msg: &str, now: i64) -> Result<()> {
-    sqlx::query("UPDATE garmin_account SET last_error = ?, updated_at = ? WHERE id = 1")
+async fn note_error(pool: &SqlitePool, uid: i64, msg: &str, now: i64) -> Result<()> {
+    sqlx::query("UPDATE garmin_account SET last_error = ?, updated_at = ? WHERE user_id = ?")
         .bind(msg)
         .bind(now)
+        .bind(uid)
         .execute(pool)
         .await?;
     Ok(())
 }
 
-async fn defer_all(pool: &SqlitePool, until: i64) -> Result<()> {
+async fn defer_all(pool: &SqlitePool, uid: i64, until: i64) -> Result<()> {
     sqlx::query(
-        "UPDATE garmin_uploads SET next_attempt_at = MAX(next_attempt_at, ?) WHERE status = 'pending'",
+        "UPDATE garmin_uploads SET next_attempt_at = MAX(next_attempt_at, ?)
+         WHERE status = 'pending' AND user_id = ?",
     )
     .bind(until)
+    .bind(uid)
     .execute(pool)
     .await?;
     Ok(())
@@ -406,6 +461,7 @@ async fn defer_all(pool: &SqlitePool, until: i64) -> Result<()> {
 
 async fn process(
     state: &AppState,
+    uid: i64,
     mut tokens: Tokens,
     sha: &str,
     attempts: i64,
@@ -415,11 +471,11 @@ async fn process(
     let pool = &state.pool;
 
     if tokens.expires_soon(now) {
-        match refresh_tokens(state, &tokens).await? {
+        match refresh_tokens(state, uid, &tokens).await? {
             Refreshed::Fresh(t) => tokens = t,
             Refreshed::LoginExpired => return Ok(Flow::Stop),
             Refreshed::Later(s) => {
-                defer_all(pool, now + s).await?;
+                defer_all(pool, uid, now + s).await?;
                 return Ok(Flow::Stop);
             }
         }
@@ -457,7 +513,7 @@ async fn process(
         upload::upload_activity(&g.cfg, g.api().as_ref(), &tokens, &name, &bytes).await;
     if outcome == UploadOutcome::AuthExpired {
         // One refresh, one more try; a second 401 pauses the queue.
-        match refresh_tokens(state, &tokens).await? {
+        match refresh_tokens(state, uid, &tokens).await? {
             Refreshed::Fresh(t) => {
                 tokens = t;
                 outcome =
@@ -465,7 +521,7 @@ async fn process(
             }
             Refreshed::LoginExpired => return Ok(Flow::Stop),
             Refreshed::Later(s) => {
-                defer_all(pool, now + s).await?;
+                defer_all(pool, uid, now + s).await?;
                 return Ok(Flow::Stop);
             }
         }
@@ -473,6 +529,7 @@ async fn process(
             tracing::warn!("garmin kept answering 401 after a refresh; queue paused");
             set_status(
                 pool,
+                uid,
                 AccountStatus::Paused,
                 Some("Garmin rejected the login after a refresh; log in again or retry"),
                 now,
@@ -488,7 +545,7 @@ async fn process(
         UploadOutcome::Uploaded { garmin_activity_id } => {
             tracing::info!(sha = short, "garmin upload done");
             finish(pool, sha, tries, "done", garmin_activity_id, None, now).await?;
-            clear_account_error(pool).await?;
+            clear_account_error(pool, uid).await?;
         }
         UploadOutcome::Duplicate => {
             tracing::info!(sha = short, "garmin already has this activity");
@@ -502,7 +559,7 @@ async fn process(
                 now,
             )
             .await?;
-            clear_account_error(pool).await?;
+            clear_account_error(pool, uid).await?;
         }
         UploadOutcome::Rejected(why) => {
             tracing::warn!(sha = short, "garmin rejected the file");
@@ -515,7 +572,7 @@ async fn process(
             );
             tracing::warn!(sha = short, wait, "garmin rate limited the upload");
             retry_later(pool, sha, tries, "Garmin rate limit (429)", now, wait).await?;
-            defer_all(pool, now + wait).await?;
+            defer_all(pool, uid, now + wait).await?;
             return Ok(Flow::Stop);
         }
         UploadOutcome::Transient(why) => {
@@ -527,10 +584,11 @@ async fn process(
     Ok(Flow::Continue)
 }
 
-async fn clear_account_error(pool: &SqlitePool) -> Result<()> {
+async fn clear_account_error(pool: &SqlitePool, uid: i64) -> Result<()> {
     sqlx::query(
-        "UPDATE garmin_account SET last_error = NULL WHERE id = 1 AND last_error IS NOT NULL",
+        "UPDATE garmin_account SET last_error = NULL WHERE user_id = ? AND last_error IS NOT NULL",
     )
+    .bind(uid)
     .execute(pool)
     .await?;
     Ok(())

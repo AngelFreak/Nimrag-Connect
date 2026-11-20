@@ -11,10 +11,16 @@ use anyhow::{Context, Result};
 /// FIT bytes that have no parse result yet. Returns true if the file is new.
 /// `origin` (import only) is the archive-relative path; identical re-imports of
 /// the same origin fold into the existing event.
+///
+/// `owner` is the user the file belongs to (the uploading token's user). A file has one owner:
+/// the first user to hold it. A file nobody owns yet (an unassigned token's upload, or a file
+/// from before multi-user) is claimed by `owner` and its derived rows move to that user; a file
+/// someone else owns keeps its owner. `None` stores the file unowned.
 pub async fn ingest(
     state: &AppState,
     blob: &store::Received,
     device: Option<(i64, String)>,
+    owner: Option<i64>,
     meta: Meta,
     origin: Option<String>,
 ) -> Result<bool> {
@@ -108,13 +114,28 @@ pub async fn ingest(
     let mut tx = state.pool.begin().await?;
     ledger::insert_file(&mut tx, &sidecar).await?;
     ledger::replace_uploads(&mut tx, &sidecar).await?;
+    // The owner row goes in before the derived rows, which are partitioned by it.
+    let mut claimed = false;
+    if let Some(uid) = owner {
+        claimed = sqlx::query("INSERT OR IGNORE INTO file_owners (sha256, user_id) VALUES (?, ?)")
+            .bind(sha256)
+            .bind(uid)
+            .execute(&mut *tx)
+            .await?
+            .rows_affected()
+            > 0;
+    }
     if let Some(parsed) = &parsed {
         derive::write(&mut tx, sha256, parsed).await?;
+    } else if let (true, Some(uid)) = (claimed, owner) {
+        // Already parsed (it was stored before, unowned): its rows move from the unassigned
+        // partition to the new owner, and the rank contests are decided again.
+        derive::reparse_partitions(&mut tx, &state.data_dir, &[0, uid]).await?;
     }
     tx.commit().await?;
     drop(_guard);
     let created = event.created && !repeat;
     let is_fit = derive::looks_like_fit(&head);
-    crate::garmin::on_stored(state, sha256, &event.meta, is_fit, created).await;
+    crate::garmin::on_stored(state, sha256, owner, &event.meta, is_fit, created).await;
     Ok(created)
 }

@@ -14,6 +14,8 @@ pub mod seed;
 pub mod settings;
 pub mod store;
 pub mod tokens;
+pub mod totp;
+pub mod users;
 pub mod web;
 pub mod web_api;
 

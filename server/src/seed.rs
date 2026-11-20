@@ -2,6 +2,11 @@
 //! derived tables, for development, screenshots and tests. Deterministic (fixed
 //! RNG seed; the only inputs are the end date, the time zone and "now").
 //!
+//! Two accounts are created: the admin (`admin`, no data) and the user `demo`, who owns all of
+//! the sample data. Both have 2FA enrolled. Their passwords and 2FA secrets are random unless the
+//! caller passes them in [`SeedAccounts`]; the report hands them back to the caller and nothing
+//! is logged.
+//!
 //! Everything is marked as sample data (`settings.sample_data = 1`), so API
 //! responses carry `sample: true`. Rows are written straight into the derived
 //! tables with synthetic hashes; no file is stored, which is why a data
@@ -13,6 +18,7 @@
 
 use crate::derived::{rank_key, src_id, V};
 use crate::settings::{self, day_start};
+use crate::users::Role;
 use anyhow::{bail, Result};
 use chrono::{Datelike, Duration, NaiveDate, Weekday};
 use chrono_tz::Tz;
@@ -25,11 +31,25 @@ const BASE_LAT: f64 = 50.0;
 const BASE_LON: f64 = 10.0;
 const SAMPLE_SRC: i64 = 1;
 
+/// Name of the user who owns the sample data.
+pub const DEMO_USER: &str = "demo";
+pub const ADMIN_USER: &str = "admin";
+
+/// Credentials to use instead of random ones (a test that must log in knows them up front).
+#[derive(Default, Clone)]
+pub struct SeedAccounts {
+    pub admin_password: Option<String>,
+    pub admin_totp_secret: Option<String>,
+    pub user_password: Option<String>,
+    pub user_totp_secret: Option<String>,
+}
+
 pub struct SeedOptions {
     pub tz: Tz,
     /// Data is generated up to this instant (unix seconds).
     pub now: i64,
     pub days: i64,
+    pub accounts: SeedAccounts,
 }
 
 impl SeedOptions {
@@ -41,7 +61,25 @@ impl SeedOptions {
             tz: settings::system_timezone(),
             now,
             days: DAYS,
+            accounts: SeedAccounts::default(),
         }
+    }
+}
+
+/// A seeded login. `Debug` shows only the username.
+#[derive(Clone)]
+pub struct SeedLogin {
+    pub username: String,
+    pub password: String,
+    /// Base32 TOTP secret (RFC 6238, SHA-1, 6 digits, 30 s).
+    pub totp_secret: String,
+}
+
+impl std::fmt::Debug for SeedLogin {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SeedLogin")
+            .field("username", &self.username)
+            .finish_non_exhaustive()
     }
 }
 
@@ -51,6 +89,9 @@ pub struct SeedReport {
     pub first_date: String,
     pub last_date: String,
     pub activities: usize,
+    pub admin: SeedLogin,
+    pub user: SeedLogin,
+    pub user_id: i64,
 }
 
 // ---- deterministic randomness --------------------------------------------------------------
@@ -105,8 +146,35 @@ impl Buf {
     }
 }
 
-async fn flush(conn: &mut sqlx::SqliteConnection, buf: Buf) -> Result<()> {
+/// Tables whose rows belong to a user (`user_id` column, first in every statement here).
+const PARTITIONED: &[&str] = &[
+    "mon_hr",
+    "mon_activity",
+    "mon_extra",
+    "stress",
+    "respiration",
+    "spo2",
+    "resting_hr",
+    "sleep_levels",
+    "hrv_values",
+    "hrv_summary",
+    "training_load",
+    "training_status",
+    "training_balance",
+    "recovery_time",
+    "vo2max",
+    "battery",
+    "body_measurements",
+];
+
+async fn flush(conn: &mut sqlx::SqliteConnection, buf: Buf, uid: i64) -> Result<()> {
     for (table, (cols, rows)) in buf.tables {
+        let owned = PARTITIONED.contains(&table);
+        let cols = if owned {
+            format!("user_id, {cols}")
+        } else {
+            cols.to_owned()
+        };
         let width = cols.split(',').count();
         let marks = format!("({})", vec!["?"; width].join(", "));
         for chunk in rows.chunks(30_000 / width) {
@@ -116,6 +184,9 @@ async fn flush(conn: &mut sqlx::SqliteConnection, buf: Buf) -> Result<()> {
             );
             let mut q = sqlx::query(sqlx::AssertSqlSafe(sql));
             for row in chunk {
+                if owned {
+                    q = q.bind(uid);
+                }
                 for v in row {
                     q = match v {
                         V::I(x) => q.bind(*x),
@@ -504,6 +575,37 @@ fn make_activity(
     }
 }
 
+// ---- accounts -----------------------------------------------------------------------------------
+
+fn login_for(username: &str, password: Option<String>, totp: Option<String>) -> Result<SeedLogin> {
+    let password = match password {
+        Some(p) => {
+            if p.chars().count() < crate::auth::MIN_PASSWORD_LEN {
+                bail!(
+                    "the seeded password for {username} must have at least {} characters",
+                    crate::auth::MIN_PASSWORD_LEN
+                );
+            }
+            p
+        }
+        None => crate::users::temporary_password()?,
+    };
+    let totp_secret = match totp {
+        Some(s) => s,
+        None => crate::totp::new_secret()?,
+    };
+    Ok(SeedLogin {
+        username: username.to_owned(),
+        password,
+        totp_secret,
+    })
+}
+
+async fn hash(password: &str) -> Result<String> {
+    let password = password.to_owned();
+    tokio::task::spawn_blocking(move || crate::auth::hash_password(&password)).await?
+}
+
 // ---- the run ------------------------------------------------------------------------------------
 
 pub async fn run(pool: &SqlitePool, data_dir: &Path, opts: SeedOptions) -> Result<SeedReport> {
@@ -522,6 +624,12 @@ pub async fn run(pool: &SqlitePool, data_dir: &Path, opts: SeedOptions) -> Resul
     if settings::get(pool, "sample_data").await?.is_some() {
         bail!(
             "{} was already seeded; use a fresh data directory",
+            data_dir.display()
+        );
+    }
+    if crate::users::count(pool).await? > 0 {
+        bail!(
+            "{} already has user accounts; dev-seed only fills a fresh data directory",
             data_dir.display()
         );
     }
@@ -1048,32 +1156,75 @@ pub async fn run(pool: &SqlitePool, data_dir: &Path, opts: SeedOptions) -> Resul
         );
     }
 
+    // Accounts. Hashing is slow on purpose, so it happens before the transaction opens.
+    let admin = login_for(
+        ADMIN_USER,
+        opts.accounts.admin_password.clone(),
+        opts.accounts.admin_totp_secret.clone(),
+    )?;
+    let user = login_for(
+        DEMO_USER,
+        opts.accounts.user_password.clone(),
+        opts.accounts.user_totp_secret.clone(),
+    )?;
+    let admin_hash = hash(&admin.password).await?;
+    let user_hash = hash(&user.password).await?;
+
     let mut conn = pool.acquire().await?;
     sqlx::query("PRAGMA foreign_keys = OFF")
         .execute(&mut *conn)
         .await?;
     let result = async {
         let mut tx = sqlx::Connection::begin(&mut *conn).await?;
-        flush(&mut tx, buf).await?;
-        for (k, v) in [("sample_data", "1".to_owned()), ("timezone", tz.name().to_owned())] {
-            sqlx::query("INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value")
-                .bind(k)
-                .bind(v)
-                .execute(&mut *tx)
-                .await?;
+        let mut ids = Vec::new();
+        for (login, hash, role) in [
+            (&admin, &admin_hash, Role::Admin),
+            (&user, &user_hash, Role::User),
+        ] {
+            let id = sqlx::query(
+                "INSERT INTO users (username, password_hash, role, totp_secret, totp_enabled, created_at)
+                 VALUES (?, ?, ?, ?, 1, ?)",
+            )
+            .bind(&login.username)
+            .bind(hash)
+            .bind(role.as_str())
+            .bind(&login.totp_secret)
+            .bind(now)
+            .execute(&mut *tx)
+            .await?
+            .last_insert_rowid();
+            ids.push(id);
         }
+        let uid = ids[1];
+        flush(&mut tx, buf, uid).await?;
+        // The sample files belong to the demo user (their rows have no `files` entry).
+        sqlx::query("INSERT INTO file_owners (sha256, user_id) SELECT sha256, ? FROM sources")
+            .bind(uid)
+            .execute(&mut *tx)
+            .await?;
+        sqlx::query("INSERT INTO user_settings (user_id, key, value) VALUES (?, 'timezone', ?)")
+            .bind(uid)
+            .bind(tz.name())
+            .execute(&mut *tx)
+            .await?;
+        sqlx::query("INSERT INTO settings (key, value) VALUES ('sample_data', '1') ON CONFLICT (key) DO UPDATE SET value = excluded.value")
+            .execute(&mut *tx)
+            .await?;
         tx.commit().await?;
-        anyhow::Ok(())
+        anyhow::Ok(uid)
     }
     .await;
     sqlx::query("PRAGMA foreign_keys = ON")
         .execute(&mut *conn)
         .await?;
-    result?;
+    let user_id = result?;
     Ok(SeedReport {
         days: opts.days,
         first_date: settings::date_string(first_date),
         last_date: settings::date_string(end_date),
         activities: acts.len(),
+        admin,
+        user,
+        user_id,
     })
 }

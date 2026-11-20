@@ -2,7 +2,7 @@
 
 use super::{ApiJson, Ctx};
 use crate::api::{ApiError, AppState};
-use crate::auth::Owner;
+use crate::auth::DataUser;
 use crate::settings::{self, HomeCards};
 use axum::{extract::State, routing::get, Json, Router};
 use serde::{Deserialize, Serialize};
@@ -40,8 +40,8 @@ pub struct SettingsPatch {
     pub home_cards: Option<HomeCards>,
 }
 
-async fn current(state: &AppState) -> Result<SettingsResponse, ApiError> {
-    let ctx = Ctx::new(state).await?;
+async fn current(state: &AppState, uid: i64) -> Result<SettingsResponse, ApiError> {
+    let ctx = Ctx::new(state, uid).await?;
     Ok(SettingsResponse {
         timezone: ctx.tz().name().to_owned(),
         step_goal: ctx.prefs.step_goal,
@@ -51,12 +51,15 @@ async fn current(state: &AppState) -> Result<SettingsResponse, ApiError> {
     })
 }
 
-async fn read(_: Owner, State(state): State<AppState>) -> Result<Json<SettingsResponse>, ApiError> {
-    Ok(Json(current(&state).await?))
+async fn read(
+    user: DataUser,
+    State(state): State<AppState>,
+) -> Result<Json<SettingsResponse>, ApiError> {
+    Ok(Json(current(&state, user.id).await?))
 }
 
 async fn patch(
-    _: Owner,
+    user: DataUser,
     State(state): State<AppState>,
     ApiJson(p): ApiJson<SettingsPatch>,
 ) -> Result<Json<SettingsResponse>, ApiError> {
@@ -86,21 +89,22 @@ async fn patch(
         .transpose()?;
     let pool = &state.pool;
     if let Some(tz) = tz {
-        settings::set(pool, "timezone", tz.name()).await?;
+        settings::set_user(pool, user.id, "timezone", tz.name()).await?;
     }
     if let Some(g) = p.step_goal {
-        settings::set(pool, "step_goal", &g.to_string()).await?;
+        settings::set_user(pool, user.id, "step_goal", &g.to_string()).await?;
     }
     if let Some(g) = p.intensity_goal_min {
-        settings::set(pool, "intensity_goal_min", &g.to_string()).await?;
+        settings::set_user(pool, user.id, "intensity_goal_min", &g.to_string()).await?;
     }
     if let Some(c) = cards {
-        settings::set(
+        settings::set_user(
             pool,
+            user.id,
             "home_cards",
             &serde_json::to_string(&c).map_err(anyhow::Error::from)?,
         )
         .await?;
     }
-    Ok(Json(current(&state).await?))
+    Ok(Json(current(&state, user.id).await?))
 }

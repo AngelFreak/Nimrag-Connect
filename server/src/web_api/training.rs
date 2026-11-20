@@ -4,7 +4,7 @@
 use super::daily::dates;
 use super::{round1, Ctx, DateValue};
 use crate::api::{ApiError, AppState};
-use crate::auth::Owner;
+use crate::auth::DataUser;
 use crate::settings::date_string;
 use axum::{extract::State, routing::get, Json, Router};
 use chrono::Duration;
@@ -119,8 +119,9 @@ type StatusRow = (
 async fn status_rows(ctx: &Ctx, from: i64) -> Res<Vec<StatusRow>> {
     Ok(sqlx::query_as(
         "SELECT ts, status, weekly_load_sum, load_min, load_max, fitness_trend, load_trend
-         FROM training_status WHERE ts >= ? AND ts <= ? ORDER BY ts",
+         FROM training_status WHERE user_id = ? AND ts >= ? AND ts <= ? ORDER BY ts",
     )
+    .bind(ctx.uid)
     .bind(from)
     .bind(ctx.now)
     .fetch_all(&ctx.pool)
@@ -169,8 +170,9 @@ pub async fn status_and_load(ctx: &Ctx) -> Res<(TrainingStatusCard, TrainingLoad
         _ => None,
     };
     let acute: Option<(Option<f64>, Option<f64>, Option<f64>)> = sqlx::query_as(
-        "SELECT acute, chronic, acwr FROM training_load WHERE ts <= ? ORDER BY ts DESC LIMIT 1",
+        "SELECT acute, chronic, acwr FROM training_load WHERE user_id = ? AND ts <= ? ORDER BY ts DESC LIMIT 1",
     )
+    .bind(ctx.uid)
     .bind(ctx.now)
     .fetch_optional(&ctx.pool)
     .await?;
@@ -197,8 +199,9 @@ pub async fn status_and_load(ctx: &Ctx) -> Res<(TrainingStatusCard, TrainingLoad
 
 pub async fn recovery(ctx: &Ctx) -> Res<RecoveryCard> {
     let row: Option<(i64, f64)> = sqlx::query_as(
-        "SELECT start_ts, minutes FROM recovery_time WHERE start_ts <= ? ORDER BY start_ts DESC LIMIT 1",
+        "SELECT start_ts, minutes FROM recovery_time WHERE user_id = ? AND start_ts <= ? ORDER BY start_ts DESC LIMIT 1",
     )
+    .bind(ctx.uid)
     .bind(ctx.now)
     .fetch_optional(&ctx.pool)
     .await?;
@@ -229,13 +232,15 @@ pub async fn vo2max(ctx: &Ctx) -> Res<Vo2Card> {
     // Watch-level readings plus the maximal MET stored with each activity file.
     let rows: Vec<(i64, f64)> = sqlx::query_as(
         "SELECT ts, maximal_met FROM (
-             SELECT ts, maximal_met FROM vo2max
+             SELECT ts, maximal_met FROM vo2max WHERE user_id = ?
              UNION ALL
              SELECT a.start_ts, m.maximal_met FROM activity_metrics m
                JOIN activities_current a ON a.sha256 = m.sha256
-               WHERE m.maximal_met IS NOT NULL AND a.start_ts IS NOT NULL)
+               WHERE a.user_id = ? AND m.maximal_met IS NOT NULL AND a.start_ts IS NOT NULL)
          WHERE ts <= ? ORDER BY ts",
     )
+    .bind(ctx.uid)
+    .bind(ctx.uid)
     .bind(ctx.now)
     .fetch_all(&ctx.pool)
     .await?;
@@ -279,8 +284,9 @@ async fn balance(ctx: &Ctx) -> Res<Option<LoadBalance>> {
     let r: Option<Row> = sqlx::query_as(
         "SELECT aerobic_low, aerobic_high, anaerobic, aerobic_low_target_min, aerobic_low_target_max,
                 aerobic_high_target_min, aerobic_high_target_max, anaerobic_target_min, anaerobic_target_max
-         FROM training_balance WHERE ts <= ? ORDER BY ts DESC LIMIT 1",
+         FROM training_balance WHERE user_id = ? AND ts <= ? ORDER BY ts DESC LIMIT 1",
     )
+    .bind(ctx.uid)
     .bind(ctx.now)
     .fetch_optional(&ctx.pool)
     .await?;
@@ -297,8 +303,8 @@ async fn balance(ctx: &Ctx) -> Res<Option<LoadBalance>> {
     }))
 }
 
-async fn training(_: Owner, State(state): State<AppState>) -> Res<Json<TrainingResponse>> {
-    let ctx = Ctx::new(&state).await?;
+async fn training(user: DataUser, State(state): State<AppState>) -> Res<Json<TrainingResponse>> {
+    let ctx = Ctx::new(&state, user.id).await?;
     let (status, load) = status_and_load(&ctx).await?;
     Ok(Json(TrainingResponse {
         sample: ctx.sample(),

@@ -3,7 +3,7 @@
 
 use super::{ApiJson, Ctx, TimedValue};
 use crate::api::{ApiError, AppState};
-use crate::auth::Owner;
+use crate::auth::DataUser;
 use crate::settings::{local_noon, parse_date};
 use axum::{
     extract::{Path, State},
@@ -85,12 +85,13 @@ fn entry(ctx: &Ctx, r: Row) -> BodyEntry {
     }
 }
 
-async fn read(_: Owner, State(state): State<AppState>) -> Res<Json<BodyResponse>> {
-    let ctx = Ctx::new(&state).await?;
+async fn read(user: DataUser, State(state): State<AppState>) -> Res<Json<BodyResponse>> {
+    let ctx = Ctx::new(&state, user.id).await?;
     let rows: Vec<Row> = sqlx::query_as(
         "SELECT id, measured_at, weight_kg, body_fat_pct, waist_cm FROM body_measurements
-         ORDER BY measured_at DESC, id DESC",
+         WHERE user_id = ? ORDER BY measured_at DESC, id DESC",
     )
+    .bind(ctx.uid)
     .fetch_all(&ctx.pool)
     .await?;
     let latest = |f: fn(&Row) -> Option<f64>| {
@@ -158,11 +159,11 @@ fn check(name: &str, v: Option<f64>, lo: f64, hi: f64) -> Result<(), ApiError> {
 }
 
 async fn create(
-    _: Owner,
+    user: DataUser,
     State(state): State<AppState>,
     ApiJson(b): ApiJson<NewBodyEntry>,
 ) -> Res<(StatusCode, Json<BodyEntry>)> {
-    let ctx = Ctx::new(&state).await?;
+    let ctx = Ctx::new(&state, user.id).await?;
     if b.weight_kg.is_none() && b.body_fat_pct.is_none() && b.waist_cm.is_none() {
         return Err(ApiError::bad_request(
             "give at least one of weight_kg, body_fat_pct, waist_cm",
@@ -183,9 +184,10 @@ async fn create(
         return Err(ApiError::bad_request("measured_at is in the future"));
     }
     let id = sqlx::query(
-        "INSERT INTO body_measurements (measured_at, weight_kg, body_fat_pct, waist_cm, created_at)
-         VALUES (?, ?, ?, ?, ?)",
+        "INSERT INTO body_measurements (user_id, measured_at, weight_kg, body_fat_pct, waist_cm, created_at)
+         VALUES (?, ?, ?, ?, ?, ?)",
     )
+    .bind(ctx.uid)
     .bind(at)
     .bind(b.weight_kg)
     .bind(b.body_fat_pct)
@@ -203,9 +205,14 @@ async fn create(
     ))
 }
 
-async fn remove(_: Owner, State(state): State<AppState>, Path(id): Path<i64>) -> Res<StatusCode> {
-    let n = sqlx::query("DELETE FROM body_measurements WHERE id = ?")
+async fn remove(
+    user: DataUser,
+    State(state): State<AppState>,
+    Path(id): Path<i64>,
+) -> Res<StatusCode> {
+    let n = sqlx::query("DELETE FROM body_measurements WHERE id = ? AND user_id = ?")
         .bind(id)
+        .bind(user.id)
         .execute(&state.pool)
         .await?
         .rows_affected();

@@ -5,7 +5,7 @@
 
 use super::{kind_of, round1, Ctx, TimedValue};
 use crate::api::{ApiError, AppState};
-use crate::auth::Owner;
+use crate::auth::DataUser;
 use crate::settings::date_string;
 use axum::{
     extract::{Path, Query, State},
@@ -171,10 +171,11 @@ pub async fn list_items(
 ) -> Res<Vec<ActivityListItem>> {
     let sql = format!(
         "{ACTIVITY_SQL} FROM activities_current a
-         WHERE a.start_ts IS NOT NULL AND a.start_ts >= ? AND a.start_ts < ?
+         WHERE a.user_id = ? AND a.start_ts IS NOT NULL AND a.start_ts >= ? AND a.start_ts < ?
          ORDER BY a.start_ts DESC, a.sha256"
     );
     let rows: Vec<ListRow> = sqlx::query_as(sqlx::AssertSqlSafe(sql))
+        .bind(ctx.uid)
         .bind(after.unwrap_or(i64::MIN))
         .bind(before.unwrap_or(i64::MAX))
         .fetch_all(&ctx.pool)
@@ -195,11 +196,11 @@ pub async fn list_items(
 }
 
 async fn list(
-    _: Owner,
+    user: DataUser,
     State(state): State<AppState>,
     Query(p): Query<ListParams>,
 ) -> Res<Json<ActivityList>> {
-    let ctx = Ctx::new(&state).await?;
+    let ctx = Ctx::new(&state, user.id).await?;
     let limit = p.limit.unwrap_or(30).clamp(1, 200);
     let before = p
         .before
@@ -296,8 +297,13 @@ async fn row_for(ctx: &Ctx, id: &str) -> Res<ListRow> {
     if !valid_id(id) {
         return Err(ApiError::not_found("no such activity"));
     }
-    let sql = format!("{ACTIVITY_SQL} FROM activities a WHERE a.sha256 = ?");
+    // The ownership join is the gate for every by-id endpoint: someone else's file is a 404.
+    let sql = format!(
+        "{ACTIVITY_SQL} FROM activities a
+         JOIN file_owners o ON o.sha256 = a.sha256 AND o.user_id = ? WHERE a.sha256 = ?"
+    );
     sqlx::query_as(sqlx::AssertSqlSafe(sql))
+        .bind(ctx.uid)
         .bind(id)
         .fetch_optional(&ctx.pool)
         .await?
@@ -348,11 +354,11 @@ pub fn hr_points(ctx: &Ctx, recs: &[RecRow], max: usize) -> Vec<TimedValue> {
 }
 
 async fn detail(
-    _: Owner,
+    user: DataUser,
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> Res<Json<ActivityDetail>> {
-    let ctx = Ctx::new(&state).await?;
+    let ctx = Ctx::new(&state, user.id).await?;
     let summary = summary_of(&ctx, &id).await?;
     let p = &ctx.pool;
     type SessAgg = (
@@ -513,11 +519,11 @@ pub struct TrackResponse {
 }
 
 async fn track(
-    _: Owner,
+    user: DataUser,
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> Res<Json<TrackResponse>> {
-    let ctx = Ctx::new(&state).await?;
+    let ctx = Ctx::new(&state, user.id).await?;
     row_for(&ctx, &id).await?;
     let pts: Vec<(f64, f64)> = sqlx::query_as(
         "SELECT lat, lon FROM activity_records WHERE sha256 = ? AND lat IS NOT NULL AND lon IS NOT NULL ORDER BY idx",

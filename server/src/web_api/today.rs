@@ -16,7 +16,7 @@ use super::training::{
 };
 use super::{mean, round1, Ctx};
 use crate::api::{ApiError, AppState};
-use crate::auth::Owner;
+use crate::auth::DataUser;
 use crate::settings::date_string;
 use axum::{extract::State, routing::get, Json, Router};
 use chrono::Duration;
@@ -149,13 +149,14 @@ pub struct Today {
 
 async fn latest(ctx: &Ctx, sql: &'static str) -> Res<Option<(i64, f64)>> {
     Ok(sqlx::query_as(sql)
+        .bind(ctx.uid)
         .bind(ctx.now)
         .fetch_optional(&ctx.pool)
         .await?)
 }
 
-async fn today(_: Owner, State(state): State<AppState>) -> Res<Json<Today>> {
-    let ctx = Ctx::new(&state).await?;
+async fn today(user: DataUser, State(state): State<AppState>) -> Res<Json<Today>> {
+    let ctx = Ctx::new(&state, user.id).await?;
     let d = ctx.today();
     let (day_from, day_to) = ctx.day_bounds(d);
     let yesterday = d - Duration::days(1);
@@ -170,25 +171,28 @@ async fn today(_: Owner, State(state): State<AppState>) -> Res<Json<Today>> {
 
     let resp = latest(
         &ctx,
-        "SELECT ts, brpm FROM respiration WHERE brpm IS NOT NULL AND ts <= ? ORDER BY ts DESC LIMIT 1",
+        "SELECT ts, brpm FROM respiration WHERE user_id = ? AND brpm IS NOT NULL AND ts <= ? ORDER BY ts DESC LIMIT 1",
     )
     .await?;
-    let day_resp: Option<f64> =
-        sqlx::query_scalar("SELECT AVG(brpm) FROM respiration WHERE ts >= ? AND ts < ?")
-            .bind(day_from)
-            .bind(day_to)
-            .fetch_one(&ctx.pool)
-            .await?;
+    let day_resp: Option<f64> = sqlx::query_scalar(
+        "SELECT AVG(brpm) FROM respiration WHERE user_id = ? AND ts >= ? AND ts < ?",
+    )
+    .bind(ctx.uid)
+    .bind(day_from)
+    .bind(day_to)
+    .fetch_one(&ctx.pool)
+    .await?;
     let spo2 = latest(
         &ctx,
-        "SELECT ts, percent FROM spo2 WHERE percent IS NOT NULL AND ts <= ? ORDER BY ts DESC LIMIT 1",
+        "SELECT ts, percent FROM spo2 WHERE user_id = ? AND percent IS NOT NULL AND ts <= ? ORDER BY ts DESC LIMIT 1",
     )
     .await?;
 
     let weights: Vec<(i64, f64)> = sqlx::query_as(
-        "SELECT measured_at, weight_kg FROM body_measurements WHERE weight_kg IS NOT NULL AND measured_at <= ?
+        "SELECT measured_at, weight_kg FROM body_measurements WHERE user_id = ? AND weight_kg IS NOT NULL AND measured_at <= ?
          ORDER BY measured_at",
     )
+    .bind(ctx.uid)
     .bind(ctx.now)
     .fetch_all(&ctx.pool)
     .await?;

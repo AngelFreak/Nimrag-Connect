@@ -65,7 +65,13 @@ enum Item {
     Error(String),
 }
 
-pub async fn run(state: &AppState, input: &Path, limits: Limits) -> Result<Report> {
+/// `owner` is the user the imported files belong to (`None`: unassigned).
+pub async fn run(
+    state: &AppState,
+    input: &Path,
+    limits: Limits,
+    owner: Option<i64>,
+) -> Result<Report> {
     let (tx, mut rx) = mpsc::channel::<Item>(8);
     let (root, input) = (state.data_dir.as_ref().clone(), input.to_path_buf());
     let walker = tokio::task::spawn_blocking(move || {
@@ -104,7 +110,7 @@ pub async fn run(state: &AppState, input: &Path, limits: Limits) -> Result<Repor
                     file_number: None,
                     watch_timestamp: None,
                 };
-                match ingest::ingest(state, &blob, None, meta, Some(path.clone())).await {
+                match ingest::ingest(state, &blob, None, owner, meta, Some(path.clone())).await {
                     Ok(true) => r.fit_new += 1,
                     Ok(false) => r.fit_present += 1,
                     Err(e) => r.errors.push(format!("{path}: ingest failed: {e:#}")),

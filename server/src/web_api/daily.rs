@@ -12,19 +12,18 @@ use super::{mean, round1, series, Ctx, DateValue, TimedValue};
 use crate::api::ApiError;
 use chrono::{Datelike, Duration, NaiveDate, Weekday};
 use serde::{Deserialize, Serialize};
-use sqlx::SqlitePool;
 use std::collections::{BTreeMap, HashMap};
 use ts_rs::TS;
 
 type Res<T> = Result<T, ApiError>;
 
 /// One value from a query with at most one row.
-pub async fn one_f64(pool: &SqlitePool, sql: &'static str, binds: &[i64]) -> Res<Option<f64>> {
-    let mut q = sqlx::query_scalar::<_, Option<f64>>(sql);
+pub async fn one_f64(ctx: &Ctx, sql: &'static str, binds: &[i64]) -> Res<Option<f64>> {
+    let mut q = sqlx::query_scalar::<_, Option<f64>>(sql).bind(ctx.uid);
     for b in binds {
         q = q.bind(*b);
     }
-    Ok(q.fetch_optional(pool).await?.flatten())
+    Ok(q.fetch_optional(&ctx.pool).await?.flatten())
 }
 
 // ---- energy ----------------------------------------------------------------------
@@ -79,16 +78,17 @@ pub fn energy_stats(rows: &[(i64, f64)]) -> EnergyStats {
 }
 
 const ENERGY_SQL: &str = "SELECT ts, body_battery FROM stress
-    WHERE ts >= ? AND ts < ? AND body_battery IS NOT NULL ORDER BY ts";
+    WHERE user_id = ? AND ts >= ? AND ts < ? AND body_battery IS NOT NULL ORDER BY ts";
 
 pub async fn energy_block(ctx: &Ctx, date: NaiveDate) -> Res<EnergyBlock> {
     let (from, to) = ctx.day_bounds(date);
-    let rows = series(&ctx.pool, ENERGY_SQL, from, to).await?;
+    let rows = series(ctx, ENERGY_SQL, from, to).await?;
     let s = energy_stats(&rows);
     let wake: Option<i64> = sqlx::query_scalar(
-        "SELECT end_ts FROM sleep_sessions_current WHERE end_ts >= ? AND end_ts < ?
+        "SELECT end_ts FROM sleep_sessions_current WHERE user_id = ? AND end_ts >= ? AND end_ts < ?
          AND start_ts IS NOT NULL ORDER BY end_ts DESC LIMIT 1",
     )
+    .bind(ctx.uid)
     .bind(from)
     .bind(to)
     .fetch_optional(&ctx.pool)
@@ -164,8 +164,9 @@ const LAST_SAMPLE_S: i64 = 180;
 pub async fn stress_block(ctx: &Ctx, from: i64, to: i64) -> Res<StressBlock> {
     let rows: Vec<(i64, Option<f64>, Option<f64>)> = sqlx::query_as(
         "SELECT ts, stress, stress_raw FROM stress
-         WHERE ts >= ? AND ts < ? AND (stress IS NOT NULL OR stress_raw IS NOT NULL) ORDER BY ts",
+         WHERE user_id = ? AND ts >= ? AND ts < ? AND (stress IS NOT NULL OR stress_raw IS NOT NULL) ORDER BY ts",
     )
+    .bind(ctx.uid)
     .bind(from)
     .bind(to)
     .fetch_all(&ctx.pool)
@@ -240,8 +241,8 @@ pub struct HeartRateBlock {
 
 pub async fn hr_window(ctx: &Ctx, from: i64, to: i64) -> Res<HrWindow> {
     let rows = series(
-        &ctx.pool,
-        "SELECT ts, bpm FROM mon_hr WHERE ts >= ? AND ts < ? ORDER BY ts",
+        ctx,
+        "SELECT ts, bpm FROM mon_hr WHERE user_id = ? AND ts >= ? AND ts < ? ORDER BY ts",
         from,
         to,
     )
@@ -272,9 +273,9 @@ pub async fn resting_by_day(
     to: NaiveDate,
 ) -> Res<BTreeMap<NaiveDate, f64>> {
     let rows = series(
-        &ctx.pool,
+        ctx,
         "SELECT ts, COALESCE(current_day_rhr, rhr) FROM resting_hr
-         WHERE ts >= ? AND ts < ? AND COALESCE(current_day_rhr, rhr) IS NOT NULL ORDER BY ts",
+         WHERE user_id = ? AND ts >= ? AND ts < ? AND COALESCE(current_day_rhr, rhr) IS NOT NULL ORDER BY ts",
         ctx.day_bounds(from).0,
         ctx.day_bounds(to).1,
     )
@@ -404,9 +405,10 @@ pub fn night_date(ctx: &Ctx, start_ts: i64) -> NaiveDate {
 async fn sessions_started(ctx: &Ctx, from: i64, to: i64) -> Res<Vec<SessionRow>> {
     let sql = format!(
         "SELECT {SESSION_COLS} FROM sleep_sessions_current
-         WHERE start_ts >= ? AND start_ts < ? AND end_ts > start_ts ORDER BY start_ts"
+         WHERE user_id = ? AND start_ts >= ? AND start_ts < ? AND end_ts > start_ts ORDER BY start_ts"
     );
     Ok(sqlx::query_as(sqlx::AssertSqlSafe(sql))
+        .bind(ctx.uid)
         .bind(from)
         .bind(to)
         .fetch_all(&ctx.pool)
@@ -450,10 +452,11 @@ pub async fn session_for_night(ctx: &Ctx, date: NaiveDate) -> Res<Option<Session
 pub async fn session_last_night(ctx: &Ctx) -> Res<Option<SessionRow>> {
     let sql = format!(
         "SELECT {SESSION_COLS} FROM sleep_sessions_current
-         WHERE start_ts IS NOT NULL AND end_ts > start_ts AND end_ts <= ? AND end_ts >= ?
+         WHERE user_id = ? AND start_ts IS NOT NULL AND end_ts > start_ts AND end_ts <= ? AND end_ts >= ?
          ORDER BY end_ts DESC LIMIT 1"
     );
     Ok(sqlx::query_as(sqlx::AssertSqlSafe(sql))
+        .bind(ctx.uid)
         .bind(ctx.now)
         .bind(ctx.now - 30 * 3600)
         .fetch_optional(&ctx.pool)
@@ -506,13 +509,14 @@ fn stages_of(levels: &[(i64, i64)], start: i64, end: i64) -> Option<Stages> {
 }
 
 async fn levels(ctx: &Ctx, from: i64, to: i64) -> Res<Vec<(i64, i64)>> {
-    Ok(
-        sqlx::query_as("SELECT ts, level FROM sleep_levels WHERE ts >= ? AND ts < ? ORDER BY ts")
-            .bind(from)
-            .bind(to)
-            .fetch_all(&ctx.pool)
-            .await?,
+    Ok(sqlx::query_as(
+        "SELECT ts, level FROM sleep_levels WHERE user_id = ? AND ts >= ? AND ts < ? ORDER BY ts",
     )
+    .bind(ctx.uid)
+    .bind(from)
+    .bind(to)
+    .fetch_all(&ctx.pool)
+    .await?)
 }
 
 fn summary(ctx: &Ctx, s: &SessionRow, lv: &[(i64, i64)]) -> NightSummary {
@@ -565,30 +569,29 @@ pub async fn night_detail(ctx: &Ctx, s: &SessionRow) -> Res<SleepNight> {
     let lv = levels(ctx, s.start_ts, s.end_ts).await?;
     let st = stages_of(&lv, s.start_ts, s.end_ts);
     let sum = summary(ctx, s, &lv);
-    let p = &ctx.pool;
     let hrv = match one_f64(
-        p,
-        "SELECT last_night_avg FROM hrv_summary WHERE ts >= ? AND ts <= ? AND last_night_avg IS NOT NULL
+        ctx,
+        "SELECT last_night_avg FROM hrv_summary WHERE user_id = ? AND ts >= ? AND ts <= ? AND last_night_avg IS NOT NULL
          ORDER BY ts DESC LIMIT 1",
         &[s.start_ts, s.end_ts + 6 * 3600],
     )
     .await?
     {
         Some(v) => Some(v),
-        None => one_f64(p, "SELECT AVG(rmssd_ms) FROM hrv_values WHERE ts >= ? AND ts <= ?", &[s.start_ts, s.end_ts])
+        None => one_f64(ctx, "SELECT AVG(rmssd_ms) FROM hrv_values WHERE user_id = ? AND ts >= ? AND ts <= ?", &[s.start_ts, s.end_ts])
             .await?
             .map(round1),
     };
     let w = [s.start_ts, s.end_ts];
     let resp = one_f64(
-        p,
-        "SELECT AVG(brpm) FROM respiration WHERE ts >= ? AND ts <= ?",
+        ctx,
+        "SELECT AVG(brpm) FROM respiration WHERE user_id = ? AND ts >= ? AND ts <= ?",
         &w,
     )
     .await?;
     let spo2_avg = one_f64(
-        p,
-        "SELECT AVG(percent) FROM spo2 WHERE ts >= ? AND ts <= ?",
+        ctx,
+        "SELECT AVG(percent) FROM spo2 WHERE user_id = ? AND ts >= ? AND ts <= ?",
         &w,
     )
     .await?;
@@ -630,16 +633,16 @@ pub async fn night_detail(ctx: &Ctx, s: &SessionRow) -> Res<SleepNight> {
             .unwrap_or_default(),
         hrv_ms: hrv,
         lowest_hr_bpm: one_f64(
-            p,
-            "SELECT MIN(bpm) FROM mon_hr WHERE ts >= ? AND ts <= ?",
+            ctx,
+            "SELECT MIN(bpm) FROM mon_hr WHERE user_id = ? AND ts >= ? AND ts <= ?",
             &w,
         )
         .await?,
         breathing_brpm: resp.map(round1),
         spo2_avg_percent: spo2_avg.map(round1),
         spo2_low_percent: one_f64(
-            p,
-            "SELECT MIN(percent) FROM spo2 WHERE ts >= ? AND ts <= ?",
+            ctx,
+            "SELECT MIN(percent) FROM spo2 WHERE user_id = ? AND ts >= ? AND ts <= ?",
             &w,
         )
         .await?,
@@ -702,8 +705,9 @@ pub async fn hrv_by_day(
     let (lo, hi) = (ctx.day_bounds(from).0, ctx.day_bounds(to).1);
     let rows: Vec<SummaryRow> = sqlx::query_as(
         "SELECT ts, last_night_avg, weekly_avg, baseline_balanced_lower, baseline_balanced_upper, status
-         FROM hrv_summary WHERE ts >= ? AND ts < ? ORDER BY ts",
+         FROM hrv_summary WHERE user_id = ? AND ts >= ? AND ts < ? ORDER BY ts",
     )
+    .bind(ctx.uid)
     .bind(lo)
     .bind(hi)
     .fetch_all(&ctx.pool)
@@ -716,8 +720,8 @@ pub async fn hrv_by_day(
     }
     // Days without a summary fall back to the mean of that day's overnight values.
     let vals = series(
-        &ctx.pool,
-        "SELECT ts, rmssd_ms FROM hrv_values WHERE ts >= ? AND ts < ? ORDER BY ts",
+        ctx,
+        "SELECT ts, rmssd_ms FROM hrv_values WHERE user_id = ? AND ts >= ? AND ts < ? ORDER BY ts",
         lo,
         hi,
     )
@@ -799,8 +803,9 @@ pub async fn day_stats(
     type Row = (i64, i64, Option<f64>, Option<f64>, Option<f64>);
     let rows: Vec<Row> = sqlx::query_as(
         "SELECT ts, activity_type, steps, distance_m, active_calories FROM mon_activity
-         WHERE ts >= ? AND ts < ?",
+         WHERE user_id = ? AND ts >= ? AND ts < ?",
     )
+    .bind(ctx.uid)
     .bind(lo)
     .bind(hi)
     .fetch_all(&ctx.pool)
@@ -832,8 +837,8 @@ pub async fn day_stats(
     }
 
     for (ts, bpm) in series(
-        &ctx.pool,
-        "SELECT ts, bpm FROM mon_hr WHERE ts >= ? AND ts < ?",
+        ctx,
+        "SELECT ts, bpm FROM mon_hr WHERE user_id = ? AND ts >= ? AND ts < ?",
         lo,
         hi,
     )
@@ -846,8 +851,9 @@ pub async fn day_stats(
     }
 
     let stress: Vec<(i64, Option<f64>, Option<f64>)> = sqlx::query_as(
-        "SELECT ts, stress, body_battery FROM stress WHERE ts >= ? AND ts < ? ORDER BY ts",
+        "SELECT ts, stress, body_battery FROM stress WHERE user_id = ? AND ts >= ? AND ts < ? ORDER BY ts",
     )
+    .bind(ctx.uid)
     .bind(lo)
     .bind(hi)
     .fetch_all(&ctx.pool)
@@ -899,9 +905,10 @@ pub async fn intensity_days(
     let start = week_start(from);
     let rows: Vec<(i64, Option<f64>, Option<f64>)> = sqlx::query_as(
         "SELECT ts, moderate_total_min, vigorous_total_min FROM mon_extra
-         WHERE ts >= ? AND ts < ? AND (moderate_total_min IS NOT NULL OR vigorous_total_min IS NOT NULL)
+         WHERE user_id = ? AND ts >= ? AND ts < ? AND (moderate_total_min IS NOT NULL OR vigorous_total_min IS NOT NULL)
          ORDER BY ts",
     )
+    .bind(ctx.uid)
     .bind(ctx.day_bounds(start).0)
     .bind(ctx.day_bounds(to).1)
     .fetch_all(&ctx.pool)

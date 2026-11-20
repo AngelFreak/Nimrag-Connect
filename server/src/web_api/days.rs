@@ -7,7 +7,7 @@ use super::daily::{
 };
 use super::{Ctx, DateValue};
 use crate::api::{ApiError, AppState};
-use crate::auth::Owner;
+use crate::auth::DataUser;
 use crate::settings::{date_string, parse_date};
 use axum::{
     extract::{Path, State},
@@ -56,11 +56,11 @@ pub async fn activities_on(ctx: &Ctx, d: NaiveDate) -> Res<Vec<ActivityListItem>
 }
 
 async fn day(
-    _: Owner,
+    user: DataUser,
     State(state): State<AppState>,
     Path(date): Path<String>,
 ) -> Res<Json<DayResponse>> {
-    let ctx = Ctx::new(&state).await?;
+    let ctx = Ctx::new(&state, user.id).await?;
     let d = Ctx::parse_date(&date)?;
     let (from, to) = ctx.day_bounds(d);
     let stats = day_stats(&ctx, d, d).await?.remove(&d).unwrap_or_default();
@@ -157,8 +157,9 @@ pub struct MovementResponse {
 
 pub async fn resting_kcal(ctx: &Ctx, d: NaiveDate) -> Res<Option<f64>> {
     super::daily::one_f64(
-        &ctx.pool,
+        ctx,
         "SELECT m.rmr_kcal_day FROM mon_info m JOIN sources s ON s.sha256 = m.sha256
+         JOIN file_owners o ON o.sha256 = m.sha256 AND o.user_id = ?
          WHERE m.rmr_kcal_day IS NOT NULL
          ORDER BY CASE WHEN s.last_ts < ? THEN 0 ELSE 1 END,
                   CASE WHEN s.last_ts < ? THEN -s.last_ts ELSE s.last_ts END LIMIT 1",
@@ -168,11 +169,11 @@ pub async fn resting_kcal(ctx: &Ctx, d: NaiveDate) -> Res<Option<f64>> {
 }
 
 async fn movement(
-    _: Owner,
+    user: DataUser,
     State(state): State<AppState>,
     Path(date): Path<String>,
 ) -> Res<Json<MovementResponse>> {
-    let ctx = Ctx::new(&state).await?;
+    let ctx = Ctx::new(&state, user.id).await?;
     let d = Ctx::parse_date(&date)?;
     let start = week_start(d);
     let stats = day_stats(&ctx, start, start + Duration::days(6)).await?;
@@ -240,11 +241,11 @@ pub struct CalendarResponse {
 }
 
 async fn calendar(
-    _: Owner,
+    user: DataUser,
     State(state): State<AppState>,
     Path(month): Path<String>,
 ) -> Res<Json<CalendarResponse>> {
-    let ctx = Ctx::new(&state).await?;
+    let ctx = Ctx::new(&state, user.id).await?;
     let first = parse_date(&format!("{month}-01"))
         .ok_or_else(|| ApiError::bad_request("month must be YYYY-MM"))?;
     let next_month = if first.month() == 12 {

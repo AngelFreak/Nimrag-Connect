@@ -1,6 +1,10 @@
-//! Owner settings (key/value table) and time-zone helpers.
+//! Settings and time-zone helpers.
 //!
-//! Days are local days in the owner's time zone (`timezone`, IANA name; default
+//! Server-wide flags (`sample_data`) live in `settings`; each user's preferences (`timezone`,
+//! `step_goal`, `intensity_goal_min`, `home_cards`) in `user_settings`, keyed by user id (0 =
+//! the pre-multi-user values, until the admin adopts them for a user).
+//!
+//! Days are local days in the user's time zone (`timezone`, IANA name; default
 //! the server's system zone, else UTC). All timestamps leave the API as RFC 3339
 //! with the zone's offset; dates are `YYYY-MM-DD`.
 
@@ -122,6 +126,20 @@ pub async fn set(pool: &SqlitePool, key: &str, value: &str) -> Result<()> {
     Ok(())
 }
 
+/// Store one of a user's preferences.
+pub async fn set_user(pool: &SqlitePool, uid: i64, key: &str, value: &str) -> Result<()> {
+    sqlx::query(
+        "INSERT INTO user_settings (user_id, key, value) VALUES (?, ?, ?)
+         ON CONFLICT (user_id, key) DO UPDATE SET value = excluded.value",
+    )
+    .bind(uid)
+    .bind(key)
+    .bind(value)
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
 /// The server's own zone, UTC when it cannot be determined.
 pub fn system_timezone() -> Tz {
     iana_time_zone::get_timezone()
@@ -130,7 +148,7 @@ pub fn system_timezone() -> Tz {
         .unwrap_or(Tz::UTC)
 }
 
-/// Everything a handler needs about the owner's preferences.
+/// Everything a handler needs about a user's preferences.
 #[derive(Debug, Clone)]
 pub struct Prefs {
     pub tz: Tz,
@@ -141,10 +159,17 @@ pub struct Prefs {
     pub sample: bool,
 }
 
-pub async fn load(pool: &SqlitePool) -> Result<Prefs> {
-    let rows: Vec<(String, String)> = sqlx::query_as("SELECT key, value FROM settings")
+/// The preferences of user `uid` (defaults for anything not set) and the server-wide flags.
+pub async fn load(pool: &SqlitePool, uid: i64) -> Result<Prefs> {
+    let mut rows: Vec<(String, String)> =
+        sqlx::query_as("SELECT key, value FROM user_settings WHERE user_id = ?")
+            .bind(uid)
+            .fetch_all(pool)
+            .await?;
+    let globals: Vec<(String, String)> = sqlx::query_as("SELECT key, value FROM settings")
         .fetch_all(pool)
         .await?;
+    rows.extend(globals);
     let find = |k: &str| {
         rows.iter()
             .find(|(key, _)| key == k)
