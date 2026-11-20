@@ -5,7 +5,7 @@ import { MemoryRouter, useLocation } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AppShell, WatchLink } from './components';
 import { useNativeRouting } from './lib/hooks';
-import { NATIVE_NAVIGATE_EVENT, hasNativeWatch, isNativeApp, navigatePath, openWatch, reportRoute } from './native';
+import { NATIVE_NAVIGATE_EVENT, hasNativeSession, hasNativeWatch, isNativeApp, navigatePath, notifySessionExpired, openWatch, reportRoute } from './native';
 
 afterEach(() => {
   delete window.NimragApp;
@@ -47,6 +47,22 @@ describe('bridge helpers', () => {
       },
     };
     expect(openWatch()).toBe(false);
+  });
+
+  it('notifySessionExpired reaches only an app that can take the session over', () => {
+    expect(hasNativeSession()).toBe(false);
+    expect(notifySessionExpired()).toBe(false);
+    window.NimragApp = { native: true };
+    expect(notifySessionExpired()).toBe(false);
+    const sessionExpired = vi.fn();
+    window.NimragApp = { native: true, sessionExpired };
+    expect(hasNativeSession()).toBe(true);
+    expect(notifySessionExpired()).toBe(true);
+    expect(sessionExpired).toHaveBeenCalledTimes(1);
+    // Without the native flag the call is not trusted either.
+    window.NimragApp = { sessionExpired };
+    expect(notifySessionExpired()).toBe(false);
+    expect(sessionExpired).toHaveBeenCalledTimes(1);
   });
 
   it('reportRoute passes the path and swallows errors', () => {

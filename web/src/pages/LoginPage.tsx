@@ -8,8 +8,10 @@ import { NewPasswordFields } from '../account/PasswordFields';
 import { passwordProblem } from '../account/passwords';
 import { landingPath, useSetupStatus, useStartSession } from '../account/queries';
 import { AuthenticatorPanel, CodeField } from '../account/TotpFields';
+import { NativeSessionWait } from '../account/NativeSessionWait';
 import { Button, TextField } from '../components';
 import { usePageTitle } from '../lib/hooks';
+import { hasNativeSession, notifySessionExpired } from '../native';
 
 /** Only same-origin paths are valid redirect targets after login. */
 export function safeNext(next: string | null): string {
@@ -187,6 +189,11 @@ export function LoginPage() {
   const setup = useSetupStatus();
   const [step, setStep] = useState<Step>({ kind: 'credentials' });
   const [notice, setNotice] = useState<string | null>(null);
+  // Inside the Android app the app signs in (and reloads); this page is never shown there.
+  const nativeTakesOver = hasNativeSession();
+  useEffect(() => {
+    if (nativeTakesOver) notifySessionExpired();
+  }, [nativeTakesOver]);
 
   // A new server has no account yet: the first visit sets up the admin instead.
   useEffect(() => {
@@ -202,6 +209,8 @@ export function LoginPage() {
     setNotice(message);
     setStep({ kind: 'credentials' });
   }
+
+  if (nativeTakesOver) return <NativeSessionWait />;
 
   return (
     <main className="center-page">
