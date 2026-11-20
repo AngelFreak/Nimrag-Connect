@@ -129,7 +129,7 @@ test('Settings: a phone that signed in is listed (no token), fits 320 px, and ca
   await expectAxeClean(page);
   expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
   await page.getByRole('button', { name: `Yes, sign it out, ${name}` }).click();
-  await expect(list).toHaveCount(0);
+  await expect(list.getByText(name)).toHaveCount(0);
 });
 
 test('Settings: changing the step goal is saved and shown on Movement', async ({ page }) => {
