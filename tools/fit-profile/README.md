@@ -13,9 +13,21 @@ returns `None` and `profile::available()` is false. Tests asserting real names
 run only under `cfg(fit_profile)`. After regenerating, run `cargo test` (build.rs
 reruns on file change).
 
-Optional, not implemented: a personal-use generator from the FIT SDK
-(`@garmin/fitsdk` `src/profile.js`, parsed as text, never executed) under its
-licence, producing a file of the same shape (`MESSAGES`, `ENUMS`, `VERSION`).
+Second source (used for the server on runcho since 2026-11-20): `from_sdk.py`
+reads Garmin's Python FIT SDK (`garmin_fit_sdk/profile.py` from the
+`garmin-fit-sdk` wheel, FIT Protocol License, personal use; parsed with `ast`,
+never executed) and writes the same shape (`MESSAGES`, `ENUMS`, `VERSION`). The
+public SDK lacks Garmin-internal messages (training status, recovery time,
+training load and balance, Firstbeat results, sleep summary) and some fields
+(monitoring 35-38, body battery in stress_level); a local overlay
+(`private/fit-overlay.json`, never committed) adds the ones the derivation reads,
+with the numbers and scales the derive tests record.
+
+```sh
+# wheel from https://pypi.org/project/garmin-fit-sdk/ unpacked under private/fitsdk/py/x
+python3 -I tools/fit-profile/from_sdk.py private/fitsdk/py/x/garmin_fit_sdk/profile.py \
+    core/src/fit/generated --overlay private/fit-overlay.json
+```
 
 ## Regenerate
 

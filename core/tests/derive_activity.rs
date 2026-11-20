@@ -229,8 +229,12 @@ fn strength_sets_invalid_weight_is_none_and_category_arrays() {
     assert_eq!(sets[0].ts, Some(T0 as i64 + FIT_EPOCH_UNIX));
     assert_eq!(sets[0].start_ts, Some(T0 as i64 - 30 + FIT_EPOCH_UNIX));
     assert_eq!(sets[0].category.code, Some(0));
-    // The local profile has no exercise_category names: code kept, name None.
-    assert_eq!(sets[0].category.name, None);
+    // The app-derived profile has no exercise_category names (code kept, name None);
+    // the FIT SDK profile names them.
+    assert!(matches!(
+        sets[0].category.name.as_deref(),
+        None | Some("bench_press")
+    ));
     assert_eq!(sets[0].wkt_step_index, Some(2));
     assert_eq!(sets[0].set_type.code, Some(0));
     assert_eq!(sets[1].weight_kg, None, "invalid weight is NULL, never 0");
@@ -290,9 +294,18 @@ fn time_in_zone_exercise_title_and_firstbeat() {
     let t = &d.activity.exercise_titles;
     assert_eq!(t.len(), 1);
     assert_eq!(t[0].category.code, Some(0));
-    assert_eq!(t[0].category.name, None);
+    assert!(matches!(
+        t[0].category.name.as_deref(),
+        None | Some("bench_press")
+    ));
     assert_eq!(t[0].subtype, Some(3));
     assert_eq!(t[0].name.as_deref(), Some("Bench"));
+    // Message 140 (Firstbeat results) is only in the app-derived profile, not in the
+    // public FIT SDK; without it there are no per-activity metrics.
+    if profile::message_name(140).is_none() {
+        assert!(d.activity.metrics.is_none());
+        return;
+    }
     let m = d.activity.metrics.as_ref().expect("metrics");
     assert_eq!(m.maximal_met, Some(50.0));
     assert_eq!(m.aerobic_te, Some(3.5));

@@ -317,6 +317,29 @@ mod with_profile {
     }
 
     #[test]
+    fn sleep_events_give_the_times_when_there_is_no_summary() {
+        // Like the Instinct 2's sleep file (128/49): event 74 start/stop, levels, assessment.
+        let event = |ts: u32, kind: u8| [(253, Fv::U32(ts)), (0, Fv::U8(74)), (1, Fv::U8(kind))];
+        let d = run(FitBuilder::new()
+            .message(21, &event(T, 0))
+            .message(275, &[(253, Fv::U32(T + 600)), (0, Fv::U8(2))])
+            .message(
+                21,
+                &[(253, Fv::U32(T + 900)), (0, Fv::U8(0)), (1, Fv::U8(0))],
+            ) // timer, ignored
+            .message(21, &event(T + 33_900, 1))
+            .message(21, &event(T + 40_000, 1)) // second stop, ignored
+            .message(346, &[(6, Fv::U8(78))]))
+        .unwrap();
+        assert_eq!(d.sleep_sessions.len(), 1);
+        let s = &d.sleep_sessions[0];
+        assert_eq!(
+            (s.start_ts, s.end_ts, s.overall_score),
+            (Some(unix(T)), Some(unix(T + 33_900)), Some(78.0))
+        );
+    }
+
+    #[test]
     fn sleep_session_without_summary_has_no_times() {
         let d = run(FitBuilder::new().message(346, &[(6, Fv::U8(81))])).unwrap();
         assert_eq!(

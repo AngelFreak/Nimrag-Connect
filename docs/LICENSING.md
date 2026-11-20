@@ -38,4 +38,5 @@ History: until this decision, every module was written without Gadgetbridge code
   - Without the generated file, `core` builds with an empty profile. Raw decoding works and names are unavailable.
   - `NIMRAG_FIT_PROFILE=none` forces the empty profile, which is the configuration that gets committed and tested.
   - Binaries and Docker images built with a generated profile contain it. Do not push or share them.
+  - Since 2026-11-20 the profile can also be generated from Garmin's public Python FIT SDK (`tools/fit-profile/from_sdk.py`, FIT Protocol License) plus a local overlay of Garmin-internal fields; the same local-only rules apply to its output and to the overlay.
   - Code and tests may name individual standard FIT messages, fields and enum values (for example `record.heart_rate`) where they are needed for interoperability. Tables of profile data may not be committed. This rule was proposed by the advisor and follows the owner's decision; the owner can tighten it.

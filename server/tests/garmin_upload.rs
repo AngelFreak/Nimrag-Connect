@@ -359,15 +359,16 @@ async fn files_stored_while_paused_wait_for_the_login() {
 
 // ---- backfill ------------------------------------------------------------------------------
 
+// Upserts: with a FIT profile compiled in, the upload already derived these rows.
 async fn derived_activity(r: &Rig, tag: u32, start_ts: i64) -> String {
     let sha = r.file("data_type=128&sub_type=4&source=watch", tag).await;
     let src_id = i64::from_str_radix(&sha[..15], 16).unwrap();
     for sql in [
         format!(
-            "INSERT INTO sources (sha256, src_id, ok, last_ts, msg_count, rank_key) VALUES ('{sha}', {src_id}, 1, {start_ts}, 1, 'k{tag}')"
+            "INSERT OR REPLACE INTO sources (sha256, src_id, ok, last_ts, msg_count, rank_key) VALUES ('{sha}', {src_id}, 1, {start_ts}, 1, 'k{tag}')"
         ),
         format!(
-            "INSERT INTO activities (sha256, ts, start_ts, total_timer_s, num_sessions, sport, sub_sport) VALUES ('{sha}', {start_ts}, {start_ts}, 1000, 1, 1, 0)"
+            "INSERT OR REPLACE INTO activities (sha256, ts, start_ts, total_timer_s, num_sessions, sport, sub_sport) VALUES ('{sha}', {start_ts}, {start_ts}, 1000, 1, 1, 0)"
         ),
     ] {
         r.env.exec(&sql).await;

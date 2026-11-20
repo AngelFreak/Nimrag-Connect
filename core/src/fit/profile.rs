@@ -3,14 +3,15 @@
 //!
 //! This file is the API only and contains no profile data. The table
 //! (`MESSAGES`, `ENUMS`, `VERSION`) is generated locally by
-//! `tools/fit-profile/extract.py` into the git-ignored
+//! `tools/fit-profile/extract.py` (Garmin Connect APK) or `from_sdk.py`
+//! (Garmin's Python FIT SDK) into the git-ignored
 //! `src/fit/generated/profile_data.rs`; `build.rs` selects it (or the committed
 //! empty table) and sets `cfg(fit_profile)`. Without it every lookup returns
 //! `None` and [`available`] is false.
 //!
 //! Extraction notes (overlay): the app's profile does not record array-ness or a
 //! profile version, so `array` is false and `profile_version()` is None unless a
-//! table provides them. `scale`/`offset` are `None` for 1.0 / 0.0 and `units` is
+//! table provides them (the SDK table does: version = major * 1000 + minor). `scale`/`offset` are `None` for 1.0 / 0.0 and `units` is
 //! `None` when empty. `type_name` is the lower-case profile type.
 
 use super::BaseType;
@@ -108,6 +109,13 @@ const fn fe(
     }
 }
 
+/// Marks a field as an array (tables that know array-ness, e.g. the FIT SDK).
+#[cfg_attr(not(fit_profile), allow(dead_code))]
+const fn arr(mut e: FieldEntry) -> FieldEntry {
+    e.info.array = true;
+    e
+}
+
 #[cfg_attr(not(fit_profile), allow(dead_code))]
 const fn comp(
     field_num: u8,
@@ -153,7 +161,7 @@ const fn sub(
 
 #[allow(clippy::all, clippy::pedantic, unused_imports)]
 mod data {
-    use super::{comp, fe, sub, BaseType, MessageInfo};
+    use super::{arr, comp, fe, sub, BaseType, MessageInfo};
     include!(concat!(env!("OUT_DIR"), "/profile_selected.rs"));
 }
 
@@ -405,6 +413,8 @@ mod tests {
     #[cfg(fit_profile)]
     #[test]
     fn priority_messages_present() {
+        // Messages the derivation reads that both table sources have (the app-only
+        // training_readiness and endurance_score are not in the public SDK).
         for name in [
             "file_id",
             "device_info",
@@ -427,8 +437,6 @@ mod tests {
             "hrv_value",
             "spo2_data",
             "max_met_data",
-            "training_readiness",
-            "endurance_score",
         ] {
             assert!(message_number(name).is_some(), "missing message {name}");
         }
