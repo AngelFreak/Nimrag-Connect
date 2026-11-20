@@ -412,7 +412,29 @@ it again).
 | `{"summary": {...}, "fit": {"messages": [...]}}` | `activity` | `activities`, `activity_sessions`, `activity_laps`, `strength_sets`, `exercise_titles`, `activity_metrics` |
 
 Anything else is listed as "not Connect JSON" and not stored. Not imported (not in the data):
-heart-rate zones, tracks and per-second records, minute-level heart rate, stress, body battery.
+minute-level heart rate, stress, body battery, HR zone boundaries.
+
+**Records and zones (optional).** `<dir>/records/<activity id>_<offset>.json` holds the pages of the
+connector's `get_activity_fit_messages(include_records=true, message_types=["record",
+"unknown_216", "zones_target"])` for an activity (several pages when it is long). The directory is
+not walked as input; a missing directory or an activity without pages is imported as before.
+For an activity file with pages the importer keeps, per `record` message with a timestamp and any
+value, one `activity_records` row (`ts` unix seconds, `lat`/`lon` degrees, `hr`, `speed` m/s
+(`enhanced_speed` preferred), `altitude_m` (`enhanced_altitude` preferred), `distance_m`, `cadence`,
+`temperature_c`) and, per `time_in_zone` message (global 216, which the connector's decoder calls
+`unknown_216`), one `activity_time_in_zone` row (`ref_mesg`, `ref_index`, seconds per zone, `null`
+for an invalid element): the same units and the same rows a watch FIT file gives, so the activity
+page's Route, Heart rate, Elevation and Time in heart rate zones fill. Fields are found by
+definition number and, where the connector gave only `unknown_N`, scaled with the FIT profile's
+factors (speed /1000, altitude /5 - 500, distance /100, zones /1000). Pages that overlap are
+merged by message index. Not stored: zone boundaries (no column) and anything computed from the
+heart rate. They go into the activity's envelope as a `records` member (compact rows, not the
+raw pages), so they derive again on reparse and the same files give the same blob. An activity
+imported earlier without them becomes a second blob with the same `connect:<id>` key that outranks
+the first (more rows); the old blob stays stored and `activities_current` hides it, so run the
+import again after pulling the records. A page for another activity (`activity_id` mismatch) is
+reported as an error and the activity is imported without records; pages for an id with no activity
+file are counted and ignored.
 
 **Storage.** Each input becomes a content-addressed blob (`files/<aa>/<bb>/<sha256>`, ledgered
 with `source = connect`) holding an envelope around the original JSON, byte for byte:
@@ -460,7 +482,9 @@ CHECK; the rows go through a temp table with the foreign keys deferred to commit
 tested in `tests/migration_connect.rs`).
 
 Tests (`tests/connect.rs`, synthetic JSON with made-up numbers; real data never goes in the
-repository): the mapping and the pages, an idempotent re-import, the user's zone, the CLI's
+repository): the mapping and the pages, records and zones (named and `unknown_N` fields, overlapping
+pages, invalid values, the activity page's series, track and zones, records added by a later
+re-run, a watch activity still hiding a Connect one with records), an idempotent re-import, the user's zone, the CLI's
 refusals, reparse gives the same rows, delete-then-assign moves the history, another user sees
 nothing, and (with the FIT profile) a watch row or activity wins in both import orders.
 

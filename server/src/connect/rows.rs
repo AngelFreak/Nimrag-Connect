@@ -648,8 +648,8 @@ fn set_type(name: &str) -> Coded {
 
 /// One activity: `{"summary": get_activity, "fit": {"messages": [{"type": "session", "fields":
 /// [{"name", "value"}]}]}}`. Sessions, laps, strength sets and exercise titles come from the
-/// decoded FIT messages (UTC), the rest and any gap from the summary; there are no records, so
-/// no track or series. HR zones are not in the data.
+/// decoded FIT messages (UTC), the rest and any gap from the summary. The data has no records and
+/// no zones; those come from the envelope's `records` member (see [`super::records`]).
 fn activity(data: &Value, tz: Tz, p: &mut Parsed) -> R {
     let sum = data.get("summary").ok_or("no summary")?;
     let id = sum
