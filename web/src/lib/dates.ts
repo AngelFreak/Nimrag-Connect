@@ -49,3 +49,49 @@ export function fmtShortDay(day: string): string {
 export function fmtMonth(month: string): string {
   return fmtDay(`${month}-01`, { month: 'long', year: 'numeric' });
 }
+
+/** Today's date in an IANA time zone ("2026-11-20"); the browser's own day when the zone is unknown. */
+export function todayIn(timeZone: string | null | undefined): string {
+  if (!timeZone) return browserToday();
+  try {
+    return new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+  } catch {
+    return browserToday();
+  }
+}
+
+/** "Nov 14": month first, as the status pages write their periods. */
+export function fmtMonthDay(day: string): string {
+  return new Intl.DateTimeFormat('en-US', { timeZone: 'UTC', month: 'short', day: 'numeric' }).format(new Date(`${day}T00:00:00Z`));
+}
+
+/** "Sep": the short month name, same spelling as the rest of the status pages. */
+export function fmtMonthShort(day: string): string {
+  return new Intl.DateTimeFormat('en-US', { timeZone: 'UTC', month: 'short' }).format(new Date(`${day}T00:00:00Z`));
+}
+
+/** "S": one letter per month, for a row of twelve. */
+export function fmtMonthLetter(day: string): string {
+  return new Intl.DateTimeFormat('en-US', { timeZone: 'UTC', month: 'narrow' }).format(new Date(`${day}T00:00:00Z`));
+}
+
+/** "Thu, Nov 19" */
+export function fmtDayLong(day: string): string {
+  return new Intl.DateTimeFormat('en-US', { timeZone: 'UTC', weekday: 'short', month: 'short', day: 'numeric' }).format(new Date(`${day}T00:00:00Z`));
+}
+
+/** "Nov 14 – Nov 20"; "Nov 19" for one day; with the years when the period crosses a year or is long. */
+export function fmtPeriod(from: string, to: string): string {
+  if (from === to) return fmtMonthDay(from);
+  const longPeriod = (Date.parse(to) - Date.parse(from)) / 86_400_000 > 300;
+  if (from.slice(0, 4) === to.slice(0, 4) && !longPeriod) return `${fmtMonthDay(from)} – ${fmtMonthDay(to)}`;
+  const withYear = (day: string) => `${fmtMonthDay(day)}, ${day.slice(0, 4)}`;
+  return `${withYear(from)} – ${withYear(to)}`;
+}
+
+/** "Nov 15" for one day, "Nov 15 – 16" inside a month, "Oct 30 – Nov 2" across months. */
+export function fmtRunDates(from: string, to: string): string {
+  if (from === to) return fmtMonthDay(from);
+  if (from.slice(0, 7) === to.slice(0, 7)) return `${fmtMonthDay(from)} – ${Number(to.slice(8))}`;
+  return `${fmtMonthDay(from)} – ${fmtMonthDay(to)}`;
+}

@@ -905,6 +905,12 @@
   height: 10px;
   border-radius: 50%;
 }
+.swatch--triangle {
+  width: 11px;
+  height: 10px;
+  border-radius: 0;
+  clip-path: polygon(50% 0, 100% 100%, 0 100%);
+}
 
 .zones {
   display: flex;
