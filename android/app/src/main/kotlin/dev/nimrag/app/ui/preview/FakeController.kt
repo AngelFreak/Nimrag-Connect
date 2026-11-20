@@ -1,6 +1,8 @@
 package dev.nimrag.app.ui.preview
 
+import dev.nimrag.app.model.AccountController
 import dev.nimrag.app.model.AppState
+import dev.nimrag.app.model.FixedAccountController
 import dev.nimrag.app.model.GarminConnectMode
 import dev.nimrag.app.model.LinkState
 import dev.nimrag.app.model.LogLine
@@ -24,7 +26,10 @@ import kotlinx.coroutines.launch
  * no engine is installed. Scan, pairing, sync and uploads play out with short delays; nothing
  * touches Bluetooth, the network or storage.
  */
-class FakeController(initial: AppState = PreviewData.notPaired()) : WatchController {
+class FakeController(
+    initial: AppState = PreviewData.notPaired(),
+    override val account: AccountController = FixedAccountController(),
+) : WatchController {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val mutable = MutableStateFlow(initial)
     override val state: StateFlow<AppState> = mutable.asStateFlow()
@@ -124,19 +129,8 @@ class FakeController(initial: AppState = PreviewData.notPaired()) : WatchControl
         }
     }
 
-    override fun saveServer(url: String, token: String?, allowMobileData: Boolean) {
-        mutable.update {
-            it.copy(
-                settings = it.settings.copy(
-                    serverUrl = url,
-                    hasToken = when (token) {
-                        null -> it.settings.hasToken
-                        else -> token.isNotEmpty()
-                    },
-                    allowMobileData = allowMobileData,
-                ),
-            )
-        }
+    override fun setAllowMobileData(allow: Boolean) {
+        mutable.update { it.copy(settings = it.settings.copy(allowMobileData = allow)) }
     }
 
     override suspend fun testServer(): ServerTest {
@@ -144,7 +138,7 @@ class FakeController(initial: AppState = PreviewData.notPaired()) : WatchControl
         val s = mutable.value.settings
         return when {
             s.serverUrl.isBlank() -> ServerTest.Failed("No server URL saved")
-            !s.hasToken -> ServerTest.Failed("HTTP 401: no token")
+            !s.hasToken -> ServerTest.Failed("HTTP 401: this phone is not signed in")
             else -> ServerTest.Ok
         }
     }

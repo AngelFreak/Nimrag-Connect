@@ -4,7 +4,10 @@
 // - same-origin cookies (the session cookie is HttpOnly, the page never sees it)
 // - `X-Nimrag: 1` on every request that changes something (CSRF guard next to SameSite)
 // - typed errors, so callers can tell "wrong password" from "server down"
-// - 401 on a session-protected call clears the offline API cache and sends the user to /login
+// - 401 on a session-protected call clears the offline API cache and sends the user to /login;
+//   inside the Android app the app signs in again natively instead (see native.ts)
+
+import { notifySessionExpired } from '../native';
 
 export class ApiError extends Error {
   readonly status: number;
@@ -105,7 +108,9 @@ export async function apiFetch<T = unknown>(path: string, options: RequestOption
     if (options.redirectOn401 !== false) {
       // The session is gone: do not leave the last signed-in user's data readable offline.
       await clearOfflineApiCache();
-      onUnauthorized();
+      // In the Android app the app itself signs in again (fingerprint or password); the web app
+      // shows no login page there. A browser, or an app without the call, gets the login page.
+      if (!notifySessionExpired()) onUnauthorized();
     }
     throw new UnauthorizedError(errorMessage(data, 'Not logged in'), data);
   }

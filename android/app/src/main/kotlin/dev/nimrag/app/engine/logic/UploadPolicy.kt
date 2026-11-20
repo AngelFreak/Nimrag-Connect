@@ -23,7 +23,7 @@ object UploadPolicy {
         /** 200 or 201: the server has the bytes. */
         data object Uploaded : Outcome
 
-        /** 401/403: the token is wrong or revoked. Stop all uploads until the settings change. */
+        /** 401/403: the token is wrong or revoked. Stop all uploads; the account wipes it and asks for a sign-in. */
         data class StopAll(val reason: String) : Outcome
 
         /** 413 or another 4xx: this file is marked failed; the others go on. */
@@ -36,7 +36,7 @@ object UploadPolicy {
     /** Server answer to `POST /api/files`. */
     fun outcome(httpStatus: Int): Outcome = when (httpStatus) {
         200, 201 -> Outcome.Uploaded
-        401, 403 -> Outcome.StopAll("The server refused the token (HTTP $httpStatus)")
+        401, 403 -> Outcome.StopAll("The server no longer accepts this phone (HTTP $httpStatus)")
         408, 429 -> Outcome.Retry("HTTP $httpStatus, will retry")
         413 -> Outcome.FailFile("The server says the file is too large (HTTP 413)")
         in 400..499 -> Outcome.FailFile("The server rejected the file (HTTP $httpStatus)")

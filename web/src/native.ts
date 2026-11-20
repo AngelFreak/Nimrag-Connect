@@ -21,6 +21,11 @@ export interface NimragAppBridge {
   openWatch?: () => void;
   /** Tells the app which page the web view shows, so its bottom bar highlights the right tab. */
   onRoute?: (path: string) => void;
+  /**
+   * The server answered 401: the session is gone. The app signs in again natively (fingerprint or
+   * password) and reloads the page; the web app shows no login page of its own meanwhile.
+   */
+  sessionExpired?: () => void;
 }
 
 declare global {
@@ -55,6 +60,26 @@ export function openWatch(): boolean {
   if (typeof bridge?.openWatch !== 'function') return false;
   try {
     bridge.openWatch();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** True inside the app when it can take over a lost session (older app versions cannot). */
+export function hasNativeSession(): boolean {
+  return isNativeApp() && typeof getBridge()?.sessionExpired === 'function';
+}
+
+/**
+ * Tells the app the session is gone. Returns true when the app took it over (the web app must
+ * then not show its own login page); false in a plain browser or an app without the call.
+ */
+export function notifySessionExpired(): boolean {
+  const bridge = getBridge();
+  if (!hasNativeSession() || typeof bridge?.sessionExpired !== 'function') return false;
+  try {
+    bridge.sessionExpired();
     return true;
   } catch {
     return false;

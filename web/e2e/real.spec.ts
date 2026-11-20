@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import { expect, test } from '@playwright/test';
 import { expectAxeClean, settled, VIEWPORTS, watch } from './helpers';
 import { DEMO, fixtureFile, ORIGIN, type Fixture } from './real-server';
+import { nextTotp } from './totp';
 
 // Every route against the real nimrag-server with dev-seed data (see real.setup.ts), signed in as
 // the seeded user `demo` (the session saved by the setup project): each page must render, make no
@@ -95,28 +96,40 @@ test('the demo user is a normal user: the profile menu says so, and /admin is no
   expect((await page.request.get('/api/admin/users')).status()).toBe(403);
 });
 
-test('Settings: a new device token is shown once, with a warning', async ({ page }) => {
+test('Settings: a phone that signed in is listed (no token), fits 320 px, and can be signed out', async ({ page, playwright }) => {
+  // The app's sign-in issues the phone's token in the background; nothing on the web page makes or shows one.
+  const phone = await playwright.request.newContext({ baseURL: ORIGIN });
+  const name = 'Pixel-9a-pro-max-ultra-with-a-very-long-unbroken-name-12345678';
+  const login = await phone.post('/api/app/login', {
+    headers: { 'X-Nimrag': '1' },
+    data: { username: DEMO.username, password: DEMO.password, code: await nextTotp(DEMO.totp), device_name: name },
+  });
+  expect(login.status()).toBe(201);
+  const issued = (await login.json()) as { token: string; device_secret: string };
+  await phone.dispose();
+
+  await page.setViewportSize({ width: 320, height: 700 });
   await page.goto('/settings');
   await settled(page);
-  await page.getByRole('button', { name: 'Create token' }).click();
-  await page.getByLabel('Name', { exact: true }).fill('e2e phone');
-  await page.getByLabel('Your password').fill('wrong password here');
-  await page.getByRole('button', { name: 'Create token' }).last().click();
-  await expect(page.getByRole('alert')).toHaveText('Wrong password.');
-  // Still logged in: a wrong token password is 403, not 401.
-  await expect(page).toHaveURL(/\/settings$/);
-  await page.getByLabel('Your password').fill(DEMO.password);
-  await page.getByRole('button', { name: 'Create token' }).last().click();
-  await expect(page.getByText('shown only once')).toBeVisible();
-  const secret = await page.getByLabel('Token', { exact: true }).inputValue();
-  expect(secret.length).toBeGreaterThan(20);
-  await page.getByRole('button', { name: 'I have saved it' }).click();
-  await expect(page.getByText(secret)).toHaveCount(0);
-  await expect(page.getByRole('table', { name: 'Device tokens' }).getByText('e2e phone')).toBeVisible();
-  // Clean up the token so reruns against a kept data dir stay tidy.
-  await page.getByRole('button', { name: 'Revoke token e2e phone' }).click();
-  await page.getByRole('button', { name: 'Confirm revoking token e2e phone' }).click();
-  await expect(page.getByRole('button', { name: 'Revoke token e2e phone' })).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'Signed-in phones' })).toBeVisible();
+  const list = page.getByRole('list', { name: 'Signed-in phones' });
+  await expect(list.getByText(name)).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Create token' })).toHaveCount(0);
+  await expect(page.getByText(/device token/i)).toHaveCount(0);
+  await expect(page.getByText(issued.token)).toHaveCount(0);
+  await expect(page.getByText(issued.device_secret)).toHaveCount(0);
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  expect(overflow).toBeLessThanOrEqual(0);
+  await expectAxeClean(page);
+  // A user cannot mint a token over the web.
+  const made = await page.request.post('/api/tokens', { headers: { 'X-Nimrag': '1' }, data: { name: 'x', password: DEMO.password } });
+  expect(made.status()).toBe(405);
+
+  await page.getByRole('button', { name: `Sign out this phone, ${name}` }).click();
+  await expectAxeClean(page);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
+  await page.getByRole('button', { name: `Yes, sign it out, ${name}` }).click();
+  await expect(list.getByText(name)).toHaveCount(0);
 });
 
 test('Settings: changing the step goal is saved and shown on Movement', async ({ page }) => {

@@ -3,6 +3,7 @@ import path from 'node:path';
 import { expect, test, type BrowserContext, type Page } from '@playwright/test';
 import { settled } from './helpers';
 import { auditLayout, MIN_TARGET, type Finding } from './layout';
+import { nextTotp } from './totp';
 import { adminSessionFile, DEMO, fixtureFile, ORIGIN, sessionFile, stateDir, webDir, type Fixture } from './real-server';
 
 // The layout audit: every route, dialog and state, as the owner sees them, must fit the screen.
@@ -15,7 +16,7 @@ import { adminSessionFile, DEMO, fixtureFile, ORIGIN, sessionFile, stateDir, web
 //   * a horizontal or vertical scroll container nobody marked `data-scroll`,
 //   * content clipped by overflow: hidden,
 //   * a button, link or field smaller than 44 x 44 px (links inside running text excepted).
-// See layout.ts for the exact rules. The seeded user also owns two device tokens (a normal name and
+// See layout.ts for the exact rules. The seeded user also has two signed-in phones (a normal name and
 // a long one), because a table of tokens was what once pushed Settings off the screen.
 //
 // Everything runs against the real server (see real.setup.ts) with sessions the setup project saved,
@@ -103,7 +104,7 @@ const DEMO_PAGES: Scenario[] = [
   { name: 'New workout', path: () => '/workouts/new' },
   { name: 'Devices', path: () => '/devices' },
   { name: 'Settings', path: () => '/settings' },
-  { name: 'Settings, new token form', path: () => '/settings', open: click('Create token') },
+  { name: 'Settings, sign-out confirmation', path: () => '/settings', open: click('Sign out this phone') },
   { name: 'Settings, two-factor password step', path: () => '/settings', open: click('Set up two-factor again') },
   { name: 'Page not found', path: () => '/does-not-exist' },
   { name: 'Profile menu', path: () => '/', open: click('Profile and account') },
@@ -225,7 +226,8 @@ function suite(title: string, pages: Scenario[], storageState: string | { cookie
   });
 }
 
-// The owner has a device token ("pixel8a") and, to stress the layout, one with a long unbroken name.
+// The owner has a signed-in phone ("pixel8a") and, to stress the layout, one with a long unbroken name. Phones are
+// made the way the app makes them: by logging in with POST /api/app/login (users cannot create tokens in the web UI).
 const TOKENS = ['pixel8a', 'Pixel-9a-in-the-hallway-charging-station-upstairs-nightstand'];
 
 suite('signed in as a user', DEMO_PAGES, sessionFile, () => {
@@ -250,8 +252,13 @@ suite('signed in as a user', DEMO_PAGES, sessionFile, () => {
     const list = (await (await api.get('/api/tokens')).json()) as { tokens: { name: string; active: boolean }[] };
     for (const name of TOKENS) {
       if (list.tokens.some((t) => t.name === name && t.active)) continue;
-      const made = await api.post('/api/tokens', { data: { name, password: DEMO.password } });
-      expect(made.ok(), `creating token ${name}: ${made.status()}`).toBe(true);
+      // A phone has no cookie: sign in from a context of its own.
+      const phone = await playwright.request.newContext({ baseURL: ORIGIN, extraHTTPHeaders: { 'X-Nimrag': '1' } });
+      const made = await phone.post('/api/app/login', {
+        data: { username: DEMO.username, password: DEMO.password, code: await nextTotp(DEMO.totp), device_name: name },
+      });
+      expect(made.status(), `signing in phone ${name}`).toBe(201);
+      await phone.dispose();
     }
     await api.dispose();
     fs.writeFileSync(done, 'ok');

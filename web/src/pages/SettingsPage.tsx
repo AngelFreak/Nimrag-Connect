@@ -4,12 +4,12 @@ import { AccountCard } from './system/AccountCard';
 import { GarminCard } from './system/GarminCard';
 import { GoalsCard } from './system/GoalsCard';
 import { PasswordCard } from './system/PasswordCard';
-import { TokensCard } from './system/TokensCard';
+import { PhonesCard } from './system/PhonesCard';
 import { TwoFactorCard } from './system/TwoFactorCard';
 import { errorMessage } from './system/errors';
 import { useSettings } from './today/queries';
 
-// Stage 3m: GET/PATCH /api/settings (timezone, goals), GET/POST/DELETE /api/tokens, the Garmin
+// Stage 3m: GET/PATCH /api/settings (timezone, goals), GET/DELETE /api/tokens, the Garmin
 // Connect (Forward) section on /api/garmin, and Log out. Accounts: Two-factor (/api/me/2fa) and
 // Change password (/api/me/password).
 //
@@ -49,8 +49,8 @@ export function SettingsPage() {
             )}
           </Section>
 
-          <Section title="Phones" hint="The phones and tools that send files to this server.">
-            <TokensCard timezone={timezone} />
+          <Section title="Phones" hint="The phones signed in to your account.">
+            <PhonesCard timezone={timezone} />
           </Section>
 
           <Section title="Garmin" hint="Optional: pass your activities on to Garmin Connect too.">

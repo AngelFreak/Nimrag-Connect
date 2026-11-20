@@ -143,11 +143,6 @@ async fn the_admin_has_no_data_and_gets_403_on_every_data_endpoint() {
             format!("/api/activities/{sha}/strength"),
             json!({ "sets": [] }),
         ),
-        (
-            Method::POST,
-            "/api/tokens".into(),
-            json!({ "name": "x", "password": PASSWORD }),
-        ),
         (Method::DELETE, "/api/tokens/1".into(), json!(null)),
         (
             Method::POST,

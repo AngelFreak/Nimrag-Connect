@@ -50,7 +50,7 @@ pub fn routes() -> Router<AppState> {
             "/api/me/2fa/confirm",
             post(two_factor_confirm).layer(small()),
         )
-        .route("/api/tokens", get(list_tokens).post(create_token))
+        .route("/api/tokens", get(list_tokens))
         .route("/api/tokens/{id}", delete(revoke_token))
 }
 
@@ -685,27 +685,11 @@ pub struct TokenInfo {
     pub active: bool,
 }
 
-/// Never holds a secret: only the creation response does.
+/// The signed-in user's phones and tokens. Never holds a secret: a token value is shown only to
+/// the app that logs in, once.
 #[derive(Debug, Serialize, Deserialize, TS)]
 pub struct TokenList {
     pub tokens: Vec<TokenInfo>,
-}
-
-/// Creating a token needs the user's password again (a stolen session must not be enough to
-/// mint a long-lived upload credential).
-#[derive(Serialize, Deserialize, TS)]
-pub struct NewToken {
-    pub name: String,
-    pub password: String,
-}
-
-/// The only time the token itself is returned.
-#[derive(Debug, Serialize, Deserialize, TS)]
-pub struct NewTokenResponse {
-    #[ts(type = "number")]
-    pub id: i64,
-    pub name: String,
-    pub token: String,
 }
 
 pub(crate) fn token_info(tz: chrono_tz::Tz, t: tokens::TokenRow) -> TokenInfo {
@@ -730,44 +714,6 @@ async fn list_tokens(
         .map(|t| token_info(tz, t))
         .collect();
     Ok(Json(TokenList { tokens }))
-}
-
-async fn create_token(
-    user: DataUser,
-    State(state): State<AppState>,
-    ClientIp(ip): ClientIp,
-    ApiJson(body): ApiJson<NewToken>,
-) -> Result<Response, ApiError> {
-    let name = body.name.trim().to_owned();
-    if name.is_empty() || name.chars().count() > 64 {
-        return Err(ApiError::bad_request("name must have 1 to 64 characters"));
-    }
-    // Same limiters and one-at-a-time argon2 gate as login; a wrong password leaves the session
-    // alone.
-    if let Some(refusal) = confirm_password(&state, ip, &user, body.password).await? {
-        return Ok(refusal);
-    }
-    let Some(created) =
-        tokens::create_capped(&state.pool, &name, user.id, tokens::MAX_ACTIVE, false).await?
-    else {
-        return Err(ApiError::new(
-            StatusCode::CONFLICT,
-            format!(
-                "at most {} active device tokens; revoke one first",
-                tokens::MAX_ACTIVE
-            ),
-        ));
-    };
-    tracing::info!(device_id = created.id, "device token created");
-    Ok((
-        StatusCode::CREATED,
-        Json(NewTokenResponse {
-            id: created.id,
-            name,
-            token: created.token,
-        }),
-    )
-        .into_response())
 }
 
 async fn revoke_token(

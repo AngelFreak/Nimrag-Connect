@@ -47,6 +47,33 @@ describe('who sees what', () => {
     expect(screen.getByTestId('where')).toHaveTextContent('/login?next=%2Factivities');
   });
 
+  it('inside the Android app nobody signed in is handed to the app: no login page', async () => {
+    const sessionExpired = vi.fn();
+    window.NimragApp = { native: true, sessionExpired };
+    try {
+      mockApi({ '/api/me': NOT_SIGNED_IN, '/api/setup': { needed: false } });
+      renderApp('/activities');
+      await waitFor(() => expect(sessionExpired).toHaveBeenCalled());
+      expect(screen.queryByLabelText('Username')).not.toBeInTheDocument();
+      expect(screen.getByTestId('where')).toHaveTextContent('/activities');
+    } finally {
+      delete window.NimragApp;
+    }
+  });
+
+  it('inside the Android app the login page itself is never shown', async () => {
+    const sessionExpired = vi.fn();
+    window.NimragApp = { native: true, sessionExpired };
+    try {
+      mockApi({ '/api/me': NOT_SIGNED_IN, '/api/setup': { needed: false } });
+      renderApp('/login');
+      await waitFor(() => expect(sessionExpired).toHaveBeenCalled());
+      expect(screen.queryByLabelText('Username')).not.toBeInTheDocument();
+    } finally {
+      delete window.NimragApp;
+    }
+  });
+
   it('nobody signed in: /admin leads to the login page too', async () => {
     mockApi({ '/api/me': NOT_SIGNED_IN, '/api/setup': { needed: false } });
     renderApp('/admin');

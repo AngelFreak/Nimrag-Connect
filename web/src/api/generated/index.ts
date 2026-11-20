@@ -31,8 +31,6 @@ export type { LoginResponse } from "./LoginResponse";
 export type { Me } from "./Me";
 export type { MovementResponse } from "./MovementResponse";
 export type { NewBodyEntry } from "./NewBodyEntry";
-export type { NewToken } from "./NewToken";
-export type { NewTokenResponse } from "./NewTokenResponse";
 export type { NewUser } from "./NewUser";
 export type { NewUserResponse } from "./NewUserResponse";
 export type { SettingsPatch } from "./SettingsPatch";

@@ -48,6 +48,52 @@ describe('api client', () => {
     expect(handler).toHaveBeenCalledOnce();
   });
 
+  it('401 inside the Android app hands the lost session to the app and shows no login page', async () => {
+    const handler = vi.fn();
+    const sessionExpired = vi.fn();
+    setUnauthorizedHandler(handler);
+    window.NimragApp = { native: true, sessionExpired };
+    try {
+      fetchMock.mockResolvedValue(jsonResponse({ error: 'nope' }, { status: 401 }));
+      await expect(api.get('/api/today')).rejects.toBeInstanceOf(UnauthorizedError);
+      expect(sessionExpired).toHaveBeenCalledOnce();
+      expect(handler).not.toHaveBeenCalled();
+    } finally {
+      delete window.NimragApp;
+    }
+  });
+
+  it('401 in an app without the call (or in a browser) still goes to the login page', async () => {
+    const handler = vi.fn();
+    setUnauthorizedHandler(handler);
+    window.NimragApp = { native: true };
+    try {
+      fetchMock.mockResolvedValue(jsonResponse({ error: 'nope' }, { status: 401 }));
+      await expect(api.get('/api/today')).rejects.toBeInstanceOf(UnauthorizedError);
+      expect(handler).toHaveBeenCalledOnce();
+    } finally {
+      delete window.NimragApp;
+    }
+  });
+
+  it('a failing bridge call falls back to the login page', async () => {
+    const handler = vi.fn();
+    setUnauthorizedHandler(handler);
+    window.NimragApp = {
+      native: true,
+      sessionExpired: () => {
+        throw new Error('bridge down');
+      },
+    };
+    try {
+      fetchMock.mockResolvedValue(jsonResponse({ error: 'nope' }, { status: 401 }));
+      await expect(api.get('/api/today')).rejects.toBeInstanceOf(UnauthorizedError);
+      expect(handler).toHaveBeenCalledOnce();
+    } finally {
+      delete window.NimragApp;
+    }
+  });
+
   it('401 on the login call is an answer, not a lost session', async () => {
     const handler = vi.fn();
     setUnauthorizedHandler(handler);

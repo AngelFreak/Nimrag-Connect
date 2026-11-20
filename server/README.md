@@ -42,7 +42,7 @@ instead of appending, in both the sidecar and `uploads`.
 ```
 nimrag-server serve [--data-dir DIR] [--listen 127.0.0.1:8080] [--log-json]
                     [--insecure-cookies] [--trusted-proxy CIDR[,CIDR...]]
-nimrag-server token create --name NAME [--user USERNAME]   # prints the token once on stdout
+nimrag-server token create --name NAME [--user USERNAME]   # for tools and scripts; phones get theirs by signing in to the app
 nimrag-server token list
 nimrag-server token revoke ID
 nimrag-server import-export [--user USERNAME] <archive.zip | dir>   # a Garmin data export (see below)
@@ -154,7 +154,7 @@ Garmin account get `user_id` 0. The admin creates the user (for example the old 
 account), then assigns the old tokens (and `adopt_legacy`) to that user in `/admin`. Because the
 admin has no data, the web app's data pages stay empty until then.
 
-### The Android app (API; the app itself comes later)
+### The Android app
 
 `X-Nimrag: 1` is required as for the web UI. Three calls, with the same limiter and the same
 indistinguishable `401`:
@@ -162,7 +162,9 @@ indistinguishable `401`:
 - `POST /api/app/login` `{username, password, code, device_name}`: the first time on a phone.
   `201 {me, device_id, token, device_secret}` and a session cookie. `token` is a normal device
   token (upload credential) and `device_secret` (`nrd_...`, 256 random bits) is the trusted-device
-  credential; both are shown once and only their SHA-256 is stored. The app cannot enrol 2FA
+  credential; both are shown once and only their SHA-256 is stored. **This is the only way a user
+  gets a device token**: the app keeps it out of sight, nobody types, pastes or copies one, and the
+  web UI cannot create one (`POST /api/tokens` is gone). The app cannot enrol 2FA
   (a user without 2FA gets `401`), admins get `403`, a temporary password `409` (change it in the
   web app first), and the 20-active-token cap applies (`409`).
 - `POST /api/app/unlock` `{username, password, device_secret}`: later, on the same phone, the
@@ -173,8 +175,10 @@ indistinguishable `401`:
   a bare `{biometric: true}` is not accepted, and neither is anything but the secret. Guessing is
   limited per address (`429` with `Retry-After`).
 
-Revoking the device token (web Settings, or the CLI) removes its device secret and ends the
-sessions it started, so the phone must sign in with username, password and code again. Disabling
+Revoking the device token (web Settings, "Signed-in phones", "Sign out this phone", or the CLI)
+removes its device secret and ends the sessions it started, so the phone must sign in with
+username, password and code again. A phone whose upload comes back `401`/`403` forgets its
+credentials the same way and shows the sign-in. Disabling
 the user, resetting their password or 2FA, or deleting them does the same for every device of
 that user.
 
@@ -234,7 +238,7 @@ duplicates and appends cards missing from `order`).
 | endpoint | what |
 |---|---|
 | `/api/login`, `/api/logout`, `/api/me`, `/api/setup`, `/api/me/password`, `/api/me/2fa`, `/api/app/*`, `/api/admin/*` | accounts: see "Accounts, 2FA and the app" |
-| `GET /api/tokens`, `POST /api/tokens` `{name, password}`, `DELETE /api/tokens/{id}` | device tokens for the web UI: create re-checks the owner's password (same limiter as login; wrong gives 401 and keeps the session) and allows at most 20 active tokens (409 beyond); the secret is returned once on create, never listed; delete revokes |
+| `GET /api/tokens`, `DELETE /api/tokens/{id}` | the signed-in user's own phones (name, created, last used, active, revoked; never a token value): the web Settings list them as "Signed-in phones" and sign one out (delete revokes the token, its device secret and its sessions; another user's id is `404`). Tokens are issued only by the app's sign-in (at most 20 active per user, `409` beyond), not by this API |
 | `GET /api/today` | the Today page: In focus (energy, last night, HRV), every At a glance card, last activity, training this week, `yesterday`, `last_7_days` |
 | `GET /api/days/{date}` | one day: heart rate, stress, energy, steps, intensity, the night that began that day, activities |
 | `GET /api/activities?type=&before=&limit=` | newest first, `type` is all, run, walk, hike, cycle, swim, strength, training, other; `next_before` is the cursor |
@@ -342,7 +346,7 @@ dependency tree to audit.
 ```
 docker build -f server/Dockerfile -t nimrag-server .     # from the workspace root
 docker run -v nimrag-data:/data -p 8080:8080 nimrag-server
-docker run --rm -v nimrag-data:/data nimrag-server token create --name phone --data-dir /data
+docker run --rm -v nimrag-data:/data nimrag-server token create --name backup-script --data-dir /data
 ```
 
 Multi-stage build with `SQLX_OFFLINE=true`; the runtime image runs as a

@@ -13,8 +13,8 @@ android {
         applicationId = "dev.nimrag.app"
         minSdk = 31
         targetSdk = 37
-        versionCode = 9
-        versionName = "0.4.2"
+        versionCode = 10
+        versionName = "0.5.0"
         // Only the ABIs the Rust library is built for (this also drops JNA's other ABIs).
         ndk { abiFilters += listOf("arm64-v8a", "x86_64") }
     }
@@ -24,7 +24,24 @@ android {
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }
-    buildFeatures { compose = true }
+    buildFeatures {
+        compose = true
+        buildConfig = true
+    }
+    // `public` is the published build (no FIT profile, no local server); `personal` is the
+    // owner's own build with both, never published. See core/build.gradle.kts.
+    flavorDimensions += "distribution"
+    productFlavors {
+        create("public") {
+            dimension = "distribution"
+            buildConfigField("boolean", "LOCAL_SERVER", "false")
+        }
+        create("personal") {
+            dimension = "distribution"
+            versionNameSuffix = "-personal"
+            buildConfigField("boolean", "LOCAL_SERVER", "true")
+        }
+    }
     testOptions {
         // JUnit Jupiter (same catalogue entries as :hosttest). The engine's tests only touch
         // pure Kotlin/JDK classes; Android framework calls would fail loudly.

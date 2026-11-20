@@ -8,7 +8,12 @@ import androidx.compose.ui.unit.dp
 import dev.nimrag.app.model.AppState
 import dev.nimrag.app.ui.NimragShell
 import dev.nimrag.app.ui.settings.LicencesScreen
-import dev.nimrag.app.ui.shell.ServerNeededScreen
+import dev.nimrag.app.engine.auth.logic.AuthFailure
+import dev.nimrag.app.engine.auth.logic.AuthPhase
+import dev.nimrag.app.model.AccountState
+import dev.nimrag.app.ui.shell.CheckingScreen
+import dev.nimrag.app.ui.shell.SignInScreen
+import dev.nimrag.app.ui.shell.UnlockScreen
 import dev.nimrag.app.ui.shell.ServerUnreachableScreen
 import dev.nimrag.app.ui.settings.SettingsScreen
 import dev.nimrag.app.ui.sync.SyncScreen
@@ -96,6 +101,23 @@ private fun SettingsPreview(state: AppState) = Host { SettingsScreen(state, Fake
     NimragShell(PreviewData.pairedReady(), FakeController(PreviewData.pairedReady()), demo = true, startInWatch = true, initialSection = 2)
 }
 
-@Preview @Composable private fun ServerNeeded() = Host { ServerNeededScreen(invalidAddress = null, onOpenSettings = {}) }
+@Preview @Composable private fun SignIn() = Host {
+    SignInScreen(AccountState(phase = AuthPhase.SignedOut), savedServer = "https://nimrag.example.ts.net", onSignIn = { _, _, _, _ -> })
+}
+
+@Preview @Composable private fun SignInFailed() = Host {
+    SignInScreen(AccountState(phase = AuthPhase.SignedOut, failure = AuthFailure.WrongCredentials), savedServer = "", onSignIn = { _, _, _, _ -> })
+}
+
+@Preview @Composable private fun Unlock() = Host {
+    UnlockScreen(
+        AccountState(phase = AuthPhase.Locked, username = "anna", biometricReady = true),
+        onFingerprint = {},
+        onPassword = {},
+        onOtherAccount = {},
+    )
+}
+
+@Preview @Composable private fun Checking() = Host { CheckingScreen() }
 
 @Preview @Composable private fun ServerUnreachable() = Host { ServerUnreachableScreen(retrying = false, onRetry = {}) }

@@ -2,7 +2,7 @@
 name = "nimrag-ffi"
 version = "0.1.0"
 edition.workspace = true
-rust-version = "1.82"
+rust-version = "1.89" # nimrag-server
 license.workspace = true
 publish.workspace = true
 description = "UniFFI bindings over nimrag-core's sans-IO watch client, for the Android app"
@@ -22,9 +22,14 @@ bindgen = ["uniffi/cli"]
 # A scripted fake watch for host tests through the real bindings. Never enabled
 # for the Android .so.
 test-fixtures = []
+# The server inside the app (nimrag_server::embedded): the owner's personal Android build only.
+# Off for the public build, whose library then has no server, no SQLite and no web app in it.
+local-server = ["dep:nimrag-server"]
 
 [dependencies]
 nimrag-core = { path = "../core" }
+# The server as a library: the app's local copy of the web interface (embedded::start).
+nimrag-server = { path = "../server", optional = true }
 uniffi = "=0.32.2"
 
 [dev-dependencies]

@@ -2,6 +2,7 @@
 import type { TokenInfo } from "./TokenInfo";
 
 /**
- * Never holds a secret: only the creation response does.
+ * The signed-in user's phones and tokens. Never holds a secret: a token value is shown only to
+ * the app that logs in, once.
  */
 export type TokenList = { tokens: Array<TokenInfo>, };

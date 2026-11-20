@@ -76,6 +76,7 @@ object BridgeScripts {
               } catch (e) { return UNKNOWN; }
             },
             openWatch: function () { var n = bridge(); if (n) n.openWatch(); },
+            sessionExpired: function () { var n = bridge(); if (n) n.sessionExpired(); },
             onRoute: function (path) { var n = bridge(); if (n) n.onRoute(String(path)); }
           };
         })();

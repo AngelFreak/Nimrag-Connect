@@ -7,6 +7,7 @@ pub mod connect;
 pub mod db;
 pub mod derive;
 pub mod derived;
+pub mod embedded;
 pub mod garmin;
 pub mod import;
 pub mod ingest;

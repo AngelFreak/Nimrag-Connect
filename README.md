@@ -86,7 +86,7 @@ No test needs a watch. Tests that replay real captures run only when the git-ign
 Running the server:
 
 ```sh
-cargo run -p nimrag-server -- token create --data-dir ./data --name phone   # prints a device token
+cargo run -p nimrag-server -- token create --data-dir ./data --name upload-script   # a token for scripts and tools (phones get theirs by signing in to the app)
 cargo run -p nimrag-server -- serve --data-dir ./data --listen 127.0.0.1:8080
 curl -H "Authorization: Bearer <token>" --data-binary @activity.fit \
      "http://127.0.0.1:8080/api/files?source=usb"

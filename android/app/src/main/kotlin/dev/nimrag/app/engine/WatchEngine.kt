@@ -9,10 +9,13 @@ import dev.nimrag.app.engine.logic.ServiceStartGate
 import dev.nimrag.app.engine.logic.StartDecision
 import dev.nimrag.app.engine.logic.StartRequest
 import dev.nimrag.app.engine.logic.UploadPolicy
+import dev.nimrag.app.engine.local.LocalWeb
+import dev.nimrag.app.model.AccountController
 import dev.nimrag.app.model.AppState
 import dev.nimrag.app.model.GarminConnectMode
 import dev.nimrag.app.model.ServerTest
 import dev.nimrag.app.model.WatchController
+import dev.nimrag.app.model.WebMode
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.withContext
@@ -50,6 +53,8 @@ class WatchEngine(private val hub: Hub) : WatchController {
 
     override val state: StateFlow<AppState> get() = hub.state
 
+    override val account: AccountController get() = hub.account
+
     /** `Application.onCreate`: never blocks the main thread on IO. */
     fun onProcessStart() {
         // The remembered watch is shown at once (one SharedPreferences read), so the UI never
@@ -63,7 +68,14 @@ class WatchEngine(private val hub: Hub) : WatchController {
             startServiceIfPaired(StartSource.ProcessStart)
         }
         hub.uploader.start()
+        hub.local.start()
+        // Is the session from the last run still good? (a cheap GET /api/me with the saved cookie)
+        hub.account.checkSession()
     }
+
+    override fun localWeb(): LocalWeb? = hub.local.web
+
+    override fun webMode(): WebMode = hub.settings.webMode
 
     /**
      * Process start, boot, the companion presence service: run the service when a watch is
@@ -171,34 +183,11 @@ class WatchEngine(private val hub: Hub) : WatchController {
         hub.uploader.uploadNow()
     }
 
-    override fun saveServer(url: String, token: String?, allowMobileData: Boolean) {
-        val trimmed = url.trim()
-        // An invalid address is kept as typed (the settings screen shows it); uploads stay off.
-        hub.settings.serverUrl = UploadPolicy.normalizeServerUrl(trimmed) ?: trimmed
-        // The token goes into an HTTP header: printable ASCII only. Surrounding whitespace from a
-        // paste is trimmed; anything else invalid keeps the old token and says so (no secrets).
-        var tokenRejected = false
-        if (token != null) {
-            val clean = token.trim()
-            if (token.isEmpty()) {
-                hub.settings.token = null
-            } else if (UploadPolicy.isValidToken(clean)) {
-                hub.settings.token = clean
-            } else {
-                tokenRejected = true
-                hub.log.warn("token rejected: invalid characters")
-            }
-        }
-        hub.settings.allowMobileData = allowMobileData
+    override fun setAllowMobileData(allow: Boolean) {
+        hub.settings.allowMobileData = allow
         publishSettings()
         hub.uploader.onSettingsChanged()
-        hub.log.info(
-            when {
-                UploadPolicy.normalizeServerUrl(trimmed) == null -> "Server settings saved, uploads are off"
-                tokenRejected -> "Server settings saved, the old token was kept"
-                else -> "Server settings saved"
-            },
-        )
+        hub.log.info(if (allow) "Uploads may use mobile data" else "Uploads wait for Wi-Fi, Ethernet or VPN")
     }
 
     override suspend fun testServer(): ServerTest = withContext(Dispatchers.IO) { hub.uploader.testServer() }
