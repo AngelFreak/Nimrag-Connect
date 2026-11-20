@@ -410,11 +410,65 @@ it again).
 | `{"trend": [{atl, ctl, ...}]}` | `training_load` | `training_load`, `training_status` |
 | `{"sport", "trend": [{vo2_max, ...}]}` | `vo2max` | `vo2max` (carried-forward days skipped) |
 | `{"days": [{steps, total_calories, ...}]}` | `stats` | `daily_totals` (days in progress or without data skipped) |
+| `[{date, steps, stress_avg, bb_high, resp_avg, moderate_min, ...}]` (a list of days, `daily_stats/YYYY-MM.json`) | `daily_stats` | `connect_daily` (see "Daily summaries" below) |
 | `{"activities": [...]}` (the list) | `activity_summary` | one blob per entry: `activities`, `activity_sessions` |
 | `{"summary": {...}, "fit": {"messages": [...]}}` | `activity` | `activities`, `activity_sessions`, `activity_laps`, `strength_sets`, `exercise_titles`, `activity_metrics` |
 
 Anything else is listed as "not Connect JSON" and not stored. Not imported (not in the data):
 minute-level heart rate, stress, body battery, HR zone boundaries.
+
+**Daily summaries (optional).** `<dir>/daily_stats/YYYY-MM.json`, a month per file, is a JSON array
+of days (a folder that is absent is skipped silently; the importer finds the files by their shape
+like the others):
+
+```json
+[{"date":"2026-11-12","steps":2327,"distance_m":1669,"floors_up":1.0,"floors_down":0.0,
+  "moderate_min":0,"vigorous_min":0,"intensity_goal":350,"hr_min":58,"hr_max":101,"rhr":56,
+  "stress_avg":28,"stress_max":76,"bb_charged":5,"bb_drained":33,"bb_high":65,"bb_low":34,
+  "resp_avg":13.0,"resp_high":17.0,"resp_low":10.0}]
+```
+
+Any field may be null; dates are the owner's local days (in the envelope's zone). Each day is a
+row of `connect_daily` (key: user, start of the local day; a sample table like `daily_totals`).
+Steps, distance, floors, minutes and the body battery figures are amounts (0 is a value); heart
+rate, stress and breathing are measurements, so 0 or a negative number (Garmin's "not measured")
+is no value. A day with no figure at all is not a row; an entry without a valid date counts as
+skipped (the blob's `file_derive` status is `partial`). `rhr`, `intensity_goal`, `floors_down` and
+`stress_max` are kept in the stored envelope but no page uses them (resting heart rate has its
+own Connect import; the API has no stress maximum), so a later migration plus `reparse` can use
+them. Pull a month again later (a day more, a corrected number) and import again: the new file is
+another blob that outranks the old one (later data, more rows), so every day it has replaces the
+old row (no duplicates); the same file changes nothing. Pull complete days: a half day (today)
+would stand as the day's figures until the watch has data for it.
+
+**Fallback to the daily summaries.** The watch's FIT data always wins. A page reads Connect's
+summary only for a day, and a metric, that the watch has no row of; if the watch has any row of
+that metric for the day, its numbers are used as they are (a figure it lacks stays `null`). The
+helpers in `web_api/daily.rs` and `metrics.rs` do it, so a day shows the same number on Today, the
+Day view, Movement, Calendar, the metric ranges and Trends:
+
+| metric | from `connect_daily` | watch row that makes the watch win |
+| --- | --- | --- |
+| stress | `stress_avg` as `stress.average` (no levels, no series, `main_level` null) | any `stress` row with a stress value or a raw status |
+| energy (body battery) | `bb_high`, `bb_low`, `bb_charged`, `bb_drained` as `high`, `low`, `charged`, `drained` (no `now`, no series) | any `stress` row with `body_battery` |
+| heart rate | `hr_min`, `hr_max` as the day's `low_bpm` and `high_bpm` (the rolling 24 hours stays a watch chart) | any `mon_hr` row |
+| breathing | `resp_avg`, `resp_low`, `resp_high` as the day's awake average, lowest and highest (asleep stays `null`) | any `respiration` reading in the day or the night that ended on it |
+| intensity minutes | `moderate_min`, `vigorous_min` (credited = moderate + 2 x vigorous) | any `mon_extra` running total that day |
+| steps, distance | `steps` (after `daily_totals`), `distance_m` | the watch's `mon_activity` counters |
+| floors | `floors_up` as the Movement page's `floors` | none (the watch has no table) |
+
+Intensity minutes: the watch keeps a weekly running total, so its first reading after days that
+came from Connect is the week so far; the day's increase is the total less what Connect counted
+for the days before it in that week (never negative), so the week is not counted twice.
+
+Where it shows: `/api/today` (`stress`, `energy`, `heart_rate`, `steps`, `intensity_minutes`,
+`respiration.day_avg_brpm`, `yesterday`, `last_7_days`), `/api/days/{date}` (`stress`, `energy`,
+`heart_rate.day`, `breathing`, `intensity_minutes`, `steps`), `/api/movement/{date}` (`floors`,
+`distance_m`, `intensity`), `/api/calendar/{month}` (`energy_high`, `energy_low`, `steps`),
+`/api/metrics/{stress,energy,heart_rate,respiration,intensity_minutes,steps}` (series, stats and
+`has_prev`), `/api/trends` (`breathing.awake_avg_brpm`: with days the watch has no breathing
+reading for, the mean of the days' awake means). There is no intraday Connect data, so the Day
+view's series and hourly charts stay empty for such a day.
 
 **Records and zones (optional).** `<dir>/records/<activity id>_<offset>.json` holds the pages of the
 connector's `get_activity_fit_messages(include_records=true, message_types=["record",
@@ -460,7 +514,7 @@ the day's value in the range endpoints.
 **Rank: the watch wins.** A Connect source has `sources.origin = 'connect'` and a rank key
 starting with `-` (`-:<kind priority>:<last_ts>:<rows>`), which sorts below every FIT key (those
 start with `0` or `1`). Sample rows (HRV, training status and load, VO2 max, resting heart rate,
-`daily_totals`) use the usual rank-based upsert, so a FIT row for the same key replaces a Connect
+`daily_totals`, `connect_daily`) use the usual rank-based upsert, so a FIT row for the same key replaces a Connect
 row and a Connect row never replaces a FIT row, whichever is imported first; a reparse gives the
 same result. Between two Connect sources the richer kind wins (the dedicated training status over
 the load history, the daily HRV with baselines over the trend, a detailed activity over its list
@@ -478,10 +532,17 @@ time in bed. A watch night keeps using its `sleep_levels` rows. `daily_totals` (
 active and resting calories per local day) fills the Today and Movement pages for a day without
 minute data. `system.last_data_ts` and the Garmin Forward backfill only look at FIT sources.
 
-Migration `0011_connect.sql`: `sources.origin`, the five sleep columns, `daily_totals`, the two
+Migration `0012_connect_daily.sql`: the `connect_daily` table. Migration `0011_connect.sql`: `sources.origin`, the five sleep columns, `daily_totals`, the two
 views, and a rebuild of `files` so its `source` CHECK accepts `connect` (SQLite cannot alter a
 CHECK; the rows go through a temp table with the foreign keys deferred to commit, nothing is lost,
 tested in `tests/migration_connect.rs`).
+
+Tests for the daily summaries: `tests/connect_daily.rs` with the fixture
+`tests/fixtures/connect_daily/daily_stats/` (made-up numbers): the import and its re-run, a later
+pull of the month, a directory without the folder, the Day, Today, Movement, Calendar, metric
+and Trends pages filling from it, a day (and a metric) with watch data keeping the watch's
+numbers, the intensity week built from Connect days and a watch total, and another user seeing
+nothing.
 
 Tests (`tests/connect.rs`, synthetic JSON with made-up numbers; real data never goes in the
 repository): the mapping and the pages, records and zones (named and `unknown_N` fields, overlapping

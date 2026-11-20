@@ -7,12 +7,20 @@
 //! the day per activity type, summed over the types; intensity minutes are
 //! running totals within the local ISO week (Monday start), the per-day value is
 //! the increase over the previous day's last value (a drop counts as a reset).
+//!
+//! Garmin Connect's daily summaries (`connect_daily`, from `import-connect`) are the fallback
+//! for a day, and a metric, that the watch has no data for: stress, body battery, breathing
+//! (see `metrics.rs`), intensity minutes, the heart rate range, steps, distance and floors. The
+//! rule is the same everywhere: if the watch has any row of that metric for the day the watch's
+//! numbers are used as they are (and a figure it lacks stays `null`); only a day without any
+//! watch row of the metric is read from Connect. Connect has no time series, so those days have
+//! no chart points, no "now" and no stress levels.
 
 use super::{mean, round1, series, Ctx, DateValue, TimedValue};
 use crate::api::ApiError;
 use chrono::{Datelike, Duration, NaiveDate, Weekday};
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use ts_rs::TS;
 
 type Res<T> = Result<T, ApiError>;
@@ -24,6 +32,83 @@ pub async fn one_f64(ctx: &Ctx, sql: &'static str, binds: &[i64]) -> Res<Option<
         q = q.bind(*b);
     }
     Ok(q.fetch_optional(&ctx.pool).await?.flatten())
+}
+
+// ---- Garmin Connect daily summaries ----------------------------------------------------
+
+/// One local day of Garmin Connect's summary (`connect_daily`); `None` for a figure Connect gave
+/// none of.
+#[derive(Debug, Clone, Default, sqlx::FromRow)]
+pub struct ConnectDay {
+    pub ts: i64,
+    pub steps: Option<f64>,
+    pub distance_m: Option<f64>,
+    pub floors_up: Option<f64>,
+    pub moderate_min: Option<f64>,
+    pub vigorous_min: Option<f64>,
+    pub hr_min: Option<f64>,
+    pub hr_max: Option<f64>,
+    pub stress_avg: Option<f64>,
+    pub bb_charged: Option<f64>,
+    pub bb_drained: Option<f64>,
+    pub bb_high: Option<f64>,
+    pub bb_low: Option<f64>,
+    pub resp_avg: Option<f64>,
+    pub resp_high: Option<f64>,
+    pub resp_low: Option<f64>,
+}
+
+const CONNECT_COLS: &str = "ts, steps, distance_m, floors_up, moderate_min, vigorous_min, hr_min,
+    hr_max, stress_avg, bb_charged, bb_drained, bb_high, bb_low, resp_avg, resp_high, resp_low";
+
+/// Connect's summaries of the local days `from..=to`, by day.
+pub async fn connect_days(
+    ctx: &Ctx,
+    from: NaiveDate,
+    to: NaiveDate,
+) -> Res<BTreeMap<NaiveDate, ConnectDay>> {
+    let sql = format!(
+        "SELECT {CONNECT_COLS} FROM connect_daily WHERE user_id = ? AND ts >= ? AND ts < ? ORDER BY ts"
+    );
+    let rows: Vec<ConnectDay> = sqlx::query_as(sqlx::AssertSqlSafe(sql))
+        .bind(ctx.uid)
+        .bind(ctx.day_bounds(from).0)
+        .bind(ctx.day_bounds(to).1)
+        .fetch_all(&ctx.pool)
+        .await?;
+    Ok(rows.into_iter().map(|r| (ctx.date(r.ts), r)).collect())
+}
+
+/// Connect's summary of the one local day `d`.
+pub async fn connect_day(ctx: &Ctx, d: NaiveDate) -> Res<Option<ConnectDay>> {
+    Ok(connect_days(ctx, d, d).await?.remove(&d))
+}
+
+/// Connect's summary of the day that starts at `from` (and ends at `to`, exclusive), for the
+/// blocks that take a window of timestamps.
+async fn connect_in(ctx: &Ctx, from: i64, to: i64) -> Res<Option<ConnectDay>> {
+    let sql = format!(
+        "SELECT {CONNECT_COLS} FROM connect_daily WHERE user_id = ? AND ts >= ? AND ts < ? ORDER BY ts LIMIT 1"
+    );
+    Ok(sqlx::query_as(sqlx::AssertSqlSafe(sql))
+        .bind(ctx.uid)
+        .bind(from)
+        .bind(to)
+        .fetch_optional(&ctx.pool)
+        .await?)
+}
+
+impl ConnectDay {
+    /// The day's body battery figures; Connect has no "latest" reading.
+    pub fn energy(&self) -> EnergyStats {
+        EnergyStats {
+            last: None,
+            charged: self.bb_charged,
+            drained: self.bb_drained,
+            high: self.bb_high,
+            low: self.bb_low,
+        }
+    }
 }
 
 // ---- energy ----------------------------------------------------------------------
@@ -83,7 +168,14 @@ const ENERGY_SQL: &str = "SELECT ts, body_battery FROM stress
 pub async fn energy_block(ctx: &Ctx, date: NaiveDate) -> Res<EnergyBlock> {
     let (from, to) = ctx.day_bounds(date);
     let rows = series(ctx, ENERGY_SQL, from, to).await?;
-    let s = energy_stats(&rows);
+    let s = if rows.is_empty() {
+        connect_in(ctx, from, to)
+            .await?
+            .map(|c| c.energy())
+            .unwrap_or_default()
+    } else {
+        energy_stats(&rows)
+    };
     let wake: Option<i64> = sqlx::query_scalar(
         "SELECT end_ts FROM sleep_sessions_current WHERE user_id = ? AND end_ts >= ? AND end_ts < ?
          AND start_ts IS NOT NULL ORDER BY end_ts DESC LIMIT 1",
@@ -171,6 +263,12 @@ pub async fn stress_block(ctx: &Ctx, from: i64, to: i64) -> Res<StressBlock> {
     .bind(to)
     .fetch_all(&ctx.pool)
     .await?;
+    // A day without a watch reading: Connect's day average (no levels, no samples).
+    let connect_avg = if rows.is_empty() {
+        connect_in(ctx, from, to).await?.and_then(|c| c.stress_avg)
+    } else {
+        None
+    };
     let mut secs: HashMap<&'static str, i64> = HashMap::new();
     let mut samples = Vec::new();
     for (i, (ts, stress, raw)) in rows.iter().enumerate() {
@@ -200,7 +298,7 @@ pub async fn stress_block(ctx: &Ctx, from: i64, to: i64) -> Res<StressBlock> {
     .max_by_key(|l| secs.get(level_name(*l)).copied().unwrap_or(0))
     .filter(|l| secs.get(level_name(*l)).copied().unwrap_or(0) > 0);
     Ok(StressBlock {
-        average: mean(rows.iter().filter_map(|r| r.1)),
+        average: mean(rows.iter().filter_map(|r| r.1)).or(connect_avg),
         main_level,
         rest_s: get(StressLevel::Rest),
         low_s: get(StressLevel::Low),
@@ -286,10 +384,18 @@ pub async fn resting_by_day(
 pub async fn heart_rate_block(ctx: &Ctx, date: NaiveDate) -> Res<HeartRateBlock> {
     let (from, to) = ctx.day_bounds(date);
     let rest = resting_by_day(ctx, date - Duration::days(6), date).await?;
+    let mut day = hr_window(ctx, from, to).await?;
+    if day.series.is_empty() {
+        // No watch reading that day: Connect's lowest and highest.
+        if let Some(c) = connect_day(ctx, date).await? {
+            day.low_bpm = c.hr_min;
+            day.high_bpm = c.hr_max;
+        }
+    }
     Ok(HeartRateBlock {
         resting_hr_bpm: rest.get(&date).copied(),
         avg_7d_resting_hr_bpm: mean(rest.values().copied()),
-        day: hr_window(ctx, from, to).await?,
+        day,
     })
 }
 
@@ -871,6 +977,15 @@ pub async fn day_stats(
             s.active_kcal = s.active_kcal.or(kcal);
         }
     }
+    // Connect's daily summaries: the same fallback for steps and distance, and the other metrics
+    // below, each only where the watch has nothing for the day.
+    let connect = connect_days(ctx, from, to).await?;
+    for (d, c) in &connect {
+        if let Some(s) = out.get_mut(d) {
+            s.steps = s.steps.or(c.steps);
+            s.distance_m = s.distance_m.or(c.distance_m);
+        }
+    }
 
     for (ts, bpm) in series(
         ctx,
@@ -885,9 +1000,18 @@ pub async fn day_stats(
             s.hr_high = Some(s.hr_high.map_or(bpm, |x| x.max(bpm)));
         }
     }
+    for (d, c) in &connect {
+        if let Some(s) = out.get_mut(d) {
+            if s.hr_low.is_none() && s.hr_high.is_none() {
+                s.hr_low = c.hr_min;
+                s.hr_high = c.hr_max;
+            }
+        }
+    }
 
-    let stress: Vec<(i64, Option<f64>, Option<f64>)> = sqlx::query_as(
-        "SELECT ts, stress, body_battery FROM stress WHERE user_id = ? AND ts >= ? AND ts < ? ORDER BY ts",
+    type StressRow = (i64, Option<f64>, Option<f64>, Option<f64>);
+    let stress: Vec<StressRow> = sqlx::query_as(
+        "SELECT ts, stress, stress_raw, body_battery FROM stress WHERE user_id = ? AND ts >= ? AND ts < ? ORDER BY ts",
     )
     .bind(ctx.uid)
     .bind(lo)
@@ -896,8 +1020,13 @@ pub async fn day_stats(
     .await?;
     let mut stress_by: HashMap<NaiveDate, Vec<f64>> = HashMap::new();
     let mut energy_by: HashMap<NaiveDate, Vec<(i64, f64)>> = HashMap::new();
-    for (ts, st, bb) in stress {
+    // Days with a watch stress reading (as `stress_block` counts them), whatever its value.
+    let mut has_stress: HashSet<NaiveDate> = HashSet::new();
+    for (ts, st, raw, bb) in stress {
         let d = ctx.date(ts);
+        if st.is_some() || raw.is_some() {
+            has_stress.insert(d);
+        }
         if let Some(v) = st {
             stress_by.entry(d).or_default().push(v);
         }
@@ -906,11 +1035,15 @@ pub async fn day_stats(
         }
     }
     for (d, s) in out.iter_mut() {
-        s.stress_avg = stress_by.get(d).and_then(|v| mean(v.iter().copied()));
-        s.energy = energy_by
-            .get(d)
-            .map(|v| energy_stats(v))
-            .unwrap_or_default();
+        s.stress_avg = if has_stress.contains(d) {
+            stress_by.get(d).and_then(|v| mean(v.iter().copied()))
+        } else {
+            connect.get(d).and_then(|c| c.stress_avg)
+        };
+        s.energy = match energy_by.get(d) {
+            Some(v) => energy_stats(v),
+            None => connect.get(d).map(ConnectDay::energy).unwrap_or_default(),
+        };
     }
 
     for (d, v) in resting_by_day(ctx, from, to).await? {
@@ -932,7 +1065,10 @@ pub fn week_start(d: NaiveDate) -> NaiveDate {
 }
 
 /// Intensity minutes per local day (moderate, vigorous) for `from..=to`, from the
-/// watch's running totals (see the module note). `None` for days without readings.
+/// watch's running totals (see the module note). A day without a watch reading takes Connect's
+/// daily minutes; Connect's minutes also count towards the week's running total, so the first
+/// watch reading after them (the watch's total is the week so far) adds only what came after.
+/// `None` for days with neither.
 pub async fn intensity_days(
     ctx: &Ctx,
     from: NaiveDate,
@@ -955,21 +1091,49 @@ pub async fn intensity_days(
         e.0 = m.or(e.0);
         e.1 = v.or(e.1);
     }
+    let connect = connect_days(ctx, start, to).await?;
     let (mut prev_m, mut prev_v) = (0.0, 0.0);
+    // The running total so far came (in part) from Connect, not from a watch reading.
+    let (mut seeded_m, mut seeded_v) = (false, false);
     let mut out = BTreeMap::new();
     for d in dates(start, to) {
         if d.weekday() == Weekday::Mon {
             (prev_m, prev_v) = (0.0, 0.0);
+            (seeded_m, seeded_v) = (false, false);
         }
-        let inc = |now: Option<f64>, prev: &mut f64| {
+        let inc = |now: Option<f64>, prev: &mut f64, seeded: &mut bool| {
             now.map(|n| {
-                let i = if n >= *prev { n - *prev } else { n };
+                let i = if n >= *prev {
+                    n - *prev
+                } else if *seeded {
+                    // Below what Connect counted for the earlier days: nothing new.
+                    0.0
+                } else {
+                    n
+                };
                 *prev = n;
+                *seeded = false;
                 i
             })
         };
-        let day = last.get(&d).copied().unwrap_or_default();
-        let (m, v) = (inc(day.0, &mut prev_m), inc(day.1, &mut prev_v));
+        let (m, v) = match last.get(&d).copied() {
+            Some(day) => (
+                inc(day.0, &mut prev_m, &mut seeded_m),
+                inc(day.1, &mut prev_v, &mut seeded_v),
+            ),
+            None => match connect
+                .get(&d)
+                .filter(|c| c.moderate_min.is_some() || c.vigorous_min.is_some())
+            {
+                Some(c) => {
+                    prev_m += c.moderate_min.unwrap_or(0.0);
+                    prev_v += c.vigorous_min.unwrap_or(0.0);
+                    (seeded_m, seeded_v) = (true, true);
+                    (c.moderate_min, c.vigorous_min)
+                }
+                None => (None, None),
+            },
+        };
         if d >= from {
             out.insert(d, (m, v));
         }

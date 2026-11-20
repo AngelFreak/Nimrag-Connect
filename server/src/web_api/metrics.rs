@@ -7,6 +7,9 @@
 //! ([`day_stats`], [`stress_block`], [`intensity_days`], [`night_sessions`], the training status
 //! and VO2 helpers), so a day shows the same number everywhere. Days are local days in the
 //! account's zone; a night belongs to the day it ends on. A day without data is `null`, never 0.
+//! A day (and a metric) the watch has no data for falls back to Garmin Connect's daily summary
+//! (`connect_daily`, imported with `import-connect`): stress, energy, heart rate, intensity
+//! minutes, steps and distance through those helpers, breathing here ([`breathing_by_day`]).
 //!
 //! Periods are rolling windows that end on `end` (default and maximum: today): `7d` is 7 days,
 //! `4w` 28 days (both in day buckets), `12w` 84 days, `6m` 182 days and `1y` 364 days (all in
@@ -18,8 +21,8 @@
 //! (the bucket's lowest).
 
 use super::daily::{
-    dates, day_stats, intensity_days, intensity_total, night_sessions, stress_block, week_start,
-    DayStats,
+    connect_day, connect_days, dates, day_stats, intensity_days, intensity_total, night_sessions,
+    stress_block, week_start, DayStats,
 };
 use super::training::{status_rows, vo2_from_met, vo2_readings};
 use super::{mean, round1, series, Ctx, DateValue, TimedValue};
@@ -33,7 +36,7 @@ use axum::{
 };
 use chrono::{Duration, NaiveDate};
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use ts_rs::TS;
 
 type Res<T> = Result<T, ApiError>;
@@ -339,7 +342,9 @@ async fn heart_rate(p: &Period<'_>) -> Res<Built> {
             "SELECT MIN(ts) FROM (
                  SELECT ts FROM mon_hr WHERE user_id = ?1
                  UNION ALL
-                 SELECT ts FROM resting_hr WHERE user_id = ?1 AND COALESCE(current_day_rhr, rhr) IS NOT NULL)",
+                 SELECT ts FROM resting_hr WHERE user_id = ?1 AND COALESCE(current_day_rhr, rhr) IS NOT NULL
+                 UNION ALL
+                 SELECT ts FROM connect_daily WHERE user_id = ?1 AND (hr_min IS NOT NULL OR hr_max IS NOT NULL))",
         )
         .await?,
         ..Built::default()
@@ -375,7 +380,10 @@ async fn stress(p: &Period<'_>) -> Res<Built> {
         stats: vec![stat("avg_stress", "Avg stress", "", avg(&average))],
         earliest: earliest(
             p.ctx,
-            "SELECT MIN(ts) FROM stress WHERE user_id = ?1 AND (stress IS NOT NULL OR stress_raw IS NOT NULL)",
+            "SELECT MIN(ts) FROM (
+                 SELECT ts FROM stress WHERE user_id = ?1 AND (stress IS NOT NULL OR stress_raw IS NOT NULL)
+                 UNION ALL
+                 SELECT ts FROM connect_daily WHERE user_id = ?1 AND stress_avg IS NOT NULL)",
         )
         .await?,
         ..Built::default()
@@ -403,7 +411,11 @@ async fn energy(p: &Period<'_>) -> Res<Built> {
         ],
         earliest: earliest(
             p.ctx,
-            "SELECT MIN(ts) FROM stress WHERE user_id = ?1 AND body_battery IS NOT NULL",
+            "SELECT MIN(ts) FROM (
+                 SELECT ts FROM stress WHERE user_id = ?1 AND body_battery IS NOT NULL
+                 UNION ALL
+                 SELECT ts FROM connect_daily WHERE user_id = ?1
+                   AND (bb_high IS NOT NULL OR bb_low IS NOT NULL OR bb_charged IS NOT NULL OR bb_drained IS NOT NULL))",
         )
         .await?,
         ..Built::default()
@@ -445,7 +457,9 @@ async fn steps(p: &Period<'_>) -> Res<Built> {
             "SELECT MIN(ts) FROM (
                  SELECT ts FROM mon_activity WHERE user_id = ?1 AND steps IS NOT NULL
                  UNION ALL
-                 SELECT ts FROM daily_totals WHERE user_id = ?1 AND steps IS NOT NULL)",
+                 SELECT ts FROM daily_totals WHERE user_id = ?1 AND steps IS NOT NULL
+                 UNION ALL
+                 SELECT ts FROM connect_daily WHERE user_id = ?1 AND (steps IS NOT NULL OR distance_m IS NOT NULL))",
         )
         .await?,
         ..Built::default()
@@ -501,8 +515,12 @@ async fn intensity(p: &Period<'_>) -> Res<Built> {
         goal: Some(f64::from(p.ctx.prefs.intensity_goal_min)),
         earliest: earliest(
             p.ctx,
-            "SELECT MIN(ts) FROM mon_extra WHERE user_id = ?1
-             AND (moderate_total_min IS NOT NULL OR vigorous_total_min IS NOT NULL)",
+            "SELECT MIN(ts) FROM (
+                 SELECT ts FROM mon_extra WHERE user_id = ?1
+                   AND (moderate_total_min IS NOT NULL OR vigorous_total_min IS NOT NULL)
+                 UNION ALL
+                 SELECT ts FROM connect_daily WHERE user_id = ?1
+                   AND (moderate_min IS NOT NULL OR vigorous_min IS NOT NULL))",
         )
         .await?,
         ..Built::default()
@@ -645,10 +663,41 @@ fn day_means(r: &[Reading], keep: impl Fn(&Reading) -> bool) -> Daily {
         .collect()
 }
 
+/// Breathing per day over `from..=to`: the mean while asleep and the mean awake. A day with no
+/// watch reading at all (neither in its night nor during the day) has Connect's awake average
+/// and no asleep figure; `from_connect` lists those days.
+pub struct BreathingDays {
+    pub asleep: Daily,
+    pub awake: Daily,
+    pub from_connect: BTreeSet<NaiveDate>,
+}
+
+pub async fn breathing_by_day(ctx: &Ctx, from: NaiveDate, to: NaiveDate) -> Res<BreathingDays> {
+    let p = Period {
+        ctx,
+        from,
+        to,
+        bucket: MetricBucket::Day,
+    };
+    let r = readings(&p, BREATHING_SQL).await?;
+    let watch_days: BTreeSet<NaiveDate> = r.iter().map(|x| x.day).collect();
+    let mut awake = day_means(&r, |x| !x.asleep);
+    let mut from_connect = BTreeSet::new();
+    for (d, c) in connect_days(ctx, from, to).await? {
+        if let (false, Some(v)) = (watch_days.contains(&d), c.resp_avg) {
+            awake.insert(d, round1(v));
+            from_connect.insert(d);
+        }
+    }
+    Ok(BreathingDays {
+        asleep: day_means(&r, |x| x.asleep),
+        awake,
+        from_connect,
+    })
+}
+
 async fn respiration(p: &Period<'_>) -> Res<Built> {
-    let r = readings(p, BREATHING_SQL).await?;
-    let asleep = day_means(&r, |x| x.asleep);
-    let awake = day_means(&r, |x| !x.asleep);
+    let BreathingDays { asleep, awake, .. } = breathing_by_day(p.ctx, p.from, p.to).await?;
     Ok(Built {
         series: vec![
             p.series("asleep", "Asleep", "brpm", &asleep, Agg::Mean),
@@ -660,7 +709,10 @@ async fn respiration(p: &Period<'_>) -> Res<Built> {
         ],
         earliest: earliest(
             p.ctx,
-            "SELECT MIN(ts) FROM respiration WHERE user_id = ?1 AND brpm IS NOT NULL",
+            "SELECT MIN(ts) FROM (
+                 SELECT ts FROM respiration WHERE user_id = ?1 AND brpm IS NOT NULL
+                 UNION ALL
+                 SELECT ts FROM connect_daily WHERE user_id = ?1 AND resp_avg IS NOT NULL)",
         )
         .await?,
         ..Built::default()
@@ -703,7 +755,8 @@ async fn spo2(p: &Period<'_>) -> Res<Built> {
 /// Breathing for one day; the night rule is the range view's.
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 pub struct DayBreathing {
-    /// Lowest and highest reading of the day, the night that ended on it included.
+    /// Lowest and highest reading of the day, the night that ended on it included (a day the
+    /// watch has no reading for: Garmin Connect's, with the awake average and no asleep one).
     pub lowest: Option<f64>,
     pub highest: Option<f64>,
     pub avg_awake: Option<f64>,
@@ -763,6 +816,18 @@ fn mean_of(r: &[Reading], keep: impl Fn(&Reading) -> bool) -> Option<f64> {
 
 pub async fn day_breathing(ctx: &Ctx, d: NaiveDate) -> Res<DayBreathing> {
     let (r, _, hourly) = day_readings(ctx, d, BREATHING_SQL).await?;
+    if r.is_empty() {
+        // No watch reading: Connect's day figures (awake only, no hourly chart).
+        if let Some(c) = connect_day(ctx, d).await? {
+            return Ok(DayBreathing {
+                lowest: c.resp_low,
+                highest: c.resp_high,
+                avg_awake: c.resp_avg.map(round1),
+                avg_asleep: None,
+                hourly,
+            });
+        }
+    }
     Ok(DayBreathing {
         lowest: r.iter().map(|x| x.value).reduce(f64::min),
         highest: r.iter().map(|x| x.value).reduce(f64::max),

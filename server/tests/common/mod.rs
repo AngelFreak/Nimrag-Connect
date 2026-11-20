@@ -247,6 +247,7 @@ pub const OWNED_TABLES: &[&str] = &[
     "battery",
     "body_measurements",
     "daily_totals",
+    "connect_daily",
 ];
 
 /// Unix seconds of a local wall-clock time in `Europe/Copenhagen`.

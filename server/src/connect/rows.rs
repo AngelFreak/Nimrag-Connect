@@ -11,7 +11,7 @@
 //! date. Local times and dates are resolved with the zone in the envelope; a date-only row sits
 //! at the start of its local day.
 
-use super::{DailyTotal, Kind, Parsed, SleepStages};
+use super::{DailyStat, DailyTotal, Kind, Parsed, SleepStages};
 use crate::settings::day_start;
 use chrono::{NaiveDate, NaiveDateTime, TimeZone};
 use chrono_tz::Tz;
@@ -35,6 +35,7 @@ pub fn fill(kind: Kind, data: &Value, tz: Tz, p: &mut Parsed) -> R {
         Kind::TrainingLoad => training_load(data, tz, p),
         Kind::Vo2max => vo2max(data, tz, p),
         Kind::Stats => stats(data, tz, p),
+        Kind::DailyStats => daily_stats(data, tz, p),
         Kind::Activity => activity(data, tz, p),
         Kind::ActivitySummary => activity_summary(data, tz, p),
     }
@@ -372,6 +373,66 @@ fn stats(data: &Value, tz: Tz, p: &mut Parsed) -> R {
         };
         if any(&[row.steps, row.total_kcal, row.active_kcal, row.resting_kcal]) {
             p.daily_totals.push(row);
+            p.rows += 1;
+            p.seen(ts);
+        }
+    }
+    Ok(())
+}
+
+/// `[{date, steps, distance_m, floors_up, moderate_min, vigorous_min, hr_min, hr_max, stress_avg,
+/// bb_charged, bb_drained, bb_high, bb_low, resp_avg, resp_high, resp_low, ...}]`: one summary
+/// per local day (a month per file). Any field may be null. Heart rate, stress and breathing are
+/// measurements: 0 or a negative number (Garmin's "not measured") is no value. Steps, distance,
+/// floors, minutes and the body battery figures are amounts and may be 0. Other fields of the
+/// day (resting heart rate, the intensity goal, floors down, the stress maximum) are not read
+/// by any page; the envelope keeps them, so a later migration plus `reparse` can use them.
+fn daily_stats(data: &Value, tz: Tz, p: &mut Parsed) -> R {
+    let days = data.as_array().ok_or("not a list of days")?;
+    for v in days {
+        let Some(d) = date_of(v, "date") else {
+            p.skipped += 1;
+            continue;
+        };
+        let amount = |k: &str| num(v, k).filter(|x| *x >= 0.0);
+        let measured = |k: &str| num(v, k).filter(|x| *x > 0.0);
+        let ts = day_start(tz, d);
+        let row = DailyStat {
+            ts,
+            steps: amount("steps"),
+            distance_m: amount("distance_m"),
+            floors_up: amount("floors_up"),
+            moderate_min: amount("moderate_min"),
+            vigorous_min: amount("vigorous_min"),
+            hr_min: measured("hr_min"),
+            hr_max: measured("hr_max"),
+            stress_avg: measured("stress_avg"),
+            bb_charged: amount("bb_charged"),
+            bb_drained: amount("bb_drained"),
+            bb_high: amount("bb_high"),
+            bb_low: amount("bb_low"),
+            resp_avg: measured("resp_avg"),
+            resp_high: measured("resp_high"),
+            resp_low: measured("resp_low"),
+        };
+        if any(&[
+            row.steps,
+            row.distance_m,
+            row.floors_up,
+            row.moderate_min,
+            row.vigorous_min,
+            row.hr_min,
+            row.hr_max,
+            row.stress_avg,
+            row.bb_charged,
+            row.bb_drained,
+            row.bb_high,
+            row.bb_low,
+            row.resp_avg,
+            row.resp_high,
+            row.resp_low,
+        ]) {
+            p.daily_stats.push(row);
             p.rows += 1;
             p.seen(ts);
         }

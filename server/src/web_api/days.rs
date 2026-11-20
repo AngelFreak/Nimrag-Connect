@@ -2,8 +2,8 @@
 
 use super::activities::{list_items, ActivityListItem};
 use super::daily::{
-    dates, day_stats, energy_block, heart_rate_block, intensity_days, intensity_total, nights,
-    stress_block, week_start, EnergyBlock, HeartRateBlock, NightSummary, StressBlock,
+    connect_day, dates, day_stats, energy_block, heart_rate_block, intensity_days, intensity_total,
+    nights, stress_block, week_start, EnergyBlock, HeartRateBlock, NightSummary, StressBlock,
 };
 use super::metrics::{day_breathing, day_spo2, DayBreathing, DaySpo2};
 use super::{Ctx, DateValue};
@@ -151,7 +151,8 @@ pub struct MovementResponse {
     /// Steps as a percentage of the goal (not capped).
     pub percent_of_goal: Option<f64>,
     pub distance_m: Option<f64>,
-    /// No table holds floors climbed: always `null`.
+    /// Floors climbed, from Garmin Connect's daily summary (the watch has no table for them):
+    /// `null` for a day without an imported summary.
     pub floors: Option<f64>,
     /// Monday to Sunday of the week containing `date`; days after `date` are `null`.
     pub week_steps: Vec<DateValue>,
@@ -208,7 +209,7 @@ async fn movement(
         step_goal: ctx.prefs.step_goal,
         percent_of_goal: today.steps.map(|s| (s / goal * 1000.0).round() / 10.0),
         distance_m: today.distance_m,
-        floors: None,
+        floors: connect_day(&ctx, d).await?.and_then(|c| c.floors_up),
         week_steps: stats
             .iter()
             .map(|(day, s)| DateValue {

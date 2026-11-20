@@ -9,7 +9,8 @@ export type MovementResponse = { sample: boolean, date: string, week_number: num
  */
 percent_of_goal: number | null, distance_m: number | null, 
 /**
- * No table holds floors climbed: always `null`.
+ * Floors climbed, from Garmin Connect's daily summary (the watch has no table for them):
+ * `null` for a day without an imported summary.
  */
 floors: number | null, 
 /**

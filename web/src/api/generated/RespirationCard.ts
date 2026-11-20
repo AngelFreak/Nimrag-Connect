@@ -2,7 +2,7 @@
 
 export type RespirationCard = { latest_brpm: number | null, latest_at: string | null, 
 /**
- * Mean of today's readings.
+ * Mean of today's readings (without any, Garmin Connect's average for the day if imported).
  */
 day_avg_brpm: number | null, 
 /**
