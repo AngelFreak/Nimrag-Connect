@@ -133,7 +133,7 @@ describe('Today on a phone', () => {
     await waitFor(() => expect(glanceIds()).toHaveLength(15));
     const href = (id: string) => document.querySelector(`.glance-grid [data-card="${id}"]`)?.getAttribute('href');
     expect(href('sleep')).toBe('/sleep');
-    expect(href('hrv')).toBe('/health');
+    expect(href('hrv')).toBe('/hrv');
     expect(href('heart_rate')).toBe('/day');
     expect(href('stress')).toBe('/day');
     expect(href('steps')).toBe('/movement');

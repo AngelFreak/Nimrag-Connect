@@ -16,6 +16,7 @@ pub mod app;
 pub mod body;
 pub mod daily;
 pub mod days;
+pub mod hrv;
 pub mod prefs;
 pub mod sleep;
 pub mod strength;
@@ -45,6 +46,7 @@ pub fn router() -> Router<AppState> {
         .merge(prefs::routes())
         .merge(today::routes())
         .merge(days::routes())
+        .merge(hrv::routes())
         .merge(activities::routes())
         .merge(strength::routes())
         .merge(sleep::routes())
@@ -100,6 +102,46 @@ impl Ctx {
     pub fn parse_date(s: &str) -> Result<NaiveDate, ApiError> {
         settings::parse_date(s).ok_or_else(|| ApiError::bad_request("date must be YYYY-MM-DD"))
     }
+    /// The local days `from..=to` a range endpoint was asked for. `to` defaults to today and is
+    /// never later than today; `from` defaults to six days before `to` (a week). A range is at
+    /// most [`MAX_RANGE_DAYS`] days, and `from` may not be after `to` or after today.
+    pub fn range(&self, p: &RangeParams) -> Result<(NaiveDate, NaiveDate), ApiError> {
+        let today = self.today();
+        let parse = |s: &str, what: &str| {
+            settings::parse_date(s)
+                .ok_or_else(|| ApiError::bad_request(format!("{what} must be YYYY-MM-DD")))
+        };
+        let to = match p.to.as_deref() {
+            Some(s) => parse(s, "to")?.min(today),
+            None => today,
+        };
+        let from = match p.from.as_deref() {
+            Some(s) => parse(s, "from")?,
+            None => to - chrono::Duration::days(6),
+        };
+        if from > to {
+            return Err(ApiError::bad_request(
+                "from must not be after to or after today",
+            ));
+        }
+        if (to - from).num_days() >= MAX_RANGE_DAYS {
+            return Err(ApiError::bad_request(format!(
+                "a range is at most {MAX_RANGE_DAYS} days"
+            )));
+        }
+        Ok((from, to))
+    }
+}
+
+/// Longest range the `from`/`to` endpoints answer (a year plus a margin).
+pub const MAX_RANGE_DAYS: i64 = 400;
+
+/// Query of the range endpoints (`/api/training/status`, `/api/hrv`, `/api/sleep/history`):
+/// local dates `YYYY-MM-DD`, both inclusive. See [`Ctx::range`].
+#[derive(Debug, Deserialize)]
+pub struct RangeParams {
+    pub from: Option<String>,
+    pub to: Option<String>,
 }
 
 /// JSON body extractor whose rejections are the API's own JSON errors (400).
@@ -244,6 +286,9 @@ pub fn export_types(dir: &Path) -> anyhow::Result<()> {
         sleep::SleepNightsResponse,
         trends::TrendsResponse,
         training::TrainingResponse,
+        training::TrainingStatusRange,
+        hrv::HrvRange,
+        sleep::SleepHistory,
         body::BodyResponse,
         body::NewBodyEntry,
         body::BodyEntry,

@@ -400,7 +400,8 @@ async fn today_exact_values() {
     assert_eq!(t["training_status"]["status_code"], 4);
     assert_eq!(t["training_status"]["since"], "2026-11-18");
     assert_eq!(t["training_status"]["since_is_lower_bound"], false);
-    assert!(t["training_status"]["label"].is_null());
+    assert_eq!(t["training_status"]["label"], "Maintaining");
+    assert_eq!(t["training_status"]["kind"], "maintaining");
     assert!(t["training_readiness"].is_null());
     let tl = &t["training_load"];
     assert_eq!(

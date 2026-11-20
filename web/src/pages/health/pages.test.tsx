@@ -427,8 +427,12 @@ describe('HealthPage', () => {
       ['Body', '/body'],
       ['Calendar', '/calendar'],
     ]) {
-      expect(screen.getByRole('link', { name: new RegExp(`^${name}`) })).toHaveAttribute('href', href);
+      expect(screen.getByRole('link', { name: new RegExp(`^${name}(?! status)`) })).toHaveAttribute('href', href);
     }
+    // The pages of the status views.
+    expect(screen.getByRole('link', { name: /^HRV status/ })).toHaveAttribute('href', '/hrv');
+    expect(screen.getByRole('link', { name: /^Training status/ })).toHaveAttribute('href', '/training/status');
+    expect(screen.getByRole('link', { name: /^Score history/ })).toHaveAttribute('href', '/sleep?range=4w');
   });
 
   it('requests the chosen range and marks it pressed', async () => {

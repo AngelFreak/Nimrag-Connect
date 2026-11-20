@@ -87,6 +87,9 @@ async fn seed_is_deterministic_and_marked_as_sample() {
         "/api/trends?range=7d",
         "/api/movement/2026-11-18",
         "/api/training",
+        "/api/training/status",
+        "/api/hrv",
+        "/api/sleep/history",
         "/api/body",
         "/api/calendar/2026-11",
         "/api/devices",
@@ -439,4 +442,62 @@ async fn seeded_training_body_devices_storage() {
         (Some(0), Some(0))
     );
     assert!(s["database_bytes"].as_u64().unwrap() > 0);
+}
+
+#[tokio::test]
+async fn seeded_range_endpoints_fill_the_three_status_pages() {
+    let (e, c) = seeded().await;
+
+    // Training status over six months: the seed spans 120 days, so the oldest weeks are empty,
+    // the rest uses only verified codes, and the runs cover the same days as the timeline.
+    let t = e
+        .get(&c, "/api/training/status?from=2026-05-21&to=2026-11-19")
+        .await;
+    let days = arr(&t["days"], "days");
+    assert_eq!(days.len(), 183);
+    assert!(days[0]["status"].is_null());
+    let kinds: std::collections::BTreeSet<&str> = days
+        .iter()
+        .filter_map(|d| d["status"]["kind"].as_str())
+        .collect();
+    assert!(kinds.len() >= 3, "a mix of statuses: {kinds:?}");
+    assert!(!kinds.contains("unknown") && !kinds.contains("none"));
+    let with_status = days.iter().filter(|d| !d["status"].is_null()).count() as u64;
+    let in_runs: u64 = arr(&t["runs"], "runs")
+        .iter()
+        .map(|r| r["days"].as_u64().unwrap())
+        .sum();
+    assert_eq!(in_runs, with_status);
+    assert_eq!(t["runs"][0]["ongoing"], true);
+    assert!(t["current"]["label"].is_string() && t["load"]["acute"].is_number());
+
+    // HRV: a status per night, a balanced range and the overnight average.
+    let h = e.get(&c, "/api/hrv?from=2026-10-23&to=2026-11-19").await;
+    assert_eq!(arr(&h["days"], "days").len(), 28);
+    assert!(h["nights"].as_u64().unwrap() >= 20);
+    assert!(h["overnight_avg_ms"].is_number() && h["baseline_low_ms"].is_number());
+    assert!(arr(&h["days"], "days")
+        .iter()
+        .any(|d| d["status"] == "balanced" && d["weekly_avg_ms"].is_number()));
+    let one = e.get(&c, "/api/hrv?from=2026-11-19&to=2026-11-19").await;
+    assert!(arr(&one["night"]["readings"], "readings").len() > 20);
+
+    // Sleep history: days, weeks and months hold the same nights.
+    let mut totals = Vec::new();
+    for group in ["day", "week", "month"] {
+        let s = e
+            .get(
+                &c,
+                &format!("/api/sleep/history?from=2026-07-23&to=2026-11-19&group={group}"),
+            )
+            .await;
+        let n: u64 = arr(&s["buckets"], "buckets")
+            .iter()
+            .map(|b| b["nights"].as_u64().unwrap())
+            .sum();
+        assert_eq!(n, s["stats"]["nights"].as_u64().unwrap(), "{group}");
+        assert!(s["stats"]["avg_score"].is_number() && s["stats"]["avg_duration_s"].is_number());
+        totals.push((s["stats"]["avg_score"].clone(), n));
+    }
+    assert!(totals.windows(2).all(|w| w[0] == w[1]), "{totals:?}");
 }

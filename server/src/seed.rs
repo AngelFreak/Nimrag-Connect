@@ -1067,12 +1067,23 @@ pub async fn run(pool: &SqlitePool, data_dir: &Path, opts: SeedOptions) -> Resul
                 i(SAMPLE_SRC),
             ],
         );
+        // A plausible mix of the verified status codes (1 detraining, 4 maintaining, 5 recovery,
+        // 7 productive, 8 strained) from the acute to chronic ratio; the first weeks have no
+        // chronic history yet and stay "maintaining".
+        let status = match ratio {
+            _ if day < 28 => 4,
+            r if r > 1.3 => 8,
+            r if r > 1.1 => 7,
+            r if r >= 0.8 => 4,
+            r if r >= 0.5 => 5,
+            _ => 1,
+        };
         buf.add(
             "training_status",
             "ts, status, weekly_load_sum, load_min, load_max, fitness_trend, load_trend, src",
             vec![
                 i(ts),
-                i(4),
+                i(status),
                 r(acute.round()),
                 r((chronic * 0.8).round()),
                 r((chronic * 1.4).round()),

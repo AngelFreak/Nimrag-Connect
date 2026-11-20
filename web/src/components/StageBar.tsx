@@ -13,12 +13,12 @@ export interface LegendItem {
   outlined?: boolean;
   /**
    * Shape of the swatch, matching what the chart draws: `square` for bars and bands (default),
-   * `line` for a line series, `dash` for a target or goal line, `dot` for single readings.
+   * `line` for a line series, `dash` for a target or goal line, `dot` for single readings, `triangle` for a marked reading.
    */
   shape?: LegendShape;
 }
 
-export type LegendShape = 'square' | 'line' | 'dash' | 'dot';
+export type LegendShape = 'square' | 'line' | 'dash' | 'dot' | 'triangle';
 
 /** Colour key. The text next to each swatch carries the meaning; colour only reinforces it. */
 export function Legend({ items, grid }: { items: LegendItem[]; grid?: boolean }) {

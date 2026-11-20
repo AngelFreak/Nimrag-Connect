@@ -48,6 +48,20 @@
   --stress-medium: #ffb066;
   --stress-activity: #1f292e;
 
+  /* Training status timeline (recovery blue, strained magenta, maintaining yellow, productive green,
+     detraining muted orange-brown, no status grey); green also marks a good night and a balanced HRV */
+  --good: #6fcf5f;
+  --status-recovery: #4f9bff;
+  --status-strained: #d65bd0;
+  --status-maintaining: #f2d45c;
+  --status-productive: #6fcf5f;
+  --status-detraining: #b0743c;
+  --status-none: #55636a;
+  /* HRV status markers: balanced green dot, unbalanced orange square, low and poor red triangle */
+  --hrv-balanced: #6fcf5f;
+  --hrv-unbalanced: #ffb066;
+  --hrv-low: #ff6b6b;
+
   /* Map */
   --map-bg: #141b1f;
   --map-grid: #1f292e;

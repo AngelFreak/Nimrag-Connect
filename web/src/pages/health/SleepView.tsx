@@ -21,6 +21,7 @@ import { fmtFixed, fmtInt, withUnit } from '../../lib/format';
 import { usePageTitle, useIsDesktop } from '../../lib/hooks';
 import { axisDates, fmtSeconds, nightBars, nightsSummary, scoreLabel, sleepTicks, stageSpans, stageSummary } from './model';
 import { CardSkeleton, ChartSummary, LoadError } from './parts';
+import { SleepRangeBar } from './SleepRangeView';
 import { useSleepNight, useSleepNights, type NightCount } from './queries';
 import { clock } from './time';
 
@@ -39,6 +40,7 @@ export function LatestNight() {
   return (
     <>
       <TopBar variant="back" backTo="/health" title="Sleep" aside={<SampleDataChip sample={list.data?.sample} />} />
+      <SleepRangeBar value="1d" />
       <div className="page" aria-busy={list.isPending}>
         {list.isPending ? <CardSkeleton lines={3} height={28} /> : null}
         {list.isError ? <LoadError what="sleep" error={list.error} onRetry={() => void list.refetch()} /> : null}
@@ -75,6 +77,7 @@ export function SleepView({ date }: { date: string }) {
         prevLabel="Previous night"
         nextLabel="Next night"
       />
+      <SleepRangeBar value="1d" />
       <div className="page" aria-busy={night.isPending}>
         {!desktop && sample ? (
           <div>
