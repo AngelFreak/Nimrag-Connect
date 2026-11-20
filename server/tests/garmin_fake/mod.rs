@@ -11,7 +11,7 @@ use axum::{
     Router,
 };
 use base64::Engine;
-use nimrag_server::{api, db, garmin::GarminConfig, tokens};
+use nimrag_server::{api, db, garmin::GarminConfig, tokens, users::Role};
 use serde_json::{json, Value};
 use std::collections::{HashSet, VecDeque};
 use std::sync::atomic::{AtomicI64, Ordering};
@@ -434,18 +434,19 @@ pub async fn rig() -> Rig {
     let fake = FakeGarmin::start(clock.clone()).await;
     let dir = tempfile::tempdir().unwrap();
     let pool = db::open(dir.path()).await.unwrap();
-    let (_, token) = tokens::create(&pool, "test-device").await.unwrap();
+    let user_id = super::common::make_user(&pool, super::common::USER, Role::User, true).await;
+    let (_, token) = tokens::create(&pool, "test-device", Some(user_id))
+        .await
+        .unwrap();
     let c = clock.clone();
     let state = api::AppState::new(pool.clone(), dir.path().to_path_buf(), api::MAX_BODY_BYTES)
         .with_garmin(fake.config())
         .with_clock(move || c.load(Ordering::SeqCst));
     let app = api::router(state.clone());
-    let env = super::common::Env {
-        dir,
-        pool,
-        app,
-        token,
-    };
+    let mut env =
+        super::common::Env::from_parts(dir, pool, app, token, Some(clock.clone()));
+    env.user_id = user_id;
+    env.adopt = std::sync::atomic::AtomicBool::new(true);
     let cookie = env.login().await;
     Rig {
         env,

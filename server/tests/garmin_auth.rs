@@ -456,7 +456,7 @@ async fn secrets_never_reach_the_logs_the_database_or_debug_output() {
         di_refresh_token: refresh.clone(),
         di_client_id: "CID".into(),
     };
-    let account = nimrag_server::garmin::queue::load_account(&r.env.pool)
+    let account = nimrag_server::garmin::queue::load_account(&r.env.pool, r.env.user_id)
         .await
         .unwrap();
     let req: nimrag_server::garmin::api::GarminLoginRequest =

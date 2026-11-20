@@ -7,31 +7,36 @@ mod common;
 use axum::http::{Method, StatusCode};
 use chrono_tz::Europe::Copenhagen;
 use common::*;
-use nimrag_server::seed::{self, SeedOptions};
+use nimrag_server::seed::{self, SeedAccounts, SeedOptions};
 use serde_json::{json, Value};
 
 fn now() -> i64 {
     cph(2026, 11, 19, 20, 0)
 }
 
-async fn seeded() -> (Env, String) {
-    let e = env_at(now()).await;
-    let report = seed::run(
-        &e.pool,
-        e.dir.path(),
-        SeedOptions {
-            tz: Copenhagen,
-            now: now(),
-            days: 120,
+fn options() -> SeedOptions {
+    SeedOptions {
+        tz: Copenhagen,
+        now: now(),
+        days: 120,
+        accounts: SeedAccounts {
+            admin_password: Some(PASSWORD.into()),
+            admin_totp_secret: Some(TOTP_SECRET.into()),
+            user_password: Some(PASSWORD.into()),
+            user_totp_secret: Some(TOTP_SECRET.into()),
         },
-    )
-    .await
-    .unwrap();
+    }
+}
+
+async fn seeded() -> (Env, String) {
+    let mut e = bare_env_at(now()).await;
+    let report = seed::run(&e.pool, e.dir.path(), options()).await.unwrap();
+    e.user_id = report.user_id;
     assert_eq!(report.days, 120);
     assert_eq!(report.last_date, "2026-11-19");
     assert_eq!(report.first_date, "2026-07-23");
     assert!(report.activities >= 40, "{} activities", report.activities);
-    let c = e.login().await;
+    let c = e.login_as("demo").await;
     (e, c)
 }
 
@@ -45,17 +50,9 @@ async fn seed_refuses_uploaded_files_and_reseeding() {
     let e = env_at(now()).await;
     let (s, _) = e.upload("data_type=4&source=watch", b"hello").await;
     assert_eq!(s, StatusCode::CREATED);
-    let err = seed::run(
-        &e.pool,
-        e.dir.path(),
-        SeedOptions {
-            tz: Copenhagen,
-            now: now(),
-            days: 120,
-        },
-    )
-    .await
-    .unwrap_err();
+    let err = seed::run(&e.pool, e.dir.path(), options())
+        .await
+        .unwrap_err();
     assert!(err.to_string().contains("uploaded files"), "{err}");
     let n: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM activities")
         .fetch_one(&e.pool)
@@ -64,17 +61,7 @@ async fn seed_refuses_uploaded_files_and_reseeding() {
     assert_eq!(n, 0, "a refused seed writes nothing");
 
     let (e, _) = seeded().await;
-    assert!(seed::run(
-        &e.pool,
-        e.dir.path(),
-        SeedOptions {
-            tz: Copenhagen,
-            now: now(),
-            days: 120
-        }
-    )
-    .await
-    .is_err());
+    assert!(seed::run(&e.pool, e.dir.path(), options()).await.is_err());
 }
 
 #[tokio::test]

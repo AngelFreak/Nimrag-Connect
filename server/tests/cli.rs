@@ -33,12 +33,13 @@ async fn token_create_list_revoke_and_reparse_via_binary() {
     // Ingest through the router using the binary-created token and the same data dir.
     let pool = nimrag_server::db::open(dir.path()).await.unwrap();
     let state = nimrag_server::api::AppState::new(pool.clone(), dir.path().to_path_buf(), 1 << 20);
-    let e = common::Env {
-        app: nimrag_server::api::router(state),
-        pool: pool.clone(),
+    let e = common::Env::from_parts(
         dir,
-        token: token.clone(),
-    };
+        pool.clone(),
+        nimrag_server::api::router(state),
+        token.clone(),
+        None,
+    );
     let (s, _) = e.upload("data_type=128", &common::tiny_fit(77)).await;
     assert_eq!(s, StatusCode::CREATED);
     e.upload("data_type=128", b"garbage").await;

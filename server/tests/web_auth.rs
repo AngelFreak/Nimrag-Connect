@@ -4,23 +4,22 @@ use axum::http::{header, Method, StatusCode};
 use common::*;
 use serde_json::json;
 
-fn login_body(pw: &str) -> Option<serde_json::Value> {
-    Some(json!({ "password": pw }))
+/// A login of the data user with a fresh 2FA code for the environment's clock.
+fn login_body(e: &Env, pw: &str) -> Option<serde_json::Value> {
+    let code = nimrag_server::totp::code_at(TOTP_SECRET, e.now()).unwrap();
+    Some(json!({ "username": USER, "password": pw, "code": code }))
 }
 
 #[tokio::test]
 async fn login_sets_a_hardened_cookie_and_me_works() {
     let e = env_at(1_800_000_000).await;
-    nimrag_server::auth::set_password(&e.pool, PASSWORD, 0)
-        .await
-        .unwrap();
     let (s, h, j) = e
         .call(
             Method::POST,
             "/api/login",
             None,
             false,
-            login_body(PASSWORD),
+            login_body(&e, PASSWORD),
         )
         .await;
     assert_eq!(s, StatusCode::OK);
@@ -64,26 +63,19 @@ async fn login_sets_a_hardened_cookie_and_me_works() {
 async fn insecure_cookies_flag_drops_secure_only() {
     let dir = tempfile::tempdir().unwrap();
     let pool = nimrag_server::db::open(dir.path()).await.unwrap();
-    nimrag_server::auth::set_password(&pool, PASSWORD, 0)
-        .await
-        .unwrap();
+    make_user(&pool, USER, nimrag_server::users::Role::User, true).await;
     let app = nimrag_server::api::router(
-        nimrag_server::api::AppState::new(pool, dir.path().to_path_buf(), 1 << 20)
+        nimrag_server::api::AppState::new(pool.clone(), dir.path().to_path_buf(), 1 << 20)
             .with_insecure_cookies(true),
     );
-    let e = Env {
-        dir,
-        pool: sqlx::SqlitePool::connect_lazy("sqlite::memory:").unwrap(),
-        app,
-        token: String::new(),
-    };
+    let e = Env::from_parts(dir, pool, app, String::new(), None);
     let (s, h, _) = e
         .call(
             Method::POST,
             "/api/login",
             None,
             false,
-            login_body(PASSWORD),
+            login_body(&e, PASSWORD),
         )
         .await;
     assert_eq!(s, StatusCode::OK);
@@ -129,33 +121,24 @@ async fn secure_mode_accepts_only_the_host_prefixed_cookie() {
 }
 
 #[tokio::test]
-async fn wrong_password_and_missing_owner() {
+async fn wrong_username_password_and_code_are_indistinguishable() {
     let e = env_at(1_800_000_000).await;
-    // No owner yet.
-    let (s, _, _) = e
-        .call(
-            Method::POST,
-            "/api/login",
-            None,
-            false,
-            login_body("anything at all"),
-        )
-        .await;
-    assert_eq!(s, StatusCode::CONFLICT);
-    nimrag_server::auth::set_password(&e.pool, PASSWORD, 0)
-        .await
-        .unwrap();
-    let (s, h, _) = e
-        .call(
-            Method::POST,
-            "/api/login",
-            None,
-            false,
-            login_body("not the password"),
-        )
-        .await;
-    assert_eq!(s, StatusCode::UNAUTHORIZED);
-    assert!(h.get(header::SET_COOKIE).is_none());
+    let good = nimrag_server::totp::code_at(TOTP_SECRET, e.now()).unwrap();
+    let mut answers = Vec::new();
+    for body in [
+        json!({ "username": "nobody", "password": PASSWORD, "code": good }),
+        json!({ "username": USER, "password": "not the password", "code": good }),
+        json!({ "username": USER, "password": PASSWORD, "code": "000000" }),
+        json!({ "username": USER, "password": PASSWORD }),
+    ] {
+        let (s, h, j) = e
+            .call(Method::POST, "/api/login", None, false, Some(body))
+            .await;
+        assert_eq!(s, StatusCode::UNAUTHORIZED);
+        assert!(h.get(header::SET_COOKIE).is_none());
+        answers.push(j);
+    }
+    assert!(answers.windows(2).all(|w| w[0] == w[1]), "{answers:?}");
     let (s, _, _) = e
         .call(
             Method::POST,
@@ -166,18 +149,11 @@ async fn wrong_password_and_missing_owner() {
         )
         .await;
     assert_eq!(s, StatusCode::BAD_REQUEST);
-    // Short passwords are refused at set time.
-    assert!(nimrag_server::auth::set_password(&e.pool, "short", 0)
-        .await
-        .is_err());
 }
 
 #[tokio::test]
 async fn login_is_rate_limited_and_recovers() {
     let e = env_at(1_800_000_000).await;
-    nimrag_server::auth::set_password(&e.pool, PASSWORD, 0)
-        .await
-        .unwrap();
     for _ in 0..4 {
         let (s, _, _) = e
             .call(
@@ -185,7 +161,7 @@ async fn login_is_rate_limited_and_recovers() {
                 "/api/login",
                 None,
                 false,
-                login_body("wrong wrong wrong"),
+                login_body(&e, "wrong wrong wrong"),
             )
             .await;
         assert_eq!(s, StatusCode::UNAUTHORIZED);
@@ -197,7 +173,7 @@ async fn login_is_rate_limited_and_recovers() {
             "/api/login",
             None,
             false,
-            login_body("wrong wrong wrong"),
+            login_body(&e, "wrong wrong wrong"),
         )
         .await;
     assert_eq!(s, StatusCode::UNAUTHORIZED);
@@ -207,7 +183,7 @@ async fn login_is_rate_limited_and_recovers() {
             "/api/login",
             None,
             false,
-            login_body(PASSWORD),
+            login_body(&e, PASSWORD),
         )
         .await;
     assert_eq!(s, StatusCode::TOO_MANY_REQUESTS);
@@ -478,17 +454,10 @@ use tower::ServiceExt;
 async fn app_with(f: impl FnOnce(AppState) -> AppState) -> Env {
     let dir = tempfile::tempdir().unwrap();
     let pool = nimrag_server::db::open(dir.path()).await.unwrap();
-    nimrag_server::auth::set_password(&pool, PASSWORD, 0)
-        .await
-        .unwrap();
+    make_user(&pool, USER, nimrag_server::users::Role::User, true).await;
     let state = AppState::new(pool.clone(), dir.path().to_path_buf(), MAX_BODY_BYTES)
         .with_clock(|| 1_800_000_000);
-    Env {
-        dir,
-        pool,
-        app: nimrag_server::api::router(f(state)),
-        token: String::new(),
-    }
+    Env::from_parts(dir, pool, nimrag_server::api::router(f(state)), String::new(), None)
 }
 
 /// POST /api/login from `peer` (as the TCP peer), optionally with an X-Forwarded-For.
@@ -502,7 +471,12 @@ async fn login_from(e: &Env, peer: &str, xff: Option<&str>, password: &str) -> S
     }
     let mut req = req
         .body(axum::body::Body::from(
-            json!({ "password": password }).to_string(),
+            json!({
+                "username": USER,
+                "password": password,
+                "code": nimrag_server::totp::code_at(TOTP_SECRET, 1_800_000_000).unwrap(),
+            })
+            .to_string(),
         ))
         .unwrap();
     let addr = SocketAddr::new(peer.parse().unwrap(), 40000);
@@ -522,7 +496,8 @@ async fn parallel_wrong_passwords_are_serialised_and_mostly_refused_without_argo
                 .uri("/api/login")
                 .header(header::CONTENT_TYPE, "application/json")
                 .body(axum::body::Body::from(
-                    json!({ "password": "wrong wrong wrong" }).to_string(),
+                    json!({ "username": USER, "password": "wrong wrong wrong", "code": "123456" })
+                        .to_string(),
                 ))
                 .unwrap();
             app.oneshot(req).await.unwrap().status()
@@ -582,16 +557,13 @@ async fn forwarded_for_from_a_trusted_proxy_names_the_client() {
 #[tokio::test]
 async fn login_body_is_capped_at_4_kib_and_json_at_64_kib() {
     let e = env_at(1_800_000_000).await;
-    nimrag_server::auth::set_password(&e.pool, PASSWORD, 0)
-        .await
-        .unwrap();
     let (s, _, _) = e
         .call(
             Method::POST,
             "/api/login",
             None,
             false,
-            Some(json!({ "password": "x".repeat(8 * 1024) })),
+            Some(json!({ "username": USER, "password": "x".repeat(8 * 1024) })),
         )
         .await;
     assert_eq!(s, StatusCode::PAYLOAD_TOO_LARGE);
@@ -602,7 +574,7 @@ async fn login_body_is_capped_at_4_kib_and_json_at_64_kib() {
             "/api/login",
             None,
             false,
-            Some(json!({ "password": "x".repeat(2 * 1024) })),
+            Some(json!({ "username": USER, "password": "x".repeat(2 * 1024) })),
         )
         .await;
     assert_eq!(s, StatusCode::UNAUTHORIZED);
@@ -737,76 +709,4 @@ async fn at_most_twenty_active_tokens_via_the_web() {
         )
         .await;
     assert_eq!(s, StatusCode::CREATED);
-}
-
-#[tokio::test]
-async fn first_run_setup_sets_the_password_once_and_signs_in() {
-    let e = env_at(1_800_000_000).await;
-    let (s, _, j) = e.call(Method::GET, "/api/setup", None, false, None).await;
-    assert_eq!(s, StatusCode::OK);
-    assert_eq!(j["needed"], true);
-
-    // CSRF header required; short passwords refused.
-    let (s, _, _) = e
-        .call(
-            Method::POST,
-            "/api/setup",
-            None,
-            false,
-            login_body(PASSWORD),
-        )
-        .await;
-    assert_eq!(s, StatusCode::FORBIDDEN);
-    let (s, _, _) = e
-        .call(Method::POST, "/api/setup", None, true, login_body("short"))
-        .await;
-    assert_eq!(s, StatusCode::BAD_REQUEST);
-
-    let (s, h, j) = e
-        .call(Method::POST, "/api/setup", None, true, login_body(PASSWORD))
-        .await;
-    assert_eq!(s, StatusCode::CREATED);
-    assert_eq!(j["authenticated"], true);
-    let set = h.get(header::SET_COOKIE).unwrap().to_str().unwrap();
-    assert!(set.contains("__Host-nimrag_session=") && set.contains("HttpOnly"));
-    let cookie = set.split(';').next().unwrap().to_owned();
-    let (s, _, _) = e
-        .call(Method::GET, "/api/me", Some(&cookie), false, None)
-        .await;
-    assert_eq!(s, StatusCode::OK);
-
-    // Closed from now on, for everyone, and the password is the one given.
-    let (_, _, j) = e.call(Method::GET, "/api/setup", None, false, None).await;
-    assert_eq!(j["needed"], false);
-    let (s, h, _) = e
-        .call(
-            Method::POST,
-            "/api/setup",
-            Some(&cookie),
-            true,
-            login_body("another password"),
-        )
-        .await;
-    assert_eq!(s, StatusCode::CONFLICT);
-    assert!(h.get(header::SET_COOKIE).is_none());
-    let (s, _, _) = e
-        .call(
-            Method::POST,
-            "/api/login",
-            None,
-            false,
-            login_body(PASSWORD),
-        )
-        .await;
-    assert_eq!(s, StatusCode::OK);
-}
-
-#[tokio::test]
-async fn racing_owner_claims_have_one_winner() {
-    let e = env_at(1_800_000_000).await;
-    let (a, b) = tokio::join!(
-        nimrag_server::auth::claim_owner(&e.pool, "first password", 0),
-        nimrag_server::auth::claim_owner(&e.pool, "second password", 0),
-    );
-    assert_ne!(a.unwrap(), b.unwrap());
 }

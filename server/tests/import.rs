@@ -316,7 +316,7 @@ async fn limits_via_library_run() {
         max_entries: 3,
         ..Default::default()
     };
-    let r = import::run(&state, &archive, limits).await.unwrap();
+    let r = import::run(&state, &archive, limits, None).await.unwrap();
     assert!(
         r.errors.iter().any(|e| e.contains("entry count")),
         "{:?}",

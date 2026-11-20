@@ -43,7 +43,7 @@ async fn upload_requires_valid_token() {
 #[tokio::test]
 async fn revoked_token_is_rejected() {
     let e = env().await;
-    assert!(nimrag_server::tokens::revoke(&e.pool, 1).await.unwrap());
+    assert!(nimrag_server::tokens::revoke(&e.pool, 1, None).await.unwrap());
     let (s, _) = e.upload("data_type=4", b"abc").await;
     assert_eq!(s, StatusCode::UNAUTHORIZED);
 }
@@ -553,7 +553,9 @@ async fn ledger_rebuilds_from_sidecars_and_reparse_leaves_it_alone() {
     derive::reparse(&e.pool, e.dir.path()).await.unwrap();
     assert_eq!(dump_ledger(&e.pool).await, ledger);
 
+    // Ownership is database-only (the sidecars do not carry it), so a rebuilt ledger starts unowned.
     for q in [
+        "DELETE FROM file_owners",
         "DELETE FROM fit_messages",
         "DELETE FROM fit_files",
         "DELETE FROM file_parse",
