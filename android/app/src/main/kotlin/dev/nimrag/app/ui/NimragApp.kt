@@ -2,35 +2,23 @@ package dev.nimrag.app.ui
 
 import androidx.activity.compose.BackHandler
 import androidx.annotation.StringRes
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.windowInsetsPadding
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -43,26 +31,21 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
@@ -70,7 +53,6 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.repeatOnLifecycle
 import dev.nimrag.app.R
-import dev.nimrag.app.engine.auth.logic.AuthPhase
 import dev.nimrag.app.model.AppState
 import dev.nimrag.app.model.WatchController
 import dev.nimrag.app.ui.components.ActivitiesIcon
@@ -78,12 +60,9 @@ import dev.nimrag.app.ui.components.HealthIcon
 import dev.nimrag.app.ui.components.LocalNowMs
 import dev.nimrag.app.ui.components.TodayIcon
 import dev.nimrag.app.ui.components.WatchIcon
-import dev.nimrag.app.ui.settings.LicencesScreen
-import dev.nimrag.app.ui.settings.SettingsScreen
 import dev.nimrag.app.ui.shell.CheckingScreen
 import dev.nimrag.app.ui.shell.SignInScreen
 import dev.nimrag.app.ui.shell.UnlockScreen
-import dev.nimrag.app.ui.shell.findActivity
 import dev.nimrag.app.ui.shell.ServerUnreachableScreen
 import dev.nimrag.app.ui.shell.ServerWebView
 import dev.nimrag.app.ui.shell.WebPreviewPlaceholder
@@ -102,18 +81,12 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.platform.LocalContext
 import dev.nimrag.app.ui.shell.rememberWebShellState
-import dev.nimrag.app.ui.sync.SyncScreen
 import dev.nimrag.app.ui.theme.NimragColors
 import dev.nimrag.app.ui.theme.NimragTheme
-import dev.nimrag.app.ui.watch.WatchScreen
+import dev.nimrag.app.ui.watch.WatchTab
+import dev.nimrag.app.ui.watch.logic.WatchPage
+import dev.nimrag.app.ui.watch.logic.WatchProblems
 import kotlinx.coroutines.delay
-
-/** The Watch tab's own pages (the existing Watch, Sync and Settings screens). */
-internal enum class WatchSection(@StringRes val label: Int, val icon: ImageVector) {
-    Watch(R.string.tab_watch, WatchIcon),
-    Sync(R.string.tab_sync, Icons.Filled.Refresh),
-    Settings(R.string.tab_settings, Icons.Filled.Settings),
-}
 
 private val NavSaver = listSaver<ShellNav, Any>(
     save = { listOf(it.webTab.ordinal, it.inWatch) },
@@ -122,7 +95,7 @@ private val NavSaver = listSaver<ShellNav, Any>(
 
 /**
  * The whole app: theme, the native bottom bar (Today, Activities, Health, Watch), one
- * shared web view for the first four and the native Watch, Sync and Settings screens under Watch.
+ * shared web view for the first three and the native Watch tab (one page and its sub-pages).
  * [demo] marks the fake controller.
  */
 @Composable
@@ -139,13 +112,12 @@ internal fun NimragShell(
     state: AppState,
     controller: WatchController,
     demo: Boolean = false,
-    initialSection: Int = 0,
+    initialPage: WatchPage = WatchPage.Main,
     startInWatch: Boolean = false,
 ) {
     var nav by rememberSaveable(stateSaver = NavSaver) { mutableStateOf(ShellNav(inWatch = startInWatch)) }
-    var sectionIndex by rememberSaveable { mutableIntStateOf(initialSection) }
-    var showLicences by rememberSaveable { mutableStateOf(false) }
-    val section = WatchSection.entries[sectionIndex]
+    // The Watch tab's page (an enum is Serializable, so it survives rotation as it is).
+    var watchPage by rememberSaveable { mutableStateOf(initialPage) }
 
     val rawServerUrl = state.settings.serverUrl
     val remoteTarget = remember(rawServerUrl) { ServerOrigin.parse(rawServerUrl) }
@@ -226,12 +198,11 @@ internal fun NimragShell(
     LaunchedEffect(state.dataVersion) { if (state.dataVersion > 0) webState.dispatchData() }
 
     // Back: web history first; in the Watch tab its sub-pages first, then the web tabs; then exit.
-    val backEnabled = if (nav.inWatch) showLicences || sectionIndex != 0 || target != null else webState.canGoBack
+    val backEnabled = if (nav.inWatch) watchPage != WatchPage.Main || target != null else webState.canGoBack
     BackHandler(enabled = backEnabled) {
         when {
             !nav.inWatch -> webState.goBack()
-            showLicences -> showLicences = false
-            sectionIndex != 0 -> sectionIndex = 0
+            watchPage != WatchPage.Main -> watchPage = watchPage.parent ?: WatchPage.Main
             else -> nav = nav.tapped(nav.webTab)
         }
     }
@@ -262,12 +233,12 @@ internal fun NimragShell(
     val onTab: (MainTab) -> Unit = { tab ->
         nav = nav.tapped(tab)
         if (tab == MainTab.Watch) {
-            showLicences = false
+            watchPage = WatchPage.Main
         } else {
             RouteTabs.pathFor(tab)?.let(webState::navigate)
         }
     }
-    val watchNeedsAttention = WatchSection.entries.any { needsAttention(it, state) }
+    val watchNeedsAttention = WatchProblems.needsAttention(state)
 
     CompositionLocalProvider(LocalNowMs provides nowMs.longValue) {
         Column(
@@ -303,26 +274,20 @@ internal fun NimragShell(
                             visible = webVisible,
                             onOpenWatch = {
                                 nav = nav.openedWatch()
-                                sectionIndex = 0
-                                showLicences = false
+                                watchPage = WatchPage.Main
                             },
                             onRoute = { nav = nav.routed(it) },
                             modifier = Modifier.fillMaxSize(),
                         )
                     }
                     when {
-                        nav.inWatch -> WatchArea(
+                        nav.inWatch -> WatchTab(
                             state = state,
                             controller = controller,
-                            section = section,
-                            onSection = {
-                                sectionIndex = it.ordinal
-                                showLicences = false
-                            },
-                            showLicences = showLicences,
-                            onShowLicences = { showLicences = it },
+                            page = watchPage,
+                            onPage = { watchPage = it },
                             onSignIn = {
-                                // From Settings: leave the Watch tab for the sign-in screen.
+                                // From the account or server rows: leave the Watch tab for the sign-in screen.
                                 forceRemote = true
                                 nav = nav.tapped(nav.webTab)
                             },
@@ -437,125 +402,6 @@ private fun ShellRail(selected: MainTab, watchNeedsAttention: Boolean, onTab: (M
             )
         }
     }
-}
-
-// ---------------------------------------------------------------- Watch tab
-
-/** "Devices and sync": header, a switch between the three native pages, and the page itself. */
-@Composable
-private fun WatchArea(
-    state: AppState,
-    controller: WatchController,
-    section: WatchSection,
-    onSection: (WatchSection) -> Unit,
-    showLicences: Boolean,
-    onShowLicences: (Boolean) -> Unit,
-    onSignIn: () -> Unit,
-) {
-    val noPadding = PaddingValues(0.dp)
-    Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
-        DevicesHeader(showLicences = showLicences, onBack = { onShowLicences(false) })
-        if (!showLicences) {
-            SectionSwitch(section, state, onSection)
-        }
-        Box(Modifier.weight(1f).fillMaxWidth()) {
-            when {
-                showLicences -> LicencesScreen(contentPadding = noPadding)
-                section == WatchSection.Watch -> WatchScreen(state, controller, noPadding)
-                section == WatchSection.Sync -> SyncScreen(
-                    state = state,
-                    controller = controller,
-                    contentPadding = noPadding,
-                    onOpenSettings = { onSection(WatchSection.Settings) },
-                )
-                else -> SettingsScreen(
-                    state = state,
-                    controller = controller,
-                    contentPadding = noPadding,
-                    onOpenLicences = { onShowLicences(true) },
-                    onSignIn = onSignIn,
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun DevicesHeader(showLicences: Boolean, onBack: () -> Unit) {
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .padding(start = if (showLicences) 12.dp else 20.dp, end = 20.dp, top = 12.dp, bottom = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
-    ) {
-        if (showLicences) {
-            IconButton(onClick = onBack) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.back))
-            }
-        }
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(
-                if (showLicences) stringResource(R.string.about_open_source) else stringResource(R.string.devices_title),
-                style = MaterialTheme.typography.titleLarge,
-                color = MaterialTheme.colorScheme.onBackground,
-            )
-            if (!showLicences) {
-                Text(
-                    stringResource(R.string.devices_subtitle),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
-    }
-}
-
-/** Three equal pills (Watch, Sync, Settings) on a card; the open one in the link colour. */
-@Composable
-private fun SectionSwitch(selected: WatchSection, state: AppState, onSelect: (WatchSection) -> Unit) {
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 20.dp, vertical = 4.dp)
-            .clip(RoundedCornerShape(12.dp))
-            .background(MaterialTheme.colorScheme.surfaceContainerLow)
-            .border(BorderStroke(1.dp, NimragColors.Line), RoundedCornerShape(12.dp))
-            .padding(4.dp),
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
-    ) {
-        WatchSection.entries.forEach { entry ->
-            val isSelected = entry == selected
-            val label = stringResource(entry.label)
-            val attention = needsAttention(entry, state)
-            Box(
-                Modifier
-                    .weight(1f)
-                    .heightIn(min = 44.dp)
-                    .clip(RoundedCornerShape(9.dp))
-                    .background(if (isSelected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent)
-                    .clickable(role = Role.Tab, onClick = { onSelect(entry) })
-                    .semantics { contentDescription = label },
-                contentAlignment = Alignment.Center,
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text(
-                        label,
-                        style = MaterialTheme.typography.labelLarge,
-                        color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    if (attention) Badge()
-                }
-            }
-        }
-    }
-}
-
-/** A dot on a page: something there needs the owner (permission missing, upload or sync trouble). */
-private fun needsAttention(section: WatchSection, state: AppState): Boolean = when (section) {
-    WatchSection.Watch -> !state.permissions.bluetooth || !state.permissions.bluetoothEnabled
-    WatchSection.Sync -> state.uploads.lastError != null || (state.sync.lastResult?.failed ?: 0) > 0
-    WatchSection.Settings -> false
 }
 
 @Composable

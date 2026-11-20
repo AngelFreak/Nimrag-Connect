@@ -2,6 +2,8 @@ package dev.nimrag.app.ui.preview
 
 import dev.nimrag.app.model.AppState
 import dev.nimrag.app.model.FoundDevice
+import dev.nimrag.app.model.GarminConnect
+import dev.nimrag.app.model.GarminConnectMode
 import dev.nimrag.app.model.LinkState
 import dev.nimrag.app.model.LogLine
 import dev.nimrag.app.model.Permissions
@@ -109,6 +111,38 @@ object PreviewData {
 
     fun pairedBondLost(now: Long = System.currentTimeMillis()) = pairedReady(now).copy(
         watch = paired(now, LinkState.BondLost),
+    )
+
+    /** Paired, but Bluetooth was switched off: the banner offers Turn on. */
+    fun pairedBluetoothOff(now: Long = System.currentTimeMillis()) = pairedReady(now).copy(
+        permissions = allPermissions.copy(bluetoothEnabled = false),
+        watch = paired(now, LinkState.Offline),
+    )
+
+    /** Garmin Connect holds the watch: the banner points to How to fix. */
+    fun pairedGarminHolding(now: Long = System.currentTimeMillis()) = pairedReady(now).copy(
+        watch = paired(now, LinkState.Waiting),
+        garminConnect = GarminConnect.HasBluetooth,
+    )
+
+    /** Sharing the watch with Garmin Connect, which is allowed to use Bluetooth. */
+    fun alongside(now: Long = System.currentTimeMillis()) = pairedReady(now).copy(
+        settings = serverSettings.copy(garminConnectMode = GarminConnectMode.Alongside),
+        garminConnect = GarminConnect.HasBluetooth,
+        sync = SyncState(
+            lastResult = SyncResult(now - 12 * MIN, downloaded = 4, archived = 0, failed = 0),
+            leftForGarminConnect = 17,
+        ),
+    )
+
+    /** Uploads keep failing: the banner offers Retry. */
+    fun uploadFailing(now: Long = System.currentTimeMillis()) = pairedReady(now).copy(
+        uploads = uploads(now).copy(pending = 3, lastError = "HTTP 502: bad gateway"),
+    )
+
+    /** Notifications refused: a quiet row on the page, no banner. */
+    fun notificationsOff(now: Long = System.currentTimeMillis()) = pairedReady(now).copy(
+        permissions = allPermissions.copy(notifications = false),
     )
 
     fun syncing(now: Long = System.currentTimeMillis()) = pairedReady(now).copy(

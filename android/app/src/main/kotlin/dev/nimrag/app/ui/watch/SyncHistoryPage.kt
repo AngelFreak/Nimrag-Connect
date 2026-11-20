@@ -1,4 +1,4 @@
-package dev.nimrag.app.ui.sync
+package dev.nimrag.app.ui.watch
 
 import android.content.Intent
 import android.os.Build
@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
@@ -39,6 +40,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -58,8 +60,8 @@ import dev.nimrag.app.model.WatchController
 import dev.nimrag.app.model.WatchState
 import dev.nimrag.app.ui.components.CardTitle
 import dev.nimrag.app.ui.components.NimragButton
-import dev.nimrag.app.ui.components.NimragOutlinedButton
 import dev.nimrag.app.ui.components.SectionCard
+import dev.nimrag.app.ui.components.SettingsPage
 import dev.nimrag.app.ui.components.WithAbsoluteTime
 import dev.nimrag.app.ui.components.absoluteDateTime
 import dev.nimrag.app.ui.components.clockTime
@@ -68,12 +70,16 @@ import dev.nimrag.app.ui.components.logTime
 import dev.nimrag.app.ui.components.relativeTime
 import dev.nimrag.app.ui.theme.status
 
+/**
+ * Everything the phone did with the watch's files: the last sync, what is stored and uploaded,
+ * the recent files and the log (with Share, for a bug report).
+ */
 @Composable
-fun SyncScreen(
+internal fun SyncHistoryPage(
     state: AppState,
     controller: WatchController,
-    contentPadding: PaddingValues,
-    onOpenSettings: () -> Unit,
+    onOpenServer: () -> Unit,
+    onBack: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var logExpanded by rememberSaveable { mutableStateOf(false) }
@@ -81,66 +87,63 @@ fun SyncScreen(
     val context = LocalContext.current
     val shareTitle = stringResource(R.string.log_share)
 
-    LazyColumn(
-        modifier = modifier,
-        contentPadding = PaddingValues(
-            start = 20.dp,
-            end = 20.dp,
-            top = contentPadding.calculateTopPadding() + 8.dp,
-            bottom = contentPadding.calculateBottomPadding() + 16.dp,
-        ),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
-    ) {
-        item(key = "sync") {
-            SyncCard(
-                state.sync,
-                paired = state.watch is WatchState.Paired,
-                alongside = state.settings.garminConnectMode == GarminConnectMode.Alongside,
-            )
-        }
-        item(key = "uploads") {
-            UploadsCard(
-                uploads = state.uploads,
-                serverConfigured = state.settings.serverUrl.isNotBlank(),
-                allowMobileData = state.settings.allowMobileData,
-                onUploadNow = controller::uploadNow,
-                onOpenSettings = onOpenSettings,
-            )
-        }
-        item(key = "recent") { RecentFilesCard(state.uploads.recent) }
+    SettingsPage(title = stringResource(R.string.history_title), onBack = onBack, modifier = modifier) {
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            item(key = "sync") {
+                SyncCard(
+                    state.sync,
+                    paired = state.watch is WatchState.Paired,
+                    alongside = state.settings.garminConnectMode == GarminConnectMode.Alongside,
+                )
+            }
+            item(key = "uploads") {
+                UploadsCard(
+                    uploads = state.uploads,
+                    serverConfigured = state.settings.serverUrl.isNotBlank(),
+                    allowMobileData = state.settings.allowMobileData,
+                    onUploadNow = controller::uploadNow,
+                    onOpenServer = onOpenServer,
+                )
+            }
+            item(key = "recent") { RecentFilesCard(state.uploads.recent) }
 
-        // The log: header and lines are separate lazy items that are shaped to read as one card.
-        item(key = "log-header") {
-            LogHeader(
-                count = log.size,
-                expanded = logExpanded,
-                onToggle = { logExpanded = !logExpanded },
-                onShare = {
-                    val send = Intent(Intent.ACTION_SEND)
-                        .setType("text/plain")
-                        .putExtra(Intent.EXTRA_SUBJECT, "Nimrag Connect log")
-                        .putExtra(Intent.EXTRA_TEXT, logReport(log, appVersion(context)))
-                    context.startActivity(Intent.createChooser(send, shareTitle))
-                },
-            )
-        }
-        if (logExpanded) {
-            if (log.isEmpty()) {
-                item(key = "log-empty") {
-                    LogContainer(last = true) {
-                        Text(
-                            stringResource(R.string.log_empty),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(16.dp),
-                        )
+            // The log: header and lines are separate lazy items that are shaped to read as one card.
+            item(key = "log-header") {
+                LogHeader(
+                    count = log.size,
+                    expanded = logExpanded,
+                    onToggle = { logExpanded = !logExpanded },
+                    onShare = {
+                        val send = Intent(Intent.ACTION_SEND)
+                            .setType("text/plain")
+                            .putExtra(Intent.EXTRA_SUBJECT, "Nimrag Connect log")
+                            .putExtra(Intent.EXTRA_TEXT, logReport(log, appVersion(context)))
+                        context.startActivity(Intent.createChooser(send, shareTitle))
+                    },
+                )
+            }
+            if (logExpanded) {
+                if (log.isEmpty()) {
+                    item(key = "log-empty") {
+                        LogContainer(last = true) {
+                            Text(
+                                stringResource(R.string.log_empty),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(16.dp),
+                            )
+                        }
                     }
-                }
-            } else {
-                val lastIndex = log.lastIndex
-                items(log.size, key = { "log-$it" }) { index ->
-                    LogContainer(last = index == lastIndex) {
-                        LogRow(log[index])
+                } else {
+                    val lastIndex = log.lastIndex
+                    items(log.size, key = { "log-$it" }) { index ->
+                        LogContainer(last = index == lastIndex) {
+                            LogRow(log[index])
+                        }
                     }
                 }
             }
@@ -160,7 +163,7 @@ internal fun SyncCard(sync: SyncState, paired: Boolean, modifier: Modifier = Mod
                 if (total == null) {
                     stringResource(R.string.sync_reading_list)
                 } else {
-                    stringResource(R.string.sync_file_of, (sync.filesDone + 1).coerceAtMost(maxOf(total, 1)), total)
+                    pluralStringResource(R.plurals.sync_pulling, total, (sync.filesDone + 1).coerceAtMost(maxOf(total, 1)), total)
                 },
                 style = MaterialTheme.typography.bodyLarge,
             )
@@ -227,13 +230,17 @@ internal fun SyncCard(sync: SyncState, paired: Boolean, modifier: Modifier = Mod
 
 // ---------------------------------------------------------------- uploads
 
+/**
+ * What is waiting, uploaded and stored. The counters appear once there is something to count
+ * (a row of zeros looks broken), and Upload now only while files wait.
+ */
 @Composable
 internal fun UploadsCard(
     uploads: UploadState,
     serverConfigured: Boolean,
     allowMobileData: Boolean,
     onUploadNow: () -> Unit,
-    onOpenSettings: () -> Unit,
+    onOpenServer: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     SectionCard(modifier) {
@@ -244,13 +251,16 @@ internal fun UploadsCard(
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            TextButton(onClick = onOpenSettings) { Text(stringResource(R.string.uploads_open_settings)) }
+            TextButton(onClick = onOpenServer) { Text(stringResource(R.string.uploads_open_server)) }
             return@SectionCard
         }
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Stat(uploads.pending.toString(), stringResource(R.string.stat_pending))
-            Stat(uploads.uploadedTotal.toString(), stringResource(R.string.stat_uploaded))
-            Stat(uploads.storedTotal.toString(), stringResource(R.string.stat_stored))
+        val any = uploads.pending > 0 || uploads.uploadedTotal > 0 || uploads.storedTotal > 0
+        if (any) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Stat(uploads.pending.toString(), stringResource(R.string.stat_pending))
+                Stat(uploads.uploadedTotal.toString(), stringResource(R.string.stat_uploaded))
+                Stat(uploads.storedTotal.toString(), stringResource(R.string.stat_stored))
+            }
         }
         val last = uploads.lastUploadAtMs
         if (last == null) {
@@ -285,8 +295,8 @@ internal fun UploadsCard(
                 color = MaterialTheme.colorScheme.error,
             )
         }
-        NimragButton(onClick = onUploadNow, enabled = uploads.pending > 0) {
-            Text(stringResource(R.string.uploads_now))
+        if (uploads.pending > 0) {
+            NimragButton(onClick = onUploadNow) { Text(stringResource(R.string.uploads_now)) }
         }
     }
 }
