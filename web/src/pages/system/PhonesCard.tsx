@@ -42,7 +42,7 @@ export function PhonesCard({ timezone }: { timezone: string }) {
 
   return (
     <Card padding="lg" aria-labelledby="phones-title" className="phones-card">
-      <CardHeader title="Signed-in phones" id="phones-title" aside="Phones that upload your watch files" />
+      <CardHeader title="Signed-in phones" id="phones-title" level={3} aside="Phones that upload your watch files" />
       {query.isPending ? <Skeleton height={20} lines={3} /> : null}
       {query.isError && !query.data ? (
         <ErrorState title="Could not load the phones" action={<Button onClick={() => void query.refetch()}>Try again</Button>}>

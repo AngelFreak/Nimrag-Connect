@@ -70,7 +70,7 @@ export function Modal({ title, description, onClose, footer, children }: ModalPr
       }}
     >
       {/* eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions -- the dialog handles Escape and the Tab focus trap */}
-      <div ref={dialog} className="sheet" role="dialog" aria-modal="true" aria-labelledby={titleId} aria-describedby={description ? descId : undefined} tabIndex={-1} onKeyDown={onKeyDown}>
+      <div ref={dialog} className="sheet sheet--modal" role="dialog" aria-modal="true" aria-labelledby={titleId} aria-describedby={description ? descId : undefined} tabIndex={-1} onKeyDown={onKeyDown}>
         <div className="sheet__head">
           <h2 className="sheet__title" id={titleId}>
             {title}
@@ -81,7 +81,7 @@ export function Modal({ title, description, onClose, footer, children }: ModalPr
             {description}
           </p>
         ) : null}
-        <div className="sheet__body modal__body">{children}</div>
+        <div className="sheet__body modal__body" data-scroll="y">{children}</div>
         {footer ? <div className="sheet__foot">{footer}</div> : null}
       </div>
     </div>,

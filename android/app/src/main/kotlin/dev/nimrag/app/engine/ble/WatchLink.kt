@@ -26,6 +26,9 @@ import dev.nimrag.app.engine.logic.DstRule
 import dev.nimrag.app.engine.logic.FileKind
 import dev.nimrag.app.engine.logic.GattPair
 import dev.nimrag.app.engine.logic.LinkRules
+import dev.nimrag.app.engine.logic.LinkStep
+import dev.nimrag.app.engine.logic.LinkSupervisor
+import dev.nimrag.app.engine.logic.StallAction
 import dev.nimrag.app.engine.logic.WriteQueue
 import dev.nimrag.app.engine.store.CopiedRow
 import dev.nimrag.app.model.GarminConnect
@@ -104,6 +107,24 @@ class WatchLink(private val hub: Hub, private val scanner: BleScanner) {
     private val backoff = Backoff()
     private var pairing: Pairing? = null
 
+    /** Per-step deadlines and the escalation after repeated stalls (pure logic, see [LinkSupervisor]). */
+    private val supervisor = LinkSupervisor()
+
+    /** The setup step the current connection waits in; null when there is no connection or setup is over. */
+    private var step: LinkStep? = null
+
+    /** The MTU exchange got no answer on this connection and was skipped. */
+    private var mtuSkipped = false
+
+    /** The current [gatt] reported CONNECTED (so a disconnect is worth waiting for before close). */
+    private var gattConnected = false
+
+    /** The old client, disconnecting: it is closed when the stack reports it or after [CLOSE_WAIT_MS]. */
+    private var closing: BluetoothGatt? = null
+
+    /** The address the system was last asked to report presence for in this process. */
+    private var observing: String? = null
+
     /** [bondedBefore]: the phone already had a bond (Garmin Connect's, say) that we reuse and must not remove. */
     private data class Pairing(
         val address: String,
@@ -119,7 +140,8 @@ class WatchLink(private val hub: Hub, private val scanner: BleScanner) {
     private val tick = Runnable { feed(Input.Tick) }
     private val reconnect = Runnable { connect() }
     private val pumpAgain = Runnable { handlePump(writes.pump()) }
-    private val setupWatchdog = Runnable { linkFailed("The link did not come up in time") }
+    private val stepWatchdog = Runnable { onStepStalled() }
+    private val closeFallback = Runnable { finishClose() }
     private val pairTimeout = Runnable { failPairing("Pairing timed out") }
     private val autoSync = Runnable {
         if (ready) {
@@ -148,11 +170,26 @@ class WatchLink(private val hub: Hub, private val scanner: BleScanner) {
         hub.refreshPermissions()
         val watch = settings.watch
         if (watch != null) {
-            // Idempotent: makes sure the system still reports the watch coming into range.
-            hub.companion.startObserving(watch.address)
-            connect()
+            // Once per process: makes sure the system still reports the watch coming into range
+            // (an app update may drop it). Repeating it on every service start adds nothing.
+            if (observing != watch.address && hub.companion.startObserving(watch.address)) observing = watch.address
+            // Another start while a connection exists, is closing or waits out a backoff changes
+            // nothing: one owner of the GATT client, and the backoff stays in force.
+            if (gatt == null && closing == null && !handler.hasCallbacks(reconnect)) connect()
         }
         return true
+    }
+
+    /**
+     * The system says the watch is in range. While we only wait out a reconnect delay, connect
+     * now instead; a connection or a close in progress is left alone.
+     */
+    fun onWatchPresent() {
+        if (!running || gatt != null || bondLost) return
+        if (handler.hasCallbacks(reconnect)) {
+            handler.removeCallbacks(reconnect)
+            connect()
+        }
     }
 
     /** The service stopped: drop the link, keep the watch remembered. */
@@ -268,6 +305,8 @@ class WatchLink(private val hub: Hub, private val scanner: BleScanner) {
             hub.companion.disassociate(watch.address)
         }
         backoff.reset()
+        supervisor.healthy()
+        observing = null
         forcedNotifyId = null
         avoidNotifyId = null
         channelRetries = 0
@@ -477,6 +516,12 @@ class WatchLink(private val hub: Hub, private val scanner: BleScanner) {
     private fun connect() {
         if (!running || gatt != null || client != null) return
         val watch = settings.watch ?: return
+        // The previous client is closed before a new one is made, never two at once.
+        if (closing != null) {
+            handler.removeCallbacks(reconnect)
+            handler.postDelayed(reconnect, CLOSE_RETRY_MS)
+            return
+        }
         if (bondLost) {
             setLink(LinkState.BondLost)
             return
@@ -498,10 +543,12 @@ class WatchLink(private val hub: Hub, private val scanner: BleScanner) {
                 return
             }
             attMtu = MIN_MTU
-            // autoConnect keeps waiting in the background until the watch is in range.
+            // autoConnect keeps waiting in the background until the watch is in range. After
+            // repeated stalls the supervisor asks for a direct connection instead.
+            val direct = supervisor.directConnect
             val g = device?.connectGatt(
                 ctx,
-                true,
+                !direct,
                 callback,
                 BluetoothDevice.TRANSPORT_LE,
                 BluetoothDevice.PHY_LE_1M_MASK,
@@ -513,7 +560,11 @@ class WatchLink(private val hub: Hub, private val scanner: BleScanner) {
                 return
             }
             gatt = g
+            gattConnected = false
+            mtuSkipped = false
             setLink(LinkState.Waiting)
+            if (direct) log.info("Connecting directly, the earlier attempts stalled")
+            enterStep(LinkStep.Connecting)
         } catch (_: SecurityException) {
             permissionLost()
         } catch (_: IllegalArgumentException) {
@@ -521,34 +572,130 @@ class WatchLink(private val hub: Hub, private val scanner: BleScanner) {
         }
     }
 
+    // ---- setup steps: one deadline each, named in the log when one stalls ----
+
+    private fun enterStep(next: LinkStep) {
+        step = next
+        handler.removeCallbacks(stepWatchdog)
+        val timeout = LinkSupervisor.timeoutMs(next, supervisor.directConnect)
+        if (timeout != null) handler.postDelayed(stepWatchdog, timeout)
+    }
+
+    private fun leaveSetup() {
+        step = null
+        handler.removeCallbacks(stepWatchdog)
+    }
+
+    private fun onStepStalled() {
+        val stalled = step ?: return
+        val g = gatt ?: return
+        if (stalled == LinkStep.Connecting) {
+            // A direct connect that found no watch: not a broken link, go back to the background connection.
+            supervisor.connectFailed()
+            log.info("No watch found by the direct connection")
+            teardown()
+            scheduleReconnect(backoff.next())
+            return
+        }
+        when (val action = supervisor.onStall(stalled, mtuSkipped)) {
+            StallAction.SkipMtu -> {
+                mtuSkipped = true
+                attMtu = MIN_MTU
+                log.warn("Link stalled at ${stalled.label}, continuing with MTU $MIN_MTU")
+                startDiscovery(g)
+            }
+            is StallAction.Reconnect -> {
+                val r = action.recovery
+                val next = buildList {
+                    if (r.refreshCache) add("refreshing the GATT cache")
+                    if (r.directConnect) add("connecting directly")
+                }.joinToString(" and ")
+                log.warn("Link stalled at ${stalled.label} (attempt ${r.attempt})${if (next.isNotEmpty()) ", next: $next" else ""}")
+                hintOtherApp()
+                teardown()
+                scheduleReconnect(backoff.next())
+            }
+        }
+    }
+
+    private fun requestMtuStep(g: BluetoothGatt) {
+        enterStep(LinkStep.MtuExchange)
+        val asked = guarded(false) { g.requestMtu(REQUESTED_MTU) }
+        if (!asked && step == LinkStep.MtuExchange) {
+            mtuSkipped = true
+            log.warn("Android would not start the MTU exchange, continuing with MTU $MIN_MTU")
+            startDiscovery(g)
+        }
+    }
+
+    private fun startDiscovery(g: BluetoothGatt) {
+        enterStep(LinkStep.ServiceDiscovery)
+        if (!guarded(false) { g.discoverServices() } && step == LinkStep.ServiceDiscovery) {
+            linkFailed("Service discovery could not start")
+        }
+    }
+
+    /**
+     * Asks the stack to forget its cached services of the watch. `BluetoothGatt.refresh()` is a
+     * hidden method: reflection, guarded, and a log line either way.
+     */
+    @SuppressLint("DiscouragedPrivateApi")
+    private fun refreshGattCache(g: BluetoothGatt) {
+        supervisor.refreshDone()
+        val done = try {
+            BluetoothGatt::class.java.getMethod("refresh").invoke(g) as? Boolean
+        } catch (_: Exception) {
+            null
+        }
+        log.info(if (done == true) "GATT cache refreshed" else "GATT cache refresh is not available on this Android")
+    }
+
     private val callback = object : BluetoothGattCallback() {
         override fun onConnectionStateChange(g: BluetoothGatt, status: Int, newState: Int) {
+            // The old client that is being closed: close it once the stack says it is disconnected.
+            if (g === closing) {
+                if (newState == BluetoothProfile.STATE_DISCONNECTED) finishClose()
+                return
+            }
             if (g !== gatt) {
                 safeClose(g)
                 return
             }
             if (newState == BluetoothProfile.STATE_CONNECTED && status == BluetoothGatt.GATT_SUCCESS) {
+                if (step != LinkStep.Connecting) return // a repeated report of the same connection
+                gattConnected = true
                 setLink(LinkState.Connecting)
                 log.info("Connected, setting up the link")
-                handler.removeCallbacks(setupWatchdog)
-                handler.postDelayed(setupWatchdog, SETUP_TIMEOUT_MS)
-                val asked = guarded(false) { g.requestMtu(REQUESTED_MTU) }
-                if (!asked) guarded(false) { g.discoverServices() }
+                if (supervisor.refreshCache) refreshGattCache(g)
+                requestMtuStep(g)
             } else {
                 log.info("Link lost (status $status)")
+                gattConnected = false // already disconnected: nothing to wait for before close
+                if (step == LinkStep.Connecting) supervisor.connectFailed()
                 linkLost()
             }
         }
 
         override fun onMtuChanged(g: BluetoothGatt, mtu: Int, status: Int) {
-            if (g !== gatt) return
-            attMtu = if (status == BluetoothGatt.GATT_SUCCESS) mtu else MIN_MTU
-            log.info("MTU $attMtu")
-            if (!guarded(false) { g.discoverServices() }) linkFailed("Service discovery could not start")
+            if (g !== gatt || client != null) return
+            val answered = if (status == BluetoothGatt.GATT_SUCCESS) mtu else MIN_MTU
+            when (step) {
+                LinkStep.MtuExchange -> {
+                    attMtu = answered
+                    log.info("MTU $attMtu")
+                    startDiscovery(g)
+                }
+                // The answer came after we gave up waiting for it: still the real MTU of this link.
+                LinkStep.ServiceDiscovery, LinkStep.Notifications -> {
+                    attMtu = answered
+                    log.info("MTU $attMtu (late answer)")
+                }
+                else -> Unit
+            }
         }
 
         override fun onServicesDiscovered(g: BluetoothGatt, status: Int) {
-            if (g !== gatt) return
+            if (g !== gatt || step != LinkStep.ServiceDiscovery) return
             if (status != BluetoothGatt.GATT_SUCCESS) return linkFailed("Service discovery failed (status $status)")
             val service = g.getService(GattPair.SERVICE) ?: return linkFailed("The watch has no multi-link service")
             val id = GattPair.choose(service.characteristics.map { it.uuid }, forcedNotifyId, avoidNotifyId)
@@ -559,15 +706,16 @@ class WatchLink(private val hub: Hub, private val scanner: BleScanner) {
             if (notify == null || write == null || cccd == null) return linkFailed("Characteristic pair incomplete")
             currentNotifyId = id
             writeChar = write
+            enterStep(LinkStep.Notifications)
             val enabled = guarded(false) { g.setCharacteristicNotification(notify, true) } &&
                 guarded(false) { writeCccd(g, cccd) }
             if (!enabled) linkFailed("Could not enable notifications")
         }
 
         override fun onDescriptorWrite(g: BluetoothGatt, descriptor: BluetoothGattDescriptor, status: Int) {
-            if (g !== gatt || descriptor.uuid != CCCD) return
+            if (g !== gatt || descriptor.uuid != CCCD || step != LinkStep.Notifications) return
             if (status != BluetoothGatt.GATT_SUCCESS) return linkFailed("Enabling notifications failed (status $status)")
-            handler.removeCallbacks(setupWatchdog)
+            leaveSetup()
             startClient()
         }
 
@@ -832,6 +980,7 @@ class WatchLink(private val hub: Hub, private val scanner: BleScanner) {
             if (!budget.stillSet) settings.firstConnect = false
         }
         backoff.reset()
+        supervisor.healthy()
         channelRetries = 0
         forcedNotifyId = null
         avoidNotifyId = null
@@ -936,6 +1085,8 @@ class WatchLink(private val hub: Hub, private val scanner: BleScanner) {
 
     private fun linkFailed(reason: String) {
         log.warn(reason)
+        // A setup step that fails outright escalates like one that stalls (cache refresh, direct connect).
+        step?.takeIf { it != LinkStep.Connecting }?.let { supervisor.onStall(it, mtuSkipped = true) }
         hintOtherApp()
         teardown()
         scheduleReconnect(backoff.next())
@@ -952,7 +1103,8 @@ class WatchLink(private val hub: Hub, private val scanner: BleScanner) {
     /** Drop the client and the GATT object; the next connection starts from scratch. */
     private fun teardown() {
         handler.removeCallbacks(tick)
-        handler.removeCallbacks(setupWatchdog)
+        leaveSetup()
+        mtuSkipped = false
         handler.removeCallbacks(autoSync)
         handler.removeCallbacks(pumpAgain)
         writes.clear()
@@ -963,7 +1115,7 @@ class WatchLink(private val hub: Hub, private val scanner: BleScanner) {
         currentNotifyId = null
         connectionHasFirst = false
         attMtu = MIN_MTU
-        gatt?.let(::safeClose)
+        gatt?.let(::releaseGatt)
         gatt = null
         hub.update { it.copy(sync = it.sync.copy(running = false, currentBytes = 0, currentSize = 0)) }
     }
@@ -984,6 +1136,40 @@ class WatchLink(private val hub: Hub, private val scanner: BleScanner) {
         handler.removeCallbacks(reconnect)
         teardown()
         setLink(LinkState.Offline)
+    }
+
+    /**
+     * Gives the client up. A connected one is disconnected first and closed when the stack
+     * reports the disconnect (or after [CLOSE_WAIT_MS]); closing straight after `disconnect()`
+     * can leave the link-layer connection alive, so the next client would meet a half-closed
+     * link. [connect] never runs while one is still closing.
+     */
+    private fun releaseGatt(g: BluetoothGatt) {
+        finishClose() // at most one client closing at a time
+        val wasConnected = gattConnected
+        gattConnected = false
+        if (!wasConnected) {
+            safeClose(g)
+            return
+        }
+        closing = g
+        try {
+            g.disconnect()
+        } catch (_: SecurityException) {
+            // Nothing to disconnect without the permission; closed below.
+        }
+        handler.postDelayed(closeFallback, CLOSE_WAIT_MS)
+    }
+
+    private fun finishClose() {
+        handler.removeCallbacks(closeFallback)
+        val g = closing ?: return
+        closing = null
+        try {
+            g.close()
+        } catch (_: SecurityException) {
+            // Nothing left to release without the permission.
+        }
     }
 
     private fun safeClose(g: BluetoothGatt) {
@@ -1089,7 +1275,8 @@ class WatchLink(private val hub: Hub, private val scanner: BleScanner) {
 
         /** Garmin Explore's app version, seen working in CAP-1 [ours, revisit]. */
         const val APP_VERSION = 38215
-        const val SETUP_TIMEOUT_MS = 20_000L
+        const val CLOSE_WAIT_MS = 1_500L
+        const val CLOSE_RETRY_MS = 100L
         const val PAIR_TIMEOUT_MS = 120_000L
         const val BUSY_RETRY_MS = 25L
         const val MAX_BUSY_RETRIES = 200

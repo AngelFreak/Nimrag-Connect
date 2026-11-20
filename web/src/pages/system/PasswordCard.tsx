@@ -33,8 +33,9 @@ export function PasswordCard() {
 
   return (
     <Card padding="lg" aria-labelledby="password-title">
-      <CardHeader title="Change password" id="password-title" />
-      <form onSubmit={submit} noValidate style={{ display: 'flex', flexDirection: 'column', gap: 14 }} aria-labelledby="password-title">
+      <CardHeader title="Change password" id="password-title" level={3} />
+      <p className="card__intro">Your other devices are logged out when you change it.</p>
+      <form onSubmit={submit} noValidate className="form" aria-labelledby="password-title">
         <TextField
           label="Current password"
           type="password"

@@ -96,15 +96,23 @@ class Hub(val app: Application) {
     fun hasNotificationPermission(): Boolean =
         Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU || granted(Manifest.permission.POST_NOTIFICATIONS)
 
-    /** Re-reads the runtime permissions and the adapter state into `AppState.permissions`. */
-    fun refreshPermissions() {
+    /**
+     * Re-reads the runtime permissions and the adapter state into `AppState.permissions`.
+     * True when they differ from what was published before.
+     */
+    fun refreshPermissions(): Boolean {
         val permissions = Permissions(
             bluetooth = hasBluetoothPermissions(),
             notifications = hasNotificationPermission(),
             bluetoothEnabled = bluetoothEnabled(),
         )
         val garminConnect = garminConnect()
-        update { it.copy(permissions = permissions, garminConnect = garminConnect) }
+        var changed = false
+        update {
+            changed = it.permissions != permissions
+            it.copy(permissions = permissions, garminConnect = garminConnect)
+        }
+        return changed
     }
 
     /**

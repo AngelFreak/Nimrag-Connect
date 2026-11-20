@@ -325,6 +325,8 @@ fn dev_description_json(d: &fit::DeveloperFieldDescription) -> Json {
 pub struct ReparseReport {
     pub files: u64,
     pub fit_inputs: u64,
+    /// Garmin Connect JSON envelopes (see `crate::connect`).
+    pub connect_inputs: u64,
     pub fit_files: u64,
     pub messages: u64,
     /// Files whose decode returned an error or panicked.
@@ -407,6 +409,13 @@ pub async fn reparse_partitions(
     reparse_files(tx, data_dir, shas).await
 }
 
+/// What a stored blob is, decided from its bytes.
+enum Read {
+    Fit(Parsed),
+    Connect(Box<crate::connect::Parsed>),
+    Other,
+}
+
 async fn reparse_files(
     tx: &mut Transaction<'_, Sqlite>,
     data_dir: &Path,
@@ -418,9 +427,15 @@ async fn reparse_files(
     };
     for sha in shas {
         let (dir, sha_owned) = (data_dir.to_path_buf(), sha.clone());
-        let read = tokio::task::spawn_blocking(move || -> Result<Option<Parsed>> {
+        let read = tokio::task::spawn_blocking(move || -> Result<Read> {
             let bytes = crate::store::read_verified(&dir, &sha_owned)?;
-            Ok(looks_like_fit(&bytes).then(|| parse(&bytes)))
+            Ok(if crate::connect::looks_like_connect(&bytes) {
+                Read::Connect(Box::new(crate::connect::parse(&bytes)))
+            } else if looks_like_fit(&bytes) {
+                Read::Fit(parse(&bytes))
+            } else {
+                Read::Other
+            })
         })
         .await?;
         match read {
@@ -428,8 +443,13 @@ async fn reparse_files(
                 report.unreadable += 1;
                 write_unreadable(tx, &sha, &format!("{e:#}")).await?;
             }
-            Ok(None) => clear(tx, &sha).await?,
-            Ok(Some(parsed)) => {
+            Ok(Read::Other) => clear(tx, &sha).await?,
+            Ok(Read::Connect(parsed)) => {
+                report.connect_inputs += 1;
+                clear(tx, &sha).await?;
+                crate::connect::write(tx, &sha, &parsed).await?;
+            }
+            Ok(Read::Fit(parsed)) => {
                 report.fit_inputs += 1;
                 report.fit_files += parsed.decoded.files.len() as u64;
                 report.messages += parsed

@@ -1,8 +1,9 @@
 /* ------------------------------------------------------------------ shell */
 .shell {
-  min-height: 100dvh;
+  flex: 1;
   display: flex;
   flex-direction: column;
+  min-width: 0;
 }
 
 .shell__header {
@@ -20,6 +21,9 @@
   gap: 12px 32px;
 }
 .shell__brand {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--touch);
   font-family: var(--font-display);
   font-size: 18px;
   font-weight: 600;
@@ -42,6 +46,8 @@
   display: inline-flex;
   align-items: center;
   min-height: var(--touch);
+  min-width: var(--touch);
+  justify-content: center;
   color: var(--text-2);
   text-decoration: none;
   border-bottom: 2px solid transparent;
@@ -341,6 +347,8 @@
 .card__title {
   font-size: var(--fs-md);
   font-weight: 600;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 .card__title--muted {
   font-size: var(--fs-sm);
@@ -353,6 +361,8 @@
 .card__aside {
   font-size: var(--fs-sm);
   color: var(--text-2);
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .grid-2 {
@@ -452,7 +462,8 @@
   border: 1px solid var(--line-strong);
   border-radius: var(--radius-pill);
   padding: 4px 10px;
-  white-space: nowrap;
+  max-width: 100%;
+  overflow-wrap: anywhere;
 }
 
 .filter-chips {
@@ -526,7 +537,10 @@
 
 .btn {
   min-height: var(--touch);
-  padding: 0 18px;
+  padding: 10px 18px;
+  max-width: 100%;
+  text-align: center;
+  line-height: 1.25;
   border-radius: var(--radius-control);
   border: 1px solid var(--line-strong);
   background: none;
@@ -579,6 +593,7 @@
   color: var(--text-2);
 }
 .field__input {
+  min-width: 0;
   min-height: var(--touch-lg);
   border-radius: var(--radius-control);
   border: 1px solid var(--line-strong);
@@ -593,7 +608,8 @@
   color: var(--text-2);
 }
 .field__hint {
-  font-size: var(--fs-xs);
+  font-size: var(--fs-sm);
+  line-height: 1.4;
   color: var(--text-2);
 }
 
@@ -742,6 +758,11 @@
 
 .table-wrap {
   overflow-x: auto;
+  /* A positioned, layout-contained box: anything absolutely placed inside (the .sr-only header of an
+     actions column) is clipped with the table instead of widening the whole page, and the narrow
+     layout below reacts to the width of this box, not of the screen. */
+  position: relative;
+  container: table-wrap / inline-size;
 }
 .table {
   width: 100%;
@@ -771,7 +792,12 @@
 .table th:first-child,
 .table td:first-child {
   padding-left: 0;
-  white-space: nowrap;
+}
+/* The first cell names the row (a date, a token). It keeps a date on one line, and a long name
+   wraps instead of pushing the table wider than its box. */
+.table td:first-child {
+  min-width: 11ch;
+  overflow-wrap: break-word;
 }
 .table th:last-child,
 .table td:last-child {
@@ -808,16 +834,77 @@
   color: var(--text-2);
 }
 .table--compact th {
-  padding: 6px 12px;
+  padding: 6px 8px;
   border-bottom: 0;
 }
+.table--compact td:first-child {
+  min-width: 0;
+}
 .table--compact td {
-  padding: 7px 12px;
+  padding: 7px 8px;
   border-bottom: 0;
   border-top: 1px solid var(--line);
 }
-.table--wide {
-  min-width: 480px;
+
+/* A wide table (several columns) turns into one block per row when its box is narrow: the first
+   cell is the title, every other cell reads "label  value", and an actions cell sits underneath. */
+@container table-wrap (max-width: 559px) {
+  .table--wide,
+  .table--wide tbody,
+  .table--wide tr,
+  .table--wide td {
+    display: block;
+  }
+  .table--wide thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .table--wide tbody tr {
+    padding: 12px 0;
+    border-top: 1px solid var(--line);
+  }
+  .table--wide tbody tr:first-child {
+    border-top: 0;
+    padding-top: 4px;
+  }
+  .table--wide td,
+  .table--wide td:first-child,
+  .table--wide td:last-child {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 16px;
+    padding: 3px 0;
+    border: 0;
+    text-align: right;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+  .table--wide td::before {
+    content: attr(data-label);
+    flex: none;
+    color: var(--text-2);
+    text-align: left;
+  }
+  .table--wide td:first-child {
+    display: block;
+    padding-bottom: 6px;
+    text-align: left;
+    font-size: var(--fs-md);
+    font-weight: 600;
+  }
+  .table--wide td:first-child::before,
+  .table--wide td:not([data-label])::before {
+    content: none;
+  }
+  .table--wide td:not([data-label]):last-child {
+    justify-content: flex-start;
+    padding-top: 10px;
+  }
 }
 
 /* ------------------------------------------------------------------ bars, rings, charts */
@@ -994,6 +1081,9 @@
   resize: none;
   overflow-wrap: anywhere;
 }
+.garmin-import__body {
+  padding-top: 10px;
+}
 .garmin-import summary {
   min-height: var(--touch);
   display: flex;
@@ -1124,10 +1214,22 @@
   color: var(--text-2);
 }
 .cal-grid {
-  gap: 2px;
+  gap: 2px 0;
+}
+/* Seven 44 px columns need 308 px: the card keeps 4 px of padding, and on the narrowest phones it
+   runs edge to edge so the days stay big enough to hit. */
+.card.cal {
+  padding: 12px 4px;
+}
+@media (max-width: 359px) {
+  .card.cal {
+    margin: 0 calc(var(--gutter) * -1);
+    border-radius: 0;
+    padding-inline: 0;
+  }
 }
 .cal-day {
-  min-height: 46px;
+  min-height: 48px;
   border: 0;
   border-radius: 10px;
   background: none;
@@ -1207,7 +1309,7 @@
 
 /* ------------------------------------------------------------------ login and misc pages */
 .center-page {
-  min-height: 100dvh;
+  flex: 1;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1290,4 +1392,174 @@
   flex-direction: column;
   gap: 12px;
   padding: 12px;
+}
+
+/* ------------------------------------------------------------------ forms, notes, sections */
+/* One form rhythm everywhere: 16 px between fields, a row of fields that wraps on its own, and the
+   actions last (the primary one first, sharing the row when there is room, stacked when not). */
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+.form__group {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+.form__group + .form__group {
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+.form__group-title {
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--text);
+}
+.form__row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr));
+  gap: 14px 16px;
+}
+.form__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 12px;
+}
+.form__actions > .btn {
+  flex: 1 1 140px;
+}
+
+/* Explanatory text in a card: at most two short sentences, easy to scan. */
+.card__intro {
+  font-size: var(--fs-base);
+  line-height: 1.5;
+  color: var(--text-2);
+  max-width: 60ch;
+}
+
+/* A boxed note inside a card (what to know before acting). */
+.notice {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 12px 14px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-control);
+  background: var(--raised);
+  font-size: var(--fs-sm);
+  line-height: 1.5;
+  color: var(--text-2);
+}
+.notice--warn {
+  border-color: var(--warn);
+}
+.notice svg {
+  flex: none;
+  margin-top: 1px;
+  color: var(--warn);
+}
+.notice p {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* Who is signed in (Settings, Account). */
+.account {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 16px;
+}
+.account__who {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.account__name {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  font-size: var(--fs-xl);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+/* A titled group of cards. Phone: title above the cards. Desktop: title in a left column that
+   stays in view while the cards scroll. */
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+.section__head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 0 2px;
+}
+.section__title {
+  font-family: var(--font-display);
+  font-size: var(--fs-title-sm);
+  font-weight: 600;
+  line-height: 1.25;
+}
+.section__hint {
+  font-size: var(--fs-sm);
+  color: var(--text-2);
+  max-width: 48ch;
+}
+.section__cards {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+  min-width: 0;
+}
+.sections {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  padding-top: 8px;
+}
+@media (min-width: 1024px) {
+  .sections {
+    gap: 0;
+  }
+  .section {
+    display: grid;
+    grid-template-columns: 240px minmax(0, 1fr);
+    gap: 40px;
+    padding: 32px 0;
+    border-top: 1px solid var(--line);
+  }
+  .section:first-child {
+    padding-top: 8px;
+    border-top: 0;
+  }
+  .section__head {
+    position: sticky;
+    top: 16px;
+    align-self: start;
+    padding: 0;
+  }
+  .section__cards {
+    /* Columns, not a grid: cards of different heights pack without holes, and a section with one
+       card keeps a card-sized column instead of stretching. */
+    display: block;
+    columns: 380px;
+    column-gap: 16px;
+  }
+  .section__cards > * {
+    margin-bottom: 16px;
+    break-inside: avoid;
+  }
+  .section__cards > *:last-child {
+    margin-bottom: 0;
+  }
 }

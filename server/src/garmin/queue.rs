@@ -194,7 +194,7 @@ pub async fn backfill(pool: &SqlitePool, uid: i64, since_ts: i64, now: i64) -> R
     let r = sqlx::query(
         "INSERT INTO garmin_uploads (file_sha256, status, attempts, next_attempt_at, created_at, user_id)
          SELECT sha256, 'pending', 0, ?, ?, ? FROM activities_current
-         WHERE user_id = ? AND COALESCE(start_ts, ts, time_created) >= ?
+         WHERE user_id = ? AND origin = 'fit' AND COALESCE(start_ts, ts, time_created) >= ?
          ON CONFLICT (file_sha256) DO NOTHING",
     )
     .bind(now)

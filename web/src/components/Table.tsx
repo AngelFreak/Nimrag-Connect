@@ -8,6 +8,8 @@ export interface Column<Row> {
   cell: (row: Row) => ReactNode | null | undefined;
   align?: 'start' | 'end';
   muted?: boolean;
+  /** Name of the column in the stacked layout of a `wide` table; defaults to `header` when that is text. Leave empty for an actions column. */
+  label?: string;
   /** The header becomes a button that calls `onSort(key)`; needs the table's `sort` and `onSort`. */
   sortable?: boolean;
 }
@@ -25,7 +27,10 @@ interface TableProps<Row> {
   caption?: string;
   captionVisible?: boolean;
   density?: 'comfortable' | 'compact';
-  /** Force horizontal scrolling below this table width (desktop tables on a phone). */
+  /**
+   * A table with several columns: in a box narrower than 560 px every row becomes a block (first
+   * cell as its title, "label value" lines for the rest) instead of scrolling sideways.
+   */
   wide?: boolean;
   /** Extra class on the `<table>` element (page-local column widths and links). */
   className?: string;
@@ -74,7 +79,11 @@ export function Table<Row>({ columns, rows, rowKey, caption, captionVisible, den
           {rows.map((row, i) => (
             <tr key={rowKey(row, i)}>
               {columns.map((c) => (
-                <td key={c.key} className={[c.align === 'end' ? 'is-end' : '', c.muted ? 'is-muted' : ''].filter(Boolean).join(' ') || undefined}>
+                <td
+                  key={c.key}
+                  data-label={c.label ?? (typeof c.header === 'string' ? c.header : undefined)}
+                  className={[c.align === 'end' ? 'is-end' : '', c.muted ? 'is-muted' : ''].filter(Boolean).join(' ') || undefined}
+                >
                   <ValueOrUnavailable value={c.cell(row)} />
                 </td>
               ))}

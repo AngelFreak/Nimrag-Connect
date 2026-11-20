@@ -45,6 +45,8 @@ nimrag-server serve [--data-dir DIR] [--listen 127.0.0.1:8080] [--log-json]
 nimrag-server token create --name NAME [--user USERNAME]   # for tools and scripts; phones get theirs by signing in to the app
 nimrag-server token list
 nimrag-server token revoke ID
+nimrag-server import-export [--user USERNAME] <archive.zip | dir>   # a Garmin data export (see below)
+nimrag-server import-connect --user USERNAME [--timezone IANA] <dir> # Garmin Connect JSON history (see below)
 nimrag-server reparse                    # derived tables from the blobs
 nimrag-server rebuild-ledger             # files/uploads rows from the sidecars
 nimrag-server user list                  # accounts (no secrets)
@@ -382,7 +384,87 @@ as `origin` on the sidecar upload event and in the `uploads.origin` column.
   Garmin-computed cloud data, not watch files; the owner decides later whether to
   import them.
 
-`serve`, `import-export`, `reparse`, `rebuild-ledger` and `dev-seed` take an exclusive lock on
-`<data>/.lock`; a second one fails fast with "data dir ... in use by `<command>`".
+## Garmin Connect history
+
+```
+nimrag-server import-connect --user USERNAME [--data-dir DIR] [--timezone IANA] <dir>
+```
+
+Imports a year or so of the owner's Garmin Connect history (raw JSON pulled through a Connect
+connector: sleep, HRV, training status and load, VO2 max, daily stats, activities) so the history
+pages show data from before the watch was synced to this server. Reads files only (no network).
+`--user` is required and names a normal user (not an admin); the data belongs to that user. The
+command takes the data-dir lock, so it cannot run beside `serve` (stop the server, import, start
+it again).
+
+**Input.** Every `*.json` below `<dir>` is recognised by its shape, not its name:
+
+| shape | kind | maps to |
+| --- | --- | --- |
+| `{"nights": [...]}` | `sleep` | `sleep_sessions` (start/end, score, stage totals), `resting_hr` |
+| `{"trend": [...]}` with `last_night_avg_hrv_ms` / `weekly_avg_hrv_ms` | `hrv_trend` | `hrv_summary` |
+| `{date: {..., baseline_balanced_low_ms, ...}}` | `hrv_daily` | `hrv_summary` with baselines |
+| `{date: {training_status, acute_load, ...}}` | `training_status` | `training_status`, `training_load`, `training_balance` |
+| `{"trend": [{atl, ctl, ...}]}` | `training_load` | `training_load`, `training_status` |
+| `{"sport", "trend": [{vo2_max, ...}]}` | `vo2max` | `vo2max` (carried-forward days skipped) |
+| `{"days": [{steps, total_calories, ...}]}` | `stats` | `daily_totals` (days in progress or without data skipped) |
+| `{"activities": [...]}` (the list) | `activity_summary` | one blob per entry: `activities`, `activity_sessions` |
+| `{"summary": {...}, "fit": {"messages": [...]}}` | `activity` | `activities`, `activity_sessions`, `activity_laps`, `strength_sets`, `exercise_titles`, `activity_metrics` |
+
+Anything else is listed as "not Connect JSON" and not stored. Not imported (not in the data):
+heart-rate zones, tracks and per-second records, minute-level heart rate, stress, body battery.
+
+**Storage.** Each input becomes a content-addressed blob (`files/<aa>/<bb>/<sha256>`, ledgered
+with `source = connect`) holding an envelope around the original JSON, byte for byte:
+`{"nimrag_connect":1,"kind":"sleep","tz":"Europe/Copenhagen","data":<the original>}`. The blob is
+recognised from its first bytes (like FIT), so `ingest`, `reparse` and an admin's assign handle it
+with no other state: `reparse` derives it again, deleting a user leaves the blobs unassigned, and
+assigning them to a user derives their rows again for the new owner. The envelope carries the IANA
+time zone used for Connect's local dates and times (`--timezone` if given, else the user's
+`timezone` setting); the same JSON imported under another zone is another blob. Re-importing is
+idempotent: identical input gives identical blobs, which are already stored and ledgered (the
+path inside `<dir>`, plus `#<id>` for a list entry, is the `origin` and folds repeats into the
+existing event); nothing is derived twice.
+
+**Time.** Sleep start and end are UTC instants (epoch milliseconds); decoded FIT messages carry UTC
+ISO strings; an activity summary has both `start_time_gmt` and `start_time_local`; the activity
+list has a local `start_time`; everything else is per local date. Local times and dates are
+resolved in the envelope's zone (the first reading of an hour that happens twice). A row Connect
+gives only per date sits at the start of that local day, so a watch reading later the same day is
+the day's value in the range endpoints.
+
+**Rank: the watch wins.** A Connect source has `sources.origin = 'connect'` and a rank key
+starting with `-` (`-:<kind priority>:<last_ts>:<rows>`), which sorts below every FIT key (those
+start with `0` or `1`). Sample rows (HRV, training status and load, VO2 max, resting heart rate,
+`daily_totals`) use the usual rank-based upsert, so a FIT row for the same key replaces a Connect
+row and a Connect row never replaces a FIT row, whichever is imported first; a reparse gives the
+same result. Between two Connect sources the richer kind wins (the dedicated training status over
+the load history, the daily HRV with baselines over the trend, a detailed activity over its list
+entry), then the later data, then more rows.
+
+**Dedup of activities and nights.** The views `activities_current` and `sleep_sessions_current`
+hide a Connect activity when a FIT activity of the same user (from the watch or from
+`import-export`) starts within 120 seconds of it, and a Connect night when a FIT night of the same
+user overlaps it in time. Hidden, not deleted: the rows stay derived, and the Connect item shows
+again if the FIT file is removed. Another user's FIT files never hide anything.
+
+**Pages.** `sleep_sessions` has stage totals (`asleep_s`, `deep_s`, `light_s`, `rem_s`,
+`awake_s`) for a Connect night; time asleep is deep + light + REM (what the watch shows), not the
+time in bed. A watch night keeps using its `sleep_levels` rows. `daily_totals` (steps, total,
+active and resting calories per local day) fills the Today and Movement pages for a day without
+minute data. `system.last_data_ts` and the Garmin Forward backfill only look at FIT sources.
+
+Migration `0011_connect.sql`: `sources.origin`, the five sleep columns, `daily_totals`, the two
+views, and a rebuild of `files` so its `source` CHECK accepts `connect` (SQLite cannot alter a
+CHECK; the rows go through a temp table with the foreign keys deferred to commit, nothing is lost,
+tested in `tests/migration_connect.rs`).
+
+Tests (`tests/connect.rs`, synthetic JSON with made-up numbers; real data never goes in the
+repository): the mapping and the pages, an idempotent re-import, the user's zone, the CLI's
+refusals, reparse gives the same rows, delete-then-assign moves the history, another user sees
+nothing, and (with the FIT profile) a watch row or activity wins in both import orders.
+
+`serve`, `import-export`, `import-connect`, `reparse`, `rebuild-ledger` and `dev-seed` take an
+exclusive lock on `<data>/.lock`; a second one fails fast with "data dir ... in use by `<command>`".
 (`token` and `user` do not lock.) This needs Rust 1.89 for `File::try_lock`, so the server
 crate sets `rust-version = "1.89"`; core stays at 1.80.

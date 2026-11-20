@@ -494,3 +494,24 @@ describe('Settings: two-factor', () => {
     expect(screen.getByTestId('where')).toHaveTextContent('/settings');
   });
 });
+
+describe('Settings: sections', () => {
+  it('groups the cards as Account, Timezone and goals, Phones, Garmin, in that order', async () => {
+    mockApi(settingsRoutes());
+    renderAt(<SettingsPage />, '/settings');
+    await screen.findByRole('heading', { name: 'Garmin Connect (Forward)' });
+    const titles = Array.from(document.querySelectorAll('.section__title')).map((h) => h.textContent);
+    expect(titles).toEqual(['Account', 'Timezone and goals', 'Phones', 'Garmin']);
+    // Cards sit under their section's title as h3, with the account cards first.
+    const account = screen.getByRole('region', { name: 'Account' });
+    expect(within(account).getAllByRole('heading', { level: 3 }).map((h) => h.textContent)).toEqual(['Signed in', 'Change password', 'Two-factor']);
+  });
+
+  it('the Garmin card still says the login is unofficial and the password is not stored', async () => {
+    mockApi(settingsRoutes());
+    renderAt(<SettingsPage />, '/settings');
+    const card = (await screen.findByRole('heading', { name: 'Garmin Connect (Forward)' })).closest('section') as HTMLElement;
+    expect(card).toHaveTextContent(/unofficial/);
+    expect(card).toHaveTextContent(/never stored/);
+  });
+});
