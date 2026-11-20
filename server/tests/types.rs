@@ -54,7 +54,6 @@ fn every_api_type_is_exported() {
         "Me",
         "LoginRequest",
         "TokenList",
-        "NewTokenResponse",
         "SettingsResponse",
         "SettingsPatch",
         "HomeCards",
