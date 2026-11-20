@@ -58,7 +58,7 @@ export function MetricView({ metric }: { metric: MetricKey }) {
   const unit = single ? 'day' : metric === 'intensity_minutes' && p.range === '7d' ? 'week' : 'period';
   return (
     <>
-      <TopBar variant="back" backTo="/" backLabel="Back to Today" title={def.title} aside={<SampleDataChip sample={q.data?.sample} />} />
+      <TopBar variant="back" backTo="/" backLabel="Back to Today" title={def.title} aside={single ? undefined : <SampleDataChip sample={q.data?.sample} />} />
       <RangeBar label="Period" options={def.ranges.map(optionOf)} value={p.range} onChange={p.setRange} />
       <div className="page" style={{ paddingTop: 0 }} aria-busy={single ? undefined : q.isPending}>
         <PeriodNav from={p.from} to={p.to} atToday={p.atToday} onStep={p.step} unit={unit} />
