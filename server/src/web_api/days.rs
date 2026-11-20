@@ -43,7 +43,7 @@ pub struct DayResponse {
     pub steps: Option<f64>,
     pub step_goal: u32,
     pub intensity_minutes: Option<f64>,
-    /// The night that began on this date.
+    /// The night that ended on this date (the morning of waking up).
     pub sleep: Option<NightSummary>,
     pub activities: Vec<ActivityListItem>,
 }
@@ -229,7 +229,7 @@ pub struct CalendarDay {
     pub date: String,
     pub activities: Vec<ActivityListItem>,
     pub steps: Option<f64>,
-    /// The night that began on this date.
+    /// The night that ended on this date (the morning of waking up).
     pub sleep_duration_s: Option<f64>,
     pub sleep_score: Option<f64>,
     pub resting_hr_bpm: Option<f64>,

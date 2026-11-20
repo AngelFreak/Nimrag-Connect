@@ -418,7 +418,8 @@ async fn import_fills_the_history_tables_and_the_pages_read_them() {
         s["stats"]["avg_duration_s"], 27_600.0,
         "time asleep, not the time in bed"
     );
-    let d = e.get(&user, "/api/days/2026-03-10").await;
+    // A night belongs to the day it ends on: 10 Mar 22:30 to 11 Mar 06:30 is the 11th's sleep.
+    let d = e.get(&user, "/api/days/2026-03-11").await;
     let n = &d["sleep"];
     assert_eq!(
         (

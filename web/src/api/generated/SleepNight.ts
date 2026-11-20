@@ -7,7 +7,8 @@ import type { StageSegment } from "./StageSegment";
  */
 export type SleepNight = { 
 /**
- * Local date the night began on (a start before 06:00 counts for the day before).
+ * Local date the night ends on, the morning of waking up (Garmin's convention): the night
+ * from Thursday evening to Friday morning is dated Friday.
  */
 date: string, start: string, end: string, 
 /**

@@ -3,6 +3,6 @@ import type { ActivityListItem } from "./ActivityListItem";
 
 export type CalendarDay = { date: string, activities: Array<ActivityListItem>, steps: number | null, 
 /**
- * The night that began on this date.
+ * The night that ended on this date (the morning of waking up).
  */
 sleep_duration_s: number | null, sleep_score: number | null, resting_hr_bpm: number | null, energy_high: number | null, energy_low: number | null, };
