@@ -1,37 +1,24 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useQueryClient } from '@tanstack/react-query';
-import { api, clearOfflineApiCache } from '../api/client';
+import { useLogout, useMe } from '../account/queries';
 import { Button, Card, CardHeader, ErrorState, SampleDataChip, Skeleton, TopBar } from '../components';
 import { usePageTitle } from '../lib/hooks';
 import { GarminCard } from './system/GarminCard';
 import { GoalsCard } from './system/GoalsCard';
+import { PasswordCard } from './system/PasswordCard';
 import { TokensCard } from './system/TokensCard';
+import { TwoFactorCard } from './system/TwoFactorCard';
 import { errorMessage } from './system/errors';
 import { useSettings } from './today/queries';
 
 // Stage 3m: GET/PATCH /api/settings (timezone, goals), GET/POST/DELETE /api/tokens, the Garmin
-// Connect (Forward) section on /api/garmin, and Log out.
+// Connect (Forward) section on /api/garmin, and Log out. Accounts: Two-factor (/api/me/2fa) and
+// Change password (/api/me/password).
 
 export function SettingsPage() {
   usePageTitle('Settings');
-  const navigate = useNavigate();
-  const queryClient = useQueryClient();
   const settings = useSettings();
-  const [busy, setBusy] = useState(false);
+  const me = useMe();
+  const logout = useLogout();
   const timezone = settings.data?.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
-
-  async function logout() {
-    setBusy(true);
-    try {
-      await api.post('/api/logout', undefined, { redirectOn401: false });
-    } catch {
-      // Already logged out or server unreachable: leave the page either way.
-    }
-    await clearOfflineApiCache();
-    queryClient.clear();
-    void navigate('/login', { replace: true });
-  }
 
   return (
     <>
@@ -39,7 +26,7 @@ export function SettingsPage() {
         variant="back"
         backTo="/"
         title="Settings"
-        subtitle="Timezone, goals, device tokens and Garmin Connect"
+        subtitle="Timezone, goals, device tokens, two-factor and password"
         aside={<SampleDataChip sample={settings.data?.sample} />}
       />
       <div className="page">
@@ -60,9 +47,11 @@ export function SettingsPage() {
           )}
           <TokensCard timezone={timezone} />
           <GarminCard timezone={timezone} />
+          <TwoFactorCard />
+          <PasswordCard />
           <Card padding="lg" aria-labelledby="session-title">
-            <CardHeader title="Session" id="session-title" />
-            <Button size="lg" onClick={() => void logout()} disabled={busy}>
+            <CardHeader title="Session" id="session-title" aside={me.data ? `Signed in as ${me.data.username}` : undefined} />
+            <Button size="lg" onClick={() => logout.mutate()} disabled={logout.isPending}>
               Log out
             </Button>
           </Card>

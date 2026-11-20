@@ -409,3 +409,113 @@ describe('Settings: session', () => {
     expect(calls.some((c) => c.url === '/api/logout')).toBe(true);
   });
 });
+
+describe('Settings: change password', () => {
+  const meOf = { step: 'done', authenticated: true, username: 'demo', role: 'user', timezone: 'Europe/Copenhagen', sample: false };
+
+  async function card() {
+    return (await screen.findByRole('heading', { name: 'Change password' })).closest('section') as HTMLElement;
+  }
+
+  it('sends the current and the new password, then says the other devices were logged out', async () => {
+    const { calls } = mockApi({ ...settingsRoutes(), 'POST /api/me/password': () => json(meOf) });
+    renderAt(<SettingsPage />, '/settings');
+    const c = within(await card());
+    const save = c.getByRole('button', { name: 'Change password' });
+    expect(save).toBeDisabled();
+    await userEvent.type(c.getByLabelText('Current password'), 'old password!');
+    await userEvent.type(c.getByLabelText('New password'), 'new password 123');
+    await userEvent.type(c.getByLabelText('New password again'), 'new password 124');
+    expect(await c.findByText('The two passwords are not the same.')).toBeInTheDocument();
+    expect(save).toBeDisabled();
+    await userEvent.clear(c.getByLabelText('New password again'));
+    await userEvent.type(c.getByLabelText('New password again'), 'new password 123');
+    await userEvent.click(save);
+    expect(await c.findByRole('status')).toHaveTextContent('every other device was logged out');
+    expect(JSON.parse(String(calls.find((x) => x.url === '/api/me/password')?.init?.body))).toEqual({ current_password: 'old password!', new_password: 'new password 123' });
+    // The fields are emptied: no password stays in the page.
+    expect(c.getByLabelText('Current password')).toHaveValue('');
+    expect(c.getByLabelText('New password')).toHaveValue('');
+  });
+
+  it('a wrong current password (403) says so', async () => {
+    mockApi({ ...settingsRoutes(), 'POST /api/me/password': () => json({ error: 'wrong password' }, { status: 403 }) });
+    renderAt(<SettingsPage />, '/settings');
+    const c = within(await card());
+    await userEvent.type(c.getByLabelText('Current password'), 'nope nope nope');
+    await userEvent.type(c.getByLabelText('New password'), 'new password 123');
+    await userEvent.type(c.getByLabelText('New password again'), 'new password 123');
+    await userEvent.click(c.getByRole('button', { name: 'Change password' }));
+    expect(await c.findByRole('alert')).toHaveTextContent('Wrong password.');
+    // Still on the settings page: 403 is not a lost session.
+    expect(screen.getByTestId('where')).toHaveTextContent('/settings');
+  });
+});
+
+describe('Settings: two-factor', () => {
+  const start = { pending_token: 'pending-reenrol', otpauth_uri: 'otpauth://totp/Nimrag%20Connect:demo?secret=KRSXG5CTMVRXEZLU&issuer=Nimrag%20Connect', secret: 'KRSXG5CTMVRXEZLU' };
+
+  async function card() {
+    return (await screen.findByRole('heading', { name: 'Two-factor' })).closest('section') as HTMLElement;
+  }
+
+  it('asks for the password, shows the QR code and secret, then confirms with a code', async () => {
+    const { calls } = mockApi({ ...settingsRoutes(), 'POST /api/me/2fa/confirm': () => new Response(null, { status: 204 }), 'POST /api/me/2fa': start });
+    renderAt(<SettingsPage />, '/settings');
+    const c = within(await card());
+    await userEvent.click(c.getByRole('button', { name: 'Set up two-factor again' }));
+    expect(c.queryByRole('img', { name: /QR code/ })).not.toBeInTheDocument();
+    await userEvent.type(c.getByLabelText('Your password'), 'my password 123');
+    await userEvent.click(c.getByRole('button', { name: 'Continue' }));
+
+    expect(await c.findByRole('img', { name: /QR code/ })).toBeInTheDocument();
+    expect(c.getByLabelText('Secret key')).toHaveValue('KRSXG5CTMVRXEZLU');
+    expect(JSON.parse(String(calls.find((x) => x.url === '/api/me/2fa')?.init?.body))).toEqual({ password: 'my password 123' });
+    const confirm = c.getByRole('button', { name: 'Confirm' });
+    expect(confirm).toBeDisabled();
+    await userEvent.type(c.getByLabelText('6-digit code'), '123456');
+    await userEvent.click(confirm);
+    expect(await c.findByRole('status')).toHaveTextContent('Two-factor is set up with the new authenticator');
+    expect(JSON.parse(String(calls.find((x) => x.url === '/api/me/2fa/confirm')?.init?.body))).toEqual({ pending_token: 'pending-reenrol', code: '123456' });
+    expect(c.queryByRole('img', { name: /QR code/ })).not.toBeInTheDocument();
+  });
+
+  it('a wrong password (403) stays on the password step', async () => {
+    mockApi({ ...settingsRoutes(), 'POST /api/me/2fa': () => json({ error: 'wrong password' }, { status: 403 }) });
+    renderAt(<SettingsPage />, '/settings');
+    const c = within(await card());
+    await userEvent.click(c.getByRole('button', { name: 'Set up two-factor again' }));
+    await userEvent.type(c.getByLabelText('Your password'), 'nope');
+    await userEvent.click(c.getByRole('button', { name: 'Continue' }));
+    expect(await c.findByRole('alert')).toHaveTextContent('Wrong password.');
+    expect(c.getByLabelText('Your password')).toHaveValue('');
+    expect(screen.getByTestId('where')).toHaveTextContent('/settings');
+  });
+
+  it('a wrong code (422) can be tried again; an expired step (401) starts over without leaving the page', async () => {
+    let attempt = 0;
+    mockApi({
+      ...settingsRoutes(),
+      'POST /api/me/2fa/confirm': () => {
+        attempt += 1;
+        return attempt === 1 ? json({ error: 'wrong code' }, { status: 422 }) : json({ error: 'this step has expired; log in again' }, { status: 401 });
+      },
+      'POST /api/me/2fa': start,
+    });
+    renderAt(<SettingsPage />, '/settings');
+    const c = within(await card());
+    await userEvent.click(c.getByRole('button', { name: 'Set up two-factor again' }));
+    await userEvent.type(c.getByLabelText('Your password'), 'my password 123');
+    await userEvent.click(c.getByRole('button', { name: 'Continue' }));
+    await userEvent.type(await c.findByLabelText('6-digit code'), '111111');
+    await userEvent.click(c.getByRole('button', { name: 'Confirm' }));
+    expect(await c.findByRole('alert')).toHaveTextContent('That code is not right');
+    expect(c.getByRole('img', { name: /QR code/ })).toBeInTheDocument();
+
+    await userEvent.type(c.getByLabelText('6-digit code'), '222222');
+    await userEvent.click(c.getByRole('button', { name: 'Confirm' }));
+    expect(await c.findByRole('alert')).toHaveTextContent('That step expired. Start again.');
+    expect(c.getByRole('button', { name: 'Set up two-factor again' })).toBeInTheDocument();
+    expect(screen.getByTestId('where')).toHaveTextContent('/settings');
+  });
+});

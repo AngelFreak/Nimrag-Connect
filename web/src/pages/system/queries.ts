@@ -1,6 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../api/client';
+import { ME_KEY, toMe } from '../../account/queries';
 import type {
+  ChangeOwnPassword,
   GarminBackfillRequest,
   GarminBackfillResponse,
   GarminImportTokens,
@@ -8,11 +10,15 @@ import type {
   GarminLoginResponse,
   GarminMfaRequest,
   GarminStatus,
+  Me,
   NewToken,
   NewTokenResponse,
   SettingsPatch,
   SettingsResponse,
+  SetupStartResponse,
   TokenList,
+  TwoFactorConfirm,
+  TwoFactorStart,
 } from '../../api/generated';
 import { SETTINGS_KEY } from '../today/queries';
 
@@ -82,4 +88,23 @@ export function useGarminActions() {
     }),
     logout: useMutation({ mutationFn: () => api.post<void>('/api/garmin/logout'), onSuccess: refresh }),
   };
+}
+
+/** POST /api/me/password: a new session replaces this one (the others end), so the cached `Me` is refreshed. */
+export function useChangePassword() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (body: ChangeOwnPassword) => api.post<Me>('/api/me/password', body),
+    onSuccess: (me) => client.setQueryData(ME_KEY, toMe(me)),
+  });
+}
+
+/** Re-enrolling two-factor: the password first (403 when wrong), then the QR code, then a code from it. */
+export function useStartTwoFactor() {
+  return useMutation({ mutationFn: (body: TwoFactorStart) => api.post<SetupStartResponse>('/api/me/2fa', body) });
+}
+
+/** 401 here means the pending step expired, not a lost session, so it must not send the page to /login. */
+export function useConfirmTwoFactor() {
+  return useMutation({ mutationFn: (body: TwoFactorConfirm) => api.post<void>('/api/me/2fa/confirm', body, { redirectOn401: false }) });
 }
