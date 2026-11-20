@@ -1,7 +1,8 @@
 import type { ReactNode } from 'react';
 import type { HomeCard, HomeCards, Today } from '../../api/generated';
 import { ProgressBar, SeriesChart, StageBar, StatTile, type Tone } from '../../components';
-import { fmtFixed, fmtInt, isMissing } from '../../lib/format';
+import { fmtShortDay } from '../../lib/dates';
+import { fmtFixed, fmtInt, isMissing, statusName } from '../../lib/format';
 import {
   baselineLabel,
   fmtSeconds,
@@ -72,6 +73,12 @@ export const DEFAULT_HOME_CARDS: HomeCards = {
   ],
   hidden: ['respiration', 'spo2', 'weight', 'training_readiness'],
 };
+
+/**
+ * Cards whose metric the "In focus" carousel already shows (Energy, Sleep last night, Overnight
+ * HRV); "At a glance" leaves them out so no metric appears twice.
+ */
+export const IN_FOCUS_CARDS: readonly HomeCard[] = ['energy', 'sleep', 'hrv'];
 
 /** The cards to show, in the owner's order, without the hidden ones. */
 export function visibleCards(cards: HomeCards): HomeCard[] {
@@ -157,7 +164,8 @@ function build(id: HomeCard, t: Today): Built {
     }
     case 'training_status': {
       const s = t.training_status;
-      return { value: s.label, sub: s.label ? join(s.since ? `Since ${s.since}${s.since_is_lower_bound ? ' or earlier' : ''}` : null) : null };
+      const since = s.since ? fmtShortDay(s.since.slice(0, 10)) : null;
+      return { value: statusName(s.label), sub: s.label ? join(since ? `Since ${since}${s.since_is_lower_bound ? ' or earlier' : ''}` : null) : null };
     }
     case 'training_readiness': {
       const r = t.training_readiness;

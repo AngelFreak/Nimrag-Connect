@@ -3,9 +3,9 @@ import { Link } from 'react-router-dom';
 import type { HrvDay } from '../../api/generated/HrvDay';
 import type { HrvRange } from '../../api/generated/HrvRange';
 import type { HrvStatusKind } from '../../api/generated/HrvStatusKind';
-import { Card, CardHeader, DataList, EmptyState, Legend, SampleDataChip, SeriesChart, StatTile, TopBar, ValueOrUnavailable, type LegendItem } from '../../components';
+import { Card, CardHeader, DataList, EmptyState, Legend, SampleDataChip, SeriesChart, StatTile, TopBar, Toggle, ValueOrUnavailable, type LegendItem } from '../../components';
 import { fmtDayLong, fmtMonthDay } from '../../lib/dates';
-import { fmtInt, withUnit } from '../../lib/format';
+import { fmtInt, statusName, withUnit } from '../../lib/format';
 import { useIsDesktop, usePageTitle } from '../../lib/hooks';
 import { CardSkeleton, ChartAxis, ChartSummary, LoadError } from './parts';
 import { PeriodNav, RangeBar, usePeriod, type PeriodOption } from './period';
@@ -94,7 +94,7 @@ function RangeBody({ data }: { data: HrvRange }) {
             value={withUnit(fmtInt(data.overnight_avg_ms), 'ms')}
             sub={data.nights > 0 ? `${data.nights} night${data.nights === 1 ? '' : 's'}` : undefined}
           />
-          <StatTile size="sm" label="Baseline" value={range} sub={range ? 'ms' : undefined} />
+          <StatTile size="sm" label="Baseline" value={withUnit(range, 'ms')} />
           <StatTile size="sm" label="7-day avg" value={withUnit(fmtInt(weekly), 'ms')} sub={weekly === null ? undefined : 'latest'} />
         </div>
       </div>
@@ -129,10 +129,7 @@ function AveragesCard({ data, mode, onMode }: { data: HrvRange; mode: HrvMode; o
   return (
     <Card padding="lg">
       <CardHeader title={mode === 'weekly' ? '7-day averages' : 'Overnight averages'} tone="muted" />
-      <label className="toggle">
-        <input type="checkbox" checked={mode === 'overnight'} onChange={(e) => onMode(e.target.checked ? 'overnight' : 'weekly')} />
-        Overnight averages
-      </label>
+      <Toggle label="Overnight averages" checked={mode === 'overnight'} onChange={(e) => onMode(e.target.checked ? 'overnight' : 'weekly')} />
       <SeriesChart
         label={mode === 'weekly' ? '7-day average HRV by day' : 'Overnight HRV by day'}
         summary={summary}
@@ -159,7 +156,7 @@ function DayCard({ day }: { day: HrvDay }) {
         </Link>
         <span className="day-card__status">
           <StatusMark status={day.status} />
-          {day.status_label ?? (day.status_code === null ? 'No status' : `Status ${day.status_code}`)}
+          {statusName(day.status_label) ?? 'No status'}
         </span>
       </div>
       <dl className="day-card__vals">
@@ -197,7 +194,7 @@ function NightBody({ data }: { data: HrvRange }) {
             {withUnit(fmtInt(hrvValue(day, 'overnight')), 'ms') ?? <span className="unavailable">unavailable</span>}
           </span>
         </div>
-        <span className="stat__sub">{day.status_label ?? (day.status_code === null ? 'No status for this night' : `Status ${day.status_code}`)}</span>
+        <span className="stat__sub">{statusName(day.status_label) ?? 'No status for this night'}</span>
         <DataList
           items={[
             { label: '7-day average', value: withUnit(fmtInt(day.weekly_avg_ms), 'ms') },

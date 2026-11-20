@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import type { SettingsPatch, SettingsResponse } from '../../api/generated';
-import { Button, Card, TextField } from '../../components';
+import { Button, Card, SelectField, TextField } from '../../components';
+import { suggestedZone, zoneOptions } from '../../lib/timezone';
 import { errorMessage } from './errors';
 import { useSaveSettings } from './queries';
 
@@ -58,14 +59,6 @@ export function validateGoals(form: GoalsForm, saved: SettingsResponse): { error
   return { errors, patch: bad || Object.keys(patch).length === 0 ? null : patch };
 }
 
-function zoneNames(): string[] {
-  try {
-    return (Intl as unknown as { supportedValuesOf?: (k: string) => string[] }).supportedValuesOf?.('timeZone') ?? [];
-  } catch {
-    return [];
-  }
-}
-
 /** Settings, "Timezone and goals": GET and PATCH /api/settings. The form is keyed to the saved values by its parent. */
 export function GoalsCard({ settings }: { settings: SettingsResponse }) {
   const save = useSaveSettings();
@@ -73,6 +66,7 @@ export function GoalsCard({ settings }: { settings: SettingsResponse }) {
   const [errors, setErrors] = useState<GoalsErrors>({});
   const [saved, setSaved] = useState(false);
   const check = validateGoals(form, settings);
+  const here = suggestedZone(settings.timezone);
   const changed = check.patch !== null || Object.keys(check.errors).length > 0;
 
   const set = (key: keyof GoalsForm) => (e: { target: { value: string } }) => {
@@ -94,23 +88,33 @@ export function GoalsCard({ settings }: { settings: SettingsResponse }) {
       <form onSubmit={submit} noValidate className="form">
         <div className="form__group">
           <h3 className="form__group-title">Timezone</h3>
-          <TextField
-            label="Timezone (IANA name)"
+          <SelectField
+            label="Timezone"
             name="timezone"
-            list="timezone-names"
-            autoComplete="off"
-            autoCapitalize="off"
-            spellCheck={false}
             value={form.timezone}
             onChange={set('timezone')}
             aria-invalid={errors.timezone ? true : undefined}
             hint={errors.timezone ?? 'Days are local days in this timezone.'}
-          />
-          <datalist id="timezone-names">
-            {zoneNames().map((z) => (
-              <option key={z} value={z} />
+          >
+            {zoneOptions(settings.timezone, form.timezone).map((z) => (
+              <option key={z} value={z}>
+                {z}
+              </option>
             ))}
-          </datalist>
+          </SelectField>
+          {here ? (
+            <Button
+              size="lg"
+              disabled={save.isPending}
+              onClick={() => {
+                setForm((f) => ({ ...f, timezone: here }));
+                setSaved(false);
+                save.mutate({ timezone: here }, { onSuccess: (s) => { setForm((f) => ({ ...f, timezone: s.timezone })); setSaved(true); } });
+              }}
+            >
+              Use {here}
+            </Button>
+          ) : null}
         </div>
         <div className="form__group">
           <h3 className="form__group-title">Goals</h3>

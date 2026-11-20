@@ -182,12 +182,6 @@ function StatusCard({ status }: { status: TrainingResponse['status'] }) {
       </span>
       {view.note ? <span className="stat__sub">{view.note}</span> : null}
       {since ? <span className="stat__sub">{since}</span> : null}
-      <DataList
-        items={[
-          { label: 'Fitness trend', value: status.fitness_trend_code === null ? null : `Code ${status.fitness_trend_code}` },
-          { label: 'Load trend', value: status.load_trend_code === null ? null : `Code ${status.load_trend_code}` },
-        ]}
-      />
     </Card>
   );
 }

@@ -3,7 +3,7 @@ import type { ActivityListItem } from '../../api/generated/ActivityListItem';
 import type { ExerciseGroup } from '../../api/generated/ExerciseGroup';
 import type { StrengthSet } from '../../api/generated/StrengthSet';
 import { activityTitle, groupByPeriod, groupLabel, parseType, rowText, sortActivities, weekStart, whenLabel } from './format';
-import { minutesAxis, paceMinutes, spread, timedToMinutes } from './series';
+import { minutesAxis, paceMinutes, spread, timedToMinutes, timeTicks } from './series';
 import { buildPatch, compareExercises, deltaText, differsFromWatch, draftsOf, loadText, parseReps, parseWeight, repsText, validateAll } from './strengthModel';
 import { zoneEntries } from './ActivityBody';
 
@@ -218,5 +218,22 @@ describe('strength text and comparison', () => {
     expect(deltaText(3, 3)).toBe('same');
     expect(deltaText(null, 3)).toBeNull();
     expect(deltaText(3, null)).toBeNull();
+  });
+});
+
+describe('timeTicks', () => {
+  it('gives round steps from 0 with the unit on the last label', () => {
+    expect(timeTicks(30).map((t) => t.label)).toEqual(['0', '10', '20', '30 min']);
+    expect(timeTicks(30).map((t) => t.minutes)).toEqual([0, 10, 20, 30]);
+    expect(timeTicks(45).map((t) => t.label)).toEqual(['0', '10', '20', '30', '40 min']);
+    expect(timeTicks(2).map((t) => t.label)).toEqual(['0', '1', '2 min']);
+  });
+  it('switches to hours for long activities and never gives more than five ticks', () => {
+    expect(timeTicks(190).map((t) => t.label)).toEqual(['0', '1', '2', '3 h']);
+    for (const m of [3, 17, 59, 61, 95, 240, 600]) expect(timeTicks(m).length).toBeLessThanOrEqual(5);
+  });
+  it('has no ticks without a duration', () => {
+    expect(timeTicks(0)).toEqual([]);
+    expect(timeTicks(NaN)).toEqual([]);
   });
 });

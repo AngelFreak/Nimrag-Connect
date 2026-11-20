@@ -111,12 +111,7 @@ export function MovementBody({ data }: { data: MovementResponse }) {
             label={stepsText === null ? 'Steps today unavailable' : `${stepsText} of ${fmtInt(goal)} steps${percent === null ? '' : `, ${percent} percent`}`}
           />
           <span className="stat__sub">{percent === null ? <Unavailable /> : `${percent}% of the goal`}</span>
-          <DataList
-            items={[
-              { label: 'Distance', value: km },
-              { label: 'Floors climbed', value: null },
-            ]}
-          />
+          <DataList hideMissing items={[{ label: 'Distance', value: km }]} />
         </Card>
 
         <Card padding="lg">

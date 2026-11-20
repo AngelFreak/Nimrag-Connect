@@ -32,6 +32,31 @@ export function minutesAxis(elapsedSeconds: readonly number[]): number[] {
   return elapsedSeconds.map((s) => Math.round((s / 60) * 100) / 100);
 }
 
+export interface TimeTick {
+  /** Minutes since the start. */
+  minutes: number;
+  label: string;
+}
+
+const TICK_STEPS_MIN = [1, 2, 5, 10, 15, 20, 30, 60, 120, 180, 240, 360];
+
+/**
+ * Evenly spaced time-axis ticks from 0 up to `totalMinutes` (at most `maxTicks`, 0 included),
+ * with a step that reads well: 0, 10, 20, 30 min or 0, 1, 2, 3 h. The unit goes on the last label.
+ */
+export function timeTicks(totalMinutes: number, maxTicks = 5): TimeTick[] {
+  if (!Number.isFinite(totalMinutes) || totalMinutes <= 0) return [];
+  const step = TICK_STEPS_MIN.find((st) => Math.floor(totalMinutes / st) + 1 <= maxTicks) ?? (TICK_STEPS_MIN[TICK_STEPS_MIN.length - 1] as number);
+  const hours = step >= 60;
+  const out: TimeTick[] = [];
+  for (let m = 0; m <= totalMinutes + 1e-9; m += step) {
+    out.push({ minutes: m, label: String(hours ? m / 60 : m) });
+  }
+  const last = out[out.length - 1];
+  if (last) last.label += hours ? ' h' : ' min';
+  return out;
+}
+
 /** Slower than this (about 33 min/km) counts as standing still: a gap, not a spike. */
 const MIN_MOVING_MPS = 0.5;
 

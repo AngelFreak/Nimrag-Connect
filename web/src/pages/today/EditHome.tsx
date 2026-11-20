@@ -160,7 +160,7 @@ export function EditHomeSheet({ initial, error, onSave, onClose }: SheetProps) {
           </h2>
         </div>
         <p className="sheet__hint" id={hintId}>
-          Choose which cards appear under At a glance and in what order. Drag a row, or use the arrow buttons.
+          Choose which cards appear under At a glance and in what order. Drag a row, or use the arrow buttons. Energy, Sleep and Overnight HRV already show under In focus on the Today page.
         </p>
         {error ? (
           <p className="today-alert sheet__error" role="alert">

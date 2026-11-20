@@ -2,7 +2,7 @@ import type { CSSProperties } from 'react';
 import type { TrainingStatusRange } from '../../api/generated/TrainingStatusRange';
 import { Card, CardHeader, DataList, EmptyState, Legend, SampleDataChip, Table, TopBar, Unavailable, type LegendItem } from '../../components';
 import { fmtMonthDay } from '../../lib/dates';
-import { fmtFixed, fmtInt } from '../../lib/format';
+import { fmtFixed, fmtInt, statusName } from '../../lib/format';
 import { usePageTitle } from '../../lib/hooks';
 import { CardSkeleton, LoadError } from './parts';
 import { PeriodNav, RangeBar, usePeriod, type PeriodOption } from './period';
@@ -76,7 +76,7 @@ function CurrentCard({ data }: { data: TrainingStatusRange }) {
               <div className="status-hero">
                 <span className="status-hero__dot" aria-hidden="true" style={{ background: STATUS_COLOR[kind] }} />
                 <span className="stat__value" style={{ fontSize: 34 }}>
-                  {current.label}
+                  {statusName(current.label)}
                 </span>
               </div>
               {since ? <span className="stat__sub">{since}</span> : null}
@@ -116,7 +116,7 @@ function StatusTimeline({ data }: { data: TrainingStatusRange }) {
 
 function TimelineCard({ data }: { data: TrainingStatusRange }) {
   // The colour key from the server, plus every unnamed code that shows up in the period (grey).
-  const unnamed = [...new Set(data.days.flatMap((d) => (d.status?.kind === 'unknown' ? [d.status.label] : [])))];
+  const unnamed = [...new Set(data.days.flatMap((d) => (d.status?.kind === 'unknown' ? [statusName(d.status.label) ?? d.status.label] : [])))];
   const items: LegendItem[] = [
     ...data.legend.map((l) => ({ key: l.label, label: l.label, color: STATUS_COLOR[l.kind] })),
     ...unnamed.map((label) => ({ key: label, label, color: STATUS_COLOR.unknown })),
@@ -152,7 +152,7 @@ function HistoryCard({ data }: { data: TrainingStatusRange }) {
               cell: (r) => (
                 <span className="status-cell">
                   <span className="swatch" aria-hidden="true" style={{ '--swatch': STATUS_COLOR[r.status.kind] } as CSSProperties} />
-                  {r.status.label}
+                  {statusName(r.status.label)}
                 </span>
               ),
             },

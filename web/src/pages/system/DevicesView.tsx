@@ -57,8 +57,8 @@ export function WatchCard({ query, timezone }: { query: UseQueryResult<DevicesRe
               </div>
               <DataList
                 items={[
-                  { label: 'Model', value: w.model },
-                  { label: 'Firmware', value: w.firmware },
+                  { label: 'Model', value: w.model, optional: true },
+                  { label: 'Firmware', value: w.firmware, optional: true },
                   { label: 'Battery', value: batteryLine(w, timezone) },
                   { label: 'Last sync', value: fmtDateTime(d.last_sync_at, timezone) },
                   { label: 'Latest watch data', value: fmtDateTime(w.last_data_at, timezone) },
@@ -89,8 +89,8 @@ export function ServerCard({ storage, timezone }: { storage: UseQueryResult<Stor
                 { label: 'Address', value: window.location.host },
                 { label: 'Status', value: 'Reachable', tone: 'link' },
                 { label: 'Original files', value: `${fmtInt(s.files)} files, ${fmtBytes(s.bytes)}` },
-                { label: 'Database', value: fmtBytes(s.database_bytes) },
-                { label: 'Last backup', value: fmtDateTime(s.last_backup_at, timezone) },
+                { label: 'Database', value: fmtBytes(s.database_bytes), optional: true },
+                { label: 'Last backup', value: fmtDateTime(s.last_backup_at, timezone), optional: true },
               ]}
             />
             <DataList

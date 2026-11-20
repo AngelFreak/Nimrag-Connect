@@ -46,9 +46,11 @@ describe('training helpers', () => {
     expect(targetText(240, 420)).toBe('240 to 420');
     expect(targetText(240, null)).toBeNull();
   });
-  it('training status shows the numeric state and invents no word for it', () => {
+  it('training status never shows a raw code and invents no word for it', () => {
     const base = training().status;
-    expect(statusView(base)).toEqual({ headline: 'Status code 4', note: 'The watch reports a number; its name is not known yet.' });
+    const other = { headline: 'Other status', note: 'The watch reports a status that has no name here yet.' };
+    expect(statusView(base)).toEqual(other);
+    expect(statusView({ ...base, label: 'Status 9' })).toEqual(other);
     expect(statusView({ ...base, label: 'Maintaining' }).headline).toBe('Maintaining');
     expect(statusView({ ...base, status_code: null })).toEqual({ headline: null, note: null });
     expect(sinceText({ ...base, since_is_lower_bound: true })).toBe('Since Thu 5 Nov or earlier');

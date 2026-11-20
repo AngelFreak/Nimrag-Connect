@@ -42,13 +42,11 @@ describe('MovementPage (3i)', () => {
     expect(screen.getByText(/Thu 19 Nov · week 47/)).toBeInTheDocument();
   });
 
-  it('floors are unavailable (no data source), never 0', async () => {
+  it('has no floors row (no data source), and no zero in its place', async () => {
     mockApi({ '/api/today': TODAY, '/api/movement/': movement() });
     renderAt(<MovementPage />, '/movement', '/movement/:date?');
     await screen.findByText('6,240');
-    const row = screen.getByText('Floors climbed').closest('div');
-    expect(row).not.toBeNull();
-    expect(within(row as HTMLElement).getByText('unavailable')).toBeInTheDocument();
+    expect(screen.queryByText('Floors climbed')).not.toBeInTheDocument();
   });
 
   it('missing metrics show "unavailable" and no zero', async () => {
@@ -138,12 +136,16 @@ describe('TrainingPage (3j)', () => {
     expect(screen.getByText('+1.0 in 3 months')).toBeInTheDocument();
   });
 
-  it('shows the numeric training state honestly when the label is null', async () => {
+  it('shows "Other status" instead of a code when the label is null, and no trend codes', async () => {
     mockApi({ '/api/training': training() });
     renderAt(<TrainingPage />, '/training');
-    expect(await screen.findByText('Status code 4')).toBeInTheDocument();
-    expect(screen.getByText(/its name is not known yet/)).toBeInTheDocument();
+    expect(await screen.findByText('Other status')).toBeInTheDocument();
+    expect(screen.getByText(/has no name here yet/)).toBeInTheDocument();
     expect(screen.getByText('Since Thu 5 Nov')).toBeInTheDocument();
+    expect(screen.queryByText(/Code \d/)).not.toBeInTheDocument();
+    expect(screen.queryByText('Fitness trend')).not.toBeInTheDocument();
+    expect(screen.queryByText('Load trend')).not.toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(/status code/i);
   });
 
   it('shows "unavailable" for missing recovery, load, balance, status and VO2 max', async () => {
@@ -192,6 +194,31 @@ describe('BodyPage (3k)', () => {
     const list = screen.getByRole('heading', { name: 'Entries' }).closest('section') as HTMLElement;
     expect(within(list).getByText('Tue 17 Nov · 07:10')).toBeInTheDocument();
     expect(within(list).getByText('Weight 81.3 kg · Waist 86.0 cm')).toBeInTheDocument();
+  });
+
+  it('shows the latest 10 entries and a "Show all (N)" button for the rest', async () => {
+    const many = Array.from({ length: 34 }, (_, i) => ({
+      id: 100 - i,
+      measured_at: new Date(Date.UTC(2026, 10, 17 - i, 6, 10)).toISOString().replace('Z', '+00:00'),
+      weight_kg: 80 + i / 10,
+      body_fat_pct: null,
+      waist_cm: null,
+    }));
+    mockApi({ '/api/today': TODAY, '/api/body': body({ entries: many }) });
+    renderAt(<BodyPage />, '/body');
+    const list = (await screen.findByRole('heading', { name: 'Entries' })).closest('section') as HTMLElement;
+    expect(within(list).getAllByRole('listitem')).toHaveLength(10);
+    expect(within(list).getAllByRole('button', { name: /^Delete entry/ })).toHaveLength(10);
+    await userEvent.click(within(list).getByRole('button', { name: 'Show all (34)' }));
+    expect(within(list).getAllByRole('listitem')).toHaveLength(34);
+    expect(within(list).queryByRole('button', { name: /Show all/ })).not.toBeInTheDocument();
+  });
+
+  it('has no "Show all" button when there are 10 entries or fewer', async () => {
+    mockApi({ '/api/today': TODAY, '/api/body': body() });
+    renderAt(<BodyPage />, '/body');
+    await screen.findByRole('heading', { name: 'Entries' });
+    expect(screen.queryByRole('button', { name: /Show all/ })).not.toBeInTheDocument();
   });
 
   it('shows an empty state with an action when there are no entries', async () => {

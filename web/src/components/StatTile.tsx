@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { Card } from './Card';
+import { isMissing } from '../lib/format';
 import { ValueOrUnavailable } from './Unavailable';
 
 export type Tone = 'energy' | 'sleep' | 'heart' | 'steps' | 'warn' | 'link' | 'muted';
@@ -16,6 +17,8 @@ interface StatTileProps {
   size?: TileSize;
   /** Extra content under the sub line (e.g. a ProgressBar). */
   children?: ReactNode;
+  /** Render nothing when `value` is missing (a tile that would only say "unavailable" is noise). */
+  hideWhenMissing?: boolean;
   /** Makes the whole tile a link to this route ("/sleep"). Keep `children` non-interactive then. */
   href?: string;
   /** `data-*` attributes go on the link when there is one, otherwise on the card. */
@@ -25,7 +28,8 @@ interface StatTileProps {
 const PADDING = { sm: 'sm', md: 'tile', lg: 'lg', xl: 'xl' } as const;
 
 /** Label, big value in Space Grotesk, and a sub line in the metric's colour. */
-export function StatTile({ label, value, sub, tone = 'muted', size = 'md', children, href, ...rest }: StatTileProps) {
+export function StatTile({ label, value, sub, tone = 'muted', size = 'md', children, href, hideWhenMissing = false, ...rest }: StatTileProps) {
+  if (hideWhenMissing && (isMissing(value) || value === '' || value === false)) return null;
   const tile = (
     <Card padding={PADDING[size]} className={`stat stat--${size}`} {...(href ? {} : rest)}>
       <span className="stat__label">{label}</span>

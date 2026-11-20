@@ -198,7 +198,7 @@ describe('TrainingStatusPage', () => {
     expect(screen.getByText(/No status recorded|no status/i)).toBeInTheDocument();
   });
 
-  it('shows a single day and an unknown status in grey with its number', async () => {
+  it('shows a single day and an unknown status in grey as "Other status", never its number', async () => {
     const unknown = info('Status 9', 'unknown', 9);
     mockApi({
       '/api/training/status': training({
@@ -208,7 +208,8 @@ describe('TrainingStatusPage', () => {
       }),
     });
     renderAt('/training/status?range=4w');
-    expect((await screen.findAllByText('Status 9')).length).toBeGreaterThan(0);
+    expect((await screen.findAllByText('Other status')).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/Status 9/)).not.toBeInTheDocument();
     expect(screen.getAllByText(/or earlier/).length).toBeGreaterThan(0);
   });
 
@@ -233,7 +234,8 @@ describe('HrvPage', () => {
     mockApi({ '/api/hrv': hrv({ days, nights: 2, overnight_avg_ms: 53.5, baseline_low_ms: 55, baseline_high_ms: 70 }) });
     renderAt('/hrv');
     expect(await screen.findByRole('img', { name: '7-day average HRV by day' })).toBeInTheDocument();
-    expect(screen.getByText('55–70')).toBeInTheDocument();
+    // The unit sits with the number, like the other tiles.
+    expect(screen.getByText('55–70 ms')).toBeInTheDocument();
     expect(screen.getByText('2 nights')).toBeInTheDocument();
     const cards = within(screen.getByRole('region', { name: 'Day by day' })).getAllByRole('listitem');
     expect(cards).toHaveLength(2);
@@ -247,8 +249,17 @@ describe('HrvPage', () => {
     mockApi({ '/api/hrv': hrv({ days, nights: 2, overnight_avg_ms: 53.5 }) });
     renderAt('/hrv');
     await screen.findByRole('img', { name: '7-day average HRV by day' });
-    await userEvent.click(screen.getByRole('checkbox', { name: 'Overnight averages' }));
+    await userEvent.click(screen.getByRole('switch', { name: 'Overnight averages' }));
     expect(screen.getByRole('img', { name: 'Overnight HRV by day' })).toBeInTheDocument();
+  });
+
+  it('says "67 ms every day" instead of "between 67 and 67 ms" when the readings never change', async () => {
+    const flat = [day(2), day(1)].map((d) => hrvDay(d, { status: 'balanced', status_label: 'Balanced', weekly_avg_ms: 67, last_night_ms: 67, baseline_low_ms: 55, baseline_high_ms: 70 }));
+    mockApi({ '/api/hrv': hrv({ days: flat, nights: 2, overnight_avg_ms: 67 }) });
+    renderAt('/hrv');
+    await screen.findByRole('img', { name: '7-day average HRV by day' });
+    expect(screen.getAllByText(/67 ms every day/).length).toBeGreaterThan(0);
+    expect(document.body.textContent).not.toMatch(/between 67 and 67/);
   });
 
   it('shows an empty state with no readings and no chart claim', async () => {

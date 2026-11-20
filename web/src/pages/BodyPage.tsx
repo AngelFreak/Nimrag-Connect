@@ -112,9 +112,13 @@ export function BodyBody({ data, today }: { data: BodyResponse; today: string })
   );
 }
 
+/** How many entries the list shows before "Show all" (the server sends them newest first). */
+export const ENTRIES_SHOWN = 10;
+
 function Entries({ entries, onAdd }: { entries: BodyEntry[]; onAdd: () => void }) {
   const client = useQueryClient();
   const [confirming, setConfirming] = useState<number | null>(null);
+  const [showAll, setShowAll] = useState(false);
   const remove = useMutation({
     mutationFn: (id: number) => api.delete(`/api/body/${id}`),
     onSuccess: async () => {
@@ -152,7 +156,7 @@ function Entries({ entries, onAdd }: { entries: BodyEntry[]; onAdd: () => void }
         </p>
       ) : null}
       <ul>
-        {entries.map((e) => {
+        {(showAll ? entries : entries.slice(0, ENTRIES_SHOWN)).map((e) => {
           const when = fmtEntryWhen(e.measured_at);
           const asking = confirming === e.id;
           return (
@@ -185,6 +189,13 @@ function Entries({ entries, onAdd }: { entries: BodyEntry[]; onAdd: () => void }
           );
         })}
       </ul>
+      {!showAll && entries.length > ENTRIES_SHOWN ? (
+        <div style={{ padding: '10px 0 12px' }}>
+          <Button block onClick={() => setShowAll(true)}>
+            Show all ({entries.length})
+          </Button>
+        </div>
+      ) : null}
     </Card>
   );
 }

@@ -228,14 +228,22 @@
   align-items: center;
   gap: 4px;
 }
+/* The back variant may carry a wide aside (chip + arrows): let it drop below the title row
+   instead of squeezing the title into a narrow column. */
+.topbar--back {
+  flex-wrap: wrap;
+}
 .topbar__text {
-  flex: 1;
+  /* Basis is the text's own width, so when title and aside do not fit side by side the aside
+     wraps below instead of squeezing the title into a narrow column. */
+  flex: 1 1 auto;
   display: flex;
   flex-direction: column;
   gap: 2px;
   min-width: 0;
 }
 .topbar--pager .topbar__text {
+  flex: 1 1 0;
   align-items: center;
   text-align: center;
 }
@@ -252,7 +260,10 @@
   font-weight: 600;
   font-size: var(--fs-title);
   line-height: 1.2;
-  overflow-wrap: anywhere;
+  /* Break between words; only split a word when it alone is wider than the line. */
+  overflow-wrap: break-word;
+  word-break: normal;
+  hyphens: manual;
 }
 .topbar--large .topbar__title {
   font-size: var(--fs-title-lg);
@@ -264,13 +275,18 @@
   display: flex;
   flex-direction: column;
   align-items: flex-end;
+  margin-left: auto;
   gap: 4px;
   font-size: var(--fs-xs);
   color: var(--link);
 }
 .topbar--back .topbar__aside {
   margin-right: 8px;
+  margin-left: auto;
   flex-direction: row;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 .topbar__aside--row {
   flex-direction: row;
@@ -628,6 +644,66 @@
   accent-color: var(--link);
 }
 
+.toggle {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  min-height: var(--touch);
+  font-size: var(--fs-base);
+  align-self: flex-start;
+  cursor: pointer;
+}
+/* The checkbox stays in place (focus, Space, screen readers) but is invisible; the track is its picture. */
+.toggle__input {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 46px;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+.toggle__track {
+  flex: none;
+  position: relative;
+  width: 46px;
+  height: 28px;
+  border-radius: var(--radius-pill);
+  background: var(--track);
+  border: 1px solid var(--line-strong);
+  transition: background 0.15s;
+}
+.toggle__track::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--text-2);
+  transition: transform 0.15s, background 0.15s;
+}
+.toggle__input:checked + .toggle__track {
+  background: var(--link);
+  border-color: var(--link);
+}
+.toggle__input:checked + .toggle__track::after {
+  background: var(--on-accent);
+  transform: translateX(18px);
+}
+.toggle__input:focus-visible + .toggle__track {
+  outline: 2px solid var(--link);
+  outline-offset: 2px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .toggle__track,
+  .toggle__track::after {
+    transition: none;
+  }
+}
+
 .footer-bar {
   position: sticky;
   bottom: 0;
@@ -737,7 +813,9 @@
 
 .data-list {
   display: grid;
-  grid-template-columns: 1fr auto;
+  /* Labels take the room they need (up to 60%) and stay on one line when they can; a long
+     value wraps in its own column instead of squeezing the label into a narrow strip. */
+  grid-template-columns: fit-content(60%) minmax(0, 1fr);
   gap: 8px 16px;
   font-size: var(--fs-base);
 }
@@ -745,11 +823,20 @@
   grid-template-columns: auto 1fr;
   gap: 10px 20px;
 }
+.data-list-empty {
+  margin: 0;
+  color: var(--text-2);
+  font-size: var(--fs-base);
+}
+.data-list.data-list--wide dd {
+  text-align: left;
+}
 .data-list dt {
   color: var(--text-2);
 }
 .data-list dd {
   margin: 0;
+  text-align: right;
 }
 .data-list .is-strong {
   font-weight: 600;
@@ -1007,9 +1094,13 @@
 }
 .zones__row {
   display: grid;
-  grid-template-columns: 56px 1fr minmax(44px, auto);
+  /* The label column is in em so "Zone 4" stays on one line at any text size. */
+  grid-template-columns: 4.5em 1fr minmax(44px, auto);
   gap: 10px;
   align-items: center;
+}
+.zones__row > span:first-child {
+  white-space: nowrap;
 }
 .zones__value {
   text-align: right;
@@ -1029,6 +1120,17 @@
   justify-content: space-between;
   font-size: var(--fs-xs);
   color: var(--text-2);
+}
+.time-axis {
+  position: relative;
+  height: 1.5em;
+  font-size: var(--fs-xs);
+  color: var(--text-2);
+}
+.time-axis > span {
+  position: absolute;
+  top: 0;
+  white-space: nowrap;
 }
 .series-chart {
   width: 100%;

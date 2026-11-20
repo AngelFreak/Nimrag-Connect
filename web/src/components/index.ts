@@ -15,6 +15,7 @@ export * from './SeriesChart';
 export * from './BarSeries';
 export * from './MapView';
 export * from './Button';
+export * from './Toggle';
 export * from './ListRow';
 export * from './TopBar';
 export * from './SyncControls';
