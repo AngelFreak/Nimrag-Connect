@@ -51,7 +51,7 @@ class EngineSettings(context: Context) {
         set(value) = prefs.edit().putBoolean(ALLOW_MOBILE, value).apply()
 
     var autoSyncMinutes: Int
-        get() = prefs.getInt(AUTO_SYNC, 60)
+        get() = prefs.getInt(AUTO_SYNC, DEFAULT_AUTO_SYNC_MINUTES)
         set(value) = prefs.edit().putInt(AUTO_SYNC, value).apply()
 
     /** The mask in effect: the saved one, else the default. Always valid hex. */
@@ -161,6 +161,9 @@ class EngineSettings(context: Context) {
         const val TOKEN = "token"
         const val ALLOW_MOBILE = "allow_mobile_data"
         const val AUTO_SYNC = "auto_sync_minutes"
+
+        /** Applies to everyone who never changed the interval (the preference is simply absent). */
+        const val DEFAULT_AUTO_SYNC_MINUTES = 15
         const val CAPABILITIES = "capabilities_hex"
         const val GARMIN_CONNECT_MODE = "garmin_connect_mode"
         const val CLIENT_ID = "client_id"

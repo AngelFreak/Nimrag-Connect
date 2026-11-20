@@ -16,6 +16,7 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.os.Build
 import android.os.SystemClock
+import dev.nimrag.app.engine.AutoSyncAlarm
 import dev.nimrag.app.engine.Hub
 import dev.nimrag.app.engine.RememberedWatch
 import dev.nimrag.app.engine.WatchService
@@ -143,12 +144,12 @@ class WatchLink(private val hub: Hub, private val scanner: BleScanner) {
     private val stepWatchdog = Runnable { onStepStalled() }
     private val closeFallback = Runnable { finishClose() }
     private val pairTimeout = Runnable { failPairing("Pairing timed out") }
-    private val autoSync = Runnable {
-        if (ready) {
-            requestBatteryAndSync()
-            scheduleAutoSync()
-        }
-    }
+
+    /** Wakes the link for the auto sync even while the phone sleeps (see [scheduleAutoSync]). */
+    private val autoSyncAlarm = AutoSyncAlarm(ctx)
+
+    /** Elapsed-realtime ms when a sync was last asked for; until the watch starts it, asking again only queues a second cycle. */
+    private var syncAskedAtMs: Long? = null
 
     init {
         val filter = IntentFilter().apply {
@@ -177,6 +178,7 @@ class WatchLink(private val hub: Hub, private val scanner: BleScanner) {
             // nothing: one owner of the GATT client, and the backoff stays in force.
             if (gatt == null && closing == null && !handler.hasCallbacks(reconnect)) connect()
         }
+        scheduleAutoSync()
         return true
     }
 
@@ -195,6 +197,7 @@ class WatchLink(private val hub: Hub, private val scanner: BleScanner) {
     /** The service stopped: drop the link, keep the watch remembered. */
     fun stop() {
         running = false
+        autoSyncAlarm.cancel()
         handler.removeCallbacks(reconnect)
         teardown()
         setLink(LinkState.Offline)
@@ -319,6 +322,7 @@ class WatchLink(private val hub: Hub, private val scanner: BleScanner) {
         // Its file keys mean nothing for another watch.
         runCatching { hub.db.clearCopied() }
         running = false
+        autoSyncAlarm.cancel()
         hub.update { it.copy(watch = WatchState.NotPaired, sync = SyncState(), scan = ScanState()) }
         log.info("Watch forgotten")
         WatchService.stop(ctx)
@@ -349,10 +353,34 @@ class WatchLink(private val hub: Hub, private val scanner: BleScanner) {
         refreshLeftForGarminConnect()
     }
 
-    /** The auto-sync interval changed. */
+    /** The auto-sync interval changed: the alarm is set again (or gone for Off), and a sync that is now due starts. */
     fun onAutoSyncChanged() {
-        handler.removeCallbacks(autoSync)
-        if (ready) scheduleAutoSync()
+        scheduleAutoSync()
+        maybeAutoSync()
+    }
+
+    /** The auto-sync alarm went off (while the phone slept, perhaps): sync when due, hurry a waiting reconnect, set the next alarm. */
+    fun onAutoSyncAlarm() {
+        if (!running || settings.watch == null) return
+        if (ready) {
+            if (autoSyncDue()) {
+                log.info("Sync requested by the auto-sync timer")
+                requestBatteryAndSync()
+            }
+        } else {
+            // The reconnect delay is a Handler delay and stands still while the phone sleeps.
+            onWatchPresent()
+        }
+        scheduleAutoSync()
+    }
+
+    /** The app came to the foreground: sync when the last one is older than 5 minutes. */
+    fun onAppOpened() {
+        val due = LinkRules.shouldSyncOnOpen(ready, syncBusy(), settings.lastSync?.finishedAtMs, System.currentTimeMillis(), settings.autoSyncMinutes)
+        if (due) {
+            log.info("Sync requested: the app was opened")
+            requestBatteryAndSync()
+        }
     }
 
     /** Shows the remembered watch in `AppState` before any connection (Application start). */
@@ -901,6 +929,8 @@ class WatchLink(private val hub: Hub, private val scanner: BleScanner) {
         }
         armTimer(step.wakeAtMonoMs)
         for (event in step.events) handleEvent(event)
+        // Backstop for the alarm: whatever the watch tells us, a sync that is due starts now.
+        maybeAutoSync()
     }
 
     /** The one deadline of the client; each step replaces the earlier one. */
@@ -990,9 +1020,7 @@ class WatchLink(private val hub: Hub, private val scanner: BleScanner) {
         updateWatch { it.copy(link = LinkState.Ready, softwareVersion = version, lastConnectedAtMs = nowMs) }
         log.info("Handshake done, watch software $version, ${event.fileTypes.size} file types")
         feed(Input.RequestBattery)
-        if (LinkRules.shouldStartSync(settings.lastSync?.finishedAtMs, nowMs, settings.autoSyncMinutes)) {
-            feed(Input.StartSync)
-        }
+        maybeAutoSync()
         scheduleAutoSync()
     }
 
@@ -1105,7 +1133,7 @@ class WatchLink(private val hub: Hub, private val scanner: BleScanner) {
         handler.removeCallbacks(tick)
         leaveSetup()
         mtuSkipped = false
-        handler.removeCallbacks(autoSync)
+        syncAskedAtMs = null
         handler.removeCallbacks(pumpAgain)
         writes.clear()
         client?.let { runCatching { it.close() } }
@@ -1196,13 +1224,43 @@ class WatchLink(private val hub: Hub, private val scanner: BleScanner) {
 
     private fun requestBatteryAndSync() {
         feed(Input.RequestBattery)
+        askForSync()
+    }
+
+    private fun askForSync() {
+        syncAskedAtMs = SystemClock.elapsedRealtime()
         feed(Input.StartSync)
     }
 
+    /** A sync runs, or one was asked for a moment ago and the watch has not started it yet. */
+    private fun syncBusy(): Boolean =
+        hub.state.value.sync.running || LinkRules.syncAskPending(syncAskedAtMs?.let { SystemClock.elapsedRealtime() - it })
+
+    private fun autoSyncDue(): Boolean =
+        LinkRules.shouldStartAutoSync(ready, syncBusy(), settings.lastSync?.finishedAtMs, System.currentTimeMillis(), settings.autoSyncMinutes)
+
+    /** Starts a sync when the interval since the last finished one has run out (after the handshake, on a watch event, on the alarm). */
+    private fun maybeAutoSync() {
+        if (!autoSyncDue()) return
+        log.info("Sync requested: the auto-sync interval has run out")
+        askForSync()
+    }
+
+    /**
+     * Sets the one auto-sync alarm for when the interval since the last finished sync runs out.
+     * It stays set while the service runs, also while the link is down, because it is what hurries
+     * a reconnect that waits out its delay. A Handler delay counts uptime and would stand still in
+     * deep sleep, so this is an alarm ([AutoSyncAlarm]). Off (0), a stopped service and a forgotten
+     * watch cancel it.
+     */
     private fun scheduleAutoSync() {
-        handler.removeCallbacks(autoSync)
         val minutes = settings.autoSyncMinutes
-        if (minutes > 0) handler.postDelayed(autoSync, minutes * 60_000L)
+        if (!running || settings.watch == null || minutes <= 0) {
+            autoSyncAlarm.cancel()
+            return
+        }
+        val delayMs = LinkRules.nextAutoSyncDelayMs(settings.lastSync?.finishedAtMs, System.currentTimeMillis(), minutes)
+        if (!autoSyncAlarm.arm(delayMs)) log.warn("Android refused to set the auto-sync timer")
     }
 
     // ---- state helpers ----

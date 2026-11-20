@@ -13,6 +13,7 @@ object LocalServerFactory {
         db: EngineDb,
         store: FileStore,
         log: EngineLog,
+        onData: () -> Unit,
         onRunning: (Int?) -> Unit,
     ): LocalServerHost = object : LocalServerHost {
         override fun start() = Unit

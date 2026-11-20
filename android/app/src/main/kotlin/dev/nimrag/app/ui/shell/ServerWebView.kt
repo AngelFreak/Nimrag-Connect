@@ -177,6 +177,11 @@ class WebShellState {
         if (pageReady) runInPage(BridgeScripts.statusEvent(status.toJson()))
     }
 
+    /** New watch data reached the server: the page fetches again (it debounces a burst). */
+    fun dispatchData() {
+        if (pageReady) runInPage(BridgeScripts.DATA_EVENT_SCRIPT)
+    }
+
     fun onPause() {
         CookieManager.getInstance().flush()
         view?.onPause()

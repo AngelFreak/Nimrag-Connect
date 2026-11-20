@@ -87,5 +87,10 @@
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
             </intent-filter>
         </receiver>
+
+        <!-- The auto-sync alarm (AlarmManager, only our own PendingIntent sends it). -->
+        <receiver
+            android:name=".engine.AutoSyncReceiver"
+            android:exported="false" />
     </application>
 </manifest>

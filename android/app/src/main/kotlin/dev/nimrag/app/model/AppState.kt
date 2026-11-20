@@ -29,6 +29,12 @@ data class AppState(
     val garminConnect: GarminConnect = GarminConnect.Absent,
     /** Port of the server inside the app on 127.0.0.1 once it runs (personal flavor), else null. */
     val localWebPort: Int? = null,
+    /**
+     * Counts the times new watch data reached a server the web page may show: an upload pass that
+     * took at least one file, or (personal flavor) the phone's own server taking files. The web
+     * view tells the page on every change (`nimrag:data`), so it fetches again.
+     */
+    val dataVersion: Int = 0,
 )
 
 enum class GarminConnect {
@@ -171,7 +177,7 @@ data class Settings(
     /** Upload over mobile data too (default: Wi-Fi, Ethernet or VPN only). */
     val allowMobileData: Boolean = false,
     /** Minutes between automatic sync requests while connected; 0 = only when the watch asks. */
-    val autoSyncMinutes: Int = 60,
+    val autoSyncMinutes: Int = 15,
     /** Our 5050 capability mask as hex (advanced; see IMPLEMENTATION_PLAN.md 2c). */
     val capabilitiesHex: String = "",
     /** Takes effect on the next connection; changing it reconnects. */
@@ -205,6 +211,12 @@ interface WatchController {
 
     /** Forget the watch: disconnect, remove the bond, clear remembered state. Stored files stay. */
     fun forget()
+
+    /**
+     * The app came to the foreground (every `ON_RESUME`): starts a sync when the link is ready and
+     * the last one is older than 5 minutes. Does nothing otherwise; never starts the service.
+     */
+    fun appOpened() {}
 
     /** Ask the watch for a sync now (Input.StartSync); also refreshes the battery. */
     fun syncNow()

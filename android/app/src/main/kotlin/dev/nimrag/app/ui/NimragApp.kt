@@ -202,6 +202,8 @@ internal fun NimragShell(
     // Permissions and Bluetooth can change while we are away (system settings, quick tiles).
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
         controller.refreshPermissions()
+        // Newest data first: sync when the last sync is old enough (the link must be ready).
+        controller.appOpened()
         // Is the session still good? (Throttled in the account; the first check runs at start.)
         controller.account.checkSession()
         webState.onResume()
@@ -211,6 +213,9 @@ internal fun NimragShell(
     // The page learns about link and last-sync changes (and only changes).
     val bridgeStatus = BridgeStatus.of(state)
     LaunchedEffect(bridgeStatus) { webState.dispatchStatus(bridgeStatus) }
+
+    // New files reached the server (or the phone's own copy): the page fetches again.
+    LaunchedEffect(state.dataVersion) { if (state.dataVersion > 0) webState.dispatchData() }
 
     // Back: web history first; in the Watch tab its sub-pages first, then the web tabs; then exit.
     val backEnabled = if (nav.inWatch) showLicences || sectionIndex != 0 || target != null else webState.canGoBack

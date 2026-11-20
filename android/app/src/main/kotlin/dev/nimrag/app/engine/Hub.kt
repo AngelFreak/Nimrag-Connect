@@ -53,6 +53,7 @@ class Hub(val app: Application) {
         onState = { uploads -> update { it.copy(uploads = uploads) } },
         // A refused token (revoked on the server, or an old hand-entered one) means: sign in again.
         onTokenRejected = { account.tokenRejected() },
+        onUploaded = ::newDataArrived,
     )
 
     /**
@@ -77,11 +78,14 @@ class Hub(val app: Application) {
      * by the web view when the real server is not the better choice. [AppState.localWebPort]
      * is set once it runs.
      */
-    val local: LocalServerHost = LocalServerFactory.create(app, db, store, log) { port ->
+    val local: LocalServerHost = LocalServerFactory.create(app, db, store, log, onData = ::newDataArrived) { port ->
         update { it.copy(localWebPort = port) }
     }
 
     fun update(block: (AppState) -> AppState) = flow.update(block)
+
+    /** New watch data reached a server the web page may show; the web view tells the page ([AppState.dataVersion]). Any thread. */
+    fun newDataArrived() = update { it.copy(dataVersion = it.dataVersion + 1) }
 
     /** True when the adapter is switched on. */
     fun bluetoothEnabled(): Boolean = try {

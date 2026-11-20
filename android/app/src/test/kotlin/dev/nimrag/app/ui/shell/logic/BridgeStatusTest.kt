@@ -105,6 +105,7 @@ class BridgeStatusTest {
         val nav = BridgeScripts.navigateEvent("/activities")
         assertTrue(nav.contains("'nimrag:navigate'"))
         assertTrue(nav.contains("detail:{path:\"/activities\"}"))
+        assertEquals("window.dispatchEvent(new CustomEvent('nimrag:data'));", BridgeScripts.DATA_EVENT_SCRIPT)
     }
 
     @Test
