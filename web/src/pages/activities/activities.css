@@ -1,8 +1,12 @@
 /* Page-local styles for Activities, Activity detail and Strength. Tokens come from styles/tokens.css. */
 
 .acts-table td a {
-  display: inline-block;
-  padding: 6px 0;
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--touch);
+}
+.acts-table td {
+  padding-block: 0;
 }
 
 .load-more {

@@ -140,8 +140,9 @@ select.field__input {
   font-size: var(--fs-sm);
 }
 .user-row__actions {
-  display: flex;
-  flex-wrap: wrap;
+  /* Four actions in two even columns on a phone; a single row from 720 px. */
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 140px), 1fr));
   gap: 8px;
 }
 
@@ -211,6 +212,8 @@ select.field__input {
     justify-content: space-between;
   }
   .user-row__actions {
+    display: flex;
+    flex-wrap: wrap;
     justify-content: flex-end;
     flex: none;
   }

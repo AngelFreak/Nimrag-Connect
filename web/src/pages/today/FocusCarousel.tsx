@@ -179,7 +179,7 @@ export function FocusCarousel({ today }: { today: Today }) {
       <h2 className="section-label">In focus</h2>
       {/* The track scrolls sideways, so it must be reachable by keyboard (arrow keys move between slides). */}
       {/* eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex, jsx-a11y/no-noninteractive-element-interactions */}
-      <div ref={track} className="focus__track" tabIndex={0} aria-label="In focus cards, use the left and right arrow keys" role="group" onScroll={onScroll} onKeyDown={onKeyDown}>
+      <div ref={track} className="focus__track" data-scroll="x" tabIndex={0} aria-label="In focus cards, use the left and right arrow keys" role="group" onScroll={onScroll} onKeyDown={onKeyDown}>
         <div className="focus__slide" role="group" aria-roledescription="slide" aria-label="1 of 3: Energy">
           <EnergySlide today={today} />
         </div>

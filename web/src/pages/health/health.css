@@ -181,7 +181,7 @@
 }
 .day-card__date {
   font-weight: 600;
-  min-height: 24px;
+  min-height: var(--touch);
   display: inline-flex;
   align-items: center;
 }

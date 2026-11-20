@@ -167,7 +167,7 @@ export function EditHomeSheet({ initial, error, onSave, onClose }: SheetProps) {
             {error}
           </p>
         ) : null}
-        <div className="sheet__body">
+        <div className="sheet__body" data-scroll="y">
           <ul ref={list} className="edit-list" aria-label="Home cards">
             {order.map((id, i) => {
               const shown = !hidden.includes(id);

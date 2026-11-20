@@ -8,7 +8,8 @@
 }
 .focus__track {
   display: flex;
-  gap: 12px;
+  /* At least the gutter: the next slide starts beyond the screen edge instead of showing a sliver. */
+  gap: var(--gutter);
   overflow-x: auto;
   scroll-snap-type: x mandatory;
   scrollbar-width: none;
