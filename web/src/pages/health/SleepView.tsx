@@ -58,8 +58,8 @@ export function SleepView({ date }: { date: string }) {
   const list = useSleepNights(count);
 
   const latest = list.data?.nights.at(-1)?.date ?? null;
-  const yesterday = addDays(browserToday(), -1);
-  const hasNext = latest !== null ? date < latest : date < yesterday;
+  // A night belongs to the day it ends on, so the newest possible one is today's.
+  const hasNext = latest !== null ? date < latest : date < browserToday();
   const sample = night.data?.sample ?? list.data?.sample;
   const desktop = useIsDesktop();
 
@@ -70,7 +70,7 @@ export function SleepView({ date }: { date: string }) {
         backTo="/health"
         backLabel="Back to Health"
         title="Sleep"
-        subtitle={`Night of ${fmtShortDay(date)}`}
+        subtitle={`Night of ${fmtShortDay(addDays(date, -1))}`}
         aside={desktop ? <SampleDataChip sample={sample} /> : undefined}
         prev={{ to: `/sleep/${addDays(date, -1)}` }}
         next={hasNext ? { to: `/sleep/${addDays(date, 1)}` } : null}

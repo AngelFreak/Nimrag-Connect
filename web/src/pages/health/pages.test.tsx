@@ -222,7 +222,8 @@ describe('SleepPage', () => {
     expect(screen.getByText('23:18 to 06:42')).toBeInTheDocument();
     expect(screen.getByText('81')).toBeInTheDocument();
     expect(screen.getByText('Good')).toBeInTheDocument();
-    expect(screen.getByText('Night of Wed 18 Nov')).toBeInTheDocument();
+    // /sleep/2026-11-18 is the night that ended on the morning of the 18th.
+    expect(screen.getByText('Night of Tue 17 Nov')).toBeInTheDocument();
     // legend: deep 1h 24m, light 3h 58m, REM 1h 50m, awake 12m
     expect(screen.getByText('1h 24m')).toBeInTheDocument();
     expect(screen.getByText('3h 58m')).toBeInTheDocument();

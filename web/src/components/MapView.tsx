@@ -3,7 +3,7 @@ import type { MapOptions } from 'maplibre-gl';
 
 // Maps use MapLibre GL JS with PMTiles from the owner's own server (/tiles/*.pmtiles).
 // There is no third-party tile server and no hosted style or glyph URL: when the tile file
-// is missing the design's placeholder is shown instead. MapLibre itself is loaded lazily,
+// is missing the route is drawn on its own instead. MapLibre itself is loaded lazily,
 // so pages without a map do not pay for it.
 
 /** Default tile file on the owner's server. Override with VITE_TILES_URL at build time. */
@@ -60,18 +60,43 @@ interface MapViewProps {
   height?: number;
 }
 
-function Placeholder() {
+/**
+ * The route drawn on its own, without a base map, for when the server has no tile file. Longitude
+ * is scaled by cos(latitude) so the shape is not stretched; with no track there is no drawing.
+ */
+export function routePath(track: [number, number][] | undefined, width: number, height: number, pad = 12): { d: string; start: [number, number] } | null {
+  if (!track || track.length < 2) return null;
+  const lats = track.map((p) => p[1]);
+  const midLat = ((Math.min(...lats) + Math.max(...lats)) / 2) * (Math.PI / 180);
+  const xs = track.map((p) => p[0] * Math.cos(midLat));
+  const ys = lats.map((lat) => -lat);
+  const [minX, maxX, minY, maxY] = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)];
+  const scale = Math.min((width - 2 * pad) / Math.max(maxX - minX, 1e-9), (height - 2 * pad) / Math.max(maxY - minY, 1e-9));
+  const offX = (width - (maxX - minX) * scale) / 2;
+  const offY = (height - (maxY - minY) * scale) / 2;
+  const pt = (i: number): [number, number] => [offX + ((xs[i] as number) - minX) * scale, offY + ((ys[i] as number) - minY) * scale];
+  const d = track.map((_, i) => `${i === 0 ? 'M' : 'L'}${pt(i)[0].toFixed(1)} ${pt(i)[1].toFixed(1)}`).join('');
+  return { d, start: pt(0) };
+}
+
+function Placeholder({ track, height }: { track?: [number, number][]; height: number }) {
+  const width = 350;
+  const h = Math.round((height / 220) * 150);
+  const route = routePath(track, width, h);
   return (
-    <svg viewBox="0 0 350 150" preserveAspectRatio="none" role="img" aria-label="Route map">
-      <rect width="350" height="150" fill="#141b1f" />
-      <path d="M0 40H350M0 80H350M0 120H350M60 0V150M130 0V150M200 0V150M270 0V150" stroke="#1f292e" strokeWidth="1" />
-      <path d="M40 110C70 60 110 40 150 52S220 30 262 44S318 92 286 112S190 128 150 118S70 132 40 110Z" fill="none" stroke="#7dbbff" strokeWidth="3" strokeLinejoin="round" />
-      <circle cx="40" cy="110" r="5" fill="#ffb066" />
+    <svg viewBox={`0 0 ${width} ${h}`} role="img" aria-label="Route map">
+      <rect width={width} height={h} fill="#141b1f" />
+      {route ? (
+        <>
+          <path d={route.d} fill="none" stroke="#7dbbff" strokeWidth="3" strokeLinejoin="round" strokeLinecap="round" />
+          <circle cx={route.start[0]} cy={route.start[1]} r="5" fill="#ffb066" />
+        </>
+      ) : null}
     </svg>
   );
 }
 
-/** Route map on the owner's PMTiles, or the design's placeholder while tiles are absent. */
+/** Route map on the owner's PMTiles, or the route drawn alone while tiles are absent. */
 export function MapView({ track, tilesUrl = DEFAULT_TILES_URL, label = 'Route map', height = 220 }: MapViewProps) {
   const container = useRef<HTMLDivElement>(null);
   const [mode, setMode] = useState<'checking' | 'placeholder' | 'map'>('checking');
@@ -140,7 +165,7 @@ export function MapView({ track, tilesUrl = DEFAULT_TILES_URL, label = 'Route ma
         <div ref={container} className="map__canvas" style={{ height }} role="img" aria-label={label} />
       ) : (
         <>
-          <Placeholder />
+          <Placeholder track={track} height={height} />
           {mode === 'checking' ? <p className="map__caption">Loading map.</p> : null}
         </>
       )}

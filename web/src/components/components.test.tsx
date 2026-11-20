@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
 import { createRef, useState, type ReactNode } from 'react';
 import { describe, expect, it, vi } from 'vitest';
+import { routePath } from './MapView';
 import {
   AppShell,
   BarSeries,
@@ -567,5 +568,24 @@ describe('MapView without tiles', () => {
     expect(await screen.findByRole('img', { name: 'Route map' })).toBeInTheDocument();
     expect(screen.queryByText(/placeholder|your own server/i)).not.toBeInTheDocument();
     vi.unstubAllGlobals();
+  });
+});
+
+describe('routePath', () => {
+  it('draws nothing without a track', () => {
+    expect(routePath(undefined, 350, 150)).toBeNull();
+    expect(routePath([[10, 56]], 350, 150)).toBeNull();
+  });
+  it('fits the real track inside the box, start first', () => {
+    const r = routePath([[10, 56], [10.01, 56], [10.01, 56.01]], 350, 150);
+    expect(r).not.toBeNull();
+    const nums = (r?.d.match(/-?\d+(\.\d+)?/g) ?? []).map(Number);
+    for (let i = 0; i < nums.length; i += 2) {
+      expect(nums[i]).toBeGreaterThanOrEqual(0);
+      expect(nums[i]).toBeLessThanOrEqual(350);
+      expect(nums[i + 1]).toBeGreaterThanOrEqual(0);
+      expect(nums[i + 1]).toBeLessThanOrEqual(150);
+    }
+    expect(r?.d.startsWith(`M${r.start[0].toFixed(1)} ${r.start[1].toFixed(1)}`)).toBe(true);
   });
 });
