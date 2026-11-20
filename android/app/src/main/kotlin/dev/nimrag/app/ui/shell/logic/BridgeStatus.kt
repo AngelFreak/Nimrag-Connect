@@ -15,20 +15,22 @@ enum class BridgeLink(val wire: String) {
 }
 
 /**
- * What the web app is told about the watch: the link and the last finished sync. A data class so
- * the shell can dispatch `nimrag:status` exactly when it changes.
+ * What the web app is told about the watch: the link, the last finished sync and whether a pull
+ * from the watch is running (the web app spins its sync icon meanwhile). A data class so the shell
+ * can dispatch `nimrag:status` exactly when it changes.
  */
-data class BridgeStatus(val link: BridgeLink, val lastSyncAtMs: Long?) {
-    /** `{"link":"connected","lastSyncAt":"2026-11-19T10:00:00Z"}`, `lastSyncAt` null when never. */
+data class BridgeStatus(val link: BridgeLink, val lastSyncAtMs: Long?, val syncing: Boolean = false) {
+    /** `{"link":"connected","lastSyncAt":"2026-11-19T10:00:00Z","syncing":false}`, `lastSyncAt` null when never. */
     fun toJson(): String {
         val at = lastSyncAtMs?.takeIf { it > 0 }?.let { Instant.ofEpochMilli(it).truncatedTo(ChronoUnit.SECONDS).toString() }
-        return "{\"link\":\"${link.wire}\",\"lastSyncAt\":${if (at == null) "null" else "\"$at\""}}"
+        return "{\"link\":\"${link.wire}\",\"lastSyncAt\":${if (at == null) "null" else "\"$at\""},\"syncing\":$syncing}"
     }
 
     companion object {
         val Unknown = BridgeStatus(BridgeLink.Unknown, null)
 
-        fun of(state: AppState): BridgeStatus = BridgeStatus(linkOf(state), state.sync.lastResult?.finishedAtMs)
+        fun of(state: AppState): BridgeStatus =
+            BridgeStatus(linkOf(state), state.sync.lastResult?.finishedAtMs, syncing = state.sync.running)
 
         /**
          * No watch is Unknown (nothing to be wrong), pairing is Waiting. For a remembered watch:
@@ -63,7 +65,7 @@ object BridgeScripts {
     val DEFINE_BRIDGE: String = """
         (function () {
           if (window.NimragApp) return;
-          var UNKNOWN = { link: 'unknown', lastSyncAt: null };
+          var UNKNOWN = { link: 'unknown', lastSyncAt: null, syncing: false };
           function bridge() { return window.$INTERFACE_NAME; }
           window.NimragApp = {
             native: true,
@@ -82,7 +84,7 @@ object BridgeScripts {
         })();
     """.trimIndent()
 
-    /** Tells the page the link or last sync changed; it re-reads `NimragApp.status()`. */
+    /** Tells the page the link, last sync or `syncing` changed; it re-reads `NimragApp.status()`. */
     fun statusEvent(statusJson: String): String =
         "window.dispatchEvent(new CustomEvent('nimrag:status',{detail:$statusJson}));"
 

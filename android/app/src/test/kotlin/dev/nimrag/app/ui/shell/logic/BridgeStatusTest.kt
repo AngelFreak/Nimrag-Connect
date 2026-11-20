@@ -18,10 +18,10 @@ class BridgeStatusTest {
     private fun paired(link: LinkState, unsupported: String? = null) =
         WatchState.Paired("AA:BB", "Instinct 2", "Instinct 2", link, unsupportedReason = unsupported)
 
-    private fun state(watch: WatchState, permissions: Permissions = ok, lastSyncMs: Long? = null) = AppState(
+    private fun state(watch: WatchState, permissions: Permissions = ok, lastSyncMs: Long? = null, running: Boolean = false) = AppState(
         permissions = permissions,
         watch = watch,
-        sync = SyncState(lastResult = lastSyncMs?.let { SyncResult(it, downloaded = 1, archived = 1, failed = 0) }),
+        sync = SyncState(running = running, lastResult = lastSyncMs?.let { SyncResult(it, downloaded = 1, archived = 1, failed = 0) }),
     )
 
     @Test
@@ -62,15 +62,15 @@ class BridgeStatusTest {
     fun `json carries the wire name and an ISO-8601 UTC time truncated to seconds`() {
         val ms = Instant.parse("2026-11-19T10:00:00.789Z").toEpochMilli()
         assertEquals(
-            "{\"link\":\"connected\",\"lastSyncAt\":\"2026-11-19T10:00:00Z\"}",
+            "{\"link\":\"connected\",\"lastSyncAt\":\"2026-11-19T10:00:00Z\",\"syncing\":false}",
             BridgeStatus(BridgeLink.Connected, ms).toJson(),
         )
     }
 
     @Test
     fun `json has null when there was no sync`() {
-        assertEquals("{\"link\":\"unknown\",\"lastSyncAt\":null}", BridgeStatus.Unknown.toJson())
-        assertEquals("{\"link\":\"waiting\",\"lastSyncAt\":null}", BridgeStatus(BridgeLink.Waiting, 0L).toJson())
+        assertEquals("{\"link\":\"unknown\",\"lastSyncAt\":null,\"syncing\":false}", BridgeStatus.Unknown.toJson())
+        assertEquals("{\"link\":\"waiting\",\"lastSyncAt\":null,\"syncing\":false}", BridgeStatus(BridgeLink.Waiting, 0L).toJson())
     }
 
     @Test
@@ -79,6 +79,16 @@ class BridgeStatusTest {
         val s = BridgeStatus.of(state(paired(LinkState.Ready), lastSyncMs = ms))
         assertEquals(BridgeStatus(BridgeLink.Connected, ms), s)
         assertTrue(s.toJson().contains("\"lastSyncAt\":\"2026-11-19T08:30:15Z\""))
+    }
+
+    @Test
+    fun `a running pull is syncing, and a change of it is a new status`() {
+        val idle = BridgeStatus.of(state(paired(LinkState.Ready), lastSyncMs = 5_000))
+        val pulling = BridgeStatus.of(state(paired(LinkState.Ready), lastSyncMs = 5_000, running = true))
+        assertFalse(idle.syncing)
+        assertTrue(pulling.syncing)
+        assertFalse(idle == pulling)
+        assertTrue(pulling.toJson().endsWith(",\"syncing\":true}"))
     }
 
     @Test

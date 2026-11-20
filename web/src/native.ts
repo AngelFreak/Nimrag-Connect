@@ -9,6 +9,8 @@ export interface NativeStatus {
   link: LinkState;
   /** ISO 8601 timestamp of the last completed sync, or null when there has not been one. */
   lastSyncAt: string | null;
+  /** True while the app pulls files from the watch (apps before 0.6.1 never say so: false). */
+  syncing: boolean;
 }
 
 export interface NimragAppBridge {
@@ -16,7 +18,8 @@ export interface NimragAppBridge {
   native?: boolean;
   /** Starts a sync with the watch. May return a promise that settles when the sync ends. */
   syncNow?: () => void | Promise<void>;
-  status?: () => NativeStatus;
+  /** The app's status; apps before 0.6.1 leave out `syncing`. */
+  status?: () => Omit<NativeStatus, 'syncing'> & { syncing?: boolean };
   /** Opens the app's own Watch screen (the Watch tab stays native in the app). */
   openWatch?: () => void;
   /** Tells the app which page the web view shows, so its bottom bar highlights the right tab. */
@@ -112,16 +115,16 @@ export function navigatePath(event: Event): string | null {
 export function readNativeStatus(): NativeStatus {
   try {
     const raw = getBridge()?.status?.();
-    if (!raw) return { link: 'unknown', lastSyncAt: null };
+    if (!raw) return { link: 'unknown', lastSyncAt: null, syncing: false };
     const link = LINK_STATES.includes(raw.link) ? raw.link : 'unknown';
     const lastSyncAt = typeof raw.lastSyncAt === 'string' ? raw.lastSyncAt : null;
-    return { link, lastSyncAt };
+    return { link, lastSyncAt, syncing: raw.syncing === true };
   } catch {
-    return { link: 'unknown', lastSyncAt: null };
+    return { link: 'unknown', lastSyncAt: null, syncing: false };
   }
 }
 
-/** Event the app dispatches on `window` when the link state or last sync time changes. */
+/** Event the app dispatches on `window` when the link state, the last sync time or `syncing` changes. */
 export const NATIVE_STATUS_EVENT = 'nimrag:status';
 
 /** Event the app dispatches on `window` when one of its own tabs is tapped; `detail.path` is the page to show. */

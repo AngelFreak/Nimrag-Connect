@@ -52,13 +52,15 @@ describe('native bridge', () => {
     delete window.NimragApp;
   });
   it('is unknown without the app', () => {
-    expect(readNativeStatus()).toEqual({ link: 'unknown', lastSyncAt: null });
+    expect(readNativeStatus()).toEqual({ link: 'unknown', lastSyncAt: null, syncing: false });
   });
   it('reads the app status and rejects malformed values', () => {
     window.NimragApp = { status: () => ({ link: 'waiting', lastSyncAt: '2026-11-19T07:42:00Z' }) };
-    expect(readNativeStatus()).toEqual({ link: 'waiting', lastSyncAt: '2026-11-19T07:42:00Z' });
+    expect(readNativeStatus()).toEqual({ link: 'waiting', lastSyncAt: '2026-11-19T07:42:00Z', syncing: false });
+    window.NimragApp = { status: () => ({ link: 'connected', lastSyncAt: null, syncing: true }) };
+    expect(readNativeStatus().syncing).toBe(true);
     window.NimragApp = { status: () => ({ link: 'bogus' as never, lastSyncAt: 5 as never }) };
-    expect(readNativeStatus()).toEqual({ link: 'unknown', lastSyncAt: null });
+    expect(readNativeStatus()).toEqual({ link: 'unknown', lastSyncAt: null, syncing: false });
     window.NimragApp = {
       status: () => {
         throw new Error('bridge down');
