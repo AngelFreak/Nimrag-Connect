@@ -24,6 +24,7 @@ fn sample_tables() -> impl Iterator<Item = &'static str> {
     activity::SAMPLE_TABLES
         .iter()
         .chain(wellness::SAMPLE_TABLES)
+        .chain(crate::connect::SAMPLE_TABLES)
         .copied()
 }
 
@@ -266,7 +267,7 @@ pub async fn persist(
     write_file_derive(tx, sha256, status, error.as_deref(), skipped).await
 }
 
-async fn write_file_derive(
+pub(crate) async fn write_file_derive(
     tx: &mut Transaction<'_, Sqlite>,
     sha256: &str,
     status: &str,

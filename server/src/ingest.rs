@@ -4,11 +4,12 @@
 
 use crate::api::AppState;
 use crate::ledger::{self, Meta, Sidecar, UploadEvent};
-use crate::{derive, store};
+use crate::{connect, derive, store};
 use anyhow::{Context, Result};
 
 /// Commit `blob`, record the upload event (sidecar first, then DB) and parse
-/// FIT bytes that have no parse result yet. Returns true if the file is new.
+/// FIT bytes (or a Garmin Connect JSON envelope, see [`connect`]) that have no parse result yet.
+/// Returns true if the file is new.
 /// `origin` (import only) is the archive-relative path; identical re-imports of
 /// the same origin fold into the existing event.
 ///
@@ -36,13 +37,31 @@ pub async fn ingest(
     // Decided from the DB, not from `created`, so a retry after a failure repairs.
     // Done outside the ledger lock.
     let mut parsed = None;
+    let mut connect_parsed = None;
     let head = {
         let (dir, sha) = (state.data_dir.clone(), sha256.clone());
-        tokio::task::spawn_blocking(move || store::read_head(&dir, &sha, derive::SNIFF_LEN))
+        let n = derive::SNIFF_LEN.max(connect::SNIFF_LEN);
+        tokio::task::spawn_blocking(move || store::read_head(&dir, &sha, n))
             .await
             .context("sniff task")??
     };
-    if derive::looks_like_fit(&head) {
+    if connect::looks_like_connect(&head) {
+        let done = sqlx::query_scalar::<_, i64>("SELECT 1 FROM file_derive WHERE sha256 = ?")
+            .bind(sha256)
+            .fetch_optional(&state.pool)
+            .await?
+            .is_some();
+        if !done {
+            let (dir, sha) = (state.data_dir.clone(), sha256.clone());
+            connect_parsed = Some(
+                tokio::task::spawn_blocking(move || -> anyhow::Result<connect::Parsed> {
+                    Ok(connect::parse(&store::read_verified(&dir, &sha)?))
+                })
+                .await
+                .context("connect parse task")??,
+            );
+        }
+    } else if derive::looks_like_fit(&head) {
         let done = sqlx::query!(
             r#"SELECT 1 as "x!: i64" FROM file_parse WHERE sha256 = ?"#,
             sha256
@@ -127,6 +146,8 @@ pub async fn ingest(
     }
     if let Some(parsed) = &parsed {
         derive::write(&mut tx, sha256, parsed).await?;
+    } else if let Some(parsed) = &connect_parsed {
+        connect::write(&mut tx, sha256, parsed).await?;
     } else if let (true, Some(uid)) = (claimed, owner) {
         // Already parsed (it was stored before, unowned): its rows move from the unassigned
         // partition to the new owner, and the rank contests are decided again.

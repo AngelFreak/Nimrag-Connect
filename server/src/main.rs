@@ -2,7 +2,7 @@
 //! three flags do not justify a parser dependency.
 
 use anyhow::{bail, Context, Result};
-use nimrag_server::{api, db, derive, import, ledger, tokens, users};
+use nimrag_server::{api, connect, db, derive, import, ledger, tokens, users};
 use std::path::PathBuf;
 
 const USAGE: &str = "\
@@ -24,10 +24,14 @@ usage:
   nimrag-server reparse [--data-dir DIR]          rebuild derived tables from the files
   nimrag-server import-export [--data-dir DIR] [--user USERNAME] [--list-skipped]
                       [--max-depth N] [--max-entries N] [--max-total-bytes N] <archive.zip | extracted-dir>
+  nimrag-server import-connect --user USERNAME [--data-dir DIR] [--timezone IANA] <dir>
+                                                   import a directory of Garmin Connect JSON (sleep, HRV, training
+                                                   status and load, VO2 max, daily stats, activities) for a user
   nimrag-server rebuild-ledger [--data-dir DIR]   recreate files/uploads rows from sidecars
 --data-dir defaults to $NIMRAG_DATA_DIR or ./data; --listen to 127.0.0.1:8080.
 --user on token create and import-export names the user who owns the token or the imported files;
-  without it they stay unassigned until an admin assigns them in the web app.
+  without it they stay unassigned until an admin assigns them in the web app (import-connect
+  needs it, and reads local dates and times in that user's timezone unless --timezone is given).
 --insecure-cookies drops the Secure flag from the session cookie (plain-http LAN use only) and
   uses the cookie name nimrag_session instead of __Host-nimrag_session.
 --trusted-proxy (repeatable, or comma-separated) names the reverse-proxy networks whose
@@ -46,6 +50,7 @@ struct Opts {
     name: Option<String>,
     user: Option<String>,
     username: Option<String>,
+    timezone: Option<String>,
     positional: Vec<String>,
 }
 
@@ -67,6 +72,7 @@ fn parse_opts(args: &[String]) -> Result<Opts> {
         name: None,
         user: None,
         username: None,
+        timezone: None,
         positional: vec![],
     };
     let mut it = args.iter();
@@ -82,6 +88,7 @@ fn parse_opts(args: &[String]) -> Result<Opts> {
             "--name" => o.name = Some(value("--name")?),
             "--user" => o.user = Some(value("--user")?),
             "--username" => o.username = Some(value("--username")?),
+            "--timezone" => o.timezone = Some(value("--timezone")?),
             "--log-json" => o.log_json = true,
             "--insecure-cookies" => o.insecure_cookies = true,
             "--trusted-proxy" => o.trusted_proxies.extend(
@@ -113,7 +120,7 @@ async fn main() -> Result<()> {
     // Hold for the whole process: one writer per data dir.
     let _lock = if matches!(
         cmd.as_str(),
-        "serve" | "import-export" | "reparse" | "rebuild-ledger" | "dev-seed"
+        "serve" | "import-export" | "import-connect" | "reparse" | "rebuild-ledger" | "dev-seed"
     ) {
         Some(db::lock_data_dir(&o.data_dir, cmd)?)
     } else {
@@ -129,8 +136,14 @@ async fn main() -> Result<()> {
             let pool = db::open(&o.data_dir).await?;
             let r = derive::reparse(&pool, &o.data_dir).await?;
             println!(
-                "reparsed: {} files ({} FIT inputs) -> {} fit files, {} messages, {} parse errors, {} unreadable",
-                r.files, r.fit_inputs, r.fit_files, r.messages, r.parse_errors, r.unreadable
+                "reparsed: {} files ({} FIT inputs, {} Garmin Connect inputs) -> {} fit files, {} messages, {} parse errors, {} unreadable",
+                r.files,
+                r.fit_inputs,
+                r.connect_inputs,
+                r.fit_files,
+                r.messages,
+                r.parse_errors,
+                r.unreadable
             );
             if r.unreadable > 0 {
                 bail!(
@@ -150,6 +163,7 @@ async fn main() -> Result<()> {
             Ok(())
         }
         "import-export" => import_export(o).await,
+        "import-connect" => import_connect(o).await,
         "token" => token(o).await,
         "user" => user(o).await,
         "dev-seed" => {
@@ -398,6 +412,52 @@ async fn serve(o: Opts) -> Result<()> {
         let _ = tokio::signal::ctrl_c().await;
     })
     .await?;
+    Ok(())
+}
+
+async fn import_connect(o: Opts) -> Result<()> {
+    let [input] = o.positional.as_slice() else {
+        bail!("import-connect needs exactly one directory\n{USAGE}");
+    };
+    let username = o
+        .user
+        .as_deref()
+        .context("import-connect needs --user USERNAME: the history belongs to a user")?;
+    let pool = db::open(&o.data_dir).await?;
+    let user = find_user(&pool, username).await?;
+    if user.role == users::Role::Admin {
+        bail!(
+            "{} is an admin account, which owns no data; pick a normal user",
+            user.username
+        );
+    }
+    let tz = match &o.timezone {
+        Some(name) => name
+            .parse::<chrono_tz::Tz>()
+            .map_err(|_| anyhow::anyhow!("{name} is not an IANA time zone name"))?,
+        None => nimrag_server::settings::load(&pool, user.id).await?.tz,
+    };
+    let state = api::AppState::new(pool, o.data_dir.clone(), api::MAX_BODY_BYTES);
+    let r = connect::import::run(&state, std::path::Path::new(input), user.id, tz).await?;
+    println!("user:                 {}", user.username);
+    println!("time zone:            {}", tz.name());
+    println!("JSON files read:      {}", r.files);
+    println!("blobs stored new:     {}", r.new_blobs());
+    println!("blobs already there:  {}", r.present_blobs());
+    for (kind, (new, present)) in &r.by_kind {
+        println!("  {kind}: {new} new, {present} already there");
+    }
+    println!("not Connect JSON (not stored): {}", r.unrecognised.len());
+    for p in &r.unrecognised {
+        println!("    {p}");
+    }
+    println!("errors:               {}", r.errors.len());
+    for e in &r.errors {
+        eprintln!("error: {e}");
+    }
+    if !r.errors.is_empty() {
+        bail!("{} files failed", r.errors.len());
+    }
     Ok(())
 }
 
