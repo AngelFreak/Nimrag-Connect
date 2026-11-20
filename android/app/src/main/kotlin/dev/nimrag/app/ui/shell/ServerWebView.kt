@@ -189,6 +189,8 @@ class WebShellState {
 
     fun onResume() {
         view?.onResume()
+        // Coming back after hours or days: the server may have a newer web app by now.
+        if (pageReady) runInPage(BridgeScripts.UPDATE_CHECK_SCRIPT)
     }
 
     /** Runs [script] in the page, only when the web view is on the server origin. Main thread. */
@@ -218,6 +220,7 @@ class WebShellState {
             runInPage(BridgeScripts.navigateEvent(it))
         }
         runInPage(BridgeScripts.statusEvent(statusProvider().toJson()))
+        runInPage(BridgeScripts.UPDATE_CHECK_SCRIPT)
     }
 
     /** Fallback when DOCUMENT_START_SCRIPT is missing: define the bridge once the page is up. */

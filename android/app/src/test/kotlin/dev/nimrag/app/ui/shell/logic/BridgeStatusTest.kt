@@ -106,6 +106,10 @@ class BridgeStatusTest {
         assertTrue(nav.contains("'nimrag:navigate'"))
         assertTrue(nav.contains("detail:{path:\"/activities\"}"))
         assertEquals("window.dispatchEvent(new CustomEvent('nimrag:data'));", BridgeScripts.DATA_EVENT_SCRIPT)
+        val update = BridgeScripts.UPDATE_CHECK_SCRIPT
+        assertTrue(update.contains("cache:'no-store'"))
+        assertTrue(update.contains("getRegistrations()"))
+        assertTrue(update.contains("location.reload()"))
     }
 
     @Test

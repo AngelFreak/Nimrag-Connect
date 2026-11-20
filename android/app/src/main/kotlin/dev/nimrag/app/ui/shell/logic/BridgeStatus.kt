@@ -89,6 +89,21 @@ object BridgeScripts {
     /** Tells the page new watch data reached the server; it fetches what it shows again (web/src/dataRefresh.ts). */
     const val DATA_EVENT_SCRIPT = "window.dispatchEvent(new CustomEvent('nimrag:data'));"
 
+    /**
+     * Loads the server's newest web app when the page runs an older one. The app process lives on
+     * (the watch service), so the web view can keep a page, and its service worker a cached copy,
+     * from before a server update for days. Asks the server for its index page past the service
+     * worker (a query it has not cached), compares the main script with the running one and, when
+     * they differ, drops the service worker and its caches and reloads. Failures are ignored.
+     */
+    const val UPDATE_CHECK_SCRIPT = "(async()=>{try{" +
+        "const cur=[...document.scripts].map(s=>s.src).find(s=>/\\/assets\\/index-[^/]+\\.js$/.test(s));if(!cur)return;" +
+        "const r=await fetch('/?nimrag_build='+Date.now(),{cache:'no-store',credentials:'same-origin'});if(!r.ok)return;" +
+        "const m=(await r.text()).match(/\\/assets\\/index-[^\"'/]+\\.js/);if(!m||cur.endsWith(m[0]))return;" +
+        "if(navigator.serviceWorker){for(const g of await navigator.serviceWorker.getRegistrations())await g.unregister();}" +
+        "if(window.caches){for(const k of await caches.keys())await caches.delete(k);}" +
+        "location.reload();}catch(e){}})();"
+
     /** Tells the page's router to go to [path] (a native tab was tapped). */
     fun navigateEvent(path: String): String =
         "window.dispatchEvent(new CustomEvent('nimrag:navigate',{detail:{path:${jsString(path)}}}));"
