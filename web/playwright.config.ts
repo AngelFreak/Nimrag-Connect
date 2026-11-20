@@ -11,7 +11,9 @@ import { ORIGIN, sessionFile } from './e2e/real-server';
 //   dir, starts the server on 127.0.0.1:18121 and a second one on an empty data dir
 //   (127.0.0.1:18122, for the first-run setup page), and logs each account in once;
 //   `real-teardown` stops them. The specs are real.spec.ts (every route as `demo`, checked for
-//   errors and accessibility), real.login.spec.ts, real.admin.spec.ts and real.firstrun.spec.ts.
+//   errors and accessibility), real.layout.spec.ts (the layout audit: every route, dialog and state
+//   at 320 to 1360 px must fit the screen; `node scripts/layout-audit-summary.mjs` prints the counts),
+//   real.login.spec.ts, real.admin.spec.ts and real.firstrun.spec.ts.
 const external = process.env['PLAYWRIGHT_BASE_URL'];
 const baseURL = external ?? 'http://127.0.0.1:4173';
 

@@ -102,7 +102,8 @@ export async function stopServer(): Promise<void> {
   const state = JSON.parse(fs.readFileSync(serverFile, 'utf8')) as ServerState;
   await stop(state);
   if (state.setup) await stop(state.setup);
-  for (const f of [serverFile, sessionFile, adminSessionFile, fixtureFile, path.join(stateDir, 'totp-steps.json')]) fs.rmSync(f, { force: true });
+  for (const f of [serverFile, sessionFile, adminSessionFile, fixtureFile, path.join(stateDir, 'totp-steps.json'), path.join(stateDir, 'layout-tokens.done')]) fs.rmSync(f, { force: true });
+  fs.rmSync(path.join(stateDir, 'layout-tokens.lock'), { recursive: true, force: true });
 }
 
 export function readServerState(): ServerState {
