@@ -166,11 +166,26 @@ select.field__input {
   min-width: 0;
 }
 
+/* Dialogs (components/Modal.tsx): more air than the Edit home sheet, which is a list. */
+.sheet--modal .sheet__head {
+  padding-top: 24px;
+}
+.sheet--modal .sheet__hint {
+  padding-bottom: 20px;
+  line-height: 1.45;
+}
+.sheet--modal .sheet__foot {
+  padding-top: 16px;
+}
 .modal__body {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding-bottom: 12px;
+  gap: 24px;
+}
+/* Above .sheet__body's `padding: 0 var(--gutter)`, which comes later in the bundle. */
+.sheet--modal .modal__body {
+  padding-top: 4px;
+  padding-bottom: 28px;
 }
 .modal__body:empty {
   display: none;
