@@ -99,6 +99,10 @@ test('the demo user is a normal user: the profile says so, and /admin is not fou
   await expect(head).toContainText('demo');
   await expect(head).toContainText('Two-step login on');
   await expect(page.getByRole('link', { name: 'Admin area' })).toHaveCount(0);
+  await expect(page.getByRole('link', { name: 'Password' })).toBeVisible();
+  // The Preferences group is a section of its own on a wide screen.
+  await page.goto('/profile?section=preferences');
+  await settled(page, 'Profile');
   await expect(page.getByRole('link', { name: /^Timezone/ })).toBeVisible();
 
   await page.goto('/admin');
@@ -155,7 +159,7 @@ test('Goals: changing the step goal is saved and shown on Movement', async ({ pa
   await page.goto('/movement');
   await settled(page);
   await expect(page.getByText('Goal 9,500')).toBeVisible();
-  await page.goto('/profile');
+  await page.goto('/profile?section=preferences');
   await settled(page, 'Profile');
   await expect(page.getByRole('link', { name: /^Goals 9,500 steps/ })).toBeVisible();
   await page.goto('/profile/goals');
@@ -165,19 +169,21 @@ test('Goals: changing the step goal is saved and shown on Movement', async ({ pa
 });
 
 test('Timezone: a pick is saved at once', async ({ page }) => {
-  await page.goto('/profile/timezone');
-  await settled(page);
-  const select = page.getByLabel('Timezone');
-  const before = await select.inputValue();
-  const other = before === 'Europe/Paris' ? 'Europe/Berlin' : 'Europe/Paris';
-  await select.selectOption(other);
-  await expect(page.getByRole('status').filter({ hasText: 'Saved.' })).toBeVisible();
-  await page.goto('/profile');
-  await settled(page, 'Profile');
-  await expect(page.getByRole('link', { name: new RegExp(`^Timezone ${other}`) })).toBeVisible();
-  await page.goto('/profile/timezone');
-  await page.getByLabel('Timezone').selectOption(before);
-  await expect(page.getByRole('status').filter({ hasText: 'Saved.' })).toBeVisible();
+  // The seeded zone may be one the list does not offer (the server's own, such as UTC), so it is put back through the API.
+  const original = ((await (await page.request.get('/api/settings')).json()) as { timezone: string }).timezone;
+  try {
+    await page.goto('/profile/timezone');
+    await settled(page);
+    const other = original === 'Europe/Paris' ? 'Europe/Berlin' : 'Europe/Paris';
+    await page.getByLabel('Timezone').selectOption(other);
+    await expect(page.getByRole('status').filter({ hasText: 'Saved.' })).toBeVisible();
+    await page.goto('/profile?section=preferences');
+    await settled(page, 'Profile');
+    await expect(page.getByRole('link', { name: new RegExp(`^Timezone ${other}`) })).toBeVisible();
+  } finally {
+    const back = await page.request.patch('/api/settings', { headers: { 'X-Nimrag': '1' }, data: { timezone: original } });
+    expect(back.ok()).toBe(true);
+  }
 });
 
 test('Watch shows the seeded server and watch data, and the server version shows under About', async ({ page }) => {
