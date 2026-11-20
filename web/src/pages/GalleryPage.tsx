@@ -8,6 +8,7 @@ import {
   CardHeader,
   CheckRow,
   Chip,
+  ConfirmDialog,
   DataList,
   DesktopNav,
   EmptyState,
@@ -16,17 +17,20 @@ import {
   Legend,
   ListRow,
   MapView,
-  ProfileMenu,
+  ProfileLink,
   ProgressBar,
   RangeBar,
   Ring,
   SampleDataChip,
   SegmentedControl,
   SeriesChart,
+  SettingsGroup,
+  SettingsRow,
   Skeleton,
   StageBar,
   StageTimeline,
   StatTile,
+  StatusBanner,
   StressBars,
   SyncButton,
   Table,
@@ -35,6 +39,12 @@ import {
   Unavailable,
   WatchLink,
   ZoneBars,
+  GlobeIcon,
+  KeyIcon,
+  LogoutIcon,
+  PhoneIcon,
+  SendIcon,
+  ShieldIcon,
   type StageSpan,
   type StressBucket,
 } from '../components';
@@ -129,6 +139,8 @@ export function GalleryPage() {
   const [range7, setRange7] = useState<'7d' | '4w' | '3m' | '1y'>('4w');
   const [type, setType] = useState<'all' | 'run' | 'strength' | 'walk'>('all');
   const [spinDemo, setSpinDemo] = useState(false);
+  const [confirmDemo, setConfirmDemo] = useState(false);
+  const [switchDemo, setSwitchDemo] = useState(false);
 
   return (
     <div className="gallery">
@@ -168,7 +180,7 @@ export function GalleryPage() {
         <div className="gallery__grid">
           <Frame label="Top bar of the main tabs (profile, sync, watch)">
             <div className="mainbar" style={{ padding: 8 }}>
-              <ProfileMenu align="start" />
+              <ProfileLink />
               <div className="mainbar__right">
                 <SyncButton spinning={false} onClick={() => setSpinDemo(true)} />
                 <WatchLink link="connected" />
@@ -397,6 +409,40 @@ export function GalleryPage() {
             <ListRow to="/activities/3" title="Walk" sub="Fri 13 Nov · 12:10" value={null} valueSub="52 min" />
           </div>
         </div>
+      </Section>
+
+      <Section title="Settings rows" note="A list of settings: each row shows its current value, the whole row is the control, and a problem is one line with one fix.">
+        <div className="gallery__grid">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <SettingsGroup title="Account">
+              <SettingsRow icon={<KeyIcon />} tone="accent" title="Password" to="/__gallery" />
+              <SettingsRow icon={<ShieldIcon />} tone="energy" title="Two-step login" value="On" to="/__gallery" />
+              <SettingsRow icon={<PhoneIcon />} tone="sleep" title="Signed-in phones" value="Pixel 9a (this phone) and 1 more" to="/__gallery" />
+            </SettingsGroup>
+            <SettingsGroup title="Preferences">
+              <SettingsRow icon={<GlobeIcon />} tone="warn" title="Timezone" value="Europe/Copenhagen" to="/__gallery" />
+              <SettingsRow icon={<SendIcon />} tone="steps" title="Send activities to Garmin" checked={switchDemo} onCheckedChange={setSwitchDemo} value={switchDemo ? 'On' : 'Off'} />
+              <SettingsRow icon={<PhoneIcon />} tone="muted" title="Sync now" action={<Button>Sync</Button>} />
+              <SettingsRow icon={<GlobeIcon />} tone="muted" title="Server" value="nimrag.example.ts.net" info />
+            </SettingsGroup>
+            <SettingsGroup title="Log out">
+              <SettingsRow icon={<LogoutIcon />} tone="heart" title="Log out" chevron={false} onClick={() => setConfirmDemo(true)} />
+            </SettingsGroup>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <StatusBanner action={<Button>Log in</Button>}>Garmin asks you to log in again.</StatusBanner>
+            <StatusBanner tone="info">No new files for two days.</StatusBanner>
+          </div>
+        </div>
+        {confirmDemo ? (
+          <ConfirmDialog
+            title="Log out?"
+            consequence="You will need your username, password and a code to sign in again."
+            confirmLabel="Log out"
+            onConfirm={() => setConfirmDemo(false)}
+            onCancel={() => setConfirmDemo(false)}
+          />
+        ) : null}
       </Section>
 
       <Section title="States">

@@ -1,4 +1,4 @@
-// Screenshots of Devices and Settings against a seeded dev server.
+// Screenshots of the Watch page and the profile pages against a seeded dev server.
 //   PLAYWRIGHT_BASE_URL=http://127.0.0.1:5121 NIMRAG_PASSWORD=... node src/pages/system/screenshots.mjs
 // Writes web/screenshots/system-*.png (gitignored). Not part of the test suite.
 import { chromium } from '@playwright/test';
@@ -28,14 +28,11 @@ for (const [w, h] of [
   [390, 844],
   [1360, 1000],
 ]) {
-  await shot('/devices', `devices-${w}`, w, h);
-  await shot('/settings', `settings-${w}`, w, h);
-  await shot('/settings', `settings-token-${w}`, w, h, async (page) => {
-    await page.getByRole('button', { name: 'Create token' }).click();
-    await page.getByLabel('Name', { exact: true }).fill('Screenshot phone');
-    await page.getByLabel('Your password').fill(password);
-    await page.getByRole('button', { name: 'Create token' }).last().click();
-    await page.getByText('shown only once').waitFor();
-  });
+  await shot('/devices', `watch-${w}`, w, h);
+  await shot('/devices/details', `watch-details-${w}`, w, h);
+  await shot('/profile', `profile-${w}`, w, h);
+  await shot('/profile/phones', `phones-${w}`, w, h);
+  await shot('/profile/goals', `goals-${w}`, w, h);
+  await shot('/profile/garmin', `garmin-${w}`, w, h);
 }
 await browser.close();

@@ -1,4 +1,4 @@
-/* Accounts: profile menu, QR code and secret, the admin area. Built from the same tokens as components.css. */
+/* Accounts: QR code and secret, the admin area. Built from the same tokens as components.css. */
 
 .shell__spacer {
   flex: 1;
@@ -15,64 +15,6 @@ select.field__input {
     6px 6px,
     6px 6px;
   background-repeat: no-repeat;
-}
-
-/* ------------------------------------------------------------------ profile menu */
-.profile-menu {
-  position: relative;
-}
-.profile-menu__panel {
-  position: absolute;
-  top: calc(100% + 4px);
-  z-index: 40;
-  min-width: 220px;
-  display: flex;
-  flex-direction: column;
-  padding: 6px;
-  background: var(--raised);
-  border: 1px solid var(--line-strong);
-  border-radius: var(--radius-control);
-  box-shadow: 0 10px 30px rgba(5, 8, 10, 0.5);
-}
-.profile-menu__panel[data-align='start'] {
-  left: 0;
-}
-.profile-menu__panel[data-align='end'] {
-  right: 0;
-}
-.profile-menu__who {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: 8px 10px 10px;
-  border-bottom: 1px solid var(--line);
-  margin-bottom: 4px;
-}
-.profile-menu__name {
-  font-weight: 600;
-  overflow-wrap: anywhere;
-}
-.profile-menu__role {
-  font-size: var(--fs-sm);
-  color: var(--text-2);
-}
-.profile-menu__item {
-  display: flex;
-  align-items: center;
-  min-height: var(--touch);
-  padding: 0 10px;
-  border: 0;
-  border-radius: var(--radius-segment);
-  background: none;
-  color: var(--text);
-  font: inherit;
-  font-size: var(--fs-md);
-  text-align: left;
-  text-decoration: none;
-  cursor: pointer;
-}
-.profile-menu__item:hover {
-  background: var(--card);
 }
 
 /* ------------------------------------------------------------------ authenticator (QR) */
@@ -217,61 +159,4 @@ select.field__input {
     justify-content: flex-end;
     flex: none;
   }
-}
-
-/* Settings, signed-in phones: one wrapping block per phone, never wider than the card (320 px up). */
-.phones-card {
-  min-width: 0;
-}
-.phones {
-  list-style: none;
-  margin: 12px 0 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-.phones__item {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding-top: 12px;
-  border-top: 1px solid var(--line);
-}
-.phones__item:first-child {
-  padding-top: 0;
-  border-top: 0;
-}
-.phones__name {
-  margin: 0;
-  font-weight: 600;
-  overflow-wrap: anywhere;
-}
-.phones__meta {
-  margin: 0;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 20px;
-  font-size: var(--fs-sm);
-  color: var(--text-2);
-}
-.phones__meta div {
-  min-width: 0;
-}
-.phones__meta dt {
-  display: inline;
-}
-.phones__meta dt::after {
-  content: ': ';
-}
-.phones__meta dd {
-  display: inline;
-  margin: 0;
-  overflow-wrap: anywhere;
-}
-.phones__actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
 }

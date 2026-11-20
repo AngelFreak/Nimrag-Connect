@@ -14,6 +14,7 @@ import './styles/tokens.css';
 import './styles/global.css';
 import './styles/components.css';
 import './styles/account.css';
+import './styles/settings.css';
 
 import { App } from './App';
 import { queryClient } from './api/queryClient';

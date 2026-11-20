@@ -148,12 +148,12 @@ describe('Today on a phone', () => {
     for (const dt of Array.from(last7.closest('section')!.querySelectorAll('dt'))) expect((dt.textContent ?? '').length).toBeLessThanOrEqual(16);
   });
 
-  it('says the days follow UTC, with a link to Settings, when the account is on UTC and the browser is not', async () => {
+  it('says the days follow UTC, with a link to the timezone page, when the account is on UTC and the browser is not', async () => {
     vi.spyOn(Intl.DateTimeFormat.prototype, 'resolvedOptions').mockReturnValue({ timeZone: 'Europe/Copenhagen' } as Intl.ResolvedDateTimeFormatOptions);
     mockApi({ '/api/today': () => json(makeToday({ timezone: 'Etc/UTC' })), '/api/settings': () => json(makeSettings()) });
     renderPage();
     expect(await screen.findByText(/Your days follow UTC time\./)).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Set your timezone' })).toHaveAttribute('href', '/settings');
+    expect(screen.getByRole('link', { name: 'Set your timezone' })).toHaveAttribute('href', '/profile/timezone');
   });
 
   it('shows no timezone notice when the browser is on UTC too, or the account is not', async () => {

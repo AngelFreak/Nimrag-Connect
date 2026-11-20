@@ -4,7 +4,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { getBridge, hasNativeSync, isNativeApp, openWatch, type LinkState } from '../native';
 import { useNativeStatus } from '../lib/hooks';
 import { RefreshIcon, WatchIcon } from './icons';
-import { ProfileMenu } from './ProfileMenu';
+import { ProfileLink } from './ProfileLink';
 
 const MIN_SPIN_MS = 700;
 
@@ -121,7 +121,7 @@ export function MainBar() {
   return (
     // A banner landmark, so the buttons are not outside every landmark (axe: region).
     <header className="mainbar">
-      <ProfileMenu align="start" />
+      <ProfileLink />
       <div className="mainbar__right">
         <SyncAndWatch />
       </div>

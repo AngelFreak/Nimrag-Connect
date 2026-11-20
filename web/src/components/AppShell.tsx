@@ -2,7 +2,7 @@ import { useEffect, useRef, type ReactNode } from 'react';
 import { Link, Outlet, useLocation } from 'react-router-dom';
 import { ActivitiesIcon, HealthIcon, TodayIcon } from './icons';
 import { isNativeApp } from '../native';
-import { ProfileMenu } from './ProfileMenu';
+import { ProfileLink } from './ProfileLink';
 import { MainBar, SyncAndWatch } from './SyncControls';
 
 export type NavKey = 'today' | 'activities' | 'sleep' | 'health' | 'strength' | 'devices' | 'other';
@@ -40,7 +40,7 @@ const DESKTOP_NAV: NavItem[] = [
   { key: 'sleep', to: '/sleep', label: 'Sleep' },
   { key: 'health', to: '/health', label: 'Health' },
   { key: 'strength', to: '/strength', label: 'Strength' },
-  { key: 'devices', to: '/devices', label: 'Devices' },
+  { key: 'devices', to: '/devices', label: 'Watch' },
 ];
 
 /** Phone bottom navigation. */
@@ -80,7 +80,7 @@ interface AppShellProps {
   tabs?: boolean;
   /**
    * The admin area: no data tabs, no sync or watch buttons. The header holds the brand (a link to
-   * /admin) and the profile menu; a phone gets a small top bar with the profile button.
+   * /admin) and the profile link; a phone gets a small top bar with the profile button.
    */
   area?: 'data' | 'admin';
   /** Render children instead of the router outlet (gallery, tests). */
@@ -120,7 +120,7 @@ export function AppShell({ tabs = false, area = 'data', children }: AppShellProp
           {admin ? <div className="shell__spacer" /> : <DesktopNav active={active} />}
           <div className="shell__tools">
             {admin ? null : <SyncAndWatch />}
-            <ProfileMenu align="end" />
+            <ProfileLink />
           </div>
         </div>
       </header>
@@ -129,7 +129,7 @@ export function AppShell({ tabs = false, area = 'data', children }: AppShellProp
         {admin ? (
           // Phone only (the header takes over from 1024 px); a banner landmark like the main bar.
           <header className="mainbar">
-            <ProfileMenu align="start" />
+            <ProfileLink />
           </header>
         ) : null}
         <main id="main" ref={main} tabIndex={-1} style={{ outline: 'none' }}>
