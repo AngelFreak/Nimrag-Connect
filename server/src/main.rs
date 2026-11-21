@@ -9,7 +9,7 @@ use std::time::Duration;
 const USAGE: &str = "\
 usage:
   nimrag-server serve [--data-dir DIR] [--listen ADDR] [--log-json] [--insecure-cookies]
-                      [--trusted-proxy CIDR[,CIDR...]] [--tiles-dir DIR]
+                      [--trusted-proxy CIDR[,CIDR...]] [--tiles-dir DIR] [--no-gps-assist]
                       [--backup-dir DIR [--backup-every 24h] [--backup-keep 7]]
   nimrag-server user set-password [--username NAME] [--data-dir DIR]
                                                    read the new password from stdin (default user: the only admin)
@@ -45,6 +45,8 @@ usage:
   uses the cookie name nimrag_session instead of __Host-nimrag_session.
 --tiles-dir (or $NIMRAG_TILES_DIR) serves the *.pmtiles files of DIR to signed-in users under
   /tiles/<name>.pmtiles (map tiles for the web app); without it /tiles/* is a 404.
+--no-gps-assist (or NIMRAG_GPS_ASSIST=off) switches off GET /api/device/gps-assist, the only place this server
+  contacts Garmin (satellite data for the watch's GPS, fetched on the phone's behalf); on otherwise.
 --backup-dir (or $NIMRAG_BACKUP_DIR) makes serve back up by itself: every --backup-every ($NIMRAG_BACKUP_EVERY,
   default 24h; 30m, 6h, 1d) a folder nimrag-backup-<UTC time> with a database snapshot and the files, of which
   the newest --backup-keep ($NIMRAG_BACKUP_KEEP, default 7) stay. Without --backup-dir nothing is backed up.
@@ -59,6 +61,7 @@ struct Opts {
     insecure_cookies: bool,
     trusted_proxies: Vec<nimrag_server::auth::Cidr>,
     tiles_dir: Option<PathBuf>,
+    gps_assist: bool,
     backup_dir: Option<PathBuf>,
     backup_every: Duration,
     backup_keep: usize,
@@ -93,6 +96,12 @@ fn parse_opts(args: &[String]) -> Result<Opts> {
         tiles_dir: std::env::var_os("NIMRAG_TILES_DIR")
             .filter(|v| !v.is_empty())
             .map(Into::into),
+        gps_assist: match env_text("NIMRAG_GPS_ASSIST") {
+            Some(v) => nimrag_server::gps_assist::parse_switch(&v)
+                .map_err(anyhow::Error::msg)
+                .context("NIMRAG_GPS_ASSIST")?,
+            None => true,
+        },
         backup_dir: std::env::var_os("NIMRAG_BACKUP_DIR")
             .filter(|v| !v.is_empty())
             .map(Into::into),
@@ -136,6 +145,7 @@ fn parse_opts(args: &[String]) -> Result<Opts> {
                     .context("--trusted-proxy")?,
             ),
             "--tiles-dir" => o.tiles_dir = Some(value("--tiles-dir")?.into()),
+            "--no-gps-assist" => o.gps_assist = false,
             "--backup-dir" => o.backup_dir = Some(value("--backup-dir")?.into()),
             "--backup-every" => {
                 o.backup_every =
@@ -438,7 +448,16 @@ async fn serve(o: Opts) -> Result<()> {
     let state = api::AppState::new(pool, o.data_dir, api::MAX_BODY_BYTES)
         .with_insecure_cookies(o.insecure_cookies)
         .with_trusted_proxies(o.trusted_proxies.clone())
-        .with_tiles_dir(o.tiles_dir.clone());
+        .with_tiles_dir(o.tiles_dir.clone())
+        .with_gps_assist(nimrag_server::gps_assist::GpsAssistConfig {
+            enabled: o.gps_assist,
+            ..Default::default()
+        });
+    if o.gps_assist {
+        tracing::info!("GPS assist on: /api/device/gps-assist fetches satellite data from Garmin for the phone");
+    } else {
+        tracing::info!("GPS assist off: this server makes no Garmin request for the watch's GPS");
+    }
     if let Some(dir) = &o.tiles_dir {
         let files = std::fs::read_dir(dir).map(|d| {
             d.flatten()

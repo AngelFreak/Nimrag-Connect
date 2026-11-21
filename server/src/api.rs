@@ -49,6 +49,8 @@ pub struct AppState {
     pub tiles_dir: Option<Arc<PathBuf>>,
     /// Permits for `GET /api/export` (see `web_api::export::MAX_EXPORTS`).
     pub(crate) export_gate: Arc<tokio::sync::Semaphore>,
+    /// GPS assist: the satellite-data endpoint for the phone (`--no-gps-assist` switches it off).
+    pub(crate) gps_assist: Arc<crate::gps_assist::GpsAssist>,
     clock: Arc<dyn Fn() -> i64 + Send + Sync>,
 }
 
@@ -70,6 +72,7 @@ impl AppState {
             export_gate: Arc::new(tokio::sync::Semaphore::new(
                 crate::web_api::export::MAX_EXPORTS,
             )),
+            gps_assist: Arc::new(crate::gps_assist::GpsAssist::new(Default::default())),
             clock: Arc::new(system_now),
         }
     }
@@ -94,6 +97,12 @@ impl AppState {
     /// Replace the Garmin client configuration (tests point it at a fake Garmin).
     pub fn with_garmin(mut self, cfg: crate::garmin::GarminConfig) -> Self {
         self.garmin = Arc::new(crate::garmin::Garmin::new(cfg));
+        self
+    }
+
+    /// Configure GPS assist (the kill switch; tests point the upstream at a fake).
+    pub fn with_gps_assist(mut self, cfg: crate::gps_assist::GpsAssistConfig) -> Self {
+        self.gps_assist = Arc::new(crate::gps_assist::GpsAssist::new(cfg));
         self
     }
 
