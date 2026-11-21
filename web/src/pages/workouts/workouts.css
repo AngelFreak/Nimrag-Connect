@@ -1,0 +1,133 @@
+/* Page-local styles for the workout list and builder. Tokens come from styles/tokens.css. */
+
+.wk-layout {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+  min-width: 0;
+}
+.wk-main,
+.wk-side {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+  min-width: 0;
+}
+@media (min-width: 1024px) {
+  .wk-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 340px;
+    gap: 20px;
+    align-items: start;
+  }
+  .wk-main,
+  .wk-side {
+    gap: 20px;
+  }
+  .wk-side {
+    position: sticky;
+    top: 16px;
+  }
+}
+
+.wk-list {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--gap);
+}
+@media (min-width: 1024px) {
+  .wk-list {
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 420px), 1fr));
+  }
+}
+
+.wk-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+}
+.wk-steps--nested {
+  margin-top: 4px;
+}
+
+.wk-fieldset {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.wk-legend {
+  padding: 0;
+  margin-bottom: 2px;
+  font-size: var(--fs-lg);
+  font-weight: 600;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+.wk-legend small {
+  font-size: var(--fs-sm);
+  font-weight: 400;
+  color: var(--text-2);
+}
+
+/* Two fields side by side when there is room, stacked when there is not (a 200 % zoom phone). */
+.wk-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr));
+  gap: 12px;
+}
+.wk-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.wk-add {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr));
+  gap: 12px;
+}
+.wk-state {
+  margin: 0;
+  font-size: var(--fs-base);
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+.wk-state--failed {
+  color: var(--warn);
+}
+.wk-note {
+  margin: 0;
+  font-size: var(--fs-sm);
+  color: var(--text-2);
+  overflow-wrap: anywhere;
+}
+.wk-error {
+  margin: 0;
+  color: var(--heart);
+  font-size: var(--fs-sm);
+  overflow-wrap: anywhere;
+}
+
+/* A step inside a repeat block sits on a darker surface with less padding, so the fields in it keep a
+   usable width on a narrow screen. */
+.wk-steps--nested > .card {
+  background: var(--raised);
+  padding: 12px;
+}
+@media (max-width: 360px) {
+  .wk-steps > .card {
+    padding: 12px 10px;
+  }
+  .wk-steps--nested > .card {
+    padding: 10px 8px;
+  }
+  .wk-fieldset .field__input {
+    padding: 0 10px;
+  }
+}

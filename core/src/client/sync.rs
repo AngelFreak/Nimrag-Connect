@@ -181,6 +181,12 @@ impl SyncCycle {
         !matches!(self.state, State::Idle | State::WaitGrant { .. })
     }
 
+    /// No cycle, and not waiting for the watch's 5037 either: an upload may
+    /// use the link.
+    pub fn is_idle(&self) -> bool {
+        matches!(self.state, State::Idle)
+    }
+
     /// The watch owes us chunks: the reply deadline applies.
     pub fn awaiting_chunks(&self) -> bool {
         matches!(self.state, State::Download) && self.dl.as_ref().is_some_and(|d| d.size.is_some())
@@ -363,7 +369,11 @@ impl SyncCycle {
             | Kind::MusicInfo
             | Kind::MusicState
             | Kind::MusicVolume
-            | Kind::FindWatch => {}
+            | Kind::FindWatch
+            | Kind::UploadCreate
+            | Kind::UploadRequest
+            | Kind::UploadData
+            | Kind::UploadComplete => {}
         }
     }
 

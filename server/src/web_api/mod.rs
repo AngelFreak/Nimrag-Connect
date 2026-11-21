@@ -26,6 +26,7 @@ pub mod system;
 pub mod today;
 pub mod training;
 pub mod trends;
+pub mod workouts;
 
 use crate::api::{ApiError, AppState};
 use crate::settings::{self, Prefs};
@@ -56,6 +57,7 @@ pub fn router() -> Router<AppState> {
         .merge(metrics::routes())
         .merge(training::routes())
         .merge(body::routes())
+        .merge(workouts::routes())
         .merge(system::routes())
         .merge(export::routes())
         .merge(crate::garmin::api::routes())
@@ -295,6 +297,23 @@ pub fn export_types(dir: &Path) -> anyhow::Result<()> {
         body::BodyResponse,
         body::NewBodyEntry,
         body::BodyEntry,
+        workouts::WorkoutBody,
+        workouts::WorkoutList,
+        workouts::WorkoutDetail,
+        workouts::WorkoutSummary,
+        workouts::WorkoutLimits,
+        workouts::WatchSend,
+        workouts::SendInfo,
+        workouts::SendState,
+        workouts::NodeDto,
+        workouts::StepDto,
+        workouts::DurationDto,
+        workouts::TargetDto,
+        workouts::SportDto,
+        workouts::IntensityDto,
+        workouts::DeviceQueue,
+        workouts::DeviceResult,
+        workouts::DeviceResultResponse,
         system::DevicesResponse,
         system::StorageResponse,
         system::AboutResponse,

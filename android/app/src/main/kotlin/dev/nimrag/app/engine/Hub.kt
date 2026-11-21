@@ -23,6 +23,7 @@ import dev.nimrag.app.engine.store.EngineDb
 import dev.nimrag.app.engine.store.EngineLog
 import dev.nimrag.app.engine.store.FileStore
 import dev.nimrag.app.engine.upload.UploadWorker
+import dev.nimrag.app.engine.workouts.WorkoutSender
 import dev.nimrag.app.model.AppState
 import dev.nimrag.app.model.GarminConnect
 import dev.nimrag.app.model.Permissions
@@ -89,6 +90,9 @@ class Hub(val app: Application) {
 
     /** The phone features (stage 2f): notifications, find my phone, music. Everything on [handler]. */
     val phone = PhoneBridge(this)
+
+    /** Workouts built on the web, taken to the watch (stage 4a). Network on its own thread, the rest on [handler]. */
+    val workouts = WorkoutSender(this)
 
     fun update(block: (AppState) -> AppState) = flow.update(block)
 

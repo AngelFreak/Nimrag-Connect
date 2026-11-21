@@ -34,6 +34,7 @@ use std::collections::VecDeque;
 use super::companion::{Companion, Cx, MusicInfo, MusicState};
 use super::sync::{Ctx, SyncCycle};
 use super::transport::REPLY_DEADLINE_MS;
+use super::upload::{self, Uploads};
 use super::{
     AnomalyKind, BatteryReport, ClientConfig, CloseReason, DeviceInfo, Duties, Event, FileType,
     FindWatchState, Now, Phase, GARMIN_EPOCH_UNIX_S,
@@ -87,6 +88,14 @@ pub enum Kind {
     MusicVolume,
     /// The protobuf find-my-watch request (5043, find_my_watch 12).
     FindWatch,
+    /// 5005 CreateFile of an upload (stage 4a).
+    UploadCreate,
+    /// 5003 UploadFile of an upload.
+    UploadRequest,
+    /// One 5004 chunk of an upload.
+    UploadData,
+    /// The 5030 SYNC_COMPLETE that closes an upload.
+    UploadComplete,
 }
 
 impl Kind {
@@ -101,6 +110,9 @@ impl Kind {
             | Kind::MusicState
             | Kind::MusicVolume
             | Kind::FindWatch => Some(AnomalyKind::DutyMessageRefused),
+            Kind::UploadCreate | Kind::UploadRequest | Kind::UploadData | Kind::UploadComplete => {
+                Some(AnomalyKind::UploadFailed)
+            }
             _ => None,
         }
     }
@@ -246,6 +258,10 @@ pub struct Session {
     companion: Companion,
     req: Requests,
     sync: SyncCycle,
+    uploads: Uploads,
+    /// A sync trigger was held back because an upload was queued or running;
+    /// start it when the uploads are done.
+    sync_held: bool,
     deadline: Option<u64>,
 }
 
@@ -272,6 +288,8 @@ impl Session {
             companion: Companion::new(config.duties),
             req: Requests::default(),
             sync: SyncCycle::new(config),
+            uploads: Uploads::new(config.connection_epoch),
+            sync_held: false,
             deadline: None,
         }
     }
@@ -283,7 +301,68 @@ impl Session {
 
     /// Handshake done, no request outstanding or queued, no sync cycle.
     pub fn is_idle(&self) -> bool {
-        self.ready && !self.req.is_pending() && self.req.queue.is_empty() && !self.sync.running()
+        self.ready
+            && !self.req.is_pending()
+            && self.req.queue.is_empty()
+            && !self.sync.running()
+            && !self.uploads.busy()
+    }
+
+    /// Whether a sync trigger may start now. While an upload is queued or
+    /// running it may not (the two would interleave on the one request line);
+    /// the trigger is kept and started afterwards. [ours]
+    fn sync_ready(&mut self) -> bool {
+        let held = self.ready && self.uploads.busy();
+        if held {
+            self.sync_held = true;
+        }
+        self.ready && !held
+    }
+
+    /// `Input::UploadFile`.
+    pub fn upload_file(
+        &mut self,
+        now: &Now,
+        upload_id: u64,
+        data_type: u8,
+        sub_type: u8,
+        data: Vec<u8>,
+    ) -> Out {
+        let mut out = Out::default();
+        self.uploads
+            .enqueue(upload_id, data_type, sub_type, data, &mut out);
+        self.finish(now, &mut out, false);
+        out
+    }
+
+    /// Ids of the uploads the closing link cut short.
+    pub fn take_unfinished_uploads(&mut self) -> Vec<u64> {
+        self.uploads.take_unfinished()
+    }
+
+    /// Start the next upload when the line is free, and the sync trigger that
+    /// waited for the uploads once they are done.
+    fn pump_uploads(&mut self, now: &Now, out: &mut Out) {
+        if out.closed.is_some() {
+            return;
+        }
+        let max_packet = self.device.as_ref().map_or(0, |d| d.max_packet_size);
+        let may_start = self.ready && self.sync.is_idle();
+        let mut cx = upload::Cx {
+            now,
+            req: &mut self.req,
+            out,
+            max_packet,
+        };
+        self.uploads.pump(may_start, &mut cx);
+        if self.sync_held && self.ready && !self.uploads.busy() {
+            self.sync_held = false;
+            self.sync.on_ready(&mut Ctx {
+                now: now.mono_ms,
+                req: &mut self.req,
+                out,
+            });
+        }
     }
 
     pub fn phase(&self) -> Phase {
@@ -336,8 +415,9 @@ impl Session {
 
     pub fn start_sync(&mut self, now: &Now) -> Out {
         let mut out = Out::default();
+        let ready = self.sync_ready();
         self.sync.start_manual(
-            self.ready,
+            ready,
             &mut Ctx {
                 now: now.mono_ms,
                 req: &mut self.req,
@@ -390,6 +470,16 @@ impl Session {
             Kind::FindWatch => out.events.push(Event::FindWatch {
                 state: FindWatchState::Failed,
             }),
+            Kind::UploadCreate | Kind::UploadRequest | Kind::UploadData => {
+                let max_packet = self.device.as_ref().map_or(0, |d| d.max_packet_size);
+                let mut cx = upload::Cx {
+                    now,
+                    req: &mut self.req,
+                    out,
+                    max_packet,
+                };
+                self.uploads.on_timeout(kind, &mut cx);
+            }
             _ => {}
         }
     }
@@ -515,6 +605,7 @@ impl Session {
     /// Common tail of every entry point: send queued requests and re-arm
     /// the reply deadline when something made progress.
     fn finish(&mut self, now: &Now, out: &mut Out, progressed: bool) {
+        self.pump_uploads(now, out);
         self.req.pump(out);
         if out.closed.is_some() {
             return;
@@ -562,6 +653,23 @@ impl Session {
             // battery and the companion duties are conveniences. [ours]
             let ack = r.status == Status::Ack;
             match pending.kind {
+                Kind::UploadCreate | Kind::UploadRequest | Kind::UploadData => {
+                    // The upload reports its own anomaly and ends itself;
+                    // the session goes on whatever the status was.
+                    let max_packet = self.device.as_ref().map_or(0, |d| d.max_packet_size);
+                    let mut cx = upload::Cx {
+                        now,
+                        req: &mut self.req,
+                        out,
+                        max_packet,
+                    };
+                    if ack {
+                        self.uploads.on_reply(pending.kind, r.body, &mut cx);
+                    } else {
+                        self.uploads
+                            .on_nak(pending.kind, status_byte(r.status), &mut cx);
+                    }
+                }
                 Kind::NotificationData => {
                     // The anomaly for a transfer that cannot go on is raised
                     // by the companion (it also knows the status byte).
@@ -683,8 +791,9 @@ impl Session {
                 match m::parse_sync_request(&msg.payload) {
                     Some(req) => {
                         out.msgs.push(response(msg, 0, &[]));
+                        let ready = self.sync_ready();
                         self.sync.on_watch_request(
-                            self.ready,
+                            ready,
                             req.option,
                             &mut Ctx {
                                 now: now.mono_ms,
@@ -701,8 +810,9 @@ impl Session {
                 match m::parse_file_available(&msg.payload) {
                     Some(entry) => {
                         out.msgs.push(response(msg, 0, &[]));
+                        let ready = self.sync_ready();
                         self.sync.on_file_available(
-                            self.ready,
+                            ready,
                             entry,
                             &mut Ctx {
                                 now: now.mono_ms,

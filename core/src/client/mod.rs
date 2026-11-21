@@ -30,6 +30,7 @@ pub mod reliable;
 mod session;
 mod sync;
 mod transport;
+mod upload;
 
 pub use crate::duties::music::MusicCommand;
 pub use crate::duties::notification::{
@@ -39,6 +40,7 @@ pub use companion::{MusicInfo, MusicState};
 use reliable::MIN_ATT_MTU;
 use session::{Out, Session};
 use transport::{Transport, TransportOut};
+pub use upload::{UploadResult, UploadStage};
 
 /// Seconds between the Unix epoch and the Garmin epoch (1989-12-31T00:00Z).
 pub const GARMIN_EPOCH_UNIX_S: i64 = 631_065_600;
@@ -189,6 +191,18 @@ pub enum Input {
     /// Ask the watch to ring (`start`) or to stop ringing. Needs the watch's
     /// find-my-watch capability; the outcome is `Event::FindWatch`.
     FindWatch { start: bool },
+    /// Send a file to the watch (stage 4a: a workout is `data_type` 128,
+    /// `sub_type` 5). `upload_id` is the caller's own number for it, echoed by
+    /// `Event::UploadFinished`. Uploads run one at a time, in order, after the
+    /// handshake and while no sync cycle runs; every upload ends with exactly
+    /// one `Event::UploadFinished`, whatever happens. The content is private:
+    /// never log it.
+    UploadFile {
+        upload_id: u64,
+        data_type: u8,
+        sub_type: u8,
+        data: Vec<u8>,
+    },
     /// The GATT link is gone. Terminal.
     Disconnected,
 }
@@ -304,6 +318,13 @@ pub enum Event {
     /// Progress of `Input::FindWatch`, or the watch cancelling by itself.
     FindWatch {
         state: FindWatchState,
+    },
+    /// The upload `upload_id` of `Input::UploadFile` ended. Failure is not the
+    /// session's: it goes on (with `AnomalyKind::UploadFailed` unless the
+    /// result is `Aborted` or `Invalid`).
+    UploadFinished {
+        upload_id: u64,
+        result: UploadResult,
     },
     /// Something unexpected that did not end the session.
     Anomaly {
@@ -423,6 +444,12 @@ pub enum AnomalyKind {
     /// not answered in time. Not fatal: the message is dropped and the session
     /// goes on.
     DutyMessageRefused,
+    /// An upload to the watch failed: refused, answered with a non-ACK status,
+    /// a reply that made no sense, or no answer within the deadline. The
+    /// matching `Event::UploadFinished` says how; `message_id` is the message
+    /// of the step (5005, 5003 or 5004). Not fatal. The closing 5030 event after
+    /// an upload that went through uses this kind too when it is refused.
+    UploadFailed,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -518,6 +545,14 @@ impl Client {
         match input {
             Input::Disconnected => self.close(CloseReason::Disconnected, &mut step),
             Input::Connected { att_mtu } => self.connect(&now, att_mtu, &mut step),
+            // Before the link is up nothing can be sent; an upload is reported
+            // instead of being dropped silently.
+            Input::UploadFile { upload_id, .. } if self.state == State::Idle => {
+                step.events.push(Event::UploadFinished {
+                    upload_id,
+                    result: UploadResult::Aborted,
+                });
+            }
             _ if self.state == State::Idle => {}
             input => {
                 self.apply_input(&now, input, &mut step);
@@ -603,6 +638,17 @@ impl Client {
                 let out = self.session.find_watch(now, start);
                 self.apply_session(now, out, step);
             }
+            Input::UploadFile {
+                upload_id,
+                data_type,
+                sub_type,
+                data,
+            } => {
+                let out = self
+                    .session
+                    .upload_file(now, upload_id, data_type, sub_type, data);
+                self.apply_session(now, out, step);
+            }
             Input::Connected { .. } | Input::Disconnected => {}
         }
     }
@@ -664,6 +710,12 @@ impl Client {
         // Nothing is worth writing on a link we are abandoning.
         step.writes.clear();
         step.wake_at_mono_ms = None;
+        for upload_id in self.session.take_unfinished_uploads() {
+            step.events.push(Event::UploadFinished {
+                upload_id,
+                result: UploadResult::Aborted,
+            });
+        }
         step.events.push(Event::Closed { reason });
     }
 

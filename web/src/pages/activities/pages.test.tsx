@@ -10,7 +10,6 @@ import type { StrengthSet } from '../../api/generated/StrengthSet';
 import { ActivitiesPage } from '../ActivitiesPage';
 import { ActivityDetailPage } from '../ActivityDetailPage';
 import { StrengthPage } from '../StrengthPage';
-import { WorkoutPage } from '../WorkoutPage';
 
 // uPlot needs a canvas and MapLibre needs WebGL; neither exists in jsdom. The stubs keep the
 // accessible name and the text summary, which is what the pages promise.
@@ -144,7 +143,6 @@ function renderAt(path: string) {
           <Route path="/strength" element={<ActivitiesPage strength />} />
           <Route path="/activities/:id" element={<ActivityDetailPage />} />
           <Route path="/activities/:id/strength" element={<StrengthPage />} />
-          <Route path="/workouts/new" element={<WorkoutPage />} />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>,
@@ -466,16 +464,5 @@ describe('StrengthPage', () => {
     renderAt(`/activities/${ID_STR}/strength`);
     expect(await screen.findByRole('alert')).toHaveTextContent('boom');
     expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument();
-  });
-});
-
-describe('WorkoutPage', () => {
-  it('says the builder is not available yet (no project jargon) and shows no sample steps', () => {
-    handler = () => ({ body: {} });
-    renderAt('/workouts/new');
-    expect(screen.getAllByText('Not available yet').length).toBeGreaterThan(0);
-    expect(document.body.textContent).not.toMatch(/stage \d/i);
-    expect(screen.queryByText('Warm-up')).not.toBeInTheDocument();
-    expect(screen.queryByText('Sample data')).not.toBeInTheDocument();
   });
 });

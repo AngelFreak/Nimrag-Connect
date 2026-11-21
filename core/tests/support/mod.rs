@@ -229,6 +229,41 @@ pub enum Fault {
     Refuse(u8),
 }
 
+/// How the fake watch misbehaves while the phone uploads a file to it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UploadFault {
+    /// 5005 ACKed with this create status.
+    CreateStatus(u8),
+    /// 5003 ACKed with this upload status.
+    RequestStatus(u8),
+    /// A 5004 ACKed with this transfer status (see `upload_fault_after_chunks`).
+    ChunkStatus(u8),
+    /// The phone's message of this id gets a NAK (5000 status 1).
+    Nak(u16),
+    /// The phone's message of this id is not answered.
+    Silent(u16),
+    /// 5003 ACKed with this offset instead of 0.
+    RequestOffset(u32),
+    /// A 5004 ACKed with this offset instead of the next one.
+    ChunkOffset(u32),
+    /// 5005 ACKed with a body too short to parse.
+    ShortCreateReply,
+}
+
+/// A file the phone uploaded (or is uploading) to the fake watch.
+#[derive(Debug, Clone)]
+pub struct WatchUpload {
+    pub request: m::CreateFileRequest,
+    pub data: Vec<u8>,
+    /// Size announced by the 5003.
+    pub announced: u32,
+    /// Number of 5004 messages taken.
+    pub chunks: usize,
+}
+
+/// File index the fake watch hands out for an upload.
+pub const UPLOAD_FILE_INDEX: u16 = 0x0107;
+
 #[derive(Debug, Clone)]
 pub struct WatchFile {
     pub entry: DirEntry,
@@ -289,6 +324,14 @@ pub struct FakeWatch {
     pub data_status: u8,
     /// Smart bytes of the 5044 sent after the ACK of a find-my-watch request.
     pub find_watch_response: Option<Vec<u8>>,
+    /// Misbehaviour while the phone uploads a file.
+    pub upload_fault: Option<UploadFault>,
+    /// `ChunkStatus`, `Nak(5004)` and `Silent(5004)` only apply once this
+    /// many 5004 chunks were taken.
+    pub upload_fault_after_chunks: usize,
+    /// Uploads that arrived completely, in order.
+    pub uploads: Vec<WatchUpload>,
+    uploading: Option<WatchUpload>,
     /// What the phone sent on this link.
     pub phone_msgs: Vec<Message>,
     pub phone_raw: Vec<Vec<u8>>,
@@ -333,6 +376,10 @@ impl FakeWatch {
             nak_duty: None,
             data_status: 0,
             find_watch_response: None,
+            upload_fault: None,
+            upload_fault_after_chunks: 0,
+            uploads: Vec::new(),
+            uploading: None,
             file_chunks_sent: 0,
             phone_msgs: Vec::new(),
             phone_raw: Vec::new(),
@@ -360,6 +407,7 @@ impl FakeWatch {
         self.plain_gfdi = None;
         self.cobs = FrameDecoder::new();
         self.serving = None;
+        self.uploading = None;
         self.file_chunks_sent = 0;
         self.phone_msgs.clear();
         self.phone_raw.clear();
@@ -524,8 +572,113 @@ impl FakeWatch {
         match msg.id {
             5050 | 5030 | 5008 | 5007 | 5043 | 5031 => self.on_phone_request(msg),
             5002 => self.serve_download(msg),
+            5003..=5005 => self.on_upload_message(msg),
             5033 | 5035 | 5049 => self.on_duty_message(msg),
             _ => Vec::new(),
+        }
+    }
+
+    /// 5005 / 5003 / 5004 from the phone: the upload side of the watch,
+    /// *inferred (Gadgetbridge)* like the client's.
+    fn on_upload_message(&mut self, msg: &Message) -> Vec<Message> {
+        let fault = self.upload_fault;
+        let late = msg.id != 5004
+            || self
+                .uploading
+                .as_ref()
+                .is_some_and(|u| u.chunks >= self.upload_fault_after_chunks);
+        if late && fault == Some(UploadFault::Silent(msg.id)) {
+            return Vec::new();
+        }
+        if late && fault == Some(UploadFault::Nak(msg.id)) {
+            return vec![watch_response(msg, 1, &[])];
+        }
+        match msg.id {
+            5005 => {
+                let req = m::parse_create_file(&msg.payload).expect("5005 payload");
+                if fault == Some(UploadFault::ShortCreateReply) {
+                    return vec![watch_response(msg, 0, &[0, 1])];
+                }
+                let status = match fault {
+                    Some(UploadFault::CreateStatus(s)) => s,
+                    _ => 0,
+                };
+                if status == 0 {
+                    self.uploading = Some(WatchUpload {
+                        request: req,
+                        data: Vec::new(),
+                        announced: 0,
+                        chunks: 0,
+                    });
+                }
+                let body = m::build_create_file_reply(&m::CreateFileReply {
+                    create_status: status,
+                    file_index: UPLOAD_FILE_INDEX,
+                    data_type: req.data_type,
+                    sub_type: req.sub_type,
+                    file_number: 1,
+                });
+                vec![watch_response(msg, 0, &body)]
+            }
+            5003 => {
+                let req = m::parse_upload_request(&msg.payload).expect("5003 payload");
+                assert_eq!(
+                    req.file_index, UPLOAD_FILE_INDEX,
+                    "5003 names the file index"
+                );
+                assert_eq!((req.offset, req.crc_seed), (0, 0));
+                let status = match fault {
+                    Some(UploadFault::RequestStatus(s)) => s,
+                    _ => 0,
+                };
+                let offset = match fault {
+                    Some(UploadFault::RequestOffset(o)) => o,
+                    _ => 0,
+                };
+                if let Some(u) = self.uploading.as_mut() {
+                    u.announced = req.size;
+                }
+                let body = m::build_upload_reply(&m::UploadReply {
+                    upload_status: status,
+                    offset,
+                    max_size: req.size,
+                    crc_seed: 0,
+                });
+                vec![watch_response(msg, 0, &body)]
+            }
+            _ => {
+                let chunk = m::parse_file_chunk(&msg.payload).expect("5004 payload");
+                let Some(up) = self.uploading.as_mut() else {
+                    return vec![watch_response(msg, 0, &[2, 0, 0, 0, 0])];
+                };
+                let in_order = chunk.offset as usize == up.data.len();
+                let mut running = crc::update(0, &up.data);
+                running = crc::update(running, &chunk.data);
+                let (status, next) = if !in_order {
+                    (4, up.data.len() as u32)
+                } else if running != chunk.crc {
+                    (3, up.data.len() as u32)
+                } else {
+                    up.data.extend_from_slice(&chunk.data);
+                    up.chunks += 1;
+                    (0, up.data.len() as u32)
+                };
+                let status = match fault {
+                    Some(UploadFault::ChunkStatus(s)) if late => s,
+                    _ => status,
+                };
+                let next = match fault {
+                    Some(UploadFault::ChunkOffset(o)) if late => o,
+                    _ => next,
+                };
+                if status == 0 && up.data.len() as u32 >= up.announced {
+                    let done = self.uploading.take().expect("upload in progress");
+                    self.uploads.push(done);
+                }
+                let mut body = vec![status];
+                body.extend_from_slice(&next.to_le_bytes());
+                vec![watch_response(msg, 0, &body)]
+            }
         }
     }
 

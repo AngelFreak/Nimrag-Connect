@@ -31,8 +31,10 @@
 //!   the stored raw values.
 
 mod decode;
+pub mod encode;
 pub mod interpret;
 pub mod profile;
+pub mod workout;
 
 pub use decode::decode;
 

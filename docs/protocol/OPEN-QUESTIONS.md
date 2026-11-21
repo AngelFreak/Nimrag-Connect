@@ -53,6 +53,22 @@ The owner approved one read-only comparison of a morning's derived data against 
 | Q-FIT-1 | Garmin's server time series (heart rate every 2 min, stress every 3 min, respiration every 2 min) are not the mean of the per-minute values in the monitoring file: 17 of 21 HR windows agree, stress and respiration often differ by 1–9. Values the watch writes as totals (resting HR, body battery, cumulative steps) match exactly. Does the server use other data, e.g. the undecoded global message 233 the watch writes every minute? | no; we show the watch's own samples and must not claim to reproduce Garmin's charts | Decode message 233 (layout unknown); compare once more after a night sync |
 | Q-FIT-2 | Monitoring `timestamp_16`: the watch wrote one sample 60 s behind a preceding event message's full timestamp. Resolving against the last *monitoring* timestamp (instead of any message) gives no backwards sample in all five captured files (inferred, not documented) | was a bug (a sample resolved to +18 h); fixed by that rule | Re-check on every new capture via the private replay test |
 
+## Workouts and uploads (stage 4a)
+
+All of this is *inferred (Gadgetbridge)* and built; none of it has met a real watch. They are the first things the stage 4a live test must settle (the owner's numbered list is in `android/README.md`, "Workouts").
+
+| Id | Question | Blocking? | How to settle |
+| --- | --- | --- | --- |
+| Q-UPLOAD-1 | Does the Instinct 2 accept a 5005 CreateFile for type 128/5 with `file_index 0`, answer 5003 with status OK and take the 5004 chunks? Connect's own 255/19 upload went to index `0xFFFB` (PROTOCOL 5.5): a fixed index may be what the watch expects for some types | yes, for 4a | Send a one-step workout; the phone log says which stage refused and with which status name (`Refused ... status N, NAME`) |
+| Q-UPLOAD-2 | Is our 3969-byte chunk (whole frame in `max_packet`) accepted? Gadgetbridge sends `max_packet - 13`; our rule is stricter, so only a watch that wants *larger* chunks would object. A workout file is a few hundred bytes, so the first live test sends one chunk and does not exercise this | no | A workout with many steps is still under 4 KB; a multi-chunk upload needs a file over 3969 bytes (not a workout) |
+| Q-UPLOAD-3 | After the upload, does the watch need anything more (a file-list refresh, a sync, a restart) before the workout shows under Training > Workouts? Gadgetbridge ends with 5030 event 0 only | yes, for 4a | Open the workout list on the watch after "Sent"; note whether a sync cycle was needed |
+| Q-UPLOAD-4 | Sending the same workout again: does the watch answer `create_status` 1 (DUPLICATE) because it keeps files by content or by name? The id in 5005 is different every time, but the file is the same. Sending after an edit, after a deletion on the watch, and after a phone report that did not arrive (the workout stays queued and is sent again) all depend on this | no, but it decides what "Send again" does | Send twice; look at the failure text on the web page |
+| Q-WORKOUT-1 | The limits in `core::fit::workout` (100 steps in the file, 20 steps in a block, 2 to 99 repeats, 63 bytes of name, 254 of note, 50 bytes of step `notes`) are cautious guesses, not Gadgetbridge's | no | Build a workout at each limit and see whether the watch shows it; widen only on evidence |
+| Q-WORKOUT-2 | The values Gadgetbridge writes without explanation: `workout.capabilities` 32, `file_id.product` 65534 ("connect"), serial number 1, `weight_display_unit` kilogram on every step. Does the watch care? | no | The first accepted file settles it |
+| Q-WORKOUT-3 | Targets: pace is written as a speed range in mm/s with the slower pace as the low speed; cadence is halved for running; heart rate is bpm + 100. Does the watch show them as typed on the web (a pace range, a heart-rate range, a cadence range)? | no | Build one step per target kind; compare what the watch shows |
+| Q-WORKOUT-4 | Which sports and sub sports the watch lists (strength is written as timed intervals; "other" as generic) | no | See the sport shown for each workout |
+| Q-WORKOUT-5 | The exercise catalogue (named strength exercises with sets and reps) is not ported: it needs the exercise list from the local FIT profile and a picker in the builder | no (follow-up) | Port `GarminExerciseCatalog` once the plain workouts work |
+
 ## Companion duties
 
 | Id | Question | Blocking? | How to settle |

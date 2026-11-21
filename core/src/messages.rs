@@ -18,7 +18,17 @@
 //! Gadgetbridge contributors), written against our own schema
 //! (`docs/protocol/proto/gdi_device_status.proto`). All of it is *inferred
 //! (Gadgetbridge)*. See docs/PORTED.md.
+//!
+//! The upload messages (5005 CreateFile, 5003 UploadFile and the replies to them
+//! and to 5004) are ported from the same commit: `.../messages/CreateFileMessage.java`,
+//! `.../messages/UploadRequestMessage.java`, `.../messages/status/CreateFileStatusMessage.java`,
+//! `.../messages/status/UploadRequestStatusMessage.java` and
+//! `.../messages/status/FileTransferDataStatusMessage.java` (no copyright lines in
+//! those files; Gadgetbridge contributors). *inferred (Gadgetbridge)*: no capture
+//! of our own shows an upload decoded field by field (PROTOCOL.md 9.5).
 
+pub const UPLOAD_FILE: u16 = 5003;
+pub const CREATE_FILE: u16 = 5005;
 pub const DOWNLOAD_FILE: u16 = 5002;
 pub const FILE_DATA: u16 = 5004;
 pub const COMPRESSED_FILE_DATA: u16 = 5054;
@@ -476,6 +486,155 @@ pub fn parse_chunk_ack(b: &[u8]) -> Option<(u8, u32)> {
     Some((*b.first()?, u32le(b, 1)?))
 }
 
+// ---- 5005 CreateFile / 5003 UploadFile (uploads to the watch) ---------------------------------
+//
+// *inferred (Gadgetbridge)*, see the module documentation.
+
+/// Longest upload the client accepts (bytes).
+pub const MAX_UPLOAD_BYTES: usize = 8 * 1024 * 1024;
+
+/// 5005 payload: `u32 size, u8 data_type, u8 sub_type, u16 file_index (0),
+/// u8 reserved (0), u8 sub-type mask (0), u16 number mask (0xFFFF),
+/// u16 path length (0), u64 file id`. Gadgetbridge sends a random file id; the
+/// client derives one (see `client::upload`).
+pub fn build_create_file(size: u32, data_type: u8, sub_type: u8, file_id: u64) -> Vec<u8> {
+    let mut v = Vec::with_capacity(22);
+    v.extend_from_slice(&size.to_le_bytes());
+    v.push(data_type);
+    v.push(sub_type);
+    v.extend_from_slice(&0u16.to_le_bytes());
+    v.push(0);
+    v.push(0);
+    v.extend_from_slice(&0xFFFFu16.to_le_bytes());
+    v.extend_from_slice(&0u16.to_le_bytes());
+    v.extend_from_slice(&file_id.to_le_bytes());
+    v
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CreateFileRequest {
+    pub size: u32,
+    pub data_type: u8,
+    pub sub_type: u8,
+    pub file_index: u16,
+    pub file_id: u64,
+}
+
+/// Parse a 5005 (used by the fake watch of the tests and by `describe`).
+pub fn parse_create_file(p: &[u8]) -> Option<CreateFileRequest> {
+    let path_len = u16le(p, 12)? as usize;
+    let id_at = 14 + path_len;
+    Some(CreateFileRequest {
+        size: u32le(p, 0)?,
+        data_type: *p.get(4)?,
+        sub_type: *p.get(5)?,
+        file_index: u16le(p, 6)?,
+        file_id: u64::from_le_bytes(p.get(id_at..id_at + 8)?.try_into().ok()?),
+    })
+}
+
+/// create status 0: the watch made the file.
+pub const CREATE_OK: u8 = 0;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CreateFileReply {
+    /// 0 OK, 1 DUPLICATE, 2 NO_SPACE, 3 UNSUPPORTED, 4 NO_SLOTS, 5 NO_SPACE_FOR_TYPE.
+    pub create_status: u8,
+    pub file_index: u16,
+    pub data_type: u8,
+    pub sub_type: u8,
+    pub file_number: u16,
+}
+
+/// Body of the ACK to 5005: `u8 create_status, u16 file_index, u8 data_type,
+/// u8 sub_type, u16 file_number`.
+pub fn parse_create_file_reply(b: &[u8]) -> Option<CreateFileReply> {
+    Some(CreateFileReply {
+        create_status: *b.first()?,
+        file_index: u16le(b, 1)?,
+        data_type: *b.get(3)?,
+        sub_type: *b.get(4)?,
+        file_number: u16le(b, 5)?,
+    })
+}
+
+pub fn build_create_file_reply(r: &CreateFileReply) -> Vec<u8> {
+    let mut v = vec![r.create_status];
+    v.extend_from_slice(&r.file_index.to_le_bytes());
+    v.push(r.data_type);
+    v.push(r.sub_type);
+    v.extend_from_slice(&r.file_number.to_le_bytes());
+    v
+}
+
+/// 5003 payload: `u16 file_index, u32 size, u32 offset (0), u16 crc seed (0)`.
+pub fn build_upload_request(file_index: u16, size: u32) -> Vec<u8> {
+    let mut v = Vec::with_capacity(12);
+    v.extend_from_slice(&file_index.to_le_bytes());
+    v.extend_from_slice(&size.to_le_bytes());
+    v.extend_from_slice(&0u32.to_le_bytes());
+    v.extend_from_slice(&0u16.to_le_bytes());
+    v
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct UploadRequest {
+    pub file_index: u16,
+    pub size: u32,
+    pub offset: u32,
+    pub crc_seed: u16,
+}
+
+pub fn parse_upload_request(p: &[u8]) -> Option<UploadRequest> {
+    Some(UploadRequest {
+        file_index: u16le(p, 0)?,
+        size: u32le(p, 2)?,
+        offset: u32le(p, 6)?,
+        crc_seed: u16le(p, 10)?,
+    })
+}
+
+/// upload status 0: the watch takes the data.
+pub const UPLOAD_OK: u8 = 0;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct UploadReply {
+    /// 0 OK, 1 INDEX_UNKNOWN, 2 INDEX_NOT_WRITEABLE, 3 NO_SPACE_LEFT, 4 INVALID,
+    /// 5 NOT_READY, 6 CRC_INCORRECT.
+    pub upload_status: u8,
+    pub offset: u32,
+    pub max_size: u32,
+    pub crc_seed: u16,
+}
+
+/// Body of the ACK to 5003: `u8 upload_status, u32 offset, u32 max_size, u16 crc_seed`.
+pub fn parse_upload_reply(b: &[u8]) -> Option<UploadReply> {
+    Some(UploadReply {
+        upload_status: *b.first()?,
+        offset: u32le(b, 1)?,
+        max_size: u32le(b, 5)?,
+        crc_seed: u16le(b, 9)?,
+    })
+}
+
+pub fn build_upload_reply(r: &UploadReply) -> Vec<u8> {
+    let mut v = vec![r.upload_status];
+    v.extend_from_slice(&r.offset.to_le_bytes());
+    v.extend_from_slice(&r.max_size.to_le_bytes());
+    v.extend_from_slice(&r.crc_seed.to_le_bytes());
+    v
+}
+
+/// transfer status 0: the chunk was taken.
+pub const TRANSFER_OK: u8 = 0;
+
+/// Body of the ACK to a phone-to-watch 5004: `u8 transfer_status, u32 next offset`.
+/// transfer status 0 OK, 1 RESEND, 2 ABORT, 3 CRC_MISMATCH, 4 OFFSET_MISMATCH,
+/// 5 SYNC_PAUSED. (Same layout as the ACK we send for the watch's chunks.)
+pub fn parse_upload_chunk_reply(b: &[u8]) -> Option<(u8, u32)> {
+    parse_chunk_ack(b)
+}
+
 // ---- 5007 / 5008 / 5030 -------------------------------------------------------------------
 
 /// 5007 filter value "pending uploads only".
@@ -924,5 +1083,55 @@ mod tests {
         );
         assert_eq!(parse_battery_protobuf(&SYNC_NOW_PROTOBUF), None);
         assert_eq!(parse_battery_protobuf(&[]), None);
+    }
+    #[test]
+    fn create_file_layout_matches_gadgetbridge() {
+        let p = build_create_file(0x0102_0304, 128, 5, 0x1122_3344_5566_7788);
+        let mut want = vec![4, 3, 2, 1, 128, 5, 0, 0, 0, 0, 0xFF, 0xFF, 0, 0];
+        want.extend_from_slice(&0x1122_3344_5566_7788u64.to_le_bytes());
+        assert_eq!(p, want);
+        assert_eq!(p.len(), 22);
+        let r = parse_create_file(&p).unwrap();
+        assert_eq!(
+            (r.size, r.data_type, r.sub_type, r.file_index, r.file_id),
+            (0x0102_0304, 128, 5, 0, 0x1122_3344_5566_7788)
+        );
+        assert!(parse_create_file(&p[..21]).is_none());
+    }
+
+    #[test]
+    fn create_file_reply_round_trips() {
+        let r = CreateFileReply {
+            create_status: 0,
+            file_index: 7,
+            data_type: 128,
+            sub_type: 5,
+            file_number: 300,
+        };
+        let b = build_create_file_reply(&r);
+        assert_eq!(b, vec![0, 7, 0, 128, 5, 0x2C, 1]);
+        assert_eq!(parse_create_file_reply(&b), Some(r));
+        assert!(parse_create_file_reply(&b[..6]).is_none());
+    }
+
+    #[test]
+    fn upload_request_and_reply_layouts() {
+        assert_eq!(
+            build_upload_request(9, 0x0000_0123),
+            vec![9, 0, 0x23, 1, 0, 0, 0, 0, 0, 0, 0, 0]
+        );
+        let q = parse_upload_request(&build_upload_request(9, 291)).unwrap();
+        assert_eq!((q.file_index, q.size, q.offset, q.crc_seed), (9, 291, 0, 0));
+        let r = UploadReply {
+            upload_status: 0,
+            offset: 0,
+            max_size: 4096,
+            crc_seed: 0,
+        };
+        let b = build_upload_reply(&r);
+        assert_eq!(b.len(), 11);
+        assert_eq!(parse_upload_reply(&b), Some(r));
+        assert!(parse_upload_reply(&b[..10]).is_none());
+        assert_eq!(parse_upload_chunk_reply(&[0, 5, 0, 0, 0]), Some((0, 5)));
     }
 }

@@ -540,6 +540,83 @@ fn duty_inputs_convert() {
 }
 
 #[test]
+fn upload_input_and_events_convert() {
+    let c: core::Input = Input::UploadFile {
+        upload_id: 7,
+        data_type: 128,
+        sub_type: 5,
+        data: vec![1, 2, 3],
+    }
+    .into();
+    assert_eq!(
+        c,
+        core::Input::UploadFile {
+            upload_id: 7,
+            data_type: 128,
+            sub_type: 5,
+            data: vec![1, 2, 3],
+        }
+    );
+    let results = [
+        (core::UploadResult::Sent, UploadResult::Sent),
+        (
+            core::UploadResult::Refused {
+                stage: core::UploadStage::Create,
+                status: 2,
+            },
+            UploadResult::Refused {
+                stage: UploadStage::Create,
+                status: 2,
+            },
+        ),
+        (
+            core::UploadResult::Nak {
+                stage: core::UploadStage::Request,
+                status: 1,
+            },
+            UploadResult::Nak {
+                stage: UploadStage::Request,
+                status: 1,
+            },
+        ),
+        (
+            core::UploadResult::TimedOut {
+                stage: core::UploadStage::Data,
+            },
+            UploadResult::TimedOut {
+                stage: UploadStage::Data,
+            },
+        ),
+        (
+            core::UploadResult::BadReply {
+                stage: core::UploadStage::Data,
+            },
+            UploadResult::BadReply {
+                stage: UploadStage::Data,
+            },
+        ),
+        (core::UploadResult::Aborted, UploadResult::Aborted),
+        (core::UploadResult::Invalid, UploadResult::Invalid),
+    ];
+    for (from, want) in results {
+        assert_eq!(
+            Event::from(core::Event::UploadFinished {
+                upload_id: 7,
+                result: from
+            }),
+            Event::UploadFinished {
+                upload_id: 7,
+                result: want
+            }
+        );
+    }
+    assert_eq!(
+        AnomalyKind::from(core::AnomalyKind::UploadFailed),
+        AnomalyKind::UploadFailed
+    );
+}
+
+#[test]
 fn duty_events_convert() {
     assert_eq!(
         Event::from(core::Event::NotificationSubscription { enabled: true }),

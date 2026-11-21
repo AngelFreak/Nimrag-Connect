@@ -238,6 +238,18 @@ static TABLES: &[Table] = &[
         from: "FROM strength_set_overrides WHERE user_id = ? ORDER BY activity_ident, set_idx",
     },
     Table {
+        file: "workouts",
+        cols: &[
+            c("name", "name", Text),
+            c("sport", "sport", Text),
+            c("definition_json", "definition", Text),
+            c("send_state", "send_state", Text),
+            c("created", "created_at", Time),
+            c("updated", "updated_at", Time),
+        ],
+        from: "FROM workouts WHERE user_id = ? ORDER BY created_at, id",
+    },
+    Table {
         file: "sleep_sessions",
         cols: &[
             c("file", "s.sha256", Text),

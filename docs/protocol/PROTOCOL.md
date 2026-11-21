@@ -332,7 +332,7 @@ Gadgetbridge at `7257742b` was read file by file and compared with the sections 
 | No FIT files in the listing | Taken as "this device serves files over classic Bluetooth" (§9.1). *inferred (Gadgetbridge, `GarminSupport.onDirectoryWithoutFitFiles`)* | An empty pending listing is normal on the Instinct 2 (seen: CAP-1, second listing). | Gadgetbridge only acts when 5024 carried a classic address, so no conflict. |
 | New sync protocol | On devices with capability 90 (or a per-model default) files are listed and pulled through `Smart.file_access` (43) and bulk data runs on the `0x..18` services; the legacy 5002 of index 0 is still sent first so the watch flushes its monitoring file. *inferred (Gadgetbridge, `FileSyncServiceHandler.kt`, `GarminSupport.onFetchRecordedData`)* | The Instinct 2 used the legacy sync (seen). | Gadgetbridge-only; not built. |
 
-### 9.5 Uploads to the watch (never built by us; all *inferred*)
+### 9.5 Uploads to the watch (built in stage 4a; all *inferred* until a watch takes one)
 
 Seen in CAP-1 only as the 255/19 upload (§5.5), whose bytes were not decoded field by field. Gadgetbridge's flow, *inferred (Gadgetbridge, `FileTransferHandler.Upload`, `messages/CreateFileMessage`, `messages/UploadRequestMessage` and their status classes)*:
 
@@ -342,6 +342,14 @@ Seen in CAP-1 only as the 255/19 upload (§5.5), whose bytes were not decoded fi
 4. **P→W 5030 event 0** after the last ACK.
 
 Check against CAP-1 when `tools/decode` learns to reassemble uploads: Connect's upload went to index `0xFFFB`, which is not what a `file_index 0` request would be expected to return, so a fixed index may be requested for 255/19. Workouts are uploaded this way as type 128/5 (`GarminSupport.onSyncWorkoutTemplate`), alarms as a 128/2 settings file on watches without REALTIME_SETTINGS.
+
+**Stage 4a, what `core::client::upload` does with this** (every byte below is *inferred (Gadgetbridge)*; none has been seen on a wire of ours; the unit tests in `core/tests/client_upload.rs` pin the exact payloads through `Client::handle`):
+
+- 5005 is 22 bytes for an empty path: `u32 size, u8 data_type, u8 sub_type, u16 file_index 0, u8 0, u8 0, u16 0xFFFF, u16 path length 0, u64 id`. For a workout `data_type` 128, `sub_type` 5. The id is not random (core has no randomness): it is derived from the caller's clocks, the connection epoch and a counter, so no two uploads share one. A watch that answers `create_status` 1 (DUPLICATE) is a refusal like any other.
+- 5003 is 12 bytes: `u16 file_index` (the one the 5005 answer gave), `u32 size`, `u32 offset 0`, `u16 crc_seed 0`. The seed the watch answers with is ignored, as Gadgetbridge does; the running CRC starts at 0.
+- 5004 chunks carry `u8 flags 0, u16 running crc, u32 offset, data`. The data length is `chunk_data_size(max_packet)`: the whole COBS frame fits `max_packet` (4000 gives 3969, the size of CAP-2's first download chunk), not Gadgetbridge's `max_packet - 13`.
+- After the last ACK, 5030 event 0 (SYNC_COMPLETE) closes the upload. The next queued upload (at most 8) starts after it; sync triggers wait until the queue is empty.
+- Failures end that upload only: a create, upload or transfer status other than OK, a NAK, a reply that does not parse, or 30 s of silence gives `Event::UploadFinished` with `Refused`, `Nak`, `BadReply` or `TimedOut` and an `AnomalyKind::UploadFailed` anomaly; a closing link reports `Aborted` for every upload that had not finished. The session continues.
 
 Chunk size note for Q-SYNC-6: a 5004 message is 13 bytes longer than its data (length 2, id 2, flags 1, crc 2, offset 4, message CRC 2). The first chunk of the 5157-byte activity in CAP-2 held 3969 bytes: 3969 + 13 = 3982, COBS adds one byte per 254 (16), and the two frame delimiters make exactly 4000 = `max_packet`. So the watch sizes a chunk so that the **framed** message fits `max_packet` (*inferred* from one chunk; our arithmetic, not Gadgetbridge's). Gadgetbridge's `max_packet − 13` for uploads ignores the COBS bytes and would exceed that limit by up to 18 bytes on a 4000-byte link; if we port the upload, use the stricter size.
 

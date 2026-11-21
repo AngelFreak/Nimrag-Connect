@@ -160,6 +160,60 @@ rules) are verified.
 6. "Make the watch ring" on the Phone features page rings the watch and stops it.
 7. Switch everything off again: the watch reconnects once and sends nothing more.
 
+## Workouts (stage 4a, built, live test pending)
+
+A workout built on the web and sent with "Send to watch" waits on the server; the phone carries it
+to the watch. Nothing here needs the FIT profile: the server writes the file, the phone only moves
+the bytes, so the `public` flavor does this as it is (and `fitProfileCompiledIn()` stays false).
+The upload protocol is ported from Gadgetbridge and *inferred (Gadgetbridge)* until it has been tried
+on the owner's Instinct 2; only the unit tests (core byte-exact frames through `Client::handle`, the
+ffi conversions, the Kotlin rules and API client) are verified.
+
+- **When.** `engine/workouts/WorkoutSender` looks at the server's queue (`GET /api/device/workouts`,
+  Bearer token) as soon as the handshake with the watch is done, then every minute while the link is
+  up, and again 2 s after an upload ends. At most four workouts are fetched per look; one that is
+  already on its way is not fetched twice.
+- **How.** Each queued workout is fetched as a FIT file (`/fit`, at most 256 KiB), handed to the
+  protocol client as `Input.UploadFile` (file type 128, sub type 5) through `WatchLink.sendFile`, and
+  the outcome is reported (`/result`): `sent`, or `failed` with a fixed sentence that says which stage
+  the watch refused and with which status name (never the workout's content). The owner sees it on
+  the workout's page on the web.
+- **Link trouble.** If the link closes before the upload ends (`UploadResult.Aborted`) nothing is
+  reported: the workout stays queued and goes again at the next connection. A refusal, a NAK, an
+  answer that makes no sense and 30 s of silence are reported as failed; none of them closes the
+  session or stops a sync.
+- **Network rule.** The same as the file upload: Wi-Fi, Ethernet or VPN, or mobile data when "Allow
+  mobile data" is on (`UploadWorker.networkAllowsUploads`). With no server URL or token nothing is asked.
+- **Privacy.** Workout names are never logged, only the workout's number. The token only goes into
+  the `Authorization` header.
+- **Order with syncing.** Uploads run one at a time and only when no sync cycle is running; a sync the
+  watch asks for while an upload runs waits until the queue is empty (`core::client::upload`).
+- **Not done.** A report that cannot reach the server is retried at the next look, but only in memory:
+  if the app is killed first the server still shows the workout as queued and the phone sends it
+  again, which the watch may answer with DUPLICATE (OPEN-QUESTIONS Q-UPLOAD-4).
+
+**To try on the watch** (each line is one of the owner's checks; none is verified yet):
+
+1. On the web, Strength > Workouts > New workout: name it "Test", keep the default warm-up step
+   (10:00) and press "Save and send to watch". The page says it is waiting for the phone.
+   (If it says this server was built without the FIT profile, the server cannot write the file:
+   use the build that has the profile; workouts can still be saved.)
+2. With the watch connected to the phone (the Watch tab shows it linked), wait up to a minute. The
+   web page changes to "Sent to the watch ... ago", or shows why the watch refused. In the app's log
+   (the Share log button) look for "Workout N sent to the watch" or "could not be sent" with the stage.
+3. On the watch open its workouts list (the Training or Workouts entry): "Test" is there. If it is not, sync
+   once (Watch tab) and look again, and note whether that was needed (Q-UPLOAD-3).
+4. Start it on the watch: a 10 minute warm-up step, with the note if you gave one.
+5. Build one with a repeat block (4 x 400 m with a 90 s rest), a heart-rate zone, a pace range and a
+   cadence range; send it. Check each step on the watch shows the end and the target as typed
+   (Q-WORKOUT-3).
+6. Edit "Test" and send it again: the watch should have one workout of that name, or two if it keeps
+   them apart; note which, and any "DUPLICATE" or other failure text on the web page (Q-UPLOAD-4).
+7. Switch the watch's Bluetooth off, press "Send to watch" and wait: nothing fails; switch it on again
+   and it goes within a minute of the connection coming back. Press "Cancel sending" before it does:
+   it is not sent.
+8. Sync still works afterwards (a new activity or the usual 15 minute sync arrives on the server as before).
+
 ## New data soon (stage 3q, 0.5.1)
 
 The auto-sync interval (default 15 minutes, Settings) is kept by an inexact alarm that is allowed in

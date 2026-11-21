@@ -152,6 +152,7 @@ struct Counts {
     files: i64,
     body: i64,
     edits: i64,
+    workouts: i64,
     garmin: bool,
 }
 
@@ -166,6 +167,7 @@ async fn counts(pool: &SqlitePool, uid: i64) -> Res<Counts> {
         files: one("SELECT COUNT(*) FROM file_owners WHERE user_id = ?").await?,
         body: one("SELECT COUNT(*) FROM body_measurements WHERE user_id = ?").await?,
         edits: one("SELECT COUNT(*) FROM strength_set_overrides WHERE user_id = ?").await?,
+        workouts: one("SELECT COUNT(*) FROM workouts WHERE user_id = ?").await?,
         garmin: one("SELECT COUNT(*) FROM garmin_account WHERE user_id = ?").await? > 0,
     })
 }
@@ -182,7 +184,7 @@ async fn user_info(state: &AppState, tz: chrono_tz::Tz, u: &User) -> Res<UserInf
         created_at: settings::rfc3339(tz, u.created_at),
         active_tokens: c.active_tokens as u32,
         files: c.files as u32,
-        has_data: c.active_tokens + c.files + c.body + c.edits > 0 || c.garmin,
+        has_data: c.active_tokens + c.files + c.body + c.edits + c.workouts > 0 || c.garmin,
     })
 }
 
@@ -341,6 +343,7 @@ async fn delete_user(
         "DELETE FROM user_settings WHERE user_id = ?",
         "DELETE FROM body_measurements WHERE user_id = ?",
         "DELETE FROM strength_set_overrides WHERE user_id = ?",
+        "DELETE FROM workouts WHERE user_id = ?",
         "DELETE FROM garmin_uploads WHERE user_id = ?",
         "DELETE FROM garmin_account WHERE user_id = ?",
         "DELETE FROM users WHERE id = ?",
