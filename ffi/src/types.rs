@@ -2,6 +2,8 @@
 //! enums only; conversion lives in `convert.rs`. Field meanings are those of
 //! the core types (see core/src/client/mod.rs).
 
+use std::fmt;
+
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct ClientConfig {
     pub client_id: u64,
@@ -16,6 +18,120 @@ pub struct ClientConfig {
     pub archive: bool,
     /// Files to leave alone (not downloaded, `Event::FileSkipped`).
     pub skip: Vec<FileKey>,
+    /// The companion duties the host has switched on (all off by default).
+    pub duties: Duties,
+}
+
+/// The companion duties of stage 2f. The host also has to claim the matching
+/// capability bits in `ClientConfig::capabilities`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, uniffi::Record)]
+pub struct Duties {
+    pub notifications: bool,
+    pub music: bool,
+    pub find_phone: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
+pub enum NotificationCategory {
+    Other,
+    Email,
+    Message,
+    Social,
+    Location,
+}
+
+/// A notification as far as the watch needs it. Private content: `Debug`
+/// prints only the id and the category.
+#[derive(Clone, PartialEq, Eq, uniffi::Record)]
+pub struct PhoneNotification {
+    pub id: u32,
+    pub app_id: String,
+    pub app_name: String,
+    pub category: NotificationCategory,
+    pub title: String,
+    pub subtitle: String,
+    pub body: String,
+    pub when_unix_s: i64,
+}
+
+impl fmt::Debug for PhoneNotification {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("PhoneNotification")
+            .field("id", &self.id)
+            .field("category", &self.category)
+            .finish_non_exhaustive()
+    }
+}
+
+/// What the wearer did to a notification on the watch. `Reply` text is private.
+#[derive(Clone, PartialEq, Eq, uniffi::Enum)]
+pub enum NotificationAction {
+    Dismiss,
+    Block,
+    Reply { text: String },
+    AcceptCall,
+    RejectCall,
+    Custom { index: u8 },
+}
+
+impl fmt::Debug for NotificationAction {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            NotificationAction::Dismiss => f.write_str("Dismiss"),
+            NotificationAction::Block => f.write_str("Block"),
+            NotificationAction::Reply { .. } => f.write_str("Reply { .. }"),
+            NotificationAction::AcceptCall => f.write_str("AcceptCall"),
+            NotificationAction::RejectCall => f.write_str("RejectCall"),
+            NotificationAction::Custom { index } => write!(f, "Custom {{ index: {index} }}"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
+pub enum MusicCommand {
+    TogglePlayPause,
+    Next,
+    Previous,
+    VolumeUp,
+    VolumeDown,
+    Play,
+    Pause,
+    SkipForward,
+    SkipBackward,
+}
+
+/// The track that is playing. Private content: `Debug` hides it.
+#[derive(Clone, PartialEq, Eq, uniffi::Record)]
+pub struct MusicInfo {
+    pub artist: String,
+    pub album: String,
+    pub title: String,
+    pub duration_s: u32,
+}
+
+impl fmt::Debug for MusicInfo {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("MusicInfo")
+            .field("duration_s", &self.duration_s)
+            .finish_non_exhaustive()
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Record)]
+pub struct MusicState {
+    pub playing: bool,
+    /// Playback speed in percent (100 = normal).
+    pub rate_percent: u16,
+    pub position_s: u32,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
+pub enum FindWatchState {
+    NotSupported,
+    Ringing,
+    Stopped,
+    Failed,
+    FoundOnWatch,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, uniffi::Record)]
@@ -64,6 +180,27 @@ pub enum Input {
     /// Ask the watch for its battery level; the answer arrives as
     /// `Event::Battery`.
     RequestBattery,
+    /// A notification appeared or changed on the phone (reuse the id to change).
+    PostNotification {
+        notification: PhoneNotification,
+    },
+    RemoveNotification {
+        id: u32,
+    },
+    MusicInfo {
+        info: MusicInfo,
+    },
+    MusicState {
+        state: MusicState,
+    },
+    /// The phone's media volume, 0-100.
+    MusicVolume {
+        percent: u8,
+    },
+    /// Ask the watch to ring or to stop ringing.
+    FindWatch {
+        start: bool,
+    },
     Disconnected,
 }
 
@@ -162,6 +299,24 @@ pub enum Event {
         level_percent: u8,
         report: BatteryReport,
     },
+    NotificationSubscription {
+        enabled: bool,
+    },
+    NotificationAction {
+        id: u32,
+        action: NotificationAction,
+    },
+    FindPhoneStart {
+        duration_s: u8,
+    },
+    FindPhoneStop,
+    MusicCommand {
+        command: MusicCommand,
+    },
+    MusicRequested,
+    FindWatch {
+        state: FindWatchState,
+    },
     Anomaly {
         kind: AnomalyKind,
         message_id: u16,
@@ -217,6 +372,7 @@ pub enum AnomalyKind {
     SyncNotGranted,
     GfdiClosedByWatch,
     BatteryRequestRefused,
+    DutyMessageRefused,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]

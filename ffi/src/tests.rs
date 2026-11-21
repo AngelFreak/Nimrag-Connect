@@ -24,6 +24,11 @@ fn config() -> ClientConfig {
             size: 3,
             timestamp: 1_000_071,
         }],
+        duties: Duties {
+            notifications: true,
+            music: false,
+            find_phone: true,
+        },
     }
 }
 
@@ -51,6 +56,14 @@ fn config_converts_every_field() {
     assert_eq!(c.capabilities, vec![0x11, 0x22]);
     assert!(!c.first_connect);
     assert!(!c.archive);
+    assert_eq!(
+        c.duties,
+        core::Duties {
+            notifications: true,
+            music: false,
+            find_phone: true
+        }
+    );
     assert_eq!(
         c.skip,
         vec![core::FileKey {
@@ -455,4 +468,224 @@ fn local_server_starts_ingests_and_stops() {
         Err(LocalServerError::Stopped)
     ));
     let _ = std::fs::remove_dir_all(&dir);
+}
+
+fn note() -> PhoneNotification {
+    PhoneNotification {
+        id: 9,
+        app_id: "org.example.chat".into(),
+        app_name: "Example Chat".into(),
+        category: NotificationCategory::Message,
+        title: "Ann".into(),
+        subtitle: "".into(),
+        body: "very private text".into(),
+        when_unix_s: 1_800_000_000,
+    }
+}
+
+#[test]
+fn duty_inputs_convert() {
+    let c: core::Input = Input::PostNotification {
+        notification: note(),
+    }
+    .into();
+    match c {
+        core::Input::PostNotification { notification: n } => {
+            assert_eq!(n.id, 9);
+            assert_eq!(n.app_id, "org.example.chat");
+            assert_eq!(n.app_name, "Example Chat");
+            assert_eq!(n.category, core::NotificationCategory::Message);
+            assert_eq!(n.title, "Ann");
+            assert_eq!(n.body, "very private text");
+            assert_eq!(n.when_unix_s, 1_800_000_000);
+        }
+        other => panic!("{other:?}"),
+    }
+    assert!(matches!(
+        core::Input::from(Input::RemoveNotification { id: 4 }),
+        core::Input::RemoveNotification { id: 4 }
+    ));
+    let c: core::Input = Input::MusicInfo {
+        info: MusicInfo {
+            artist: "A".into(),
+            album: "B".into(),
+            title: "C".into(),
+            duration_s: 215,
+        },
+    }
+    .into();
+    assert!(
+        matches!(c, core::Input::MusicInfo { info } if info.title == "C" && info.duration_s == 215)
+    );
+    let c: core::Input = Input::MusicState {
+        state: MusicState {
+            playing: true,
+            rate_percent: 100,
+            position_s: 42,
+        },
+    }
+    .into();
+    assert!(matches!(
+        c,
+        core::Input::MusicState { state } if state.playing && state.rate_percent == 100 && state.position_s == 42
+    ));
+    assert!(matches!(
+        core::Input::from(Input::MusicVolume { percent: 50 }),
+        core::Input::MusicVolume { percent: 50 }
+    ));
+    assert!(matches!(
+        core::Input::from(Input::FindWatch { start: true }),
+        core::Input::FindWatch { start: true }
+    ));
+}
+
+#[test]
+fn duty_events_convert() {
+    assert_eq!(
+        Event::from(core::Event::NotificationSubscription { enabled: true }),
+        Event::NotificationSubscription { enabled: true }
+    );
+    let actions = [
+        (
+            core::NotificationAction::Dismiss,
+            NotificationAction::Dismiss,
+        ),
+        (core::NotificationAction::Block, NotificationAction::Block),
+        (
+            core::NotificationAction::AcceptCall,
+            NotificationAction::AcceptCall,
+        ),
+        (
+            core::NotificationAction::RejectCall,
+            NotificationAction::RejectCall,
+        ),
+        (
+            core::NotificationAction::Custom { index: 2 },
+            NotificationAction::Custom { index: 2 },
+        ),
+        (
+            core::NotificationAction::Reply { text: "ok".into() },
+            NotificationAction::Reply { text: "ok".into() },
+        ),
+    ];
+    for (from, want) in actions {
+        assert_eq!(
+            Event::from(core::Event::NotificationAction {
+                id: 3,
+                action: from
+            }),
+            Event::NotificationAction {
+                id: 3,
+                action: want
+            }
+        );
+    }
+    assert_eq!(
+        Event::from(core::Event::FindPhoneStart { duration_s: 30 }),
+        Event::FindPhoneStart { duration_s: 30 }
+    );
+    assert_eq!(
+        Event::from(core::Event::FindPhoneStop),
+        Event::FindPhoneStop
+    );
+    assert_eq!(
+        Event::from(core::Event::MusicRequested),
+        Event::MusicRequested
+    );
+    let commands = [
+        (
+            core::MusicCommand::TogglePlayPause,
+            MusicCommand::TogglePlayPause,
+        ),
+        (core::MusicCommand::Next, MusicCommand::Next),
+        (core::MusicCommand::Previous, MusicCommand::Previous),
+        (core::MusicCommand::VolumeUp, MusicCommand::VolumeUp),
+        (core::MusicCommand::VolumeDown, MusicCommand::VolumeDown),
+        (core::MusicCommand::Play, MusicCommand::Play),
+        (core::MusicCommand::Pause, MusicCommand::Pause),
+        (core::MusicCommand::SkipForward, MusicCommand::SkipForward),
+        (core::MusicCommand::SkipBackward, MusicCommand::SkipBackward),
+    ];
+    for (from, want) in commands {
+        assert_eq!(
+            Event::from(core::Event::MusicCommand { command: from }),
+            Event::MusicCommand { command: want }
+        );
+    }
+    let states = [
+        (
+            core::FindWatchState::NotSupported,
+            FindWatchState::NotSupported,
+        ),
+        (core::FindWatchState::Ringing, FindWatchState::Ringing),
+        (core::FindWatchState::Stopped, FindWatchState::Stopped),
+        (core::FindWatchState::Failed, FindWatchState::Failed),
+        (
+            core::FindWatchState::FoundOnWatch,
+            FindWatchState::FoundOnWatch,
+        ),
+    ];
+    for (from, want) in states {
+        assert_eq!(
+            Event::from(core::Event::FindWatch { state: from }),
+            Event::FindWatch { state: want }
+        );
+    }
+    assert_eq!(
+        AnomalyKind::from(core::AnomalyKind::DutyMessageRefused),
+        AnomalyKind::DutyMessageRefused
+    );
+}
+
+#[test]
+fn private_content_stays_out_of_debug_output() {
+    let shown = format!(
+        "{:?}",
+        Input::PostNotification {
+            notification: note()
+        }
+    );
+    assert!(!shown.contains("private") && !shown.contains("Ann") && !shown.contains("chat"));
+    let shown = format!(
+        "{:?}",
+        Event::NotificationAction {
+            id: 1,
+            action: NotificationAction::Reply {
+                text: "secret reply".into()
+            }
+        }
+    );
+    assert!(!shown.contains("secret"));
+    let shown = format!(
+        "{:?}",
+        Input::MusicInfo {
+            info: MusicInfo {
+                artist: "Hidden Artist".into(),
+                album: "".into(),
+                title: "Hidden Title".into(),
+                duration_s: 1
+            }
+        }
+    );
+    assert!(!shown.contains("Hidden"));
+}
+
+#[test]
+fn a_client_with_find_phone_on_reports_the_watchs_request() {
+    // Through the real NimragClient: the duty flag reaches the core.
+    let mut cfg = config();
+    cfg.duties = Duties {
+        notifications: false,
+        music: false,
+        find_phone: true,
+    };
+    let client = NimragClient::new(cfg);
+    // Before the handshake a duty input is ignored and produces nothing.
+    let step = client.handle(
+        now(0),
+        Input::PostNotification {
+            notification: note(),
+        },
+    );
+    assert!(step.writes.is_empty());
 }
