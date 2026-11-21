@@ -38,7 +38,7 @@ The finished product: an Android app that pairs with the Instinct 2 without Garm
 | | 3r | Live use, 0.6.x: metric detail pages, Watch/Profile redesign, Connect daily history, maps, sync icon, day-total fix | Done (0.6.0–0.6.2, 2026-11-20/21); see "Live use (2026-11-20/21)" |
 | | Gate 3 | Every page from real data, "unavailable" shown correctly, accessibility check | **In progress**: pages run on real data; the accessibility check passes on seeded data (every route, 2026-11-21), not yet on real data |
 | 4 Writing + ops | 4a | FIT encoder + workout builder, sent to the watch via the phone (encoder and upload path ported from Gadgetbridge) | **Built, live test pending** (2026-11-21): everything tested without a watch; the first upload to the Instinct 2 is the owner's step |
-| | 4b | Scheduled backups + documented restore test | Done and tested (2026-11-21); not yet run on the owner's server |
+| | 4b | Scheduled backups + documented restore test | Done (2026-11-21); running on the owner's server (daily, 7 kept), and a restore of the first backup matched the live database table for table |
 | | 4c | Export: originals + CSV per data type | Done and tested (2026-11-21): server, web Profile row; Android download path built, not tried on a phone |
 | | 4d | Runbook: install, upgrade, restore, re-pair, firmware over USB | Written (2026-11-21); the Docker forms, a fresh pairing and a firmware update not yet tried |
 | | Gate 4 | Final report | — |
@@ -107,9 +107,10 @@ Workflow as described at the top of this file.
 
 # Phase 2: Android sync
 
-## Where work stopped (updated 2026-11-21)
-- **Now:** the owner's Instinct 2 syncs to their Pixel 9a every 15 minutes, unattended, and the files reach the deployed server within seconds. App 0.6.2 is the current pre-release. Phase 3 is in daily use; Gate 2's week of wear runs until about 2026-11-27. Details of the last two days: "Live use (2026-11-20/21)" at the end of the plan.
-- **Next candidates (owner to pick):** scheduled backups (4b); data gaps (19 Nov transition day and intraday Connect data for recent days: built 2026-11-21, to be run on the real files; SpO2); companion duties (2f); the live test of workouts to the watch (4a, built); accessibility pass for Gate 3.
+## Where work stopped (updated 2026-11-21, afternoon)
+- **Now:** the owner's Instinct 2 syncs to their Pixel 9a every 15 minutes, unattended, and the files reach the deployed server within seconds. Gate 2's week of wear runs until about 2026-11-27. Built and merged on 2026-11-21: scheduled backups, export and runbook (4b–4d; daily backups run on the owner's server, a restore matched the live database table for table), Garmin Connect intraday series (19 Nov is complete), the Gate 3 accessibility check on seeded data, phone features (2f: notifications, music, find my phone/watch; app 0.7.0) and workouts to the watch (4a). Details: "Live use (2026-11-20/21)" at the end of the plan.
+- **Waiting on the owner (with the watch):** the live tests of 2f (android/README.md "Phone features") and 4a (android/README.md "Workouts"; open questions Q-UPLOAD-1..4 and Q-WORKOUT-1..5 in docs/protocol/OPEN-QUESTIONS.md); Gate 2's USB comparison (~2026-11-27); the fresh-pairing capture; Forward against real Garmin; fingerprint unlock; the "Download my data" download in the app. Decisions: GPS-assist and weather sources (the rest of 2f); the exercise catalogue for strength workouts (Q-WORKOUT-5).
+- **Next for the builders:** whatever the live tests of 2f and 4a show; Gate 3 on real data; then Gate 4 (final report).
 - History of this section, oldest first:
 - Done and committed: phase 0 decoding, phase 1 (gate 1 passed on a USB copy), stage 2a (protocol client), 2b (Android build of core), most of 2p (Gadgetbridge port list, protocol diff, device catalogue with sync status, battery parser), the 5052 DST fix (Q-TIME-2), every sleep summary kept.
 - Next: the owner tests debug 0.2.0 (stages 2c–2e built: pairing through the companion-device dialog, link, sync, storage, uploads, screens) with the watch; fix what the live test shows. Pairing replaces the Garmin Connect pairing. Rows 16 (first-connect events), 8 (plain GFDI, reopen after a watch-side close), 22 (5009 FileAvailable) and 28 (battery: 5023 and `Input::RequestBattery`) are ported (2026-11-19, second machine without `private/` captures: the private replay was skipped for all four, so run it before 2c; neither 5009 nor 5023 occurs in the captures).
@@ -564,7 +565,10 @@ Final report: what works, what was verified and how, what is still unknown.
 - **Maps**: `serve --tiles-dir DIR` (or `NIMRAG_TILES_DIR`) serves `*.pmtiles` to signed-in users with range requests; the web app draws routes on a Protomaps basemap and needs MapLibre's worker URL set explicitly (fixed 2026-11-20). The owner's extract covers the areas of their routes (git-ignored `tiles/`); a route elsewhere has no basemap until the extract is redone.
 - **0.6.1 / 0.6.2**: the sync icon spins while the app pulls from the watch and uploads, then until the page has fetched the new data; recovery time 0 reads "Recovered".
 - **Day totals across midnight (2026-11-21)**: the watch writes the finished day's cumulative totals stamped exactly 00:00 before it resets, so today showed yesterday's steps. Cumulative counters (steps, distance, calories, intensity minutes) now count for the day of `ts - 1`.
-- **Open**: SpO2 has no readings yet; intraday Connect data for imported days (built 2026-11-21, see "Garmin Connect history", to be run on the real files); training status, load, recovery and VO2 max change only when the watch writes its metrics file (after an activity), which is expected.
+- **Intraday Connect data (2026-11-21)**: imported live (30 days of stress and body battery, 2 days of heart rate and breathing); 19 Nov, the day the watch took over at 21:06, now has a full day of samples. Connect's -2 ("too much motion") counts as the activity stress level, as the watch's own negative reading does.
+- **Ops (2026-11-21)**: scheduled backups run on the owner's server (daily, 7 kept, a bind-mounted folder outside the repo); the first backup restored into a scratch folder matched the live database table for table and passed SQLite's integrity check.
+- **0.7.0** (2026-11-21): phone features (notifications, music, find my phone, make the watch ring), all off by default; "Download my data" saves to Downloads in the app. Checked on the Samsung (no watch): the Phone features page, defaults and notification-access card.
+- **Open**: SpO2 has no readings (the watch never recorded any in the last month; Pulse Ox is off on the watch); training status, load, recovery and VO2 max change only when the watch writes its metrics file (after an activity), which is expected.
 
 # Appendix: contracts and reviewer notes
 
