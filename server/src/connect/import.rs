@@ -127,6 +127,17 @@ pub fn classify(v: &Value) -> Option<Kind> {
         return looks.then_some(Kind::DailyStats);
     }
     let obj = v.as_object()?;
+    // A day of minute-level series: a descriptor list and the values array beside it.
+    let has = |k: &str| obj.get(k).is_some_and(Value::is_array);
+    if has("stressValueDescriptorsDTOList") && has("stressValuesArray") {
+        return Some(Kind::IntradayStress);
+    }
+    if has("heartRateValueDescriptors") && has("heartRateValues") {
+        return Some(Kind::IntradayHeartRate);
+    }
+    if has("respirationValueDescriptorsDTOList") && has("respirationValuesArray") {
+        return Some(Kind::IntradayRespiration);
+    }
     if obj.contains_key("nights") {
         return Some(Kind::Sleep);
     }
@@ -171,6 +182,24 @@ pub fn classify(v: &Value) -> Option<Kind> {
         };
     }
     None
+}
+
+/// The account's profile id, which Connect's intraday responses carry.
+const PROFILE_KEY: &str = "userProfilePK";
+
+/// Remove every member called `key` (at any depth); true when something was removed.
+fn strip_key(v: &mut Value, key: &str) -> bool {
+    match v {
+        Value::Object(m) => {
+            let mut hit = m.remove(key).is_some();
+            for x in m.values_mut() {
+                hit |= strip_key(x, key);
+            }
+            hit
+        }
+        Value::Array(a) => a.iter_mut().fold(false, |hit, x| strip_key(x, key) | hit),
+        _ => false,
+    }
 }
 
 /// Every `*.json` below `dir`, in path order, as (path inside `dir`, full path). Symbolic links
@@ -227,7 +256,7 @@ fn blobs_of(
     tz: Tz,
     records: &dyn Fn(i64) -> Result<Option<Value>, String>,
 ) -> Option<Blobs> {
-    let value: Value = serde_json::from_str(raw).ok()?;
+    let mut value: Value = serde_json::from_str(raw).ok()?;
     if let Some(items) = value.get("activities").and_then(Value::as_array) {
         let blobs = items
             .iter()
@@ -255,6 +284,15 @@ fn blobs_of(
             }
         }
     }
+    // An intraday file may carry the account's profile id: never stored. A file without it keeps
+    // its text byte for byte; one with it is stored as the JSON it is without that member.
+    let stripped;
+    let raw = if kind.is_intraday() && strip_key(&mut value, PROFILE_KEY) {
+        stripped = serde_json::to_string(&value).ok()?;
+        stripped.as_str()
+    } else {
+        raw
+    };
     let bytes = wrap_with_records(kind, tz, raw, recs.as_ref());
     Some((
         vec![Blob {
@@ -423,6 +461,65 @@ mod tests {
         assert_eq!(k(json!([])), None);
         assert_eq!(k(json!({"something": "else"})), None);
         assert_eq!(k(json!([1, 2])), None);
+    }
+
+    #[test]
+    fn a_day_of_intraday_series_is_recognised_by_its_descriptors_and_values() {
+        let k = |v: Value| classify(&v);
+        let desc = json!([{"key": "timestamp", "index": 0}]);
+        assert_eq!(
+            k(json!({"stressValueDescriptorsDTOList": desc, "stressValuesArray": []})),
+            Some(Kind::IntradayStress)
+        );
+        assert_eq!(
+            k(json!({"heartRateValueDescriptors": desc, "heartRateValues": []})),
+            Some(Kind::IntradayHeartRate)
+        );
+        assert_eq!(
+            k(json!({"respirationValueDescriptorsDTOList": desc, "respirationValuesArray": []})),
+            Some(Kind::IntradayRespiration)
+        );
+        // Values without their descriptors, or the descriptors of another series, are not it.
+        assert_eq!(k(json!({"stressValuesArray": []})), None);
+        assert_eq!(
+            k(json!({"heartRateValueDescriptors": desc, "respirationValuesArray": []})),
+            None
+        );
+        assert_eq!(
+            k(json!({"heartRateValueDescriptors": desc, "heartRateValues": null})),
+            None
+        );
+    }
+
+    #[test]
+    fn the_profile_id_is_dropped_from_an_intraday_envelope_only() {
+        let tz: Tz = "Europe/Copenhagen".parse().unwrap();
+        let raw = r#"{"userProfilePK": 424242, "calendarDate": "2026-11-12",
+            "heartRateValueDescriptors": [{"key": "timestamp", "index": 0}, {"key": "heartrate", "index": 1}],
+            "heartRateValues": [[1000, 60]]}"#;
+        let (blobs, _) = blobs_of("hr.json", raw, tz, &|_| Ok(None)).unwrap();
+        let text = String::from_utf8(blobs[0].bytes.clone()).unwrap();
+        assert!(
+            !text.contains("userProfilePK") && !text.contains("424242"),
+            "{text}"
+        );
+        assert!(text.contains("calendarDate") && text.contains("heartRateValues"));
+        // Without it the original text is kept byte for byte.
+        let plain = raw.replace(r#""userProfilePK": 424242, "#, "");
+        let (blobs, _) = blobs_of("hr.json", &plain, tz, &|_| Ok(None)).unwrap();
+        assert!(String::from_utf8(blobs[0].bytes.clone())
+            .unwrap()
+            .contains(&plain));
+        // Another kind is stored as it came.
+        let sleep = r#"{"userProfilePK": 424242, "nights": []}"#;
+        let (blobs, _) = blobs_of("s.json", sleep, tz, &|_| Ok(None)).unwrap();
+        assert!(String::from_utf8(blobs[0].bytes.clone())
+            .unwrap()
+            .contains("424242"));
+        let mut v = json!({"a": [{"userProfilePK": 1, "b": 2}], "userProfilePK": 3});
+        assert!(strip_key(&mut v, "userProfilePK"));
+        assert_eq!(v, json!({"a": [{"b": 2}]}));
+        assert!(!strip_key(&mut v, "userProfilePK"));
     }
 
     #[test]

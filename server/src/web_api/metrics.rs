@@ -7,9 +7,12 @@
 //! ([`day_stats`], [`stress_block`], [`intensity_days`], [`night_sessions`], the training status
 //! and VO2 helpers), so a day shows the same number everywhere. Days are local days in the
 //! account's zone; a night belongs to the day it ends on. A day without data is `null`, never 0.
-//! A day (and a metric) the watch has no data for falls back to Garmin Connect's daily summary
-//! (`connect_daily`, imported with `import-connect`): stress, energy, heart rate, intensity
-//! minutes, steps and distance through those helpers, breathing here ([`breathing_by_day`]).
+//! A day (and a metric) that has no sample rows (the watch's, or Garmin Connect's intraday series
+//! from `import-connect`, which fill the same tables) falls back to Connect's daily summary
+//! (`connect_daily`): stress, energy, heart rate, intensity minutes, steps and distance through
+//! those helpers, breathing here ([`breathing_by_day`]). A day's samples may come from both
+//! sources (Connect's until the watch started, the watch's after, the watch's where both have
+//! the same instant); every figure is computed from the merged rows.
 //!
 //! Periods are rolling windows that end on `end` (default and maximum: today): `7d` is 7 days,
 //! `4w` 28 days (both in day buckets), `12w` 84 days, `6m` 182 days and `1y` 364 days (all in
@@ -664,7 +667,7 @@ fn day_means(r: &[Reading], keep: impl Fn(&Reading) -> bool) -> Daily {
 }
 
 /// Breathing per day over `from..=to`: the mean while asleep and the mean awake. A day with no
-/// watch reading at all (neither in its night nor during the day) has Connect's awake average
+/// reading at all (neither in its night nor during the day) has Connect's awake average
 /// and no asleep figure; `from_connect` lists those days.
 pub struct BreathingDays {
     pub asleep: Daily,
@@ -680,11 +683,12 @@ pub async fn breathing_by_day(ctx: &Ctx, from: NaiveDate, to: NaiveDate) -> Res<
         bucket: MetricBucket::Day,
     };
     let r = readings(&p, BREATHING_SQL).await?;
-    let watch_days: BTreeSet<NaiveDate> = r.iter().map(|x| x.day).collect();
+    // Days with a reading of any source: only the others read Connect's daily summary.
+    let sample_days: BTreeSet<NaiveDate> = r.iter().map(|x| x.day).collect();
     let mut awake = day_means(&r, |x| !x.asleep);
     let mut from_connect = BTreeSet::new();
     for (d, c) in connect_days(ctx, from, to).await? {
-        if let (false, Some(v)) = (watch_days.contains(&d), c.resp_avg) {
+        if let (false, Some(v)) = (sample_days.contains(&d), c.resp_avg) {
             awake.insert(d, round1(v));
             from_connect.insert(d);
         }
@@ -817,7 +821,8 @@ fn mean_of(r: &[Reading], keep: impl Fn(&Reading) -> bool) -> Option<f64> {
 pub async fn day_breathing(ctx: &Ctx, d: NaiveDate) -> Res<DayBreathing> {
     let (r, _, hourly) = day_readings(ctx, d, BREATHING_SQL).await?;
     if r.is_empty() {
-        // No watch reading: Connect's day figures (awake only, no hourly chart).
+        // No reading at all (watch or Connect intraday): Connect's day figures (awake only,
+        // no hourly chart).
         if let Some(c) = connect_day(ctx, d).await? {
             return Ok(DayBreathing {
                 lowest: c.resp_low,

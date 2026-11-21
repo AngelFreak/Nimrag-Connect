@@ -22,6 +22,12 @@
 //! `connect_daily` table; the web API reads it only for a day, and a metric, that the watch has
 //! no data for (see `web_api/daily.rs`).
 //!
+//! Garmin's minute-level series of a day (`intraday/{stress,heart_rate,respiration}/YYYY-MM-DD.json`,
+//! kinds `intraday_*`) fill the watch's own sample tables `stress` (stress level and body battery
+//! level), `mon_hr` and `respiration`, one row per sample instant, so a day imported from Connect
+//! gets the Day view's charts. Where the watch has a row at the same instant its row wins (the
+//! rank rule below), and the rest of the day is Connect's.
+//!
 //! A Connect source ranks below every FIT source (`sources.origin = 'connect'`, rank key
 //! starting with `-`), so a watch row wins whatever the import order. Rows that Connect gives
 //! only per date sit at the start of that local day, so any reading the watch made later the
@@ -70,6 +76,15 @@ pub enum Kind {
     Activity,
     /// One entry of Connect's activity list.
     ActivitySummary,
+    /// One day of Connect's stress response (`intraday/stress/YYYY-MM-DD.json`): the stress level
+    /// and the body battery level every 3 minutes.
+    IntradayStress,
+    /// One day of Connect's heart rate response (`intraday/heart_rate/YYYY-MM-DD.json`), every
+    /// 2 minutes.
+    IntradayHeartRate,
+    /// One day of Connect's respiration response (`intraday/respiration/YYYY-MM-DD.json`), every
+    /// 2 minutes.
+    IntradayRespiration,
 }
 
 impl Kind {
@@ -85,7 +100,19 @@ impl Kind {
             Kind::DailyStats => "daily_stats",
             Kind::Activity => "activity",
             Kind::ActivitySummary => "activity_summary",
+            Kind::IntradayStress => "intraday_stress",
+            Kind::IntradayHeartRate => "intraday_heart_rate",
+            Kind::IntradayRespiration => "intraday_respiration",
         }
+    }
+
+    /// A day of minute-level samples (the files may carry the account's `userProfilePK`, which
+    /// is dropped before the envelope is made).
+    pub fn is_intraday(self) -> bool {
+        matches!(
+            self,
+            Kind::IntradayStress | Kind::IntradayHeartRate | Kind::IntradayRespiration
+        )
     }
 
     pub fn parse(s: &str) -> Option<Kind> {
@@ -100,6 +127,9 @@ impl Kind {
             Kind::DailyStats,
             Kind::Activity,
             Kind::ActivitySummary,
+            Kind::IntradayStress,
+            Kind::IntradayHeartRate,
+            Kind::IntradayRespiration,
         ]
         .into_iter()
         .find(|k| k.as_str() == s)
@@ -478,6 +508,111 @@ mod tests {
         assert_eq!(p.rows, 1);
         let not_a_list = wrap(Kind::DailyStats, tz, "{}");
         assert!(parse(&not_a_list).error.is_some());
+    }
+
+    #[test]
+    fn a_stress_day_joins_stress_and_body_battery_by_instant_and_reads_columns_by_key() {
+        // Columns in another order than Connect's usual one, one more column in the stress list.
+        let p = parsed(
+            Kind::IntradayStress,
+            r#"{"userProfilePK": 1,
+            "stressValueDescriptorsDTOList": [{"key": "stressLevel", "index": 1}, {"key": "timestamp", "index": 0}],
+            "stressValuesArray": [[60000, 25], [120000, -1], [180000, -2], [240000, null], [300000, 0], [360000, 40], ["x", 1], 5],
+            "bodyBatteryValueDescriptorsDTOList": [
+                {"bodyBatteryValueDescriptorIndex": 2, "bodyBatteryValueDescriptorKey": "timestamp"},
+                {"bodyBatteryValueDescriptorIndex": 0, "bodyBatteryValueDescriptorKey": "bodyBatteryLevel"},
+                {"bodyBatteryValueDescriptorIndex": 1, "bodyBatteryValueDescriptorKey": "bodyBatteryStatus"}],
+            "bodyBatteryValuesArray": [[70, "MEASURED", 60000], [null, "MEASURED", 120000], [65, "MEASURED", 420000.5]]}"#,
+        );
+        assert_eq!(p.error, None);
+        // The "x" and the 5 have no instant.
+        assert_eq!(p.skipped, 2);
+        let rows: Vec<_> = p
+            .derived
+            .stress
+            .iter()
+            .map(|r| {
+                (
+                    r.ts,
+                    r.stress,
+                    r.stress_raw,
+                    r.body_battery,
+                    r.body_battery_status,
+                )
+            })
+            .collect();
+        assert_eq!(
+            rows,
+            vec![
+                (60, Some(25.0), None, Some(70.0), None),
+                (300, Some(0.0), None, None, None), // 0 is a stress value
+                (360, Some(40.0), None, None, None),
+                (420, None, None, Some(65.0), None),
+            ],
+            "-1, -2 and null are no stress value; a null level is no body battery"
+        );
+        assert_eq!(p.rows, 4);
+        assert_eq!(p.last_ts, Some(420));
+    }
+
+    #[test]
+    fn a_stress_day_without_body_battery_and_one_without_the_stress_columns() {
+        let p = parsed(
+            Kind::IntradayStress,
+            r#"{"stressValueDescriptorsDTOList": [{"key": "timestamp", "index": 0}, {"key": "stressLevel", "index": 1}],
+                "stressValuesArray": [[1000, 10]]}"#,
+        );
+        assert_eq!(p.error, None);
+        assert_eq!(p.derived.stress.len(), 1);
+        assert_eq!(p.derived.stress[0].body_battery, None);
+        // The descriptors do not name the level column: nothing is guessed from positions.
+        let p = parsed(
+            Kind::IntradayStress,
+            r#"{"stressValueDescriptorsDTOList": [{"key": "timestamp", "index": 0}, {"key": "other", "index": 1}],
+                "stressValuesArray": [[1000, 10]]}"#,
+        );
+        assert!(p.error.is_some() && p.derived.stress.is_empty());
+        // A body battery array without its descriptors is an error too.
+        let p = parsed(
+            Kind::IntradayStress,
+            r#"{"stressValueDescriptorsDTOList": [{"key": "timestamp", "index": 0}, {"key": "stressLevel", "index": 1}],
+                "stressValuesArray": [[1000, 10]], "bodyBatteryValuesArray": [[1000, "MEASURED", 5]]}"#,
+        );
+        assert!(p.error.is_some());
+    }
+
+    #[test]
+    fn heart_rate_and_breathing_days_keep_only_real_readings_one_per_second() {
+        let p = parsed(
+            Kind::IntradayHeartRate,
+            r#"{"heartRateValueDescriptors": [{"key": "timestamp", "index": 0}, {"key": "heartrate", "index": 1}],
+                "heartRateValues": [[120000, 61], [240000, null], [360000, 0], [480000, 70], [480001, 99], [600000, 72.5]]}"#,
+        );
+        assert_eq!(p.error, None);
+        let rows: Vec<_> = p.derived.mon_hr.iter().map(|r| (r.ts, r.bpm)).collect();
+        assert_eq!(rows, vec![(120, 61.0), (480, 70.0), (600, 72.5)]);
+        assert_eq!((p.rows, p.skipped), (3, 0));
+
+        let p = parsed(
+            Kind::IntradayRespiration,
+            r#"{"respirationValueDescriptorsDTOList": [{"key": "timestamp", "index": 0}, {"key": "respiration", "index": 1}],
+                "respirationValuesArray": [[120000, 14.0], [240000, -1.0], [360000, 15.5]]}"#,
+        );
+        assert_eq!(p.error, None);
+        let rows: Vec<_> = p
+            .derived
+            .respiration
+            .iter()
+            .map(|r| (r.ts, r.brpm, r.brpm_raw))
+            .collect();
+        assert_eq!(rows, vec![(120, Some(14.0), None), (360, Some(15.5), None)]);
+        // Not a list of values.
+        let p = parsed(
+            Kind::IntradayRespiration,
+            r#"{"respirationValueDescriptorsDTOList": [{"key": "timestamp", "index": 0}, {"key": "respiration", "index": 1}],
+                "respirationValuesArray": 3}"#,
+        );
+        assert!(p.error.is_some());
     }
 
     #[test]

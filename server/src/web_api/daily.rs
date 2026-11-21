@@ -12,12 +12,16 @@
 //! before it resets (seen 2026-11-21: 4490 at 00:00, then 18 at 01:04).
 //!
 //! Garmin Connect's daily summaries (`connect_daily`, from `import-connect`) are the fallback
-//! for a day, and a metric, that the watch has no data for: stress, body battery, breathing
-//! (see `metrics.rs`), intensity minutes, the heart rate range, steps, distance and floors. The
-//! rule is the same everywhere: if the watch has any row of that metric for the day the watch's
-//! numbers are used as they are (and a figure it lacks stays `null`); only a day without any
-//! watch row of the metric is read from Connect. Connect has no time series, so those days have
-//! no chart points, no "now" and no stress levels.
+//! for a day, and a metric, that has no sample rows: stress, body battery, breathing (see
+//! `metrics.rs`), intensity minutes, the heart rate range, steps, distance and floors. The rule
+//! is the same everywhere: if the day has any row of that metric the rows' numbers are used as
+//! they are (and a figure they lack stays `null`); only a day without any row of the metric is
+//! read from the summary. Whose rows they are does not matter: `stress`, `mon_hr` and
+//! `respiration` hold the watch's rows and the rows of Connect's intraday series (a lower rank,
+//! so the watch's row wins at an instant both have), and a day can have both (Connect's from
+//! before the watch was synced, the watch's after). Every figure is computed from the merged
+//! rows, one query per day, never per source. A day that has only the summary has no chart
+//! points, no "now" and no stress levels.
 
 use super::{mean, round1, series, Ctx, DateValue, TimedValue};
 use crate::api::ApiError;
@@ -266,7 +270,8 @@ pub async fn stress_block(ctx: &Ctx, from: i64, to: i64) -> Res<StressBlock> {
     .bind(to)
     .fetch_all(&ctx.pool)
     .await?;
-    // A day without a watch reading: Connect's day average (no levels, no samples).
+    // A day without a stress reading of any source: Connect's day average (no levels, no
+    // samples).
     let connect_avg = if rows.is_empty() {
         connect_in(ctx, from, to).await?.and_then(|c| c.stress_avg)
     } else {
@@ -389,7 +394,8 @@ pub async fn heart_rate_block(ctx: &Ctx, date: NaiveDate) -> Res<HeartRateBlock>
     let rest = resting_by_day(ctx, date - Duration::days(6), date).await?;
     let mut day = hr_window(ctx, from, to).await?;
     if day.series.is_empty() {
-        // No watch reading that day: Connect's lowest and highest.
+        // No heart rate reading that day (watch or Connect intraday): the summary's lowest and
+        // highest.
         if let Some(c) = connect_day(ctx, date).await? {
             day.low_bpm = c.hr_min;
             day.high_bpm = c.hr_max;
@@ -1074,7 +1080,7 @@ pub fn week_start(d: NaiveDate) -> NaiveDate {
 }
 
 /// Intensity minutes per local day (moderate, vigorous) for `from..=to`, from the
-/// watch's running totals (see the module note). A day without a watch reading takes Connect's
+/// watch's running totals (see the module note). A day without a counter reading takes Connect's
 /// daily minutes; Connect's minutes also count towards the week's running total, so the first
 /// watch reading after them (the watch's total is the week so far) adds only what came after.
 /// `None` for days with neither.
