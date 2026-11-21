@@ -32,6 +32,7 @@
 use std::collections::VecDeque;
 
 use super::companion::{Companion, Cx, MusicInfo, MusicState};
+use super::gps_assist::{self, GpsAssist};
 use super::sync::{Ctx, SyncCycle};
 use super::transport::REPLY_DEADLINE_MS;
 use super::upload::{self, Uploads};
@@ -88,6 +89,8 @@ pub enum Kind {
     MusicVolume,
     /// The protobuf find-my-watch request (5043, find_my_watch 12).
     FindWatch,
+    /// One chunk of a protobuf answer to the watch (5044): GPS assist.
+    GpsAssistReply,
     /// 5005 CreateFile of an upload (stage 4a).
     UploadCreate,
     /// 5003 UploadFile of an upload.
@@ -109,7 +112,8 @@ impl Kind {
             | Kind::MusicInfo
             | Kind::MusicState
             | Kind::MusicVolume
-            | Kind::FindWatch => Some(AnomalyKind::DutyMessageRefused),
+            | Kind::FindWatch
+            | Kind::GpsAssistReply => Some(AnomalyKind::DutyMessageRefused),
             Kind::UploadCreate | Kind::UploadRequest | Kind::UploadData | Kind::UploadComplete => {
                 Some(AnomalyKind::UploadFailed)
             }
@@ -256,6 +260,7 @@ pub struct Session {
     battery_requested: bool,
     duties: Duties,
     companion: Companion,
+    gps: GpsAssist,
     req: Requests,
     sync: SyncCycle,
     uploads: Uploads,
@@ -286,6 +291,7 @@ impl Session {
             battery_requested: false,
             duties: config.duties,
             companion: Companion::new(config.duties),
+            gps: GpsAssist::new(config.connection_epoch),
             req: Requests::default(),
             sync: SyncCycle::new(config),
             uploads: Uploads::new(config.connection_epoch),
@@ -470,6 +476,16 @@ impl Session {
             Kind::FindWatch => out.events.push(Event::FindWatch {
                 state: FindWatchState::Failed,
             }),
+            Kind::GpsAssistReply => {
+                let max_packet = self.device.as_ref().map_or(0, |d| d.max_packet_size);
+                let mut cx = gps_assist::Cx {
+                    now,
+                    req: &mut self.req,
+                    out,
+                    max_packet,
+                };
+                self.gps.dropped(&mut cx);
+            }
             Kind::UploadCreate | Kind::UploadRequest | Kind::UploadData => {
                 let max_packet = self.device.as_ref().map_or(0, |d| d.max_packet_size);
                 let mut cx = upload::Cx {
@@ -567,6 +583,40 @@ impl Session {
                 out: &mut out,
             };
             self.companion.find_watch(start, &caps, &mut cx);
+        }
+        self.finish(now, &mut out, false);
+        out
+    }
+
+    /// `Input::GpsAssistData`.
+    pub fn gps_assist_data(&mut self, now: &Now, id: u32, body: &[u8], etag: &str) -> Out {
+        let mut out = Out::default();
+        if self.duties.gps_assist {
+            let max_packet = self.device.as_ref().map_or(0, |d| d.max_packet_size);
+            let mut cx = gps_assist::Cx {
+                now,
+                req: &mut self.req,
+                out: &mut out,
+                max_packet,
+            };
+            self.gps.data(id, body, etag, &mut cx);
+        }
+        self.finish(now, &mut out, false);
+        out
+    }
+
+    /// `Input::GpsAssistUnavailable`.
+    pub fn gps_assist_unavailable(&mut self, now: &Now, id: u32) -> Out {
+        let mut out = Out::default();
+        if self.duties.gps_assist {
+            let max_packet = self.device.as_ref().map_or(0, |d| d.max_packet_size);
+            let mut cx = gps_assist::Cx {
+                now,
+                req: &mut self.req,
+                out: &mut out,
+                max_packet,
+            };
+            self.gps.unavailable(id, &mut cx);
         }
         self.finish(now, &mut out, false);
         out
@@ -680,6 +730,18 @@ impl Session {
                         out,
                     };
                     self.companion.on_data_answer(ok, &mut cx);
+                }
+                Kind::GpsAssistReply => {
+                    // The anomaly for a refused chunk is raised by the duty.
+                    let max_packet = self.device.as_ref().map_or(0, |d| d.max_packet_size);
+                    let mut cx = gps_assist::Cx {
+                        now,
+                        req: &mut self.req,
+                        out,
+                        max_packet,
+                    };
+                    self.gps
+                        .on_answer(ack && gps_assist::answer_ok(r.body), &mut cx);
                 }
                 Kind::FindWatch if !ack => {
                     out.anomaly(anomaly, r.request_id);
@@ -865,7 +927,7 @@ impl Session {
                 },
             ),
             m::PROTOBUF_REQUEST | m::PROTOBUF_RESPONSE => {
-                self.on_protobuf(msg, out);
+                self.on_protobuf(now, msg, out);
                 false
             }
             m::AUTH_NEGOTIATION => {
@@ -1035,20 +1097,46 @@ impl Session {
     }
 
     /// Watch protobuf requests (5043) and answers to ours (5044) are
-    /// acknowledged with an 8-byte body; we never answer them (5044). Of the
-    /// content we read only the battery response (device_status 8), from
-    /// single-chunk messages; everything else is ignored.
-    fn on_protobuf(&mut self, msg: &Message, out: &mut Out) {
+    /// acknowledged with an 8-byte body; we answer them (5044) only for GPS
+    /// assist (`gps_assist.rs`). Of the content we read the battery response
+    /// (device_status 8) and find-my-watch answers, from single-chunk messages,
+    /// and with GPS assist on the HTTP and data-transfer requests; everything
+    /// else is ignored.
+    fn on_protobuf(&mut self, now: &Now, msg: &Message, out: &mut Out) {
         let Some((header, body)) = m::parse_protobuf(&msg.payload) else {
             out.anomaly(AnomalyKind::BadFrame, msg.id);
             return;
         };
-        if header.offset != 0 || header.chunk != header.total {
-            out.anomaly(AnomalyKind::ChunkedProtobuf, msg.id);
+        // With GPS assist on, chunked messages are reassembled (the requests
+        // are not small); without it they are a reported oddity, as before.
+        let whole;
+        let (single, body) = if self.duties.gps_assist {
+            match self.gps.reassemble(msg, &header, body, out) {
+                Some(bytes) => {
+                    whole = bytes;
+                    (true, &whole[..])
+                }
+                None => return,
+            }
+        } else {
+            if header.offset != 0 || header.chunk != header.total {
+                out.anomaly(AnomalyKind::ChunkedProtobuf, msg.id);
+            }
+            out.msgs
+                .push(response(msg, 0, &m::build_protobuf_ack(header.request_id)));
+            (header.offset == 0 && header.chunk == header.total, body)
+        };
+        if self.duties.gps_assist && msg.id == m::PROTOBUF_REQUEST {
+            let max_packet = self.device.as_ref().map_or(0, |d| d.max_packet_size);
+            let mut cx = gps_assist::Cx {
+                now,
+                req: &mut self.req,
+                out,
+                max_packet,
+            };
+            self.gps.on_smart(header.request_id, body, &mut cx);
         }
-        out.msgs
-            .push(response(msg, 0, &m::build_protobuf_ack(header.request_id)));
-        if header.offset == 0 && header.chunk == header.total {
+        if single {
             if let Some(b) = m::parse_battery_protobuf(body) {
                 out.events.push(Event::Battery {
                     level_percent: b.level,

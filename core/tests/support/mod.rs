@@ -68,6 +68,7 @@ pub fn all_duties() -> Duties {
         notifications: true,
         music: true,
         find_phone: true,
+        gps_assist: false,
     }
 }
 
@@ -318,8 +319,10 @@ pub struct FakeWatch {
     pub battery_response: Option<Vec<u8>>,
     /// Leave every 5033 / 5035 / 5049 and find-my-watch request unanswered.
     pub silent_duties: bool,
-    /// Answer the phone's 5033 / 5035 / 5049 of this id with a NAK.
+    /// Answer the phone's 5033 / 5035 / 5049 / 5044 of this id with a NAK.
     pub nak_duty: Option<u16>,
+    /// (chunk status, status code) the watch answers a 5044 chunk with.
+    pub protobuf_status: (u8, u8),
     /// Transfer status the watch answers a 5035 chunk with (0 = OK).
     pub data_status: u8,
     /// Smart bytes of the 5044 sent after the ACK of a find-my-watch request.
@@ -374,6 +377,7 @@ impl FakeWatch {
             battery_response: Some(battery_smart(87, Some(1), Some(120))),
             silent_duties: false,
             nak_duty: None,
+            protobuf_status: (0, 0),
             data_status: 0,
             find_watch_response: None,
             upload_fault: None,
@@ -574,6 +578,7 @@ impl FakeWatch {
             5002 => self.serve_download(msg),
             5003..=5005 => self.on_upload_message(msg),
             5033 | 5035 | 5049 => self.on_duty_message(msg),
+            5044 => self.on_protobuf_chunk(msg),
             _ => Vec::new(),
         }
     }
@@ -694,6 +699,25 @@ impl FakeWatch {
             return vec![watch_response(msg, 0, &[self.data_status])];
         }
         vec![watch_response(msg, 0, &[])]
+    }
+
+    /// A 5044 chunk from the phone (a protobuf answer, GPS assist): the watch's
+    /// status answer `u16 request_id, u32 offset, u8 chunk status, u8 code`.
+    fn on_protobuf_chunk(&mut self, msg: &Message) -> Vec<Message> {
+        let Some((h, _)) = m::parse_protobuf(&msg.payload) else {
+            return Vec::new();
+        };
+        if self.silent_duties {
+            return Vec::new();
+        }
+        if self.nak_duty == Some(5044) {
+            return vec![watch_response(msg, 1, &[])];
+        }
+        let mut body = h.request_id.to_le_bytes().to_vec();
+        body.extend_from_slice(&h.offset.to_le_bytes());
+        body.push(self.protobuf_status.0);
+        body.push(self.protobuf_status.1);
+        vec![watch_response(msg, 0, &body)]
     }
 
     fn on_phone_response(&mut self, msg: &Message) -> Vec<Message> {

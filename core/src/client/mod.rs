@@ -26,6 +26,7 @@ use crate::cobs;
 use crate::describe::DirEntry;
 
 mod companion;
+mod gps_assist;
 pub mod reliable;
 mod session;
 mod sync;
@@ -37,6 +38,7 @@ pub use crate::duties::notification::{
     NotificationAction, NotificationCategory, PhoneNotification,
 };
 pub use companion::{MusicInfo, MusicState};
+pub use gps_assist::GpsAssistOutcome;
 use reliable::MIN_ATT_MTU;
 use session::{Out, Session};
 use transport::{Transport, TransportOut};
@@ -90,7 +92,8 @@ pub struct ClientConfig {
 /// with "not supported" and sends nothing unasked, as before 2f. The caller also
 /// has to claim the matching bits in `ClientConfig::capabilities`, or the watch
 /// does not ask (notifications: bit 6, music: bits 7 and 52, find my phone: bits
-/// 8 and 9; *inferred (Gadgetbridge)*, `GarminCapability`).
+/// 8 and 9, GPS assist: bits 10 and 88; *inferred (Gadgetbridge)*,
+/// `GarminCapability`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct Duties {
     /// Show the phone's notifications on the watch.
@@ -99,6 +102,11 @@ pub struct Duties {
     pub music: bool,
     /// Let the watch ring the phone (find my phone).
     pub find_phone: bool,
+    /// Serve the watch's GPS-assist (satellite data) download. The host fetches
+    /// the file (from the Nimrag server); claim the HTTP capability bits (10 and
+    /// 88, *inferred (Gadgetbridge)*) with it. Every other HTTP request is
+    /// refused.
+    pub gps_assist: bool,
 }
 
 /// What names a file on the watch across connections: the directory entry's
@@ -203,6 +211,19 @@ pub enum Input {
         sub_type: u8,
         data: Vec<u8>,
     },
+    /// The file for `Event::GpsAssistRequest { id }`: `body` as the host holds it
+    /// and `etag` as the header value to send (quotes included; empty when the
+    /// host has none). Checked against the format of the request, then answered
+    /// 200 or, when the watch's `If-None-Match` equals `etag`, 304. Ignored
+    /// unless `Duties::gps_assist` is on and the request is still waiting.
+    GpsAssistData {
+        id: u32,
+        body: Vec<u8>,
+        etag: String,
+    },
+    /// The host has no file for `Event::GpsAssistRequest { id }`: the watch is
+    /// told "no data" and the request ends with `GpsAssistOutcome::Unavailable`.
+    GpsAssistUnavailable { id: u32 },
     /// The GATT link is gone. Terminal.
     Disconnected,
 }
@@ -325,6 +346,33 @@ pub enum Event {
     UploadFinished {
         upload_id: u64,
         result: UploadResult,
+    },
+    /// The watch asks for GPS-assist data (`Duties::gps_assist`): `path_and_query`
+    /// is what follows the host in its request, already checked (it starts with
+    /// `/ephemeris/`, only safe characters, a known format); `if_none_match` is
+    /// the watch's `If-None-Match`. Answer with `Input::GpsAssistData` or
+    /// `Input::GpsAssistUnavailable` with the same `id`. The host never learns
+    /// anything else from the watch's request.
+    GpsAssistRequest {
+        id: u32,
+        path_and_query: String,
+        if_none_match: Option<String>,
+    },
+    /// The request `id` is over; `outcome` says how.
+    GpsAssistDone {
+        id: u32,
+        outcome: GpsAssistOutcome,
+    },
+    /// The watch's HTTP request was not served (`Duties::gps_assist`): nothing
+    /// was forwarded, the watch got "no data" (or nothing at all for a request
+    /// we cannot read or answer). `host` and `path` are cleaned for a log line
+    /// (letters, digits, dots and dashes; number-like path segments shown as
+    /// `*`; never the query). Both are empty when the request had no readable
+    /// address (the encrypted form, Q-COMP-2) and `?` when the address did not
+    /// parse.
+    HttpRequestRefused {
+        host: String,
+        path: String,
     },
     /// Something unexpected that did not end the session.
     Anomaly {
@@ -647,6 +695,14 @@ impl Client {
                 let out = self
                     .session
                     .upload_file(now, upload_id, data_type, sub_type, data);
+                self.apply_session(now, out, step);
+            }
+            Input::GpsAssistData { id, body, etag } => {
+                let out = self.session.gps_assist_data(now, id, &body, &etag);
+                self.apply_session(now, out, step);
+            }
+            Input::GpsAssistUnavailable { id } => {
+                let out = self.session.gps_assist_unavailable(now, id);
                 self.apply_session(now, out, step);
             }
             Input::Connected { .. } | Input::Disconnected => {}
