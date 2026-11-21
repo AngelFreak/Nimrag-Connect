@@ -1,0 +1,98 @@
+package dev.nimrag.app.engine.phone.logic
+
+import dev.nimrag.app.engine.logic.CapabilityHex
+import dev.nimrag.app.model.PhoneAccess
+import dev.nimrag.app.model.PhoneFeatures
+import org.junit.jupiter.api.Assertions.assertArrayEquals
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertSame
+import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.Test
+
+class PhoneDutiesTest {
+    private val granted = PhoneAccess(notificationAccess = true)
+    private val denied = PhoneAccess(notificationAccess = false)
+
+    @Test
+    fun `everything is off by default`() {
+        val features = PhoneFeatures()
+        assertFalse(features.notifications)
+        assertFalse(features.music)
+        assertFalse(features.findPhone)
+        assertTrue(features.excludedApps.isEmpty())
+        assertFalse(PhoneDuties.effective(features, granted).any)
+    }
+
+    @Test
+    fun `notifications and music need notification access, finding the phone does not`() {
+        val all = PhoneFeatures(notifications = true, music = true, findPhone = true)
+        assertEquals(DutyMask(notifications = true, music = true, findPhone = true), PhoneDuties.effective(all, granted))
+        assertEquals(DutyMask(notifications = false, music = false, findPhone = true), PhoneDuties.effective(all, denied))
+    }
+
+    @Test
+    fun `a switch that is off stays off even with access`() {
+        val onlyMusic = PhoneFeatures(music = true)
+        assertEquals(DutyMask(music = true), PhoneDuties.effective(onlyMusic, granted))
+    }
+
+    @Test
+    fun `no duty claims no bit and returns the mask unchanged`() {
+        val base = CapabilityHex.parse(CapabilityHex.DEFAULT)!!
+        assertSame(base, PhoneDuties.claim(base, DutyMask()))
+    }
+
+    @Test
+    fun `claiming sets the bits of the duty on the default mask`() {
+        val base = CapabilityHex.parse(CapabilityHex.DEFAULT)!!
+        // default: 39 00 00 20 00 00 00 00 80 10 00 00 00
+        val notes = PhoneDuties.claim(base, DutyMask(notifications = true))
+        assertEquals(0x79, notes[0].toInt() and 0xFF) // bit 6 added to 0x39
+        assertArrayEquals(base.copyOfRange(1, base.size), notes.copyOfRange(1, notes.size))
+
+        val music = PhoneDuties.claim(base, DutyMask(music = true))
+        assertEquals(0xB9, music[0].toInt() and 0xFF) // bit 7
+        assertEquals(0x10, music[6].toInt() and 0xFF) // bit 52 = byte 6, 1 shl 4
+
+        val find = PhoneDuties.claim(base, DutyMask(findPhone = true))
+        assertEquals(0x03, find[1].toInt() and 0xFF) // bits 8 and 9
+        assertEquals(0x39, find[0].toInt() and 0xFF)
+    }
+
+    @Test
+    fun `claiming never clears a bit and never changes the input`() {
+        val base = CapabilityHex.parse(CapabilityHex.DEFAULT)!!
+        val copy = base.copyOf()
+        val out = PhoneDuties.claim(base, DutyMask(true, true, true))
+        assertArrayEquals(copy, base)
+        for (i in base.indices) {
+            assertEquals(base[i].toInt() and 0xFF, (base[i].toInt() and out[i].toInt()) and 0xFF, "byte $i lost a bit")
+        }
+    }
+
+    @Test
+    fun `a short mask grows with zero bytes up to the highest claimed bit`() {
+        val out = PhoneDuties.claim(byteArrayOf(0x01), DutyMask(music = true))
+        assertEquals(7, out.size)
+        assertEquals(0x81, out[0].toInt() and 0xFF)
+        assertEquals(0x10, out[6].toInt() and 0xFF)
+        assertEquals(0, out[3].toInt())
+        // notifications alone fit in the first byte
+        assertEquals(1, PhoneDuties.claim(byteArrayOf(0x00), DutyMask(notifications = true)).size)
+    }
+
+    @Test
+    fun `claiming twice is the same as claiming once`() {
+        val base = CapabilityHex.parse(CapabilityHex.DEFAULT)!!
+        val once = PhoneDuties.claim(base, DutyMask(true, true, true))
+        assertArrayEquals(once, PhoneDuties.claim(once, DutyMask(true, true, true)))
+    }
+
+    @Test
+    fun `bit lists match the protocol client`() {
+        assertEquals(listOf(6), PhoneDuties.bits(DutyMask(notifications = true)))
+        assertEquals(listOf(7, 52), PhoneDuties.bits(DutyMask(music = true)))
+        assertEquals(listOf(8, 9), PhoneDuties.bits(DutyMask(findPhone = true)))
+    }
+}

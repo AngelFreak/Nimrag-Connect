@@ -31,6 +31,7 @@ import dev.nimrag.app.ui.components.InfoIcon
 import dev.nimrag.app.ui.components.LinkIcon
 import dev.nimrag.app.ui.components.ListIcon
 import dev.nimrag.app.ui.components.PageColumn
+import dev.nimrag.app.ui.components.PhoneIcon
 import dev.nimrag.app.ui.components.RowTone
 import dev.nimrag.app.ui.components.RowTrailing
 import dev.nimrag.app.ui.components.ServerIcon
@@ -128,6 +129,15 @@ internal fun WatchScreen(
                             onClick = { onOpen(WatchPage.WatchDetails) },
                         )
                     }
+                }
+                item {
+                    SettingsRow(
+                        title = stringResource(R.string.phone_features_title),
+                        value = phoneFeaturesSummary(state),
+                        icon = PhoneIcon,
+                        trailing = RowTrailing.Chevron,
+                        onClick = { onOpen(WatchPage.PhoneFeatures) },
+                    )
                 }
                 item {
                     val files = state.uploads.storedTotal

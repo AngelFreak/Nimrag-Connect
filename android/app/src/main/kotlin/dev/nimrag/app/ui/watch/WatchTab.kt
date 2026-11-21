@@ -54,6 +54,14 @@ fun WatchTab(
         )
         WatchPage.WatchDetails -> if (paired != null) WatchDetailsPage(paired, onPairAgain = controller::forget, onBack = back)
         WatchPage.SyncHistory -> SyncHistoryPage(state, controller, onOpenServer = { onPage(WatchPage.Server) }, onBack = back)
+        WatchPage.PhoneFeatures -> PhoneFeaturesPage(
+            state = state,
+            controller = controller,
+            actions = actions,
+            onOpenApps = { onPage(WatchPage.NotificationApps) },
+            onBack = back,
+        )
+        WatchPage.NotificationApps -> NotificationAppsPage(state.settings.phone.excludedApps, controller, back)
         WatchPage.Server -> ServerPage(state.settings, controller, onSignIn, back)
         WatchPage.Account -> AccountPage(account, controller, onSignIn, back)
         WatchPage.About -> AboutPage(onOpen = onPage, onBack = back)

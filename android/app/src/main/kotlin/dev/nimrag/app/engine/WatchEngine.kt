@@ -10,7 +10,9 @@ import dev.nimrag.app.engine.logic.StartDecision
 import dev.nimrag.app.engine.logic.StartRequest
 import dev.nimrag.app.engine.logic.UploadPolicy
 import dev.nimrag.app.engine.local.LocalWeb
+import dev.nimrag.app.engine.phone.PhoneBridge
 import dev.nimrag.app.model.AccountController
+import dev.nimrag.app.model.AppChoice
 import dev.nimrag.app.model.AppState
 import dev.nimrag.app.model.GarminConnectMode
 import dev.nimrag.app.model.ServerTest
@@ -19,6 +21,7 @@ import dev.nimrag.app.model.WebMode
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.withContext
+import android.content.Intent
 
 /** Who asked to start the watch service; written to the log so the path that ran is known. */
 enum class StartSource(val label: String, val request: StartRequest) {
@@ -54,6 +57,9 @@ class WatchEngine(private val hub: Hub) : WatchController {
     override val state: StateFlow<AppState> get() = hub.state
 
     override val account: AccountController get() = hub.account
+
+    /** The phone features, for the notification listener service (it lives in the same process). */
+    val phoneBridge: PhoneBridge get() = hub.phone
 
     /** `Application.onCreate`: never blocks the main thread on IO. */
     fun onProcessStart() {
@@ -156,6 +162,16 @@ class WatchEngine(private val hub: Hub) : WatchController {
         hub.handler.post {
             val changed = hub.refreshPermissions()
             startServiceIfPaired(if (changed) StartSource.Permissions else StartSource.AppOpened)
+            // The owner may have given or taken away notification access in system settings.
+            link.onDutiesChanged()
+        }
+    }
+
+    /** The notification listener (dis)connected: the system's access changed, so re-read it and apply. */
+    fun onNotificationAccessChanged() {
+        hub.handler.post {
+            hub.refreshPermissions()
+            link.onDutiesChanged()
         }
     }
 
@@ -226,6 +242,61 @@ class WatchEngine(private val hub: Hub) : WatchController {
         hub.settings.garminConnectMode = mode
         publishSettings()
         hub.handler.post { link.onGarminConnectModeChanged(mode) }
+    }
+
+    override fun setPhoneNotifications(on: Boolean) {
+        if (hub.settings.phoneNotifications == on) return
+        hub.settings.phoneNotifications = on
+        phoneFeatureChanged("Notifications on the watch", on)
+    }
+
+    override fun setPhoneMusic(on: Boolean) {
+        if (hub.settings.phoneMusic == on) return
+        hub.settings.phoneMusic = on
+        phoneFeatureChanged("Music control", on)
+    }
+
+    override fun setPhoneFindPhone(on: Boolean) {
+        if (hub.settings.phoneFindPhone == on) return
+        hub.settings.phoneFindPhone = on
+        phoneFeatureChanged("Find my phone", on)
+    }
+
+    private fun phoneFeatureChanged(name: String, on: Boolean) {
+        publishSettings()
+        hub.log.info("$name: ${if (on) "on" else "off"}")
+        hub.handler.post {
+            hub.refreshPermissions()
+            link.onDutiesChanged()
+        }
+    }
+
+    override fun setAppExcluded(packageName: String, excluded: Boolean) {
+        hub.phone.setExcluded(packageName, excluded)
+    }
+
+    override suspend fun launchableApps(): List<AppChoice> = withContext(Dispatchers.IO) {
+        val pm = hub.app.packageManager
+        val intent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
+        try {
+            // The flags overload needs API 33; the plain one works everywhere (minSdk is 31).
+            @Suppress("DEPRECATION")
+            pm.queryIntentActivities(intent, 0)
+                .map { AppChoice(it.activityInfo.packageName, it.loadLabel(pm).toString()) }
+                .distinctBy { it.packageName }
+                .filter { it.packageName != hub.app.packageName }
+                .sortedBy { it.label.lowercase() }
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
+
+    override fun findMyWatch(start: Boolean) {
+        hub.handler.post { hub.phone.findWatch(start) }
+    }
+
+    override fun stopFindPhone() {
+        hub.phone.stopFindPhone()
     }
 
     private fun publishSettings() = hub.update { it.copy(settings = hub.settings.toState()) }

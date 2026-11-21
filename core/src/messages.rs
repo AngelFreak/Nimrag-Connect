@@ -565,7 +565,7 @@ pub fn read_varint(b: &[u8], i: &mut usize) -> Option<u64> {
 
 /// One decoded protobuf field: varints and length-delimited values are
 /// kept, fixed-width values are skipped.
-enum Wire<'a> {
+pub(crate) enum Wire<'a> {
     Varint(u64),
     Bytes(&'a [u8]),
     Skipped,
@@ -573,7 +573,7 @@ enum Wire<'a> {
 
 /// Next `(field number, value)` at `*i`, or `None` when the bytes are
 /// malformed (truncated value, field 0, group or unknown wire type).
-fn next_field<'a>(b: &'a [u8], i: &mut usize) -> Option<(u64, Wire<'a>)> {
+pub(crate) fn next_field<'a>(b: &'a [u8], i: &mut usize) -> Option<(u64, Wire<'a>)> {
     let key = read_varint(b, i)?;
     let field = key >> 3;
     if field == 0 {

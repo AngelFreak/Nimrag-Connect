@@ -25,7 +25,7 @@ The finished product: an Android app that pairs with the Instinct 2 without Garm
 | | 2c | Foreground service, BLE link, pairing without Garmin Connect | Live since 2026-11-19 (0.2.3) on the owner's Pixel 9a with the Instinct 2; pairing reuses an existing bond. Not tried: a watch with no bond |
 | | 2d | Phone storage, archive only after safe storage, upload queue | Live: files stored, archived after storage and uploaded within seconds to the deployed server (since 2026-11-20) |
 | | 2e | Time duty + native Devices and sync screen + sync log | Live: time sent every sync, shareable sync log; Watch tab redesigned in 0.6.0 |
-| | 2f | Further companion duties, one at a time, ported from Gadgetbridge where it has them: GPS assist (setting, the only Garmin call), weather, notifications, music, find my phone | Not Started |
+| | 2f | Further companion duties, one at a time, ported from Gadgetbridge where it has them: GPS assist (setting, the only Garmin call), weather, notifications, music, find my phone | **Notifications, music, find my phone/watch built, live test pending** (see Stage 2f); GPS assist, weather, calendar, location not started |
 | | 2g | Garmin Connect too, for owners who want both: **Alongside** (phone side, both apps share the watch, Nimrag copies, Connect archives) now; **Forward** (server uploads activities to Garmin Connect), approved, after 3a | Alongside: built, live test pending; Forward: server and web built, tested against a fake Garmin only |
 | | Gate 2 | A week of normal wear: no manual steps, no lost or duplicated files; counts and hashes against a USB copy | **In progress**: syncing unattended every 15 min since 2026-11-20; the week ends about 2026-11-27, then the USB comparison |
 | 3 Web | 3a | JSON API, web login (password + optional passkey), device tokens created in the web UI (since 2026-11-20 issued only by the app's sign-in; the web lists and signs out phones), generated TS types | Done (7eb0ea7; passkeys later) |
@@ -386,7 +386,7 @@ Design (integrator, 2026-11-19): Jetpack Compose + Material 3 (dynamic colour, l
 ## Stage 2f: further companion duties
 **Goal**: one at a time, each a user setting: GPS assist data (the only allowed Garmin call; off switch), weather, notifications, music control, find my phone. Port Gadgetbridge's implementation of each (`agps`, `NotificationsHandler`, weather, music handlers) instead of decoding from scratch.
 **Success Criteria**: each duty verified live on the watch; where PROTOCOL.md marks it unknown (Q-COMP-1..3, Q-SYNC-2), the ported behaviour is confirmed by a capture before it is marked verified
-**Status**: Not Started
+**Status**: In progress. **Built, live test pending** (2026-11-21): notifications, music control, find my phone and find my watch (port-list rows 35, 36, 37, plus 27 for what they need). Core in `core/src/duties/*` and `core/src/client/companion.rs`, tested byte-exact through `Client::handle` with synthetic frames labelled *inferred (Gadgetbridge)* (`core/tests/client_companion.rs`); FFI inputs and events; Android: notification listener, find-my-phone alarm, media-session bridge and a "Phone features" page in the Watch tab, every switch off by default. Not started: GPS assist, weather, location sharing, calendar (rows 29, 32-34, 38). Nothing here is marked verified until the owner has run the list in `android/README.md` ("Phone features") on the Instinct 2.
 
 ## Stage 2g: Garmin Connect too (owner request, 2026-11-19)
 **Goal**: owners who also want Garmin Connect keep it. Two routes, chosen in Settings → Garmin Connect:

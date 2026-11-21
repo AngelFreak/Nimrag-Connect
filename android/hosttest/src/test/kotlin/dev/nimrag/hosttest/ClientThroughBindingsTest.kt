@@ -12,6 +12,7 @@ import uniffi.nimrag_ffi.NimragClient
 import uniffi.nimrag_ffi.Now
 import uniffi.nimrag_ffi.Phase
 import uniffi.nimrag_ffi.ScriptedWatch
+import uniffi.nimrag_ffi.Duties
 import uniffi.nimrag_ffi.ffiVersion
 import uniffi.nimrag_ffi.fitProfileCompiledIn
 
@@ -28,6 +29,7 @@ private fun config() = ClientConfig(
     firstConnect = false,
     archive = true,
     skip = emptyList(),
+    duties = Duties(notifications = false, music = false, findPhone = false),
 )
 
 private fun now(monoMs: ULong) = Now(

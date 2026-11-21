@@ -11,6 +11,8 @@ enum class WatchPage(val parent: WatchPage?) {
     GarminHelp(Main),
     WatchDetails(Main),
     SyncHistory(Main),
+    PhoneFeatures(Main),
+    NotificationApps(PhoneFeatures),
     Server(Main),
     Account(Main),
     About(Main),

@@ -35,7 +35,57 @@ data class AppState(
      * view tells the page on every change (`nimrag:data`), so it fetches again.
      */
     val dataVersion: Int = 0,
+    /** What the system allows the phone features (Watch tab, "Phone features") to do right now. */
+    val phoneAccess: PhoneAccess = PhoneAccess(),
+    /** What the phone features are doing right now. */
+    val phone: PhoneStatus = PhoneStatus(),
 )
+
+/**
+ * The phone features of stage 2f: what the phone does for the watch besides syncing. Every
+ * switch is off until the owner turns it on (IMPLEMENTATION_PLAN.md, stage 2f).
+ */
+data class PhoneFeatures(
+    /** Show the phone's notifications on the watch (all apps except the ones in [excludedApps]). */
+    val notifications: Boolean = false,
+    /** Control the phone's music from the watch and show what plays. */
+    val music: Boolean = false,
+    /** Let the watch ring the phone. */
+    val findPhone: Boolean = false,
+    /** Package names whose notifications stay on the phone. */
+    val excludedApps: Set<String> = emptySet(),
+)
+
+/** What the system lets the phone features do (re-read on every resume). */
+data class PhoneAccess(
+    /** "Notification access" for this app: needed to read notifications and the music player. */
+    val notificationAccess: Boolean = false,
+    /** Android 14+ lets the owner turn off full-screen alerts per app; without it "Found it" is a heads-up. */
+    val fullScreenAlerts: Boolean = true,
+)
+
+/** The live state of the phone features. */
+data class PhoneStatus(
+    /** The phone is ringing because the watch asked. */
+    val findPhoneRinging: Boolean = false,
+    val findWatch: FindWatchUi = FindWatchUi.Idle,
+)
+
+/** Progress of "Find my watch" as the Phone features page shows it. */
+enum class FindWatchUi {
+    Idle,
+
+    /** Asked, the watch has not answered yet. */
+    Asking,
+    Ringing,
+
+    /** The watch does not offer it. */
+    NotSupported,
+    Failed,
+}
+
+/** An installed app the owner can exclude from the watch's notifications. */
+data class AppChoice(val packageName: String, val label: String)
 
 enum class GarminConnect {
     /** Not installed. */
@@ -182,6 +232,8 @@ data class Settings(
     val capabilitiesHex: String = "",
     /** Takes effect on the next connection; changing it reconnects. */
     val garminConnectMode: GarminConnectMode = GarminConnectMode.Off,
+    /** The phone features (stage 2f); changing a switch reconnects the watch once. */
+    val phone: PhoneFeatures = PhoneFeatures(),
 )
 
 data class LogLine(val atMs: Long, val level: Level, val text: String) {
@@ -237,6 +289,27 @@ interface WatchController {
 
     /** Saved; a connected watch is reconnected so the new mode applies at once. */
     fun setGarminConnectMode(mode: GarminConnectMode)
+
+    /** Notifications on the watch (default off). Reconnects the watch once to tell it. */
+    fun setPhoneNotifications(on: Boolean) {}
+
+    /** Music control (default off). Reconnects the watch once to tell it. */
+    fun setPhoneMusic(on: Boolean) {}
+
+    /** Let the watch ring the phone (default off). Reconnects the watch once to tell it. */
+    fun setPhoneFindPhone(on: Boolean) {}
+
+    /** Keep (or stop keeping) one app's notifications on the phone. */
+    fun setAppExcluded(packageName: String, excluded: Boolean) {}
+
+    /** Apps with a launcher icon, A to Z, for the exclusion list. Off the main thread. */
+    suspend fun launchableApps(): List<AppChoice> = emptyList()
+
+    /** Make the watch ring (`start`) or stop it. The answer is [PhoneStatus.findWatch]. */
+    fun findMyWatch(start: Boolean) {}
+
+    /** "Found it" in the app: stop the phone ringing. */
+    fun stopFindPhone() {}
 
     /** How to reach the server inside the app (personal flavor), once [AppState.localWebPort] is set. */
     fun localWeb(): LocalWeb? = null

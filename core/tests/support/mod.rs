@@ -14,7 +14,8 @@ use std::collections::{HashMap, VecDeque};
 use nimrag_core::capture::{Att, Direction};
 use nimrag_core::client::reliable::MlrEndpoint;
 use nimrag_core::client::{
-    Client, ClientConfig, DstPair, Event, FileType, Input, Now, Phase, Step, GARMIN_EPOCH_UNIX_S,
+    Client, ClientConfig, DstPair, Duties, Event, FileType, Input, Now, Phase, Step,
+    GARMIN_EPOCH_UNIX_S,
 };
 use nimrag_core::cobs::{self, FrameDecoder};
 use nimrag_core::crc;
@@ -49,6 +50,24 @@ pub fn test_config_epoch(connection_epoch: u32) -> ClientConfig {
         first_connect: false,
         archive: true,
         skip: vec![],
+        duties: Duties::default(),
+    }
+}
+
+/// The test config with the given duties switched on.
+pub fn duty_config(duties: Duties) -> ClientConfig {
+    ClientConfig {
+        duties,
+        ..test_config()
+    }
+}
+
+/// A watch that answers phone messages of the companion duties.
+pub fn all_duties() -> Duties {
+    Duties {
+        notifications: true,
+        music: true,
+        find_phone: true,
     }
 }
 
@@ -262,6 +281,14 @@ pub struct FakeWatch {
     /// Smart bytes of the 5044 sent after the ACK of a battery request
     /// (`None`: no 5044).
     pub battery_response: Option<Vec<u8>>,
+    /// Leave every 5033 / 5035 / 5049 and find-my-watch request unanswered.
+    pub silent_duties: bool,
+    /// Answer the phone's 5033 / 5035 / 5049 of this id with a NAK.
+    pub nak_duty: Option<u16>,
+    /// Transfer status the watch answers a 5035 chunk with (0 = OK).
+    pub data_status: u8,
+    /// Smart bytes of the 5044 sent after the ACK of a find-my-watch request.
+    pub find_watch_response: Option<Vec<u8>>,
     /// What the phone sent on this link.
     pub phone_msgs: Vec<Message>,
     pub phone_raw: Vec<Vec<u8>>,
@@ -302,6 +329,10 @@ impl FakeWatch {
             nak_battery_request: false,
             silent_battery_request: false,
             battery_response: Some(battery_smart(87, Some(1), Some(120))),
+            silent_duties: false,
+            nak_duty: None,
+            data_status: 0,
+            find_watch_response: None,
             file_chunks_sent: 0,
             phone_msgs: Vec::new(),
             phone_raw: Vec::new(),
@@ -493,8 +524,23 @@ impl FakeWatch {
         match msg.id {
             5050 | 5030 | 5008 | 5007 | 5043 | 5031 => self.on_phone_request(msg),
             5002 => self.serve_download(msg),
+            5033 | 5035 | 5049 => self.on_duty_message(msg),
             _ => Vec::new(),
         }
+    }
+
+    /// 5033 / 5035 / 5049 from the phone: an ACK (5035 with its transfer status).
+    fn on_duty_message(&mut self, msg: &Message) -> Vec<Message> {
+        if self.silent_duties {
+            return Vec::new();
+        }
+        if self.nak_duty == Some(msg.id) {
+            return vec![watch_response(msg, 1, &[])];
+        }
+        if msg.id == 5035 {
+            return vec![watch_response(msg, 0, &[self.data_status])];
+        }
+        vec![watch_response(msg, 0, &[])]
     }
 
     fn on_phone_response(&mut self, msg: &Message) -> Vec<Message> {
@@ -582,6 +628,24 @@ impl FakeWatch {
                         vec![watch_response(msg, 0, &m::build_protobuf_ack(h.request_id))];
                     out.extend(
                         self.battery_response
+                            .iter()
+                            .map(|b| Message::new(5044, m::build_protobuf(h.request_id, b))),
+                    );
+                    return out;
+                }
+                if body == nimrag_core::duties::find::FIND_WATCH_START_PROTOBUF
+                    || body == nimrag_core::duties::find::FIND_WATCH_CANCEL_PROTOBUF
+                {
+                    if self.silent_duties {
+                        return Vec::new();
+                    }
+                    if self.nak_duty == Some(5043) {
+                        return vec![watch_response(msg, 1, &[])];
+                    }
+                    let mut out =
+                        vec![watch_response(msg, 0, &m::build_protobuf_ack(h.request_id))];
+                    out.extend(
+                        self.find_watch_response
                             .iter()
                             .map(|b| Message::new(5044, m::build_protobuf(h.request_id, b))),
                     );

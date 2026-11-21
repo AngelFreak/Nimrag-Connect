@@ -92,3 +92,13 @@ val CodeIcon: ImageVector by lazy { svgIcon("Code", "M8 7l-5 5 5 5M16 7l5 5-5 5M
 val DocumentIcon: ImageVector by lazy {
     svgIcon("Document", "M7 3h7l5 5v11a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z", "M14 3v5h5M8 13h8M8 17h6")
 }
+
+/** A music note. */
+val MusicIcon: ImageVector by lazy {
+    svgIcon("Music", "M9 18V5l12-2v13", "M3 18a3 3 0 1 0 6 0a3 3 0 1 0-6 0", "M15 16a3 3 0 1 0 6 0a3 3 0 1 0-6 0")
+}
+
+/** A phone, seen from the front. */
+val PhoneIcon: ImageVector by lazy {
+    svgIcon("Phone", "M8 3h8a1.5 1.5 0 0 1 1.5 1.5v15A1.5 1.5 0 0 1 16 21H8a1.5 1.5 0 0 1-1.5-1.5v-15A1.5 1.5 0 0 1 8 3z", "M11 18h2")
+}

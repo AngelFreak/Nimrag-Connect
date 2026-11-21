@@ -23,15 +23,22 @@
 //! Rebelo, kuhy, Thomas Kuehne and the other Gadgetbridge contributors).
 //! Those behaviours are *inferred (Gadgetbridge)*; what we do differently is
 //! marked [ours].
+//!
+//! The companion duties of stage 2f (notifications, find my phone, music) are in
+//! `companion.rs`; this file routes the watch's messages and the host's inputs
+//! to it when the duty is on, and treats the messages we send for them as soft
+//! requests (see `Kind::soft`).
 
 use std::collections::VecDeque;
 
+use super::companion::{Companion, Cx, MusicInfo, MusicState};
 use super::sync::{Ctx, SyncCycle};
 use super::transport::REPLY_DEADLINE_MS;
 use super::{
-    AnomalyKind, BatteryReport, ClientConfig, CloseReason, DeviceInfo, Event, FileType, Now, Phase,
-    GARMIN_EPOCH_UNIX_S,
+    AnomalyKind, BatteryReport, ClientConfig, CloseReason, DeviceInfo, Duties, Event, FileType,
+    FindWatchState, Now, Phase, GARMIN_EPOCH_UNIX_S,
 };
+use crate::duties::{find, music, notification as notif};
 use crate::gfdi::{Message, Status, RESPONSE};
 use crate::messages as m;
 
@@ -68,6 +75,35 @@ pub enum Kind {
     SyncComplete,
     /// The protobuf battery request (5043, device_status 8).
     BatteryRequest,
+    /// 5033 (stage 2f).
+    NotificationUpdate,
+    /// One 5035 chunk (stage 2f).
+    NotificationData,
+    /// 5049 with the track (stage 2f).
+    MusicInfo,
+    /// 5049 with the player state (stage 2f).
+    MusicState,
+    /// 5049 with the volume (stage 2f).
+    MusicVolume,
+    /// The protobuf find-my-watch request (5043, find_my_watch 12).
+    FindWatch,
+}
+
+impl Kind {
+    /// Requests whose failure must not end the session: a refusal or 30 s of
+    /// silence drops the request and reports this anomaly. [ours]
+    pub fn soft(self) -> Option<AnomalyKind> {
+        match self {
+            Kind::BatteryRequest => Some(AnomalyKind::BatteryRequestRefused),
+            Kind::NotificationUpdate
+            | Kind::NotificationData
+            | Kind::MusicInfo
+            | Kind::MusicState
+            | Kind::MusicVolume
+            | Kind::FindWatch => Some(AnomalyKind::DutyMessageRefused),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -117,6 +153,16 @@ impl Requests {
     pub fn send(&mut self, out: &mut Out, id: u16, payload: Vec<u8>, kind: Kind) {
         self.queue.push_back(Queued { id, payload, kind });
         self.pump(out);
+    }
+
+    /// Like `send`, but a request of the same kind that still waits in the
+    /// queue is replaced instead of followed (a newer now-playing state makes
+    /// the older one pointless). One already on the wire is not touched. [ours]
+    pub fn send_replacing(&mut self, out: &mut Out, id: u16, payload: Vec<u8>, kind: Kind) {
+        match self.queue.iter_mut().find(|q| q.kind == kind) {
+            Some(queued) => queued.payload = payload,
+            None => self.send(out, id, payload, kind),
+        }
     }
 
     /// Send the next queued request when none is outstanding.
@@ -196,6 +242,8 @@ pub struct Session {
     /// `Input::RequestBattery` arrived before the handshake was done: send
     /// one request right after it.
     battery_requested: bool,
+    duties: Duties,
+    companion: Companion,
     req: Requests,
     sync: SyncCycle,
     deadline: Option<u64>,
@@ -220,6 +268,8 @@ impl Session {
             handshake_started: false,
             ready: false,
             battery_requested: false,
+            duties: config.duties,
+            companion: Companion::new(config.duties),
             req: Requests::default(),
             sync: SyncCycle::new(config),
             deadline: None,
@@ -257,15 +307,17 @@ impl Session {
         let mut out = Out::default();
         if self.deadline.is_some_and(|d| now.mono_ms >= d) {
             self.deadline = None;
-            let battery_pending = self
+            let soft = self
                 .req
                 .pending
-                .is_some_and(|p| p.kind == Kind::BatteryRequest);
-            if battery_pending && !self.sync.awaiting_chunks() {
-                // A silent battery request must not end the session: drop
-                // it and go on; a late answer is then unexpected. [ours]
+                .and_then(|p| p.kind.soft().map(|anomaly| (p, anomaly)));
+            if let (Some((p, anomaly)), false) = (soft, self.sync.awaiting_chunks()) {
+                // A silent battery request (or duty message) must not end the
+                // session: drop it and go on; a late answer is then
+                // unexpected. [ours]
                 self.req.pending = None;
-                out.anomaly(AnomalyKind::BatteryRequestRefused, m::PROTOBUF_REQUEST);
+                out.anomaly(anomaly, p.id);
+                self.soft_dropped(now, p.kind, &mut out);
             } else {
                 out.close(CloseReason::Timeout {
                     phase: self.phase(),
@@ -322,6 +374,112 @@ impl Session {
             m::build_protobuf(id, &m::BATTERY_REQUEST_PROTOBUF),
             Kind::BatteryRequest,
         );
+    }
+
+    /// A soft request got no answer in time and was dropped.
+    fn soft_dropped(&mut self, now: &Now, kind: Kind, out: &mut Out) {
+        match kind {
+            Kind::NotificationData => {
+                let mut cx = Cx {
+                    now,
+                    req: &mut self.req,
+                    out,
+                };
+                self.companion.drop_transfer(&mut cx);
+            }
+            Kind::FindWatch => out.events.push(Event::FindWatch {
+                state: FindWatchState::Failed,
+            }),
+            _ => {}
+        }
+    }
+
+    /// `Input::PostNotification`; ignored before the handshake is done.
+    pub fn post_notification(&mut self, now: &Now, n: notif::PhoneNotification) -> Out {
+        let mut out = Out::default();
+        if self.ready {
+            let mut cx = Cx {
+                now,
+                req: &mut self.req,
+                out: &mut out,
+            };
+            self.companion.post(n, &mut cx);
+        }
+        self.finish(now, &mut out, false);
+        out
+    }
+
+    /// `Input::RemoveNotification`; ignored before the handshake is done.
+    pub fn remove_notification(&mut self, now: &Now, id: u32) -> Out {
+        let mut out = Out::default();
+        if self.ready {
+            let mut cx = Cx {
+                now,
+                req: &mut self.req,
+                out: &mut out,
+            };
+            self.companion.remove(id, &mut cx);
+        }
+        self.finish(now, &mut out, false);
+        out
+    }
+
+    pub fn music_info(&mut self, now: &Now, info: &MusicInfo) -> Out {
+        let mut out = Out::default();
+        if self.ready {
+            let mut cx = Cx {
+                now,
+                req: &mut self.req,
+                out: &mut out,
+            };
+            self.companion.music_info(info, &mut cx);
+        }
+        self.finish(now, &mut out, false);
+        out
+    }
+
+    pub fn music_state(&mut self, now: &Now, state: MusicState) -> Out {
+        let mut out = Out::default();
+        if self.ready {
+            let mut cx = Cx {
+                now,
+                req: &mut self.req,
+                out: &mut out,
+            };
+            self.companion.music_state(state, &mut cx);
+        }
+        self.finish(now, &mut out, false);
+        out
+    }
+
+    pub fn music_volume(&mut self, now: &Now, percent: u8) -> Out {
+        let mut out = Out::default();
+        if self.ready {
+            let mut cx = Cx {
+                now,
+                req: &mut self.req,
+                out: &mut out,
+            };
+            self.companion.music_volume(percent, &mut cx);
+        }
+        self.finish(now, &mut out, false);
+        out
+    }
+
+    /// `Input::FindWatch`; ignored before the handshake is done.
+    pub fn find_watch(&mut self, now: &Now, start: bool) -> Out {
+        let mut out = Out::default();
+        if self.ready {
+            let caps = self.watch_capabilities.clone().unwrap_or_default();
+            let mut cx = Cx {
+                now,
+                req: &mut self.req,
+                out: &mut out,
+            };
+            self.companion.find_watch(start, &caps, &mut cx);
+        }
+        self.finish(now, &mut out, false);
+        out
     }
 
     pub fn file_stored(&mut self, now: &Now, transfer_id: u64, stored: bool) -> Out {
@@ -399,11 +557,30 @@ impl Session {
             }
             return true;
         }
-        if pending.kind == Kind::BatteryRequest {
+        if let Some(anomaly) = pending.kind.soft() {
             // Like the first-connection events, a refusal is not fatal: the
-            // battery is a convenience. [ours]
-            if r.status != Status::Ack {
-                out.anomaly(AnomalyKind::BatteryRequestRefused, m::PROTOBUF_REQUEST);
+            // battery and the companion duties are conveniences. [ours]
+            let ack = r.status == Status::Ack;
+            match pending.kind {
+                Kind::NotificationData => {
+                    // The anomaly for a transfer that cannot go on is raised
+                    // by the companion (it also knows the status byte).
+                    let ok = ack && notif::transfer_ok(r.body);
+                    let mut cx = Cx {
+                        now,
+                        req: &mut self.req,
+                        out,
+                    };
+                    self.companion.on_data_answer(ok, &mut cx);
+                }
+                Kind::FindWatch if !ack => {
+                    out.anomaly(anomaly, r.request_id);
+                    out.events.push(Event::FindWatch {
+                        state: FindWatchState::Failed,
+                    });
+                }
+                _ if !ack => out.anomaly(anomaly, r.request_id),
+                _ => {}
             }
             return true;
         }
@@ -585,6 +762,69 @@ impl Session {
                 out.close(CloseReason::AuthRequested);
                 false
             }
+            notif::NOTIFICATION_SUBSCRIPTION if self.duties.notifications => {
+                let mut cx = Cx {
+                    now,
+                    req: &mut self.req,
+                    out,
+                };
+                self.companion.on_subscription(msg, &mut cx);
+                false
+            }
+            notif::NOTIFICATION_CONTROL if self.duties.notifications => {
+                let mut cx = Cx {
+                    now,
+                    req: &mut self.req,
+                    out,
+                };
+                self.companion.on_control(msg, &mut cx);
+                false
+            }
+            find::FIND_MY_PHONE_REQUEST if self.duties.find_phone => {
+                let mut cx = Cx {
+                    now,
+                    req: &mut self.req,
+                    out,
+                };
+                self.companion.on_find_phone_request(msg, &mut cx);
+                false
+            }
+            find::FIND_MY_PHONE_CANCEL if self.duties.find_phone => {
+                let mut cx = Cx {
+                    now,
+                    req: &mut self.req,
+                    out,
+                };
+                self.companion.on_find_phone_cancel(msg, &mut cx);
+                false
+            }
+            music::MUSIC_CONTROL if self.duties.music => {
+                let mut cx = Cx {
+                    now,
+                    req: &mut self.req,
+                    out,
+                };
+                self.companion.on_music_control(msg, &mut cx);
+                false
+            }
+            music::MUSIC_CAPABILITIES if self.duties.music => {
+                let mut cx = Cx {
+                    now,
+                    req: &mut self.req,
+                    out,
+                };
+                self.companion.on_music_capabilities(msg, &mut cx);
+                false
+            }
+            music::MUSIC_ENTITY_UPDATE if self.duties.music => {
+                let mut cx = Cx {
+                    now,
+                    req: &mut self.req,
+                    out,
+                };
+                self.companion.on_music_entity_request(msg, &mut cx);
+                false
+            }
             id => {
                 out.msgs.push(response(msg, STATUS_UNSUPPORTED, &[]));
                 out.events.push(Event::Unsupported { message_id: id });
@@ -708,6 +948,7 @@ impl Session {
                     },
                 });
             }
+            self.companion.on_find_watch_protobuf(body, out);
         }
     }
 }

@@ -3,6 +3,8 @@ package dev.nimrag.app.engine
 import android.Manifest
 import android.app.Application
 import android.bluetooth.BluetoothManager
+import android.app.NotificationManager
+import android.content.ComponentName
 import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
@@ -15,6 +17,8 @@ import dev.nimrag.app.engine.auth.WebSession
 import dev.nimrag.app.engine.ble.CompanionAssociation
 import dev.nimrag.app.engine.local.LocalServerFactory
 import dev.nimrag.app.engine.local.LocalServerHost
+import dev.nimrag.app.engine.phone.NimragNotificationListener
+import dev.nimrag.app.engine.phone.PhoneBridge
 import dev.nimrag.app.engine.store.EngineDb
 import dev.nimrag.app.engine.store.EngineLog
 import dev.nimrag.app.engine.store.FileStore
@@ -22,6 +26,7 @@ import dev.nimrag.app.engine.upload.UploadWorker
 import dev.nimrag.app.model.AppState
 import dev.nimrag.app.model.GarminConnect
 import dev.nimrag.app.model.Permissions
+import dev.nimrag.app.model.PhoneAccess
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
@@ -82,6 +87,9 @@ class Hub(val app: Application) {
         update { it.copy(localWebPort = port) }
     }
 
+    /** The phone features (stage 2f): notifications, find my phone, music. Everything on [handler]. */
+    val phone = PhoneBridge(this)
+
     fun update(block: (AppState) -> AppState) = flow.update(block)
 
     /** New watch data reached a server the web page may show; the web view tells the page ([AppState.dataVersion]). Any thread. */
@@ -111,12 +119,32 @@ class Hub(val app: Application) {
             bluetoothEnabled = bluetoothEnabled(),
         )
         val garminConnect = garminConnect()
+        val phoneAccess = phoneAccess()
         var changed = false
         update {
             changed = it.permissions != permissions
-            it.copy(permissions = permissions, garminConnect = garminConnect)
+            it.copy(permissions = permissions, garminConnect = garminConnect, phoneAccess = phoneAccess)
         }
         return changed
+    }
+
+    /**
+     * What the system lets the phone features do. "Notification access" is a special access the
+     * owner gives in system settings (it cannot be asked for in a dialog).
+     */
+    fun phoneAccess(): PhoneAccess {
+        val manager = app.getSystemService(NotificationManager::class.java)
+        val access = try {
+            manager?.isNotificationListenerAccessGranted(ComponentName(app, NimragNotificationListener::class.java)) == true
+        } catch (_: Exception) {
+            false
+        }
+        val fullScreen = try {
+            Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE || manager?.canUseFullScreenIntent() == true
+        } catch (_: Exception) {
+            true
+        }
+        return PhoneAccess(notificationAccess = access, fullScreenAlerts = fullScreen)
     }
 
     /**

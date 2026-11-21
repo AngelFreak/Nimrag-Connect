@@ -20,6 +20,100 @@ impl From<ClientConfig> for core::ClientConfig {
             first_connect: c.first_connect,
             archive: c.archive,
             skip: c.skip.into_iter().map(core::FileKey::from).collect(),
+            duties: core::Duties {
+                notifications: c.duties.notifications,
+                music: c.duties.music,
+                find_phone: c.duties.find_phone,
+            },
+        }
+    }
+}
+
+impl From<NotificationCategory> for core::NotificationCategory {
+    fn from(c: NotificationCategory) -> Self {
+        match c {
+            NotificationCategory::Other => core::NotificationCategory::Other,
+            NotificationCategory::Email => core::NotificationCategory::Email,
+            NotificationCategory::Message => core::NotificationCategory::Message,
+            NotificationCategory::Social => core::NotificationCategory::Social,
+            NotificationCategory::Location => core::NotificationCategory::Location,
+        }
+    }
+}
+
+impl From<PhoneNotification> for core::PhoneNotification {
+    fn from(n: PhoneNotification) -> Self {
+        core::PhoneNotification {
+            id: n.id,
+            app_id: n.app_id,
+            app_name: n.app_name,
+            category: n.category.into(),
+            title: n.title,
+            subtitle: n.subtitle,
+            body: n.body,
+            when_unix_s: n.when_unix_s,
+        }
+    }
+}
+
+impl From<MusicInfo> for core::MusicInfo {
+    fn from(i: MusicInfo) -> Self {
+        core::MusicInfo {
+            artist: i.artist,
+            album: i.album,
+            title: i.title,
+            duration_s: i.duration_s,
+        }
+    }
+}
+
+impl From<MusicState> for core::MusicState {
+    fn from(s: MusicState) -> Self {
+        core::MusicState {
+            playing: s.playing,
+            rate_percent: s.rate_percent,
+            position_s: s.position_s,
+        }
+    }
+}
+
+impl From<core::NotificationAction> for NotificationAction {
+    fn from(a: core::NotificationAction) -> Self {
+        match a {
+            core::NotificationAction::Dismiss => NotificationAction::Dismiss,
+            core::NotificationAction::Block => NotificationAction::Block,
+            core::NotificationAction::Reply { text } => NotificationAction::Reply { text },
+            core::NotificationAction::AcceptCall => NotificationAction::AcceptCall,
+            core::NotificationAction::RejectCall => NotificationAction::RejectCall,
+            core::NotificationAction::Custom { index } => NotificationAction::Custom { index },
+        }
+    }
+}
+
+impl From<core::MusicCommand> for MusicCommand {
+    fn from(c: core::MusicCommand) -> Self {
+        match c {
+            core::MusicCommand::TogglePlayPause => MusicCommand::TogglePlayPause,
+            core::MusicCommand::Next => MusicCommand::Next,
+            core::MusicCommand::Previous => MusicCommand::Previous,
+            core::MusicCommand::VolumeUp => MusicCommand::VolumeUp,
+            core::MusicCommand::VolumeDown => MusicCommand::VolumeDown,
+            core::MusicCommand::Play => MusicCommand::Play,
+            core::MusicCommand::Pause => MusicCommand::Pause,
+            core::MusicCommand::SkipForward => MusicCommand::SkipForward,
+            core::MusicCommand::SkipBackward => MusicCommand::SkipBackward,
+        }
+    }
+}
+
+impl From<core::FindWatchState> for FindWatchState {
+    fn from(s: core::FindWatchState) -> Self {
+        match s {
+            core::FindWatchState::NotSupported => FindWatchState::NotSupported,
+            core::FindWatchState::Ringing => FindWatchState::Ringing,
+            core::FindWatchState::Stopped => FindWatchState::Stopped,
+            core::FindWatchState::Failed => FindWatchState::Failed,
+            core::FindWatchState::FoundOnWatch => FindWatchState::FoundOnWatch,
         }
     }
 }
@@ -60,6 +154,16 @@ impl From<Input> for core::Input {
             Input::FileStored { transfer_id } => core::Input::FileStored { transfer_id },
             Input::FileStoreFailed { transfer_id } => core::Input::FileStoreFailed { transfer_id },
             Input::RequestBattery => core::Input::RequestBattery,
+            Input::PostNotification { notification } => core::Input::PostNotification {
+                notification: notification.into(),
+            },
+            Input::RemoveNotification { id } => core::Input::RemoveNotification { id },
+            Input::MusicInfo { info } => core::Input::MusicInfo { info: info.into() },
+            Input::MusicState { state } => core::Input::MusicState {
+                state: state.into(),
+            },
+            Input::MusicVolume { percent } => core::Input::MusicVolume { percent },
+            Input::FindWatch { start } => core::Input::FindWatch { start },
             Input::Disconnected => core::Input::Disconnected,
         }
     }
@@ -186,6 +290,22 @@ impl From<core::Event> for Event {
                 level_percent,
                 report: report.into(),
             },
+            core::Event::NotificationSubscription { enabled } => {
+                Event::NotificationSubscription { enabled }
+            }
+            core::Event::NotificationAction { id, action } => Event::NotificationAction {
+                id,
+                action: action.into(),
+            },
+            core::Event::FindPhoneStart { duration_s } => Event::FindPhoneStart { duration_s },
+            core::Event::FindPhoneStop => Event::FindPhoneStop,
+            core::Event::MusicCommand { command } => Event::MusicCommand {
+                command: command.into(),
+            },
+            core::Event::MusicRequested => Event::MusicRequested,
+            core::Event::FindWatch { state } => Event::FindWatch {
+                state: state.into(),
+            },
             core::Event::Anomaly { kind, message_id } => Event::Anomaly {
                 kind: kind.into(),
                 message_id,
@@ -249,6 +369,7 @@ impl From<core::AnomalyKind> for AnomalyKind {
             core::AnomalyKind::SyncNotGranted => AnomalyKind::SyncNotGranted,
             core::AnomalyKind::GfdiClosedByWatch => AnomalyKind::GfdiClosedByWatch,
             core::AnomalyKind::BatteryRequestRefused => AnomalyKind::BatteryRequestRefused,
+            core::AnomalyKind::DutyMessageRefused => AnomalyKind::DutyMessageRefused,
         }
     }
 }

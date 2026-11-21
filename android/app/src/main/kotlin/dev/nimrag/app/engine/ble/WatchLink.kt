@@ -31,6 +31,8 @@ import dev.nimrag.app.engine.logic.LinkStep
 import dev.nimrag.app.engine.logic.LinkSupervisor
 import dev.nimrag.app.engine.logic.StallAction
 import dev.nimrag.app.engine.logic.WriteQueue
+import dev.nimrag.app.engine.phone.logic.DutyMask
+import dev.nimrag.app.engine.phone.logic.PhoneDuties
 import dev.nimrag.app.engine.store.CopiedRow
 import dev.nimrag.app.model.GarminConnect
 import dev.nimrag.app.model.GarminConnectMode
@@ -45,6 +47,7 @@ import uniffi.nimrag_ffi.ClientConfig
 import uniffi.nimrag_ffi.CloseReason
 import uniffi.nimrag_ffi.DirEntry
 import uniffi.nimrag_ffi.DstPair
+import uniffi.nimrag_ffi.Duties
 import uniffi.nimrag_ffi.Event
 import uniffi.nimrag_ffi.FileFailure
 import uniffi.nimrag_ffi.FileKey
@@ -76,6 +79,10 @@ class WatchLink(private val hub: Hub, private val scanner: BleScanner) {
     private val settings = hub.settings
     private val log = hub.log
 
+    init {
+        hub.phone.attach(this)
+    }
+
     // ---- connection state (HandlerThread only) ----
     private var running = false
     private var gatt: BluetoothGatt? = null
@@ -105,6 +112,14 @@ class WatchLink(private val hub: Hub, private val scanner: BleScanner) {
 
     /** The mode the current client was built with: files are copied, never archived, in Alongside. */
     private var connectionMode = GarminConnectMode.Off
+
+    /**
+     * The phone features the current client was built with (and claimed in its capability mask).
+     * A change of the switches or of the system access reconnects, because the watch only
+     * learns what we do at the handshake ([onDutiesChanged]).
+     */
+    var connectionDuties = DutyMask()
+        private set
     private val backoff = Backoff()
     private var pairing: Pairing? = null
 
@@ -326,6 +341,29 @@ class WatchLink(private val hub: Hub, private val scanner: BleScanner) {
         hub.update { it.copy(watch = WatchState.NotPaired, sync = SyncState(), scan = ScanState()) }
         log.info("Watch forgotten")
         WatchService.stop(ctx)
+    }
+
+    /** The handshake is done and the link is usable. */
+    fun isReady(): Boolean = ready && client != null
+
+    /** A phone-feature input (notification, music, find my watch): sent when the link is ready, else dropped. */
+    fun sendDuty(input: Input) {
+        if (!ready || client == null) return
+        feed(input)
+    }
+
+    /**
+     * The phone-feature switches or the system's notification access changed. The watch learns
+     * what we claim at the handshake, so a connected watch is reconnected once when what is
+     * effective now differs from what this connection was built with.
+     */
+    fun onDutiesChanged() {
+        val want = PhoneDuties.effective(settings.phoneFeatures(), hub.phoneAccess())
+        hub.phone.onDutiesChanged(want)
+        if (client == null || want == connectionDuties) return
+        log.info("Phone features changed, reconnecting to apply them")
+        teardown()
+        scheduleReconnect(MODE_RECONNECT_MS)
     }
 
     fun syncNow() {
@@ -786,7 +824,12 @@ class WatchLink(private val hub: Hub, private val scanner: BleScanner) {
         val first = AlongsideRules.firstConnect(mode, settings.firstConnect && LinkRules.firstConnectFor(settings.firstConnectTries))
         connectionHasFirst = first
         epoch += 1
-        val capabilities = CapabilityHex.parse(settings.capabilitiesHex) ?: CapabilityHex.parse(CapabilityHex.DEFAULT)!!
+        val base = CapabilityHex.parse(settings.capabilitiesHex) ?: CapabilityHex.parse(CapabilityHex.DEFAULT)!!
+        // Stage 2f: a duty is claimed (and switched on in the client) only when the owner turned it
+        // on and the system lets us do it; otherwise the watch behaves as before.
+        val duties = PhoneDuties.effective(settings.phoneFeatures(), hub.phoneAccess())
+        connectionDuties = duties
+        val capabilities = PhoneDuties.claim(base, duties)
         client = NimragClient(
             ClientConfig(
                 clientId = settings.clientId.toULong(),
@@ -799,6 +842,11 @@ class WatchLink(private val hub: Hub, private val scanner: BleScanner) {
                 firstConnect = first,
                 archive = AlongsideRules.archive(mode),
                 skip = skipKeys(mode),
+                duties = Duties(
+                    notifications = duties.notifications,
+                    music = duties.music,
+                    findPhone = duties.findPhone,
+                ),
             ),
         )
         ready = false
@@ -996,6 +1044,15 @@ class WatchLink(private val hub: Hub, private val scanner: BleScanner) {
                 updateWatch { it.copy(batteryPercent = event.levelPercent.toInt(), batteryAtMs = System.currentTimeMillis()) }
                 log.info("Battery ${event.levelPercent}% (${if (event.report is BatteryReport.Status) "pushed" else "asked"})")
             }
+            // Phone features (stage 2f): the bridge decides; it never logs content.
+            is Event.NotificationSubscription,
+            is Event.NotificationAction,
+            is Event.FindPhoneStart,
+            is Event.FindPhoneStop,
+            is Event.MusicCommand,
+            is Event.MusicRequested,
+            is Event.FindWatch,
+            -> hub.phone.onWatchEvent(event)
             is Event.Anomaly -> log.warn("Anomaly: ${describe(event.kind)} (message ${event.messageId})")
             is Event.Closed -> onClientClosed(event.reason)
         }
@@ -1020,6 +1077,7 @@ class WatchLink(private val hub: Hub, private val scanner: BleScanner) {
         updateWatch { it.copy(link = LinkState.Ready, softwareVersion = version, lastConnectedAtMs = nowMs) }
         log.info("Handshake done, watch software $version, ${event.fileTypes.size} file types")
         feed(Input.RequestBattery)
+        hub.phone.onLinkReady(connectionDuties)
         maybeAutoSync()
         scheduleAutoSync()
     }
@@ -1139,6 +1197,7 @@ class WatchLink(private val hub: Hub, private val scanner: BleScanner) {
         client?.let { runCatching { it.close() } }
         client = null
         ready = false
+        hub.phone.onLinkDown()
         writeChar = null
         currentNotifyId = null
         connectionHasFirst = false
@@ -1312,6 +1371,7 @@ class WatchLink(private val hub: Hub, private val scanner: BleScanner) {
         AnomalyKind.SYNC_NOT_GRANTED -> "the watch did not start the sync we asked for"
         AnomalyKind.GFDI_CLOSED_BY_WATCH -> "the watch closed the GFDI channel"
         AnomalyKind.BATTERY_REQUEST_REFUSED -> "battery request refused or unanswered"
+        AnomalyKind.DUTY_MESSAGE_REFUSED -> "a phone feature message (notification, music or find my watch) was refused or unanswered"
     }
 
     private fun describe(reason: CloseReason): String = when (reason) {

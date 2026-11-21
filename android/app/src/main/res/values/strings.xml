@@ -232,6 +232,67 @@
     <string name="account_sign_out_hint">The phone stops uploading and forgets this account. Your data stays on the server.</string>
     <string name="account_sign_out_yes">Sign out</string>
     <string name="notifications_title">Notifications</string>
+
+    <!-- Phone features -->
+    <string name="phone_features_title">Phone features</string>
+    <string name="phone_features_value_off">All off</string>
+    <string name="phone_features_value_count">%1$d of 3 on</string>
+    <string name="phone_features_intro">What the phone does for the watch besides syncing. Everything is off until you switch it on, and nothing leaves your phone except to your own watch.</string>
+    <string name="phone_group_features">Features</string>
+    <string name="phone_notifications_title">Notifications on the watch</string>
+    <string name="phone_notifications_off">Off</string>
+    <string name="phone_notifications_on">On · all apps except the ones you leave out</string>
+    <string name="phone_notifications_waiting">On · waiting for notification access</string>
+    <string name="phone_music_title">Music control</string>
+    <string name="phone_music_off">Off</string>
+    <string name="phone_music_on">On · shows what plays and controls the player</string>
+    <string name="phone_music_waiting">On · waiting for notification access</string>
+    <string name="phone_find_title">Find my phone</string>
+    <string name="phone_find_off">Off</string>
+    <string name="phone_find_on">On · the watch can make the phone ring</string>
+    <string name="phone_features_footer">Changing a switch reconnects the watch once, so it learns what the phone can do.</string>
+    <string name="phone_notifications_explain">Notifications: your phone\'s notifications appear on the watch, with the title and text, and you can dismiss them from the watch. They go straight to your watch and are never stored or logged by Nimrag.</string>
+    <string name="phone_music_explain">Music: the watch shows the song that plays on your phone and its buttons play, pause, skip and change the volume. This needs notification access too, because that is how Android shows the player to an app.</string>
+    <string name="phone_find_explain">Find my phone: pressing the find-phone button on the watch makes the phone ring loudly and vibrate, even on silent, until you press \"Found it\", the watch cancels, or the time is up.</string>
+    <string name="phone_access_title">Notification access is off</string>
+    <string name="phone_access_body">Android keeps a special switch for apps that read notifications. Notifications and music need it. Turn on \"Nimrag Connect\" on the page that opens; nothing is read until a feature is on.</string>
+    <string name="phone_access_open">Open the setting</string>
+    <string name="phone_access_restricted">If the switch is greyed out, open the app info, tap the three dots and choose \"Allow restricted settings\" (Android does this for apps installed outside the Play Store), then try again.</string>
+    <string name="phone_access_app_info">Open app info</string>
+    <string name="phone_access_manage">Notification access</string>
+    <string name="phone_access_manage_on">On · tap to change it in system settings</string>
+    <string name="phone_fullscreen_note">Android is not letting Nimrag take over the screen, so \"Found it\" appears as a notification you can tap instead.</string>
+    <string name="phone_group_apps">Notifications</string>
+    <string name="phone_apps_title">Apps left out</string>
+    <string name="phone_apps_none">None · every app is shown</string>
+    <plurals name="phone_apps_count">
+        <item quantity="one">%d app stays on the phone</item>
+        <item quantity="other">%d apps stay on the phone</item>
+    </plurals>
+    <string name="phone_apps_footer">Nimrag\'s own notifications never go to the watch. Group summaries, music players and other ongoing notifications are skipped too.</string>
+    <string name="phone_apps_page_title">Apps left out</string>
+    <string name="phone_apps_page_hint">Switch an app on to keep its notifications on the phone only.</string>
+    <string name="phone_apps_loading">Loading apps</string>
+    <string name="phone_apps_empty">No apps found.</string>
+    <string name="phone_apps_no_longer_installed">Not installed any more</string>
+    <string name="phone_apps_left_out">Left out</string>
+    <string name="phone_apps_shown">Shown on the watch</string>
+    <string name="phone_group_find_watch">Find my watch</string>
+    <string name="phone_find_watch_title">Make the watch ring</string>
+    <string name="phone_find_watch_idle">Tap to make the watch ring</string>
+    <string name="phone_find_watch_asking">Asking the watch</string>
+    <string name="phone_find_watch_ringing">The watch is ringing · tap to stop</string>
+    <string name="phone_find_watch_unsupported">This watch does not offer it</string>
+    <string name="phone_find_watch_failed">The watch did not answer · tap to try again</string>
+    <string name="phone_find_watch_not_connected">Connect the watch first</string>
+    <string name="phone_find_watch_footer">Works when the watch is connected. Stop it here or on the watch.</string>
+
+    <!-- Find my phone alert -->
+    <string name="find_phone_channel_name">Find my phone</string>
+    <string name="find_phone_channel_description">Rings and shows \"Found it\" when you use find my phone on the watch.</string>
+    <string name="find_phone_title">Your watch is looking for this phone</string>
+    <string name="find_phone_text">The phone is ringing.</string>
+    <string name="find_phone_found">Found it</string>
     <string name="notifications_value_off">Off · tap to allow</string>
     <string name="settings_about_app">About Nimrag</string>
     <string name="about_value">Version %1$s</string>
