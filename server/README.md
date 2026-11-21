@@ -295,6 +295,66 @@ was seeded already. Passwords and 2FA secrets are random unless given in
 `NIMRAG_SEED_USER_TOTP` (base32); the generated ones are printed once on stdout for whoever ran
 the command, the supplied ones never, and nothing goes to the logs.
 
+## Workouts (stage 4a)
+
+Workouts are built on the web, saved here, written as a FIT workout file when the phone asks for
+it, and sent to the watch by the Android app (file type 128/5). Migration `0013_workouts.sql`; code
+in `src/web_api/workouts.rs`; tests in `tests/workouts.rs`.
+
+Owner side (session cookie; writes need `X-Nimrag: 1`; an admin gets `403`; a workout of another
+user is `404`):
+
+| endpoint | what |
+|---|---|
+| `GET /api/workouts` | `{watch_send: {available, reason}, limits, workouts: [{id, name, sport, steps, duration_s, updated_at, send}]}`, newest change first. `duration_s` is the total when every step has a time (repeats counted), else `null`; `steps` counts every step, those in repeat blocks included |
+| `POST /api/workouts` | create from a body (below); `201` with the detail; at most 200 per user (`409`) |
+| `GET /api/workouts/{id}` | `{id, revision, created_at, updated_at, workout, send}` |
+| `PUT /api/workouts/{id}` | replace the body; `revision` + 1. A queued workout stays queued (the phone sends the new revision); `sent` and `failed` go back to `idle` |
+| `DELETE /api/workouts/{id}` | `204`; a copy already on the watch stays there |
+| `POST /api/workouts/{id}/send` | "Send to watch": queue it. `503` with the reason when this server has no FIT profile; `400` with the reason when the workout cannot be written |
+| `DELETE /api/workouts/{id}/send` | take it out of the queue again (back to `idle`) |
+
+The body is `{name, sport, note?, nodes}`. `sport` is `running`, `cycling`, `walking`, `hiking`,
+`strength` or `other`. A node is a step `{type: "step", intensity, duration, target, note?}` or a
+repeat block `{type: "repeat", count, steps: [step without type]}`. `intensity` is `warmup`,
+`active`, `rest`, `cooldown` or `recovery`. `duration` is `{kind: "open"}`,
+`{kind: "time", seconds}`, `{kind: "distance", meters}`, `{kind: "heart_rate_below", bpm}` or
+`{kind: "heart_rate_above", bpm}`. `target` is `{kind: "none"}`, `{kind: "heart_rate_zone", zone}`,
+`{kind: "heart_rate_range", low_bpm, high_bpm}`, `{kind: "pace", fast_s_per_km, slow_s_per_km}`,
+`{kind: "speed", low_kmh, high_kmh}` or `{kind: "cadence", low, high}`. The limits (also sent in
+`limits`, so the builder keeps to the same ones): 100 steps in the file (a repeat block counts one
+more than its steps), 1 to 20 steps in a block, 2 to 99 repeats, a name of 1 to 63 bytes, a note
+of at most 254 bytes, a step of 1 s to 24 h or 1 m to 500 km, heart rates 30 to 240 bpm, zones 1
+to 5, pace 1:00 to 60:00 per km, speed 0.5 to 100 km/h, cadence 1 to 300; low never above high.
+The first refused value is named in the `400` text.
+
+`send` is `{state, requested_at, finished_at, error}` with `state` `idle`, `queued`, `sent` or
+`failed`. Only `failed` has an `error`: a fixed sentence from the phone (which stage the watch
+refused, with Gadgetbridge's status name; never the workout's content).
+
+Phone side (a device token, `Authorization: Bearer`, like `/api/files`; no CSRF header; the token
+must belong to a user; a cookie is rejected here):
+
+| endpoint | what |
+|---|---|
+| `GET /api/device/workouts` | `{workouts: [{id, name, revision}]}`: the user's queued workouts, oldest request first |
+| `GET /api/device/workouts/{id}/fit` | the FIT file (`application/octet-stream`), made now from the stored body; header `X-Nimrag-Revision` says which revision it was made from. `404` when the workout is not queued (any more); `503` without the profile |
+| `POST /api/device/workouts/{id}/result` | `{revision, ok, error?}` (error cut at 200 characters). Answers `{applied}`: a result for a revision that is no longer the current one is ignored (`applied: false`), so an edit made while the phone was sending is not marked as sent |
+
+**The FIT profile.** The server writes the file with `nimrag_core::fit` and the locally generated
+FIT profile (Garmin data, never redistributed, `docs/LICENSING.md`). A server built without it
+(the default, `NIMRAG_FIT_PROFILE=none`, and the Docker image) can keep workouts but cannot send
+them: `GET /api/workouts` says `watch_send.available: false` with the reason, the web page shows it
+before anyone tries, and `send` and the FIT download answer `503` with
+"this server was built without the FIT profile, so it cannot write workout files for the watch;
+workouts can still be saved here". The phone never needs the profile: it only carries the bytes,
+which is why the public Android build can send workouts. The file is never stored: it is made when
+the phone fetches it.
+
+Workouts are the user's own data: they are in the export (`csv/workouts.csv`) and removed with the
+user. The `X-Nimrag` rule is unchanged for the owner side; `/api/device/` is exempt like
+`/api/files`.
+
 ## Building (sqlx offline)
 
 Queries in the ingest and parse code are checked at compile time (the owner API
