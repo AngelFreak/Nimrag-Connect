@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Button, Card, EmptyState, FilterChips, ListRow, SampleDataChip, TopBar } from '../components';
+import { Button, Card, EmptyState, FilterChips, LinkButton, ListRow, SampleDataChip, TopBar } from '../components';
 import { browserToday } from '../lib/dates';
 import { useIsDesktop, usePageTitle } from '../lib/hooks';
 import { ActivitiesTable, activityHref } from './activities/ActivitiesTable';
@@ -82,7 +82,16 @@ export function ActivitiesPage({ strength = false }: { strength?: boolean }) {
 
   return (
     <>
-      <TopBar variant="large" title={strength ? 'Strength' : 'Activities'} aside={<SampleDataChip sample={sample} />} />
+      <TopBar
+        variant="large"
+        title={strength ? 'Strength' : 'Activities'}
+        aside={
+          <>
+            <SampleDataChip sample={sample} />
+            {strength ? <LinkButton to="/workouts">Workouts</LinkButton> : null}
+          </>
+        }
+      />
       <FilterChips
         label="Filter by type"
         options={TYPE_OPTIONS}

@@ -27,6 +27,7 @@ import { TrainingPage } from './pages/TrainingPage';
 import { TrainingStatusPage } from './pages/TrainingStatusPage';
 import { WatchPage } from './pages/WatchPage';
 import { WorkoutPage } from './pages/WorkoutPage';
+import { WorkoutListPage } from './pages/workouts/WorkoutListPage';
 import { GarminPage } from './pages/profile/GarminPage';
 import { GoalsPage } from './pages/profile/GoalsPage';
 import { PasswordPage } from './pages/profile/PasswordPage';
@@ -117,7 +118,9 @@ export function App() {
           <Route path="hrv" element={<HrvPage />} />
           <Route path="body" element={<BodyPage />} />
           <Route path="calendar/:month?" element={<CalendarPage />} />
+          <Route path="workouts" element={<WorkoutListPage />} />
           <Route path="workouts/new" element={<WorkoutPage />} />
+          <Route path="workouts/:id" element={<WorkoutPage />} />
           <Route path="devices" element={<WatchPage />} />
           <Route path="devices/details" element={<WatchDetailsPage />} />
           <Route path="*" element={<NotFoundPage />} />

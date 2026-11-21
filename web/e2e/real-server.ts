@@ -67,6 +67,8 @@ export interface Fixture {
   runId: string;
   strengthId: string;
   walkId: string;
+  /** A saved workout of the demo user (a warm-up, a repeat block, a cool-down). */
+  workoutId: string;
 }
 
 function alive(pid: number): boolean {

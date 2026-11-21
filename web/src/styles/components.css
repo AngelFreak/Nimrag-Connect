@@ -621,6 +621,8 @@
   font-size: var(--fs-lg);
   font-weight: 500;
   width: 100%;
+  /* A long value (a workout name at 200 % zoom) ends in an ellipsis when the field is not being edited. */
+  text-overflow: ellipsis;
 }
 .field__input::placeholder {
   color: var(--text-2);

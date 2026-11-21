@@ -153,7 +153,39 @@ setup('start the real servers with seeded data', async ({ playwright }) => {
   expect(walk, 'the seed has a walk').toBeDefined();
   const [y, m, d] = today.date.split('-').map(Number) as [number, number, number];
   const night = new Date(Date.UTC(y, m - 1, d - 1)).toISOString().slice(0, 10);
-  const fixture: Fixture = { today: today.date, month: today.date.slice(0, 7), night, runId: String(run?.id), strengthId: String(strength?.id), walkId: String(walk?.id) };
+  // One saved workout for the workout pages: a warm-up, a repeat block, a cool-down. Saving works with
+  // and without the FIT profile (only "send to watch" needs it), so the seed does not depend on the build.
+  const created = await demo.post('/api/workouts', {
+    headers: { 'X-Nimrag': '1' },
+    data: {
+      name: 'Intervals 4 x 400 m',
+      sport: 'running',
+      note: 'Seeded for the page checks',
+      nodes: [
+        { type: 'step', intensity: 'warmup', duration: { kind: 'time', seconds: 600 }, target: { kind: 'heart_rate_zone', zone: 2 } },
+        {
+          type: 'repeat',
+          count: 4,
+          steps: [
+            { intensity: 'active', duration: { kind: 'distance', meters: 400 }, target: { kind: 'pace', fast_s_per_km: 270, slow_s_per_km: 300 } },
+            { intensity: 'recovery', duration: { kind: 'time', seconds: 90 }, target: { kind: 'none' } },
+          ],
+        },
+        { type: 'step', intensity: 'cooldown', duration: { kind: 'open' }, target: { kind: 'none' } },
+      ],
+    },
+  });
+  expect(created.status(), 'saving the seeded workout').toBe(201);
+  const workout = (await created.json()) as { id: number };
+  const fixture: Fixture = {
+    today: today.date,
+    month: today.date.slice(0, 7),
+    night,
+    runId: String(run?.id),
+    strengthId: String(strength?.id),
+    walkId: String(walk?.id),
+    workoutId: String(workout.id),
+  };
   fs.writeFileSync(fixtureFile, JSON.stringify(fixture));
   await demo.dispose();
 });
