@@ -30,7 +30,17 @@ data class BridgeStatus(val link: BridgeLink, val lastSyncAtMs: Long?, val synci
         val Unknown = BridgeStatus(BridgeLink.Unknown, null)
 
         fun of(state: AppState): BridgeStatus =
-            BridgeStatus(linkOf(state), state.sync.lastResult?.finishedAtMs, syncing = state.sync.running)
+            BridgeStatus(linkOf(state), state.sync.lastResult?.finishedAtMs, syncing = syncingOf(state))
+
+        /**
+         * A pull from the watch, or files on their way to the server: the page's data is not new
+         * until those uploads are in. Uploads that wait for a network or failed do not count, so a
+         * stuck queue cannot keep the icon spinning.
+         */
+        fun syncingOf(state: AppState): Boolean {
+            val u = state.uploads
+            return state.sync.running || (u.pending > 0 && !u.waitingForNetwork && u.lastError == null)
+        }
 
         /**
          * No watch is Unknown (nothing to be wrong), pairing is Waiting. For a remembered watch:

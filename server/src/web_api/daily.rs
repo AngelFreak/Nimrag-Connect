@@ -7,6 +7,9 @@
 //! the day per activity type, summed over the types; intensity minutes are
 //! running totals within the local ISO week (Monday start), the per-day value is
 //! the increase over the previous day's last value (a drop counts as a reset).
+//! A counter reading is the total at the END of its interval, so it belongs to the day of
+//! `ts - 1` ([`counter_date`]): the watch writes the finished day's total stamped exactly 00:00,
+//! before it resets (seen 2026-11-21: 4490 at 00:00, then 18 at 01:04).
 //!
 //! Garmin Connect's daily summaries (`connect_daily`, from `import-connect`) are the fallback
 //! for a day, and a metric, that the watch has no data for: stress, body battery, breathing
@@ -910,6 +913,12 @@ pub struct DayStats {
     pub vigorous_min: Option<f64>,
 }
 
+/// The local day a cumulative counter reading counts for: the day its interval ends in, so a
+/// reading stamped exactly at midnight closes the day before (see the module note).
+pub fn counter_date(ctx: &Ctx, ts: i64) -> NaiveDate {
+    ctx.date(ts - 1)
+}
+
 pub fn dates(from: NaiveDate, to: NaiveDate) -> impl Iterator<Item = NaiveDate> {
     std::iter::successors(Some(from), move |d| Some(*d + Duration::days(1)))
         .take_while(move |d| *d <= to)
@@ -929,7 +938,7 @@ pub async fn day_stats(
     type Row = (i64, i64, Option<f64>, Option<f64>, Option<f64>);
     let rows: Vec<Row> = sqlx::query_as(
         "SELECT ts, activity_type, steps, distance_m, active_calories FROM mon_activity
-         WHERE user_id = ? AND ts >= ? AND ts < ?",
+         WHERE user_id = ? AND ts > ? AND ts <= ?",
     )
     .bind(ctx.uid)
     .bind(lo)
@@ -944,7 +953,7 @@ pub async fn day_stats(
         }
     };
     for (ts, ty, steps, dist, kcal) in rows {
-        let e = maxima.entry((ctx.date(ts), ty)).or_default();
+        let e = maxima.entry((counter_date(ctx, ts), ty)).or_default();
         up(&mut e.0, steps);
         up(&mut e.1, dist);
         up(&mut e.2, kcal);
@@ -1077,7 +1086,7 @@ pub async fn intensity_days(
     let start = week_start(from);
     let rows: Vec<(i64, Option<f64>, Option<f64>)> = sqlx::query_as(
         "SELECT ts, moderate_total_min, vigorous_total_min FROM mon_extra
-         WHERE user_id = ? AND ts >= ? AND ts < ? AND (moderate_total_min IS NOT NULL OR vigorous_total_min IS NOT NULL)
+         WHERE user_id = ? AND ts > ? AND ts <= ? AND (moderate_total_min IS NOT NULL OR vigorous_total_min IS NOT NULL)
          ORDER BY ts",
     )
     .bind(ctx.uid)
@@ -1087,7 +1096,7 @@ pub async fn intensity_days(
     .await?;
     let mut last: HashMap<NaiveDate, (Option<f64>, Option<f64>)> = HashMap::new();
     for (ts, m, v) in rows {
-        let e = last.entry(ctx.date(ts)).or_default();
+        let e = last.entry(counter_date(ctx, ts)).or_default();
         e.0 = m.or(e.0);
         e.1 = v.or(e.1);
     }

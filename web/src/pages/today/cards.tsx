@@ -197,6 +197,8 @@ function build(id: HomeCard, t: Today): Built {
     }
     case 'recovery_time': {
       const r = t.recovery_time;
+      // Nothing left: "0m, ready around <now>" reads like a countdown that is stuck.
+      if (r.remaining_s === 0) return { value: 'Recovered', sub: null };
       const ready = fmtTime(r.ready_at, tz);
       return { value: fmtSeconds(r.remaining_s), sub: ready ? `Ready around ${ready}` : null };
     }

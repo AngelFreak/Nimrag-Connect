@@ -137,6 +137,16 @@ describe('Today on a phone', () => {
     expect(document.body.textContent).not.toMatch(/\d{4}-\d{2}-\d{2}/);
   });
 
+  it('says Recovered, not "0m, ready around now", when no recovery time is left', async () => {
+    const base = makeToday();
+    const recovery_time = { ...base.recovery_time, remaining_s: 0, percent_complete: 100, ready_at: '2026-11-21T08:54:00+00:00' };
+    mockApi({ '/api/today': () => json(makeToday({ recovery_time })), '/api/settings': () => json(makeSettings({ home_cards: { order: makeSettings().home_cards.order, hidden: [] } })) });
+    renderPage();
+    const card = (await screen.findByText('Recovery time')).closest('a, .stat') as HTMLElement;
+    expect(within(card).getByText('Recovered')).toBeInTheDocument();
+    expect(within(card).queryByText(/Ready around/)).toBeNull();
+  });
+
   it('keeps the Yesterday and Last 7 days labels short enough for large text', async () => {
     mockApi({ '/api/today': () => json(makeToday()), '/api/settings': () => json(makeSettings()) });
     renderPage();

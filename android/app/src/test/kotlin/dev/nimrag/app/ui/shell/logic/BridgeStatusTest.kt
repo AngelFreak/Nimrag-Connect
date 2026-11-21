@@ -5,6 +5,7 @@ import dev.nimrag.app.model.LinkState
 import dev.nimrag.app.model.Permissions
 import dev.nimrag.app.model.SyncResult
 import dev.nimrag.app.model.SyncState
+import dev.nimrag.app.model.UploadState
 import dev.nimrag.app.model.WatchState
 import java.time.Instant
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -89,6 +90,15 @@ class BridgeStatusTest {
         assertTrue(pulling.syncing)
         assertFalse(idle == pulling)
         assertTrue(pulling.toJson().endsWith(",\"syncing\":true}"))
+    }
+
+    @Test
+    fun `uploads on their way count as syncing, stuck ones do not`() {
+        val base = state(paired(LinkState.Ready), lastSyncMs = 5_000)
+        assertTrue(BridgeStatus.of(base.copy(uploads = UploadState(pending = 2))).syncing)
+        assertFalse(BridgeStatus.of(base.copy(uploads = UploadState(pending = 2, waitingForNetwork = true))).syncing)
+        assertFalse(BridgeStatus.of(base.copy(uploads = UploadState(pending = 2, lastError = "HTTP 502"))).syncing)
+        assertFalse(BridgeStatus.of(base.copy(uploads = UploadState(pending = 0))).syncing)
     }
 
     @Test

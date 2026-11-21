@@ -1059,6 +1059,60 @@ async fn the_days_follow_the_account_zone() {
     assert_eq!(values(&m, "steps")[5], NULL);
 }
 
+#[tokio::test]
+async fn a_counter_stamped_at_midnight_closes_the_day_before() {
+    // As the watch wrote it on 2026-11-21: the finished day's total at exactly 00:00, then the
+    // reset count. The 00:00 reading is the 20th's, not the 21st's (and the 19th's is the 19th's).
+    let e = env_at(cph(2026, 11, 23, 10, 0)).await;
+    let c = e.login().await;
+    e.send(
+        &c,
+        Method::PATCH,
+        "/api/settings",
+        json!({ "timezone": "Europe/Copenhagen" }),
+    )
+    .await;
+    for (ts, steps) in [
+        (cph(2026, 11, 19, 23, 50), 4791),
+        (cph(2026, 11, 20, 0, 0), 4791),
+        (cph(2026, 11, 20, 0, 40), 18),
+        (cph(2026, 11, 20, 23, 56), 4490),
+        (cph(2026, 11, 21, 0, 0), 4490),
+        (cph(2026, 11, 21, 1, 4), 18),
+        (cph(2026, 11, 21, 9, 50), 120),
+    ] {
+        e.exec(&format!(
+            "INSERT INTO mon_activity (ts, activity_type, steps, src) VALUES ({ts}, 6, {steps}, 1)"
+        ))
+        .await;
+    }
+    // A Monday 00:00 reading holds last week's intensity total: it must not land on Monday.
+    for (ts, m) in [
+        (cph(2026, 11, 22, 23, 0), 90.0),
+        (cph(2026, 11, 23, 0, 0), 90.0),
+    ] {
+        e.exec(&format!(
+            "INSERT INTO mon_extra (ts, moderate_total_min, vigorous_total_min, src) VALUES ({ts}, {m}, 0, 1)"
+        ))
+        .await;
+    }
+    let m = e.get(&c, "/api/metrics/steps?range=7d").await;
+    assert_eq!(m["to"], "2026-11-23");
+    assert_eq!(
+        values(&m, "steps")[2..],
+        [n(4791.0), n(4490.0), n(120.0), NULL, NULL]
+    );
+    let d = e.get(&c, "/api/days/2026-11-20").await;
+    assert_eq!(d["steps"], n(4490.0));
+    // Intensity's 7d is the calendar week: the 90 is Sunday's, the new week starts empty.
+    let i = e
+        .get(&c, "/api/metrics/intensity_minutes?range=7d&end=2026-11-22")
+        .await;
+    assert_eq!(values(&i, "moderate")[6], n(90.0));
+    let i = e.get(&c, "/api/metrics/intensity_minutes?range=7d").await;
+    assert_eq!(values(&i, "moderate")[0], NULL);
+}
+
 // ---- dev-seed data ---------------------------------------------------------------------------------
 
 #[tokio::test]

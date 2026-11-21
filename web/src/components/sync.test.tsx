@@ -11,14 +11,15 @@ function setSyncing(next: boolean) {
   window.dispatchEvent(new Event(NATIVE_STATUS_EVENT));
 }
 
-function renderSync() {
-  const client = new QueryClient();
+function renderSync(client = new QueryClient()) {
   return renderHook(() => useSync(), {
     wrapper: ({ children }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>,
   });
 }
 
 const wait = (ms: number) => act(async () => void (await vi.advanceTimersByTimeAsync(ms)));
+/** Lets the refetch after a sync settle (it is a promise, not a timer). */
+const settle = () => wait(0);
 
 describe('useSync in the app', () => {
   beforeEach(() => {
@@ -42,6 +43,7 @@ describe('useSync in the app', () => {
     await wait(30_000);
     expect(result.current.spinning).toBe(true);
     act(() => setSyncing(false));
+    await settle();
     expect(result.current.spinning).toBe(false);
   });
 
@@ -54,12 +56,31 @@ describe('useSync in the app', () => {
     expect(result.current.spinning).toBe(false);
   });
 
-  it('spins for a pull the app started on its own', () => {
+  it('spins for a pull the app started on its own', async () => {
     const { result } = renderSync();
     expect(result.current.spinning).toBe(false);
     act(() => setSyncing(true));
     expect(result.current.spinning).toBe(true);
     act(() => setSyncing(false));
+    await settle();
+    expect(result.current.spinning).toBe(false);
+  });
+
+  it('fetches the data again when a sync ends and spins until it is in', async () => {
+    const client = new QueryClient();
+    let release: () => void = () => {};
+    const invalidate = vi.spyOn(client, 'invalidateQueries').mockImplementation(
+      () => new Promise<void>((resolve) => (release = resolve)),
+    );
+    const { result } = renderSync(client);
+    act(() => setSyncing(true));
+    act(() => setSyncing(false));
+    expect(invalidate).toHaveBeenCalledTimes(1);
+    expect(result.current.spinning).toBe(true);
+    await settle();
+    expect(result.current.spinning).toBe(true);
+    act(() => release());
+    await settle();
     expect(result.current.spinning).toBe(false);
   });
 
@@ -69,6 +90,7 @@ describe('useSync in the app', () => {
     act(() => result.current.sync());
     await wait(1_000);
     act(() => setSyncing(false));
+    await settle();
     expect(result.current.spinning).toBe(false);
   });
 });

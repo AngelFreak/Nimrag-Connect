@@ -13,8 +13,9 @@ const START_GRACE_MS = 15_000;
 /**
  * Sync behaviour of the top bar.
  * In the Android app (`window.NimragApp.syncNow` exists) it asks the app to sync with the
- * watch, and spins for as long as the app reports `syncing` (also for syncs the app starts on
- * its own). In a normal browser it refetches every query from the server.
+ * watch, and spins for as long as the app reports `syncing` (the pull and the uploads after it,
+ * also for syncs the app starts on its own), then refetches the page's data and spins until it
+ * is in. In a normal browser it refetches every query from the server.
  */
 export function useSync(): { sync: () => void; spinning: boolean; native: boolean } {
   const queryClient = useQueryClient();
@@ -33,6 +34,10 @@ export function useSync(): { sync: () => void; spinning: boolean; native: boolea
       window.clearTimeout(grace.current);
     };
   }, []);
+  // When the app's sync (pull and uploads) ends, fetch the page's data again and spin until it is
+  // in: only then does the screen show what the sync brought.
+  const [refreshing, setRefreshing] = useState(false);
+  const wasSyncing = useRef(syncing);
   useEffect(() => {
     syncingNow.current = syncing;
     if (syncing) {
@@ -42,7 +47,14 @@ export function useSync(): { sync: () => void; spinning: boolean; native: boolea
       window.clearTimeout(grace.current);
       setAwaiting(false);
     }
-  }, [syncing]);
+    if (wasSyncing.current && !syncing) {
+      setRefreshing(true);
+      void queryClient.invalidateQueries().finally(() => {
+        if (alive.current) setRefreshing(false);
+      });
+    }
+    wasSyncing.current = syncing;
+  }, [syncing, queryClient]);
   const native = hasNativeSync();
 
   const sync = useCallback(() => {
@@ -72,7 +84,7 @@ export function useSync(): { sync: () => void; spinning: boolean; native: boolea
     });
   }, [queryClient]);
 
-  return { sync, spinning: spinning || awaiting || syncing, native };
+  return { sync, spinning: spinning || awaiting || syncing || refreshing, native };
 }
 
 interface SyncButtonProps {
