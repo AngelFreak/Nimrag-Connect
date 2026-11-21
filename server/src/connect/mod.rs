@@ -545,13 +545,14 @@ mod tests {
             rows,
             vec![
                 (60, Some(25.0), None, Some(70.0), None),
-                (300, Some(0.0), None, None, None), // 0 is a stress value
+                (180, None, Some(-2.0), None, None), // too much motion: the activity reading
+                (300, Some(0.0), None, None, None),  // 0 is a stress value
                 (360, Some(40.0), None, None, None),
                 (420, None, None, Some(65.0), None),
             ],
-            "-1, -2 and null are no stress value; a null level is no body battery"
+            "-1 and null are no stress value; a null level is no body battery"
         );
-        assert_eq!(p.rows, 4);
+        assert_eq!(p.rows, 5);
         assert_eq!(p.last_ts, Some(420));
     }
 

@@ -509,7 +509,7 @@ before the envelope is stored (the rest of the response is kept as it came).
 
 | file | rows | mapping |
 | --- | --- | --- |
-| `stress` | `stress`, one per instant with a value | `stressValuesArray` `[ms, level]` into `stress` (below 0, null and Garmin's -1 "no reading" and -2 "too much motion" are no value); `bodyBatteryValuesArray` `[ms, status, level, version]` into `body_battery` at the same instant (a null level is none). `stress_raw` (the watch's raw reading) and `body_battery_status` (a code, Connect sends a word) stay `NULL`. An instant with neither value is no row. |
+| `stress` | `stress`, one per instant with a value | `stressValuesArray` `[ms, level]` into `stress` (null and Garmin's -1 "no reading" are no value; -2 "too much motion" goes into `stress_raw`, as the watch's own activity reading does); `bodyBatteryValuesArray` `[ms, status, level, version]` into `body_battery` at the same instant (a null level is none). `body_battery_status` (a code, Connect sends a word) stay `NULL`. An instant with neither value is no row. |
 | `heart_rate` | `mon_hr` | `heartRateValues` `[ms, bpm]` (null and 0 are no reading) |
 | `respiration` | `respiration` | `respirationValuesArray` `[ms, brpm]` (-1.0 is no reading); `brpm_raw` stays `NULL` |
 
@@ -525,9 +525,9 @@ the stress average and the time at each level (a level stands for the time to th
 at most 10 minutes), the energy series with its charged, drained, high, low and "now" (the latest
 sample of either source), the heart rate low, high and 5-minute series, breathing (the awake and
 asleep means by the night's start and end, the hourly chart) and the sleep window's lowest heart
-rate and breathing. Notes: a stress reading of -1 or -2 is a gap (no row), so the time it spans
-is not counted as the activity level (the watch gives movement a negative raw reading and an
-activity level) but stands for the reading before it, up to 10 minutes; where Connect and the
+rate and breathing. Notes: a stress reading of -2 (too much motion) counts as the activity level,
+as the watch's negative raw reading does; a -1 is a gap (no stress value), whose time stands for
+the reading before it, up to 10 minutes; where Connect and the
 watch both cover the same period at different instants their rows interleave, so the means weigh
 that period by both sample counts (the time per stress level does not, it follows the clock).
 `system.last_data_ts` still only looks at FIT sources, so Connect's samples never make the data

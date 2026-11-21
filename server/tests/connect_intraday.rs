@@ -327,9 +327,10 @@ async fn import_fills_the_sample_tables_and_a_rerun_and_a_reparse_change_nothing
             .find(|r| r.starts_with(&format!("{t}|{uid}|{ts}|")))
             .unwrap_or_else(|| panic!("no {t} row at {ts}"))
     };
-    // Stress -1 and -2 are no stress value; the body battery at that instant is kept.
+    // Stress -1 is no stress value, -2 (too much motion) the watch's activity reading; the body
+    // battery at that instant is kept.
     assert!(row("stress", at(12, 8, 6)).ends_with("|NULL|NULL|57.0|NULL|connect"));
-    assert!(row("stress", at(12, 8, 9)).ends_with("|NULL|NULL|56.0|NULL|connect"));
+    assert!(row("stress", at(12, 8, 9)).ends_with("|NULL|-2.0|56.0|NULL|connect"));
     // A null body battery level leaves the stress value alone; stress_raw and the status are
     // the watch's own codes, so they stay empty.
     assert!(row("stress", at(12, 8, 15)).ends_with("|40.0|NULL|NULL|NULL|connect"));
@@ -481,15 +482,17 @@ async fn a_day_with_only_connect_samples_gets_a_day_series_and_the_right_figures
     let (e, c) = setup(at(14, 12, 0)).await;
     let d = e.get(&c, "/api/days/2026-11-12").await;
 
-    // Stress: five readings (20, 30, 50, 40, 70); the -1 and the -2 are no readings, the
-    // instant with only a body battery level is no stress sample.
+    // Stress: five readings (20, 30, 50, 40, 70) and the -2 (too much motion), an activity
+    // sample as on the watch; the -1 is no reading, the instant with only a body battery level
+    // is no stress sample.
     let s = &d["stress"];
     assert_eq!(f(&s["average"]), Some(42.0), "{s}");
-    assert_eq!(len(&s["series"]), 5);
+    assert_eq!(len(&s["series"]), 6);
+    assert_eq!(s["series"][2]["level"], "activity");
     assert_eq!(f(&s["series"][1]["stress"]), Some(30.0));
     assert_eq!(s["series"][1]["level"], "low");
-    // 20 stands for 3 minutes; 30 until 08:12 (the gap of the two missing readings, 9 minutes);
-    // 50 and 40 3 each; 70, the last, 3.
+    // 20 stands for 3 minutes; 30 until the motion reading (6 minutes, over the missing one);
+    // the motion reading, 50, 40 and 70, the last, 3 each.
     assert_eq!(
         (
             f(&s["rest_s"]),
@@ -498,7 +501,13 @@ async fn a_day_with_only_connect_samples_gets_a_day_series_and_the_right_figures
             f(&s["high_s"]),
             f(&s["activity_s"])
         ),
-        (Some(180.0), Some(900.0), Some(180.0), Some(0.0), Some(0.0))
+        (
+            Some(180.0),
+            Some(720.0),
+            Some(180.0),
+            Some(0.0),
+            Some(180.0)
+        )
     );
     assert_eq!(s["main_level"], "low");
 

@@ -526,18 +526,21 @@ fn empty_stress(ts: i64) -> Stress {
 }
 
 /// A day of Connect's stress response: `stressValuesArray` ([epoch_ms, stressLevel]; below 0 is
-/// no value) and `bodyBatteryValuesArray` ([epoch_ms, status, level, version], read by the
+/// no value, but -2, too much motion, is the watch's activity reading in `stress_raw`) and `bodyBatteryValuesArray` ([epoch_ms, status, level, version], read by the
 /// descriptor keys) join by instant into `stress` rows. A row has what its source has: the
 /// stress level in `stress` (`stress_raw`, the watch's raw reading, stays empty), the body
 /// battery level in `body_battery` (its status is Connect's word, not the watch's code, so
 /// `body_battery_status` stays empty); an instant with neither is no row.
+/// Connect's stress level for "too much motion to measure".
+const MOTION: f64 = -2.0;
+
 fn intraday_stress(data: &Value, p: &mut Parsed) -> R {
     let stress = one_series(
         data,
         "stressValuesArray",
         "stressValueDescriptorsDTOList",
         "stresslevel",
-        |v| v >= 0.0,
+        |v| v >= 0.0 || v == MOTION,
         p,
     )?;
     let battery = if data.get("bodyBatteryValuesArray").is_some() {
@@ -554,7 +557,13 @@ fn intraday_stress(data: &Value, p: &mut Parsed) -> R {
     };
     let mut rows: BTreeMap<i64, Stress> = BTreeMap::new();
     for (ts, v) in stress {
-        rows.entry(ts).or_insert_with(|| empty_stress(ts)).stress = Some(v);
+        let row = rows.entry(ts).or_insert_with(|| empty_stress(ts));
+        // Too much motion: the watch's own rows give it as a negative raw reading (activity).
+        if v == MOTION {
+            row.stress_raw = Some(v);
+        } else {
+            row.stress = Some(v);
+        }
     }
     for (ts, v) in battery {
         rows.entry(ts)
