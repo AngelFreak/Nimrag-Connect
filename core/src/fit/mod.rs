@@ -33,8 +33,8 @@
 mod decode;
 pub mod encode;
 pub mod interpret;
-pub mod workout;
 pub mod profile;
+pub mod workout;
 
 pub use decode::decode;
 
