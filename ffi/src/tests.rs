@@ -28,6 +28,7 @@ fn config() -> ClientConfig {
             notifications: true,
             music: false,
             find_phone: true,
+            weather: true,
         },
     }
 }
@@ -61,7 +62,8 @@ fn config_converts_every_field() {
         core::Duties {
             notifications: true,
             music: false,
-            find_phone: true
+            find_phone: true,
+            weather: true
         }
     );
     assert_eq!(
@@ -755,6 +757,7 @@ fn a_client_with_find_phone_on_reports_the_watchs_request() {
         notifications: false,
         music: false,
         find_phone: true,
+        weather: false,
     };
     let client = NimragClient::new(cfg);
     // Before the handshake a duty input is ignored and produces nothing.
@@ -765,4 +768,83 @@ fn a_client_with_find_phone_on_reports_the_watchs_request() {
         },
     );
     assert!(step.writes.is_empty());
+}
+
+#[test]
+fn weather_input_and_events_convert() {
+    let c: core::Input = Input::SendWeather {
+        definitions: vec![0x40, 1],
+        records: vec![vec![0, 1], vec![0, 2]],
+    }
+    .into();
+    assert_eq!(
+        c,
+        core::Input::SendWeather {
+            definitions: vec![0x40, 1],
+            records: vec![vec![0, 1], vec![0, 2]],
+        }
+    );
+    assert_eq!(
+        Event::from(core::Event::WeatherRequest {
+            format: 1,
+            cell: Some(core::WeatherCell {
+                lat_tenths: 557,
+                lon_tenths: -126
+            }),
+            hours: 12
+        }),
+        Event::WeatherRequest {
+            format: 1,
+            cell: Some(WeatherCell {
+                lat_tenths: 557,
+                lon_tenths: -126
+            }),
+            hours: 12
+        }
+    );
+    assert_eq!(
+        Event::from(core::Event::WeatherRequest {
+            format: 0,
+            cell: None,
+            hours: 0
+        }),
+        Event::WeatherRequest {
+            format: 0,
+            cell: None,
+            hours: 0
+        }
+    );
+    let results = [
+        (core::WeatherResult::Sent, WeatherResult::Sent),
+        (
+            core::WeatherResult::NotSupported,
+            WeatherResult::NotSupported,
+        ),
+        (core::WeatherResult::Busy, WeatherResult::Busy),
+        (core::WeatherResult::Invalid, WeatherResult::Invalid),
+        (core::WeatherResult::Refused, WeatherResult::Refused),
+        (core::WeatherResult::TimedOut, WeatherResult::TimedOut),
+    ];
+    for (from, want) in results {
+        assert_eq!(
+            Event::from(core::Event::WeatherSent { result: from }),
+            Event::WeatherSent { result: want }
+        );
+    }
+}
+
+#[test]
+fn a_weather_cell_prints_nothing_of_the_position() {
+    let shown = format!(
+        "{:?}",
+        Event::WeatherRequest {
+            format: 1,
+            cell: Some(WeatherCell {
+                lat_tenths: 557,
+                lon_tenths: 126
+            }),
+            hours: 12
+        }
+    );
+    assert!(!shown.contains("557") && !shown.contains("126"), "{shown}");
 }

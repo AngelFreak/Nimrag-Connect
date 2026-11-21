@@ -29,6 +29,8 @@ pub struct Duties {
     pub notifications: bool,
     pub music: bool,
     pub find_phone: bool,
+    /// Answer the watch's weather request (the host claims capability bit 26).
+    pub weather: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
@@ -142,6 +144,32 @@ pub enum UploadStage {
     Data,
 }
 
+/// The watch's position on a 0.1 degree grid (about 10 km), in tenths of a
+/// degree: latitude -900..=900, longitude -1800..=1800. The finest position the
+/// phone and the server ever get; `Debug` prints nothing of it.
+#[derive(Clone, Copy, PartialEq, Eq, uniffi::Record)]
+pub struct WeatherCell {
+    pub lat_tenths: i16,
+    pub lon_tenths: i16,
+}
+
+impl std::fmt::Debug for WeatherCell {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("WeatherCell").finish_non_exhaustive()
+    }
+}
+
+/// How `Input::SendWeather` ended (see `nimrag_core::client::WeatherResult`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
+pub enum WeatherResult {
+    Sent,
+    NotSupported,
+    Busy,
+    Invalid,
+    Refused,
+    TimedOut,
+}
+
 /// How an upload to the watch ended.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
 pub enum UploadResult {
@@ -235,6 +263,13 @@ pub enum Input {
     /// Ask the watch to ring or to stop ringing.
     FindWatch {
         start: bool,
+    },
+    /// The forecast for the watch's last weather request: FIT definition and
+    /// data records as the server made them (no FIT file header). Answered by
+    /// exactly one `Event::WeatherSent`. The content is private: never log it.
+    SendWeather {
+        definitions: Vec<u8>,
+        records: Vec<Vec<u8>>,
     },
     /// Send a file to the watch (a workout is `data_type` 128, `sub_type` 5).
     /// The caller's `upload_id` comes back in `Event::UploadFinished`. The
@@ -360,6 +395,17 @@ pub enum Event {
     MusicRequested,
     FindWatch {
         state: FindWatchState,
+    },
+    /// The watch asks for weather (duty on); already acknowledged. `cell` is
+    /// its position rounded to 0.1 degree, `None` without a usable position.
+    WeatherRequest {
+        format: u8,
+        cell: Option<WeatherCell>,
+        hours: u8,
+    },
+    /// `Input::SendWeather` ended.
+    WeatherSent {
+        result: WeatherResult,
     },
     UploadFinished {
         upload_id: u64,
