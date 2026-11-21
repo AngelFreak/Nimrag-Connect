@@ -120,7 +120,10 @@ impl fmt::Display for EncodeError {
                 message,
                 field,
                 subfield,
-            } => write!(f, "the profile has no subfield {message}.{field}.{subfield}"),
+            } => write!(
+                f,
+                "the profile has no subfield {message}.{field}.{subfield}"
+            ),
             EncodeError::UnknownEnum {
                 message,
                 field,
@@ -457,7 +460,13 @@ impl MessageBuilder {
         }
     }
 
-    fn store(&mut self, num: u8, bt: BaseType, data: Vec<u8>, field: &str) -> Result<(), EncodeError> {
+    fn store(
+        &mut self,
+        num: u8,
+        bt: BaseType,
+        data: Vec<u8>,
+        field: &str,
+    ) -> Result<(), EncodeError> {
         if data.len() > MAX_FIELD_BYTES {
             return Err(EncodeError::FieldTooLong {
                 message: self.name.clone(),
@@ -535,15 +544,13 @@ impl MessageBuilder {
         let (num, info) = self.lookup(field)?;
         let mut data = Vec::new();
         for v in values {
-            data.extend(
-                int_bytes(info.base_type, i128::from(*v)).ok_or_else(|| {
-                    if is_non_numeric(info.base_type) {
-                        self.wrong(field)
-                    } else {
-                        self.range(field)
-                    }
-                })?,
-            );
+            data.extend(int_bytes(info.base_type, i128::from(*v)).ok_or_else(|| {
+                if is_non_numeric(info.base_type) {
+                    self.wrong(field)
+                } else {
+                    self.range(field)
+                }
+            })?);
         }
         if data.is_empty() {
             return Err(self.range(field));
@@ -566,13 +573,12 @@ impl MessageBuilder {
     /// (`"intensity"`, `"warmup"`). The field's profile type names the table.
     pub fn enum_name(&mut self, field: &str, value: &str) -> Result<&mut Self, EncodeError> {
         let (num, info) = self.lookup(field)?;
-        let raw = profile::enum_value(info.type_name, value).ok_or_else(|| {
-            EncodeError::UnknownEnum {
+        let raw =
+            profile::enum_value(info.type_name, value).ok_or_else(|| EncodeError::UnknownEnum {
                 message: self.name.clone(),
                 field: field.to_owned(),
                 value: value.to_owned(),
-            }
-        })?;
+            })?;
         match int_bytes(info.base_type, i128::from(raw)) {
             Some(b) => self.store(num, info.base_type, b, field)?,
             None => return Err(self.range(field)),
@@ -599,13 +605,12 @@ impl MessageBuilder {
                 field: field.to_owned(),
                 subfield: subfield.to_owned(),
             })?;
-        let raw = profile::enum_value(sub.type_name, value).ok_or_else(|| {
-            EncodeError::UnknownEnum {
+        let raw =
+            profile::enum_value(sub.type_name, value).ok_or_else(|| EncodeError::UnknownEnum {
                 message: self.name.clone(),
                 field: field.to_owned(),
                 value: value.to_owned(),
-            }
-        })?;
+            })?;
         match int_bytes(info.base_type, i128::from(raw)) {
             Some(b) => self.store(num, info.base_type, b, field)?,
             None => return Err(self.range(field)),
@@ -800,7 +805,11 @@ mod tests {
         );
         assert_eq!(int_bytes(BaseType::Sint16, -2), Some(vec![0xFE, 0xFF]));
         assert_eq!(int_bytes(BaseType::Sint8, 127), None);
-        assert_eq!(int_bytes(BaseType::Uint8z, 0), None, "zero is invalid in z types");
+        assert_eq!(
+            int_bytes(BaseType::Uint8z, 0),
+            None,
+            "zero is invalid in z types"
+        );
         assert_eq!(int_bytes(BaseType::Uint32z, 32), Some(vec![32, 0, 0, 0]));
         assert_eq!(int_bytes(BaseType::Enum, 255), None);
         assert_eq!(int_bytes(BaseType::Float32, 1), None);
@@ -823,7 +832,11 @@ mod tests {
         );
         assert_eq!(float_bytes(BaseType::Float32, f64::NAN), None);
         assert_eq!(float_bytes(BaseType::Float32, f64::INFINITY), None);
-        assert_eq!(float_bytes(BaseType::Float32, 1.0e300), None, "overflows f32");
+        assert_eq!(
+            float_bytes(BaseType::Float32, 1.0e300),
+            None,
+            "overflows f32"
+        );
         assert_eq!(float_bytes(BaseType::Uint8, 1.0), None);
     }
 
@@ -876,7 +889,7 @@ mod tests {
         assert!(f.complete);
         assert_eq!(f.crc, Crc::Ok);
         assert!(f.header.header_crc_ok);
-        assert_eq!(f.header.header_crc.is_some(), true);
+        assert!(f.header.header_crc.is_some());
         assert_eq!(f.header.protocol_version, 16);
         assert_eq!(f.header.profile_version, 21117);
         assert_eq!(f.header.data_size as usize, file.len() - 16);
@@ -889,7 +902,8 @@ mod tests {
         // Gadgetbridge computes it over the data only; the two agree because the
         // header carries its own CRC.
         let mut w = FitWriter::new();
-        w.push(&RawMessage::new(1).with_field(0, 0x02, vec![9])).unwrap();
+        w.push(&RawMessage::new(1).with_field(0, 0x02, vec![9]))
+            .unwrap();
         let file = w.finish().unwrap();
         let data = &file[14..file.len() - 2];
         let stored = u16::from_le_bytes([file[file.len() - 2], file[file.len() - 1]]);
@@ -911,7 +925,10 @@ mod tests {
         assert_eq!(d.error, None);
         let m = &d.files[0].messages;
         assert_eq!(m.len(), 4);
-        assert_eq!((m[0].local, m[1].local, m[2].local, m[3].local), (0, 1, 0, 1));
+        assert_eq!(
+            (m[0].local, m[1].local, m[2].local, m[3].local),
+            (0, 1, 0, 1)
+        );
         assert_eq!(m[1].fields.len(), 2);
     }
 
@@ -988,7 +1005,9 @@ mod tests {
             MessageBuilder::new("no_such_message").unwrap_err(),
             EncodeError::Unavailable
         );
-        assert!(EncodeError::Unavailable.to_string().contains("no FIT profile"));
+        assert!(EncodeError::Unavailable
+            .to_string()
+            .contains("no FIT profile"));
     }
 
     #[cfg(fit_profile)]
@@ -1016,7 +1035,10 @@ mod tests {
         let msgs = interpret(&d.files[0]);
         assert_eq!(msgs[0].message_name, Some("file_id"));
         assert_eq!(msgs[0].get("type").unwrap().enum_label, Some("workout"));
-        assert_eq!(msgs[0].get("manufacturer").unwrap().enum_label, Some("garmin"));
+        assert_eq!(
+            msgs[0].get("manufacturer").unwrap().enum_label,
+            Some("garmin")
+        );
         assert_eq!(msgs[0].number("serial_number"), Some(1.0));
         assert_eq!(msgs[0].number("time_created"), Some(977_000_000.0));
         assert_eq!(msgs[1].message_name, Some("record"));
@@ -1104,11 +1126,17 @@ mod tests {
     fn invalid_values_and_subfield_scales_are_written_as_the_profile_says() {
         let mut m = MessageBuilder::new("workout_step").unwrap();
         m.invalid("target_value").unwrap();
-        m.sub_scaled("duration_value", "duration_time", 600.0).unwrap();
+        m.sub_scaled("duration_value", "duration_time", 600.0)
+            .unwrap();
         let raw = m.build();
         let by = |n: &str| {
             let (num, _) = profile::field_by_name(raw.global, n).unwrap();
-            raw.fields.iter().find(|f| f.num == num).unwrap().data.clone()
+            raw.fields
+                .iter()
+                .find(|f| f.num == num)
+                .unwrap()
+                .data
+                .clone()
         };
         assert_eq!(by("target_value"), vec![0xFF; 4]);
         assert_eq!(by("duration_value"), 600_000u32.to_le_bytes().to_vec());

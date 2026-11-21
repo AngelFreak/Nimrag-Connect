@@ -141,13 +141,27 @@ pub enum Duration {
 pub enum Target {
     None,
     /// Zone 1 to 5 of the watch's own heart-rate zones.
-    HeartRateZone { zone: u8 },
-    HeartRateRange { low_bpm: u16, high_bpm: u16 },
+    HeartRateZone {
+        zone: u8,
+    },
+    HeartRateRange {
+        low_bpm: u16,
+        high_bpm: u16,
+    },
     /// A pace range in seconds per kilometre; `fast` is the smaller number.
-    Pace { fast_s_per_km: f64, slow_s_per_km: f64 },
-    Speed { low_kmh: f64, high_kmh: f64 },
+    Pace {
+        fast_s_per_km: f64,
+        slow_s_per_km: f64,
+    },
+    Speed {
+        low_kmh: f64,
+        high_kmh: f64,
+    },
     /// Steps (or revolutions, cycling) per minute.
-    Cadence { low: u16, high: u16 },
+    Cadence {
+        low: u16,
+        high: u16,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -162,7 +176,10 @@ pub struct Step {
 pub enum Node {
     Step(Step),
     /// The steps run `count` times in all.
-    Repeat { count: u16, steps: Vec<Step> },
+    Repeat {
+        count: u16,
+        steps: Vec<Step>,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -208,9 +225,7 @@ impl Workout {
                         return bad(format!("a repeat runs {REPEAT_MIN} to {REPEAT_MAX} times"));
                     }
                     if steps.is_empty() || steps.len() > MAX_BLOCK_STEPS {
-                        return bad(format!(
-                            "a repeat block holds 1 to {MAX_BLOCK_STEPS} steps"
-                        ));
+                        return bad(format!("a repeat block holds 1 to {MAX_BLOCK_STEPS} steps"));
                     }
                     for s in steps {
                         s.validate()?;
@@ -723,29 +738,56 @@ mod tests {
             let steps = named(&msgs, "workout_step");
             // 0: warmup 10 min, heart-rate zone 2
             assert_eq!(steps[0].number("message_index"), Some(0.0));
-            assert_eq!(steps[0].get("intensity").unwrap().enum_label, Some("warmup"));
-            assert_eq!(steps[0].get("duration_type").unwrap().enum_label, Some("time"));
+            assert_eq!(
+                steps[0].get("intensity").unwrap().enum_label,
+                Some("warmup")
+            );
+            assert_eq!(
+                steps[0].get("duration_type").unwrap().enum_label,
+                Some("time")
+            );
             assert_eq!(steps[0].number("duration_time"), Some(600.0));
-            assert_eq!(steps[0].get("target_type").unwrap().enum_label, Some("heart_rate"));
+            assert_eq!(
+                steps[0].get("target_type").unwrap().enum_label,
+                Some("heart_rate")
+            );
             assert_eq!(steps[0].number("target_hr_zone"), Some(2.0));
             assert_eq!(
                 steps[0].get("weight_display_unit").unwrap().enum_label,
                 Some("kilogram")
             );
             // 1: 400 m at 4:00-5:00 per km
-            assert_eq!(steps[1].get("intensity").unwrap().enum_label, Some("active"));
+            assert_eq!(
+                steps[1].get("intensity").unwrap().enum_label,
+                Some("active")
+            );
             assert_eq!(steps[1].number("duration_distance"), Some(400.0));
-            assert_eq!(steps[1].get("target_type").unwrap().enum_label, Some("speed"));
+            assert_eq!(
+                steps[1].get("target_type").unwrap().enum_label,
+                Some("speed")
+            );
             // 1000/300 = 3.333 m/s low, 1000/240 = 4.167 m/s high, in mm/s: 3333 and 4167
             assert_eq!(steps[1].number("custom_target_speed_low"), Some(3.333));
             assert_eq!(steps[1].number("custom_target_speed_high"), Some(4.167));
             // 2: recovery 90 s, open target with value 0
-            assert_eq!(steps[2].get("intensity").unwrap().enum_label, Some("recovery"));
-            assert_eq!(steps[2].get("target_type").unwrap().enum_label, Some("open"));
+            assert_eq!(
+                steps[2].get("intensity").unwrap().enum_label,
+                Some("recovery")
+            );
+            assert_eq!(
+                steps[2].get("target_type").unwrap().enum_label,
+                Some("open")
+            );
             assert_eq!(steps[2].number("target_value"), Some(0.0));
             // 4: cooldown, open duration (no value), heart-rate range 100-130 stored +100
-            assert_eq!(steps[4].get("intensity").unwrap().enum_label, Some("cooldown"));
-            assert_eq!(steps[4].get("duration_type").unwrap().enum_label, Some("open"));
+            assert_eq!(
+                steps[4].get("intensity").unwrap().enum_label,
+                Some("cooldown")
+            );
+            assert_eq!(
+                steps[4].get("duration_type").unwrap().enum_label,
+                Some("open")
+            );
             assert!(steps[4].get("duration_value").is_none());
         }
 
@@ -799,25 +841,45 @@ mod tests {
             assert_eq!(steps[1].get("intensity").unwrap().enum_label, Some("rest"));
             let file = encode(&w, 1).unwrap();
             let d = decode(&file);
-            assert_eq!(raw(&d.files[0], 27, 0, 2), Some(240u32.to_le_bytes().to_vec()));
-            assert_eq!(raw(&d.files[0], 27, 1, 2), Some(220u32.to_le_bytes().to_vec()));
+            assert_eq!(
+                raw(&d.files[0], 27, 0, 2),
+                Some(240u32.to_le_bytes().to_vec())
+            );
+            assert_eq!(
+                raw(&d.files[0], 27, 1, 2),
+                Some(220u32.to_le_bytes().to_vec())
+            );
         }
 
         #[test]
         fn cadence_is_halved_for_running_only() {
-            for (sport, want) in [(Sport::Running, (80.0, 90.0)), (Sport::Cycling, (160.0, 180.0))] {
+            for (sport, want) in [
+                (Sport::Running, (80.0, 90.0)),
+                (Sport::Cycling, (160.0, 180.0)),
+            ] {
                 let mut w = sample();
                 w.sport = sport;
                 w.nodes = vec![Node::Step(step(
                     Intensity::Active,
                     Duration::Open,
-                    Target::Cadence { low: 160, high: 180 },
+                    Target::Cadence {
+                        low: 160,
+                        high: 180,
+                    },
                 ))];
                 let msgs = round_trip(&w);
                 let s = named(&msgs, "workout_step")[0];
                 assert_eq!(s.get("target_type").unwrap().enum_label, Some("cadence"));
-                assert_eq!(s.number("custom_target_cadence_low"), Some(want.0), "{sport:?}");
-                assert_eq!(s.number("custom_target_cadence_high"), Some(want.1), "{sport:?}");
+                assert_eq!(
+                    s.number("custom_target_cadence_low"),
+                    Some(want.0),
+                    "{sport:?}"
+                );
+                assert_eq!(
+                    s.number("custom_target_cadence_high"),
+                    Some(want.1),
+                    "{sport:?}"
+                );
             }
         }
 
@@ -871,7 +933,10 @@ mod tests {
             }
             let memo = &msgs[4];
             assert_eq!(memo.number("part_index"), Some(0.0));
-            assert_eq!(memo.get("mesg_num").unwrap().enum_label, Some("workout_step"));
+            assert_eq!(
+                memo.get("mesg_num").unwrap().enum_label,
+                Some("workout_step")
+            );
             assert_eq!(memo.number("parent_index"), Some(0.0));
             assert_eq!(memo.number("field_num"), Some(8.0));
             // The memo's data is the whole note and a NUL, as uint8z elements.
@@ -882,7 +947,10 @@ mod tests {
             want.push(0);
             assert_eq!(data, want);
             // The step after the note keeps counting.
-            assert_eq!(named(&msgs, "workout_step")[1].number("message_index"), Some(1.0));
+            assert_eq!(
+                named(&msgs, "workout_step")[1].number("message_index"),
+                Some(1.0)
+            );
         }
 
         #[test]
