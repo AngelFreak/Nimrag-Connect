@@ -10,29 +10,33 @@ The finished product: an Android app that pairs with the Instinct 2 without Garm
 | --- | --- | --- | --- |
 | 0 Protocol | 0a | Static protocol map (`docs/protocol/`) | Complete |
 | | 0b | Live captures: reconnect, activity, settings | Complete |
-| | 0b | Live captures: night sync, fresh pairing | **Open** (night: recorder running; pairing: needs owner) |
+| | 0b | Live captures: night sync, fresh pairing | Night: no longer needed for the data (the app's own syncs bring the night files; sleep stages match the watch to the minute, 2026-11-20). Fresh pairing (a watch with no bond): **open** |
 | | 0c | `/core` framing + `tools/decode` | Complete |
 | | Gate 0 | Report | Reported 2026-11-19 |
 | 1 Server | 1a | FIT decoder | Complete |
 | | 1b | FIT profile (generated locally, never committed) | Complete |
 | | 1c | Server ingest, store, tokens, `reparse` | Complete |
-| | 1d | Parsers: activities, monitoring, sleep, HRV, metrics | Complete (sleep/HRV/SpO2 await a night capture) |
+| | 1d | Parsers: activities, monitoring, sleep, HRV, metrics | Complete; sleep verified on real nights (2026-11-20); cumulative counters read per the interval they close (2026-11-21); SpO2 not yet seen in real data |
 | | 1e | Garmin export importer | Complete (FIT only) |
 | | Gate 1 | USB copy uploads, parses, reparses identically | **Passed** 2026-11-19 |
 | 2 Android sync | 2a | sans-IO protocol client + capture replay | Complete |
 | | 2p | Port Gadgetbridge's Garmin work: survey, device catalogue (≈197 models), protocol diff against our captures | Mostly done: port list, protocol diff, catalogue (193 models + sync status), battery; sleep stages wait for the night capture |
 | | 2b | FFI crate (UniFFI) + Android Gradle project | Complete |
-| | 2c | Foreground service, BLE link, pairing without Garmin Connect | Built 2026-11-19 (debug 0.2.0); live test with the watch pending (owner) |
-| | 2d | Phone storage, archive only after safe storage, upload queue | Built 2026-11-19; live test pending |
-| | 2e | Time duty + native Devices and sync screen + sync log | Built 2026-11-19; live test pending |
+| | 2c | Foreground service, BLE link, pairing without Garmin Connect | Live since 2026-11-19 (0.2.3) on the owner's Pixel 9a with the Instinct 2; pairing reuses an existing bond. Not tried: a watch with no bond |
+| | 2d | Phone storage, archive only after safe storage, upload queue | Live: files stored, archived after storage and uploaded within seconds to the deployed server (since 2026-11-20) |
+| | 2e | Time duty + native Devices and sync screen + sync log | Live: time sent every sync, shareable sync log; Watch tab redesigned in 0.6.0 |
 | | 2f | Further companion duties, one at a time, ported from Gadgetbridge where it has them: GPS assist (setting, the only Garmin call), weather, notifications, music, find my phone | Not Started |
 | | 2g | Garmin Connect too, for owners who want both: **Alongside** (phone side, both apps share the watch, Nimrag copies, Connect archives) now; **Forward** (server uploads activities to Garmin Connect), approved, after 3a | Alongside: built, live test pending; Forward: server and web built, tested against a fake Garmin only |
-| | Gate 2 | A week of normal wear: no manual steps, no lost or duplicated files; counts and hashes against a USB copy | — |
+| | Gate 2 | A week of normal wear: no manual steps, no lost or duplicated files; counts and hashes against a USB copy | **In progress**: syncing unattended every 15 min since 2026-11-20; the week ends about 2026-11-27, then the USB comparison |
 | 3 Web | 3a | JSON API, web login (password + optional passkey), device tokens created in the web UI (since 2026-11-20 issued only by the app's sign-in; the web lists and signs out phones), generated TS types | Done (7eb0ea7; passkeys later) |
 | | 3b | Web scaffold: Vite/React/TS, TanStack Query, design system, PWA, embedded in the server binary, Docker image | Done (Docker image builds and serves, 162 MB) |
-| | 3c–3m | Pages 1–11 of the brief (Today … Desktop extras) | Done (pages wired to the API; 52 Playwright tests incl. axe on a seeded server); live data not yet seen |
-| | 3n | Android shell: web view with native bottom bar, offline via PWA cache | Done (0.4.0; not yet tried against a real server) |
-| | Gate 3 | Every page from real data, "unavailable" shown correctly, accessibility check | — |
+| | 3c–3m | Pages 1–11 of the brief (Today … Desktop extras) | Done; on real data since the server was deployed (2026-11-20), plus Garmin-style status pages (training status, HRV, sleep), metric detail pages and maps |
+| | 3n | Android shell: web view with native bottom bar, offline via PWA cache | Done (0.4.0); in daily use against the deployed server |
+| | 3o | Local server inside the app (personal flavor, offline data) | Spike works on the Pixel 8a; not in use |
+| | 3p | App sign-in with the accounts (fingerprint or password unlock) | Done (0.5.0); fingerprint unlock not yet verified on a phone |
+| | 3q | New data shows up soon: alarm-driven auto sync, refetch after uploads | Done (0.5.1); verified live 2026-11-21 (syncs every 15 min through the night, page refreshes after a sync) |
+| | 3r | Live use, 0.6.x: metric detail pages, Watch/Profile redesign, Connect daily history, maps, sync icon, day-total fix | Done (0.6.0–0.6.2, 2026-11-20/21); see "Live use (2026-11-20/21)" |
+| | Gate 3 | Every page from real data, "unavailable" shown correctly, accessibility check | **In progress**: pages run on real data; the accessibility check has only run on seeded data |
 | 4 Writing + ops | 4a | FIT encoder + workout builder, sent to the watch via the phone (encoder and upload path ported from Gadgetbridge) | Not Started |
 | | 4b | Scheduled backups + documented restore test | Not Started |
 | | 4c | Export: originals + CSV per data type | Not Started |
@@ -55,7 +59,7 @@ Every phase ends with an update to `docs/ARCHITECTURE.md` and a gate report (eng
 **Goal**: snoop logs for fresh pairing, normal sync, sync after activity, sync after night, settings change
 **Success Criteria**: logs stored under `private/captures/` (git-ignored), scrubbed copies under `fixtures/`
 **Tests**: n/a
-**Status**: Partly complete. Done: CAP-1 reconnect + manual sync, CAP-2 activity sync, CAP-3 settings change (all decoded with 0 unknown frames). Open: sync after a night (live recorder running), fresh pairing (needs the owner). Scrubbed fixtures are synthetic, built in code.
+**Status**: Partly complete. Done: CAP-1 reconnect + manual sync, CAP-2 activity sync, CAP-3 settings change (all decoded with 0 unknown frames). Sync after a night: no longer needed for the data, since the app's own syncs bring the night files and the sleep stages match the watch to the minute (2026-11-20). Open: fresh pairing of a watch with no bond (needs the owner). Scrubbed fixtures are synthetic, built in code.
 
 ## Stage 0c: /core framing + tools/decode
 **Goal**: sans-IO frame codec (COBS, CRC-16, message ids) in /core; CLI decodes snoop logs / live adb stream
@@ -89,7 +93,7 @@ Workflow as described at the top of this file.
 **Status**: Complete
 
 ## Stage 1d: parsers (activities, monitoring, sleep, HRV, metrics)
-**Status**: Complete (sleep/HRV/SpO2 unverified on real files until a night capture)
+**Status**: Complete. Sleep verified on real nights from the app (2026-11-20: a `sleep_levels` row is the stage of the period ending at its ts); cumulative monitoring counters count for the day of `ts - 1` (2026-11-21, the watch stamps the finished day's totals at 00:00); SpO2 not yet seen in real files.
 ## Stage 1e: Garmin export importer
 **Status**: Complete (FIT only; TCX/GPX/JSON counted, not stored — owner decision pending)
 ## Gate 1
@@ -103,7 +107,10 @@ Workflow as described at the top of this file.
 
 # Phase 2: Android sync
 
-## Where work stopped (2026-11-19, end of day)
+## Where work stopped (updated 2026-11-21)
+- **Now:** the owner's Instinct 2 syncs to their Pixel 9a every 15 minutes, unattended, and the files reach the deployed server within seconds. App 0.6.2 is the current pre-release. Phase 3 is in daily use; Gate 2's week of wear runs until about 2026-11-27. Details of the last two days: "Live use (2026-11-20/21)" at the end of the plan.
+- **Next candidates (owner to pick):** scheduled backups (4b); data gaps (19 Nov transition day, intraday Connect data for recent days, SpO2); companion duties (2f); workouts to the watch (4a); accessibility pass for Gate 3.
+- History of this section, oldest first:
 - Done and committed: phase 0 decoding, phase 1 (gate 1 passed on a USB copy), stage 2a (protocol client), 2b (Android build of core), most of 2p (Gadgetbridge port list, protocol diff, device catalogue with sync status, battery parser), the 5052 DST fix (Q-TIME-2), every sleep summary kept.
 - Next: the owner tests debug 0.2.0 (stages 2c–2e built: pairing through the companion-device dialog, link, sync, storage, uploads, screens) with the watch; fix what the live test shows. Pairing replaces the Garmin Connect pairing. Rows 16 (first-connect events), 8 (plain GFDI, reopen after a watch-side close), 22 (5009 FileAvailable) and 28 (battery: 5023 and `Input::RequestBattery`) are ported (2026-11-19, second machine without `private/` captures: the private replay was skipped for all four, so run it before 2c; neither 5009 nor 5023 occurs in the captures).
 - 0.2.1 (2026-11-19): the owner's first try on their own phone (Garmin Connect installed and connected) did not pair; no log yet. 0.2.1 reuses an existing Bluetooth bond and never removes one it did not create (pairing failure or Forget used to remove Garmin Connect's bond), shows why pairing failed, explains the Garmin Connect clash with a Force-stop route, adds Share log, and uses the repo logo as launcher icon. Open: does the watch accept us over Garmin Connect's bond with Connect force-stopped, and does `first_connect` on a reused bond do harm.
@@ -244,7 +251,7 @@ Base: Gadgetbridge commit `7257742b` (local copy in `private/re/gadgetbridge`, g
 4. Parser parity: port the FIT interpretation rules marked `2p` in the port list (rows 40 and 42; row 41 is a comparison only) into `core/src/derive`, by field name through `core::fit::profile`, never from Gadgetbridge's generated tables.
 **Success Criteria**: every ported file has the attribution header and a `docs/PORTED.md` row; the catalogue recognises the Instinct 2 (product 3888) exactly as our captures show; the private replay and all tests still pass; nothing from Gadgetbridge's generated FIT profile (`FitCodeGenerator/src/main/resources/fit_profile.json`, generated `fit/messages/Fit*`, `fit/enums/*`, `NativeFITMessages`, `assets/workouts/exercises/garmin.json`) is committed; every row marked `2p` below is either done or moved to a later stage with a reason.
 **Tests**: catalogue lookups (known ids, unknown id → generic Garmin); a parity test per ported parser rule over our real files (private) and synthetic files (committed); for every later-stage port, an integration test through `Client::handle` (the real entry point), not only a unit test of the codec.
-**Status**: In Progress (survey and protocol diff done; catalogue in progress; parser parity not started)
+**Status**: Mostly done (port list, protocol diff, catalogue with 193 models and their sync status, battery); parser parity not started; sleep stages were solved from real nights instead (2026-11-20)
 
 ### Port list
 
@@ -344,7 +351,7 @@ From the 2b review: an in-app licence screen with the AGPL source offer (§6), t
 **Goal**: the app pairs with the watch on its own, keeps a link in a foreground service, and drives `NimragClient` over it.
 **Success Criteria**: on the owner's phone the app bonds with the Instinct 2 (watch in "Pair phone" mode), reaches `HandshakeDone`, answers the time request, reconnects by itself after the watch leaves and comes back, and survives the screen being off for an hour.
 **Tests**: unit tests (JVM, `app/src/test`) for the DST pair, the capability hex parser, characteristic-pair choice and the write queue; the live checks above by the owner.
-**Status**: In Progress (built 2026-11-19; live test with the owner pending)
+**Status**: Live since 2026-11-19 22:30 (0.2.3, Pixel 9a, Instinct 2 firmware 17.22): the companion association plus Garmin Connect's existing bond (its Nearby devices permission off); link setup hardened in 0.4.2. Not tried: pairing a watch that has no bond.
 
 Design (integrator, 2026-11-19; contract file `android/app/src/main/kotlin/dev/nimrag/app/model/AppState.kt`):
 - Built: after review, pairing first creates a CompanionDeviceManager association (system dialog) so the service may restart in the background and on the watch's presence (`WatchPresenceService`); without one, a refused background start posts "Open Nimrag Connect to reconnect". A removed bond shows `LinkState.BondLost` and stops retrying. `first_connect` is charged only on connections that reached `HandshakeDone`.
@@ -360,7 +367,7 @@ Design (integrator, 2026-11-19; contract file `android/app/src/main/kotlin/dev/n
 **Goal**: every downloaded file is durable on the phone before the watch may archive it, then reaches the server exactly once.
 **Success Criteria**: kill the app between `FileDownloaded` and upload: the file is on disk, not archived twice, and uploaded on the next start; the server receives each file once (dedupe by SHA-256).
 **Tests**: JVM unit tests for the store's write path (temp, fsync, rename), the upload backoff and the network rule.
-**Status**: In Progress (built 2026-11-19)
+**Status**: Live: since the server was deployed (2026-11-20) every sync's files are stored, archived on the watch after storage and uploaded within seconds; an auto sync is one 128/32 monitoring file plus one 128/58 device file. Not yet seen live: a long outage of the server (backoff), a large activity file.
 
 Design (integrator, 2026-11-19):
 - Store: `filesDir/watch/<sha256>.fit`, written to a temp file, `FileOutputStream.fd.sync()`, renamed, directory fsynced; a row in SQLite (`android.database.sqlite`, no Room): `files(sha256 PK, size, data_type, sub_type, file_index, file_number, watch_timestamp, received_at, uploaded_at, attempts, next_attempt_at, last_error)`. Only after the row is committed does the engine send `FileStored`; any failure → `FileStoreFailed`. Bytes already stored (same hash) count as stored.
@@ -372,7 +379,7 @@ Design (integrator, 2026-11-19):
 **Goal**: the native app UI: Watch (scan, pair, link, battery, forget), Sync (sync now, progress, last result, stored files and upload state, log) and Settings (account and server, network rule, auto-sync interval, capability mask, about and licences). Time duty = the `Now` above (the client answers 5052).
 **Success Criteria**: the owner can pair, see the link and battery, start a sync, watch files arrive and upload, and configure the server without adb.
 **Tests**: Compose previews with a fake controller; manual check on the phone.
-**Status**: In Progress (built 2026-11-19)
+**Status**: Live: time sent before every sync, sync log shared from the app; in 0.6.0 the Watch tab became one page with sub-pages (states other than "connected and idle" checked only in Compose previews).
 
 Design (integrator, 2026-11-19): Jetpack Compose + Material 3 (dynamic colour, light and dark), one activity, bottom bar with the three screens; the UI reads `AppState` and calls `WatchController` only. Runtime permissions (`BLUETOOTH_SCAN` with `neverForLocation`, `BLUETOOTH_CONNECT`, `POST_NOTIFICATIONS`) are asked for on the Watch screen with a short reason. Settings → About shows the version, the AGPL-3.0-or-later notice with the source link (`https://github.com/AngelFreak/Nimrag-Connect`) and the licences of the bundled libraries (UniFFI MPL-2.0, JNA Apache-2.0, AndroidX/Compose and kotlinx-coroutines Apache-2.0, and the Rust crates linked into `libnimrag_ffi.so` with their licences), which covers the 2b review note for the public debug builds.
 
@@ -410,10 +417,11 @@ Design (integrator, 2026-11-19): Jetpack Compose + Material 3 (dynamic colour, l
 
 **Success Criteria**: core tests: archive false never emits 5008 in any path (including retries and stale confirmations); skip keys suppress download and are counted; archive true unchanged (all existing tests pass untouched). Live: with Connect's permission on and Alongside set, both apps stay connected, Connect still shows new data, and Nimrag stores the same files.
 **Tests**: `core/tests/client_synthetic.rs` cases for archive false / skip; Android unit tests for the copied-key store and mode switch; live test by the owner.
-**Status**: Alongside built (0.3.0, live test pending); Forward Not Started (approved, after 3a)
+**Status**: Alongside built (0.3.0, live test pending; the owner runs Nimrag only). Forward: server and web built (night of 2026-11-19), tested against a fake Garmin only.
 
 ## Gate 2
 A week of normal wear syncs with no manual steps and no lost or duplicated files; file counts and hashes compared against a USB copy of the watch (note: the watch cuts monitoring/metrics files per sync, so compare at the level of files the watch lists, plus a USB copy taken at the end of the week).
+**Status**: In progress. Unattended syncs every 15 minutes since 2026-11-20 (the owner's log of 2026-11-21 shows one every 15 minutes from 00:27 to 07:17, 0 failed). The week ends about 2026-11-27; then the USB copy and the comparison.
 
 # Phase 3: web interface
 
@@ -432,13 +440,13 @@ Every page works at 390 px and at desktop width, uses the brief's design system 
 - Types: Rust structs are the only definition; ts-rs writes them to `web/src/api/generated/`, and a test fails when the committed files are stale.
 - `nimrag-server dev-seed --data-dir DIR` fills an empty data directory with 120 days of plausible sample rows in the derived tables (marked sample) for development, screenshots and the Playwright test; it refuses a directory that holds any uploaded file.
 **Tests**: API integration tests through the router; auth tests; generated types compile in /web
-**Status**: In Progress
+**Status**: Done (7eb0ea7, hardened after a security review); accounts with 2FA replaced the single owner login (see "Multi-user"); passkeys not done.
 
 ## Stage 3b: web scaffold
 **Goal**: /web with Vite, React, TypeScript, TanStack Query; uPlot for series; MapLibre GL JS with self-hosted PMTiles (no third-party tile servers); PWA with service worker + IndexedDB cache; frontend embedded in the server binary; Docker image
 **Contract**: tokens from the design canvas (background #0F1417, card #171E22, raised #12181C, line #243037/#2A353B, text #E8EDEE / #9AA7AC, link #7DBBFF, metric colours: energy #4FD1B5, sleep #A594FF, heart #FF6B6B, steps #F2D45C, stress/warn #FFB066, zones #5B8DBE/#4FD1B5/#F2D45C/#FFA24D/#FF6B6B), Inter + Space Grotesk self-hosted (no Google Fonts at runtime), components (card, stat tile, ring, series chart on uPlot, zone bars, chips, segmented control, top bars with back / previous / next, bottom nav Today · Activities · Health · Strength, desktop sidebar layout from the web dashboard), a component gallery route for review, the login page, routing for every page as a stub. The server embeds `web/dist` (rust-embed) and serves it with an SPA fallback; the Dockerfile builds the web app first.
 **Tests**: build in CI; Playwright smoke test against the real server binary
-**Status**: In Progress
+**Status**: Done; the Docker image builds the web app and embeds it (deployed 2026-11-20).
 
 ## Stages 3c–3m: pages (in the brief's order)
 **Today page structure (owner, 2026-11-19, from screenshots of their Garmin Connect home, kept in `private/design/garmin-home/`; structure only, in our design system and our words, no Garmin names such as "Body Battery"):**
@@ -453,7 +461,7 @@ Every page works at 390 px and at desktop width, uses the brief's design system 
 3c Today · 3d Activities list + detail (map, stats, HR zones, laps) · 3e Strength session (edit sets, compare to previous) · 3f Sleep night (+ last 7 nights) · 3g Day view (HR, stress, energy; prev/next day) · 3h Health trends (HRV vs personal range, RHR, breathing, SpO2, sleep score; 7 d / 4 w / 3 m / 1 y) · 3i Movement · 3j Training (recovery time, 7-day load vs target, load by intensity, VO2 max as max MET × 3.5 labelled derived) · 3k Body (weight trend, manual measurements) · 3l Calendar · 3m Desktop extras (overview, activities table, strength progress, compare and reports, devices, storage and backups)
 - **Status pages** (after Garmin Connect's layout, information only): Training status (Current / 4w / 12w / 6m, a timeline with one coloured segment per day, a list of runs of equal status), HRV status (1d / 7d / 4w, 7-day averages against the balanced range with a marker per status, overnight toggle, a card per day) and Sleep score (1d / 7d / 4w / 1y, score line, time-asleep bars, avg / avg highest / avg lowest). Served by `GET /api/training/status`, `/api/hrv` and `/api/sleep/history`; routes `/training/status`, `/hrv` and `/sleep?range=`. Training status codes verified so far: 1, 4, 5, 7, 8 (0 = no status); others show as "Status N".
 **Tests per page**: renders from real synced data; "unavailable" states; keyboard reachable controls; labelled charts with text summaries; contrast ≥ 4.5:1
-**Status**: Not Started
+**Status**: Done (night of 2026-11-19, 52 Playwright tests incl. axe on a seeded server). On real data since 2026-11-20, then reworked from the owner's phone reviews: Garmin-style status pages (training status timeline, HRV baseline, sleep score and duration), metric detail pages behind the Today tiles (0.6.0), value axes on every chart, maps from the server's own tiles.
 
 ## Stage 3n: Android shell
 **Goal**: the app shows the web interface in an embedded web view with a native bottom bar; offline viewing from the PWA cache; Devices and sync stays native
@@ -463,7 +471,7 @@ Every page works at 390 px and at desktop width, uses the brief's design system 
 - The app dispatches `nimrag:status` on `window` when the link state or last sync changes, and `nimrag:navigate` with `detail.path` when a native tab is tapped. Since 0.5.1 also `nimrag:data` (no detail) after new watch data reached the server (stage 3q).
 - Web: with `NimragApp.native`, the web bottom bar is hidden (the native one shows Today · Activities · Health · Strength · Watch), the watch icon calls `openWatch()` instead of linking to /devices, the router follows `nimrag:navigate`, and route changes call `onRoute(path)` so the native bar highlights the right tab.
 - Watch tab = the existing native Watch, Sync and Settings screens, restyled to the canvas's Devices design and tokens.
-**Status**: Android shell built (0.4.0, versionCode 7); checks pass; web side (`NimragApp` consumers) is a separate builder; live check against the real web app pending.
+**Status**: Done (0.4.0); in daily use against the deployed server. The web view reloads itself when the server has a newer web build (0.5.1); the bridge status carries `syncing` (0.6.1, 0.6.2).
 **Android notes (2026-11-19)**: tab taps send `nimrag:navigate` with path `/`, `/activities`, `/health`, `/strength` (the web router must map `/strength` to `/activities?type=strength`); `onRoute` accepts both forms. `status()` link mapping: no watch = unknown, pairing / Waiting / Connecting = waiting, Ready = connected, Offline / BondLost / unsupported model / Bluetooth permission or adapter off = problem. The bridge script is injected with `addDocumentStartJavaScript` for the server origin when the web view supports DOCUMENT_START_SCRIPT, else on page start and finish (a page that reads `NimragApp` very early can then miss it). Offline: the service worker serves cached pages; with no network the web view also prefers its HTTP cache; with no cached page the native "Server unreachable" overlay shows (a main-frame network error or HTTP 502 to 504). Service workers need a secure context: https, or `localhost` / `127.0.0.1`; a plain-http LAN address has no offline cache.
 
 ## Stage 3o: local server on the phone (spike, personal flavor only)
@@ -476,15 +484,16 @@ Every page works at 390 px and at desktop width, uses the brief's design system 
 ## Stage 3p: app sign-in with the accounts (Android, 0.5.0)
 **Goal**: the app signs in with the multi-user server: native sign-in, silent token, unlock by fingerprint or password, the web app opens signed in.
 **Design**: see `android/README.md`, "Signing in". Server address + username + password + code → `/api/app/login`; the token goes to the upload worker, the device secret into the Keystore (fingerprint-bound copy and a password copy), the session cookie into `CookieManager`. Session gone → native unlock (`/api/app/resume` or `/api/app/unlock`); a revoked secret or a refused upload token wipes everything and shows the sign-in. Web: `NimragApp.sessionExpired()` replaces the login page inside the app. Manual token entry removed. Sign out revokes the phone on the server.
-**Status**: built; verified on the Pixel 8a against a local server: sign-in, signed-in web view, Settings account card, a web 401 landing on Unlock, unlock by password (wrong then right), a revoked phone landing on Unlock with the failure text and "Use a different account", sign-out (server token revoked, session gone) and Settings, "Sign in" opening the sign-in screen. Not yet verified on a device: the fingerprint unlock (no fingerprint is enrolled on the test phone), the upload-401 path (covered only by the unit-tested policy, `UploadPolicy`, and code review) and the personal flavor's offline local copy without an account.
+**Status**: Done (0.5.0); verified on the Pixel 8a against a local server and in use on the owner's Pixel 9a: sign-in, signed-in web view, Settings account card, a web 401 landing on Unlock, unlock by password (wrong then right), a revoked phone landing on Unlock with the failure text and "Use a different account", sign-out (server token revoked, session gone) and Settings, "Sign in" opening the sign-in screen. Not yet verified on a device: the fingerprint unlock (no fingerprint is enrolled on the test phone), the upload-401 path (covered only by the unit-tested policy, `UploadPolicy`, and code review) and the personal flavor's offline local copy without an account.
 
 ## Stage 3q: new data shows up soon (Android 0.5.1)
 **Problem** (owner, 2026-11-20): new watch data (Body Battery etc.) took hours to show. Files reached the server seconds after a phone sync, but phone to watch syncs ran at 09:27, 13:01 and 15:52 UTC with auto sync = 60 min.
 **Fix**: (1) the auto-sync wake-up is an `AlarmManager.setAndAllowWhileIdle(ELAPSED_REALTIME_WAKEUP)` alarm (`engine/AutoSyncAlarm.kt`, no exact-alarm permission) delivered to `AutoSyncReceiver` (`goAsync`), which runs `WatchLink.onAutoSyncAlarm()` on the link's thread: sync when due (`LinkRules.shouldStartAutoSync`, wall-clock last sync, never while one runs or was just asked for), hurry a reconnect that waits out its (uptime) delay, set the next alarm (`LinkRules.nextAutoSyncDelayMs`). Backstop: the same due-check runs after the handshake, after every step of the client (any watch event) and when the interval changes. The alarm is cancelled for Off (0), when the service stops and on forget. Default interval 15 min (the Settings card already offered it). (2) Opening the app (`ON_RESUME`, `WatchController.appOpened()`) starts a sync when the link is ready and the last finished sync is older than 5 minutes (`LinkRules.shouldSyncOnOpen`; auto-sync Off stays off); `ServiceStartGate` is untouched. (3) After an upload pass that took at least one file, and (personal flavor) after the local server ingested files, `AppState.dataVersion` is bumped and the shell runs `window.dispatchEvent(new CustomEvent('nimrag:data'))` in the page; `web/src/dataRefresh.ts` debounces 2 s and calls `queryClient.invalidateQueries()`, and refetches stale active queries when the page becomes visible again.
-**Status**: built; unit tests (JVM and vitest) pass. Not verified: a real sync across deep sleep (no watch on the test phone), the alarm firing in Doze, and the page refresh inside the app after a real upload.
+**Status**: Done (0.5.1). Verified live 2026-11-21: the owner's log shows an auto sync every 15 minutes through the night (the alarm keeps firing while the phone is idle; Doze itself not confirmed), and the page showed the new data after a sync (Energy 78 → 76 after the 09:53 sync).
 
 ## Gate 3
 Each page renders from real synced data, shows "unavailable" correctly for missing metrics, and passes an accessibility check.
+**Status**: In progress. Every page runs on the owner's real data (watch files plus the imported Garmin Connect history) and was reviewed on phones at 100 % text size; the axe check has only run on a seeded server.
 
 # Phase 4: writing to the watch and operations
 
@@ -529,7 +538,16 @@ Final report: what works, what was verified and how, what is still unknown.
 - Activity records (added 2026-11-20): `DIR/records/<id>_<offset>.json` (pages of the connector's `get_activity_fit_messages` with `record`, `time_in_zone` and `zones_target`) is optional. For an activity file with pages, the importer keeps the columns of `activity_records` (time, position in degrees, heart rate, speed, altitude, distance, cadence, temperature) and the `time_in_zone` messages (seconds per HR zone, as a watch FIT file) as a `records` member of the activity's envelope, so Route, Heart rate, Elevation and Time in heart rate zones fill like a watch activity and survive reparse. Fields are found by FIT definition number (the connector's decoder lacks parts of the profile) and scaled with the profile's factors when it did not name them. An activity imported earlier without records becomes a second blob with the same `connect:<id>` key that outranks it (more rows); the old one stays, hidden by `activities_current`. Zone boundaries and zones computed from heart rate are not stored.
 - Mapped onto the existing tables (training status and load, HRV with baselines, resting HR, VO2 max, sleep, activities with sessions, laps and strength sets); new: `sleep_sessions` stage totals and `daily_totals` (steps and calories per day, used when a day has no minute data). Migration 0011 also rebuilds `files` so its `source` CHECK accepts `connect`.
 **Status**: done and tested on synthetic fixtures; dry run on a scratch copy of the real history showed training status runs from May to November, a year of sleep nights, 28 days of HRV with baselines and the activity list.
-**Open**: the real history has no night to check Connect's sleep instants against the watch-verified night of 2026-11-19/20 (it was pulled before that night); the instants were checked against the HRV local strings instead. Date-only rows sit at local midnight, so a DST change inside the imported range moves nothing but is unverified on real data; a user who changes zone and re-imports gets a second set of blobs (the zone is part of the blob). Records and zones need the pull of `records/` first (a pull in progress gives them for those activities only; re-run the import afterwards). Not run against the live database.
+**Open**: the real history has no night to check Connect's sleep instants against the watch-verified night of 2026-11-19/20 (it was pulled before that night); the instants were checked against the HRV local strings instead. Date-only rows sit at local midnight, so a DST change inside the imported range moves nothing but is unverified on real data; a user who changes zone and re-imports gets a second set of blobs (the zone is part of the blob). Records and zones need the pull of `records/` first (a pull in progress gives them for those activities only; re-run the import afterwards). Run against the live database for the owner's user on 2026-11-20 (backup first), re-run with activity records and zones, and again with the daily summaries (below).
+**Daily summaries (2026-11-20, migration 0012)**: `daily_stats/YYYY-MM.json` (Connect's day totals: steps, distance, floors, intensity minutes, heart rate range, stress average, body battery, breathing) go into `connect_daily`; a page falls back to it per metric per day only when the watch has no row of that metric that day. 365 days imported live. Known artefact: on the first day of watch data (2026-11-19, watch rows only from 21:06) the watch's fragment wins over Connect's full day.
+
+## Live use (2026-11-20/21)
+- **0.6.0** (2026-11-20 evening): value axes on every chart; metric detail pages behind the Today tiles (`/metrics/<key>`) from a clean-room spec (`docs/design/clean-room/metric-detail-spec.md`); Watch tab as one page with sub-pages; Profile page in the web app.
+- **Training load tile** reads the newest training status row that has a load (the watch writes today's row with a status only).
+- **Maps**: `serve --tiles-dir DIR` (or `NIMRAG_TILES_DIR`) serves `*.pmtiles` to signed-in users with range requests; the web app draws routes on a Protomaps basemap and needs MapLibre's worker URL set explicitly (fixed 2026-11-20). The owner's extract covers the areas of their routes (git-ignored `tiles/`); a route elsewhere has no basemap until the extract is redone.
+- **0.6.1 / 0.6.2**: the sync icon spins while the app pulls from the watch and uploads, then until the page has fetched the new data; recovery time 0 reads "Recovered".
+- **Day totals across midnight (2026-11-21)**: the watch writes the finished day's cumulative totals stamped exactly 00:00 before it resets, so today showed yesterday's steps. Cumulative counters (steps, distance, calories, intensity minutes) now count for the day of `ts - 1`.
+- **Open**: SpO2 has no readings yet; intraday Connect data for imported days (their Day views have no charts); training status, load, recovery and VO2 max change only when the watch writes its metrics file (after an activity), which is expected.
 
 # Appendix: contracts and reviewer notes
 
