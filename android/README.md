@@ -108,9 +108,9 @@ live in `ui/watch/logic` with unit tests; the shared rows, group, banner and dia
 
 ## Phone features (stage 2f, built, live test pending)
 
-The Watch tab has a "Phone features" page with four switches, **all off by default**:
-notifications on the watch, music control, find my phone and weather (see "Weather" below), plus a
-"Find my watch" button.
+The Watch tab has a "Phone features" page with five switches, **all off by default**:
+notifications on the watch, music control, find my phone, GPS assist and weather (see "Weather"
+below), plus a "Find my watch" button.
 Everything here is ported from Gadgetbridge and *inferred (Gadgetbridge)* until it has been tried on
 the owner's Instinct 2; only the unit tests (core byte-exact frames, ffi conversions, the Kotlin
 rules) are verified.
@@ -141,6 +141,21 @@ rules) are verified.
 - **Music.** The watch follows the phone's active media session (the one that plays, else the one with
   a track), shows title, artist, state, position and volume, and its buttons play, pause, skip, seek
   and change the volume (`MusicBridge`, `MusicRules`).
+- **GPS assist.** The "GPS assist" switch makes the watch's request for satellite data (a web request
+  under `/ephemeris/`) answerable, so the watch finds GPS faster. The Nimrag **server** downloads the
+  file from Garmin (`GET /api/device/gps-assist`, see `server/README.md`; this is Nimrag's only
+  contact with Garmin and the server has an off switch, `NIMRAG_GPS_ASSIST=off`); the phone only
+  talks to that server, with the device token and the upload network rule (Wi-Fi unless "allow mobile
+  data" is on), never to Garmin, and the token never follows a redirect. The switch claims capability
+  bits 10 (CONNECTIQ_HTTP) and 88 (HTTP_RAW_RESOURCE_REQUEST) only while it is on (not 28: the EPO
+  messages are not built), and the client is built with `Duties.gps_assist`. With it on, **every other
+  web request the watch makes is refused** (nothing is forwarded; the core's firewall) and logged as
+  host and path only, never the query. Where the bytes come from (`engine/gps/GpsAssist`,
+  `engine/gps/logic`, tested): the phone's own copy when it is under 4 hours old; else the server
+  (10 s wait); else a copy under 3 days old; else no answer (the core then replies "timed out"). After
+  each sync, copies of 4 hours or more are refreshed from the server so the watch's next ask is quick.
+  A file the core refuses is dropped from the phone's copy. The page shows when satellite data last
+  reached the watch. Copies live in the app's private `files/gps-assist/` (up to 8 paths).
 - **Privacy.** Notification, music and reply content only passes through memory on its way to the
   watch: never logged (log lines say what happened, not what or from whom), never stored, never
   uploaded; the types that carry it print nothing of it (`toString`/`Debug`).
@@ -150,7 +165,7 @@ rules) are verified.
 
 **To try on the watch** (each line is one of the owner's checks; none is verified yet):
 
-1. Phone features: all three switches are off; watch behaviour and sync are as before.
+1. Phone features: all switches are off; watch behaviour and sync are as before.
 2. Switch Notifications on, grant Notification access: the watch reconnects once; send yourself a
    message: it shows on the watch with title and text; dismiss it on the watch: it goes from the shade.
 3. Leave one app out: its notifications stay on the phone only.
@@ -161,9 +176,38 @@ rules) are verified.
 6. "Make the watch ring" on the Phone features page rings the watch and stops it.
 7. Switch everything off again: the watch reconnects once and sends nothing more.
 
+**To try GPS assist** (needs a server with `NIMRAG_GPS_ASSIST` not `off`, the phone signed in to it,
+and the watch connected; none of this is verified yet):
+
+1. GPS assist is off after install; the Phone features page says "Off", and the log shows no web
+   request activity from the watch.
+2. Switch it on: the watch reconnects once (the Share log gets "GPS assist: on"). The page says
+   "On · the watch finds GPS faster" and "Last sent to the watch: Not yet".
+3. Wait a few minutes with the watch connected, or open an outdoor activity so it looks for GPS. Then
+   open Share log and look for one of:
+   - "GPS assist: the watch asked for satellite data, answered from the server" followed by
+     "the satellite data reached the watch" (or "the watch already had the current satellite data"):
+     the Instinct 2 asks in the clear and the whole chain works. The page now shows "Last sent: just now".
+     Run the activity outdoors from a cold start and compare the time to the first fix with GPS assist
+     off (switch it off, reconnect, repeat on another day).
+   - "Refused a web request from the watch: a request it sent encrypted": the watch asks, but its
+     request is encrypted for Garmin (Q-COMP-2); a local proxy cannot read it, so GPS assist cannot work
+     on this watch this way. Not a bug in the phone. Note the lines (they carry no query) and switch the
+     feature off.
+   - "Refused a web request from the watch: <host><path>" for a host that is not `api.gcs.garmin.com`:
+     the watch asks for something else; nothing was forwarded. The line shows what (path cleaned,
+     no query), which tells us what else it wants.
+   - "the watch asked for the file in a way this version does not do yet (file access)": the watch wants
+     the file through the multi-link file-access path, which is not built; report it.
+   - "there is none to give": the server could not be reached (check "Test the server" in Settings)
+     and the phone has no copy under 3 days old.
+4. On the server: `nimrag-server` logs "gps-assist: fetched N bytes from upstream" once per 4 hours at
+   most; with `NIMRAG_GPS_ASSIST=off` the endpoint answers 404 and the phone logs the "none to give" line.
+5. Switch GPS assist off again: the watch reconnects once and the Share log shows no more satellite lines.
+
 ## Weather (stage 2f, built, live test pending)
 
-The Phone features page has a fourth switch, **Weather on the watch, off by default**, with one
+The Phone features page also has a switch for weather, **Weather on the watch, off by default**, with one
 sentence under it: your Nimrag server gets the forecast from Open-Meteo for your area, rounded to
 about 10 km. Like the rest of 2f it is ported from Gadgetbridge and *inferred (Gadgetbridge)* until
 the watch has shown a forecast from us; only the unit tests (core byte-exact frames through

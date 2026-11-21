@@ -25,6 +25,7 @@ impl From<ClientConfig> for core::ClientConfig {
                 music: c.duties.music,
                 find_phone: c.duties.find_phone,
                 weather: c.duties.weather,
+                gps_assist: c.duties.gps_assist,
             },
         }
     }
@@ -151,6 +152,19 @@ impl From<core::WeatherResult> for WeatherResult {
     }
 }
 
+impl From<core::GpsAssistOutcome> for GpsAssistOutcome {
+    fn from(o: core::GpsAssistOutcome) -> Self {
+        match o {
+            core::GpsAssistOutcome::Sent => GpsAssistOutcome::Sent,
+            core::GpsAssistOutcome::NotModified => GpsAssistOutcome::NotModified,
+            core::GpsAssistOutcome::Unavailable => GpsAssistOutcome::Unavailable,
+            core::GpsAssistOutcome::Refused => GpsAssistOutcome::Refused,
+            core::GpsAssistOutcome::Failed => GpsAssistOutcome::Failed,
+            core::GpsAssistOutcome::NeedsFileAccess => GpsAssistOutcome::NeedsFileAccess,
+        }
+    }
+}
+
 impl From<core::UploadResult> for UploadResult {
     fn from(r: core::UploadResult) -> Self {
         match r {
@@ -239,6 +253,10 @@ impl From<Input> for core::Input {
                 sub_type,
                 data,
             },
+            Input::GpsAssistData { id, body, etag } => {
+                core::Input::GpsAssistData { id, body, etag }
+            }
+            Input::GpsAssistUnavailable { id } => core::Input::GpsAssistUnavailable { id },
             Input::Disconnected => core::Input::Disconnected,
         }
     }
@@ -397,6 +415,22 @@ impl From<core::Event> for Event {
                 upload_id,
                 result: result.into(),
             },
+            core::Event::GpsAssistRequest {
+                id,
+                path_and_query,
+                if_none_match,
+            } => Event::GpsAssistRequest {
+                id,
+                path_and_query,
+                if_none_match,
+            },
+            core::Event::GpsAssistDone { id, outcome } => Event::GpsAssistDone {
+                id,
+                outcome: outcome.into(),
+            },
+            core::Event::HttpRequestRefused { host, path } => {
+                Event::HttpRequestRefused { host, path }
+            }
             core::Event::Anomaly { kind, message_id } => Event::Anomaly {
                 kind: kind.into(),
                 message_id,

@@ -21,7 +21,8 @@ were not run in the build session.
 8. [Firmware updates over USB](#firmware-updates-over-usb)
 9. [Map tiles](#map-tiles)
 10. [Weather for the watch](#weather-for-the-watch)
-11. [Troubleshooting](#troubleshooting)
+11. [GPS assist (satellite data for the watch)](#gps-assist-satellite-data-for-the-watch)
+12. [Troubleshooting](#troubleshooting)
 
 ## Install
 
@@ -327,6 +328,20 @@ To switch it off for the whole server, set `NIMRAG_WEATHER: "off"` (or start wit
 The server needs the locally generated FIT profile to write the answer, so the default build and the
 Docker image answer `503` ("without the FIT profile") and the phone then shows no weather. Details
 are in "Weather" in [`server/README.md`](../server/README.md).
+
+## GPS assist (satellite data for the watch)
+
+With the "GPS assist" switch on the phone's Phone features page, the watch gets satellite orbit
+data and finds GPS faster. The phone asks your server, and your server downloads the file from
+Garmin (`api.gcs.garmin.com`, no login, about 66 KB, cached for 4 hours). This is the **only**
+request Nimrag ever makes to Garmin, and nothing about you is sent with it (no token, no unit id,
+no position). The phone switch is off by default.
+
+To make the server refuse to contact Garmin at all, set `NIMRAG_GPS_ASSIST=off` (or start with
+`serve --no-gps-assist`) and restart: `/api/device/gps-assist` then answers 404 and the phone's
+switch simply finds nothing. In Docker add `NIMRAG_GPS_ASSIST: "off"` under `environment:`. The
+downloaded files sit in `<data dir>/gps-assist/`; the folder is a cache, is not backed up, and can be
+deleted. Details in "GPS assist" in [`server/README.md`](../server/README.md).
 
 ## Troubleshooting
 

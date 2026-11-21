@@ -41,7 +41,7 @@ instead of appending, in both the sidecar and `uploads`.
 
 ```
 nimrag-server serve [--data-dir DIR] [--listen 127.0.0.1:8080] [--log-json]
-                    [--insecure-cookies] [--trusted-proxy CIDR[,CIDR...]] [--tiles-dir DIR]
+                    [--insecure-cookies] [--trusted-proxy CIDR[,CIDR...]] [--tiles-dir DIR] [--no-gps-assist]
                     [--backup-dir DIR [--backup-every 24h] [--backup-keep 7]]
 nimrag-server token create --name NAME [--user USERNAME]   # for tools and scripts; phones get theirs by signing in to the app
 nimrag-server token list
@@ -406,6 +406,42 @@ phone never needs the profile, which is why the public Android build can carry w
 [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Open-Meteo's free service is for
 non-commercial use; a self-hosted household server fetching a few forecasts an hour is well inside
 it, but read their [terms](https://open-meteo.com/en/terms) if you run it for others.
+
+## GPS assist (stage 2f)
+
+The watch can find GPS faster with satellite orbit data (Garmin's "ephemeris"). The phone asks this
+server for it; the server fetches it from Garmin; the phone never talks to Garmin. That one request
+is the only contact Nimrag has with Garmin, so it has an off switch: `NIMRAG_GPS_ASSIST=off` (also
+`0`, `false`, `no`) or `serve --no-gps-assist`. On otherwise; any other value stops the server at
+start. The phone asks only when its own "GPS assist" switch (off by default) is on. `src/gps_assist.rs`.
+
+| endpoint | what |
+|---|---|
+| `GET /api/device/gps-assist?path=<path?query>` (device token) | the file Garmin serves at `https://api.gcs.garmin.com<path>`; `path` is URL-encoded and must start with `/ephemeris/`. Headers: `ETag` (Garmin's), `Age` (seconds since the copy was fetched), `Content-Type: application/octet-stream`. `If-None-Match` with that tag (a list, `W/` and `*` count) gives `304` |
+
+Errors: `400` for a path outside the whitelist (only letters, digits and `/ . _ - , = & ? % +`, at
+most 512 bytes, one `?`, no `..`, no `//`, no `%2e` or `%2f`; the rule is the core's
+`is_safe_path_and_query`), `401` without a device token, `404` when the switch is off or Garmin has
+no such file, `502` when Garmin does not answer or answers wrongly. The host is fixed in the server;
+the phone cannot choose it.
+
+* **Fetch**: `reqwest`, 20 s timeout, no redirects, body cut at 1 MiB (refused, not truncated).
+  One fetch at a time. The server does not check the file's contents; the Rust core of the phone
+  does (tar of RxNetworks or Sony CPE data) before the watch sees it.
+* **Cache**: one pair of files per distinct path in `<data dir>/gps-assist/` (`<sha256 of the path>.bin`
+  and `.json` with the tag and fetch time; the path and its query are not stored), fresh for 4 hours
+  (Garmin's `max-age=14400`), then revalidated with `If-None-Match` and replaced when the tag changed.
+  At most 32 paths are kept. It is a cache: it is not in backups and can be deleted at any time.
+  The API-wide `Cache-Control: no-store` stays on the response, so the phone applies the 4 h rule itself.
+* **Log**: only "fetched N bytes" and failures, never the path, its query or a token.
+* The file seen once by hand: `GET /ephemeris/cpe/sony/lle?coverage=WEEKS_1&constellations=GPS,GLONASS,GALILEO,QZSS`
+  answers `200` without login, a 66 KB `application/x-tar` with `CPE_GPS.BIN`, `CPE_GAL.BIN`,
+  `CPE_GLO.BIN`, `CPE_QZSS.BIN`, an `etag` and `cache-control: max-age=14400`. The exact URL the
+  Instinct 2 asks for is not known yet (`docs/protocol/OPEN-QUESTIONS.md` Q-COMP-1), which is why
+  any `/ephemeris/` path is passed on.
+
+Tests: `tests/gps_assist.rs` (a fake Garmin on 127.0.0.1; fetch, cache, 304, revalidation, switch,
+token, whitelist, failures, the cap, redirects) and the unit tests in `src/gps_assist.rs`.
 
 ## Building (sqlx offline)
 

@@ -1,7 +1,8 @@
 //! Message layouts of the phone-side companion duties of stage 2f:
 //! notifications (5033-5036), find my phone / find my watch (5039, 5040 and the
-//! `find_my_watch` protobuf service), music control (5041, 5042, 5049) and
-//! weather (5014, 5011, 5012).
+//! `find_my_watch` protobuf service), music control (5041, 5042, 5049), weather
+//! (5014, 5011, 5012) and the GPS-assist download (the watch's HTTP-over-protobuf
+//! requests: `http`, `agps`, `xfer`).
 //!
 //! Only layouts live here: pure build and parse functions that never panic on
 //! peer data. The client state around them (which notification is known, which
@@ -12,10 +13,13 @@
 //! watch confirms it. See docs/PORTED.md and docs/LICENSING.md. The individual
 //! files name their Gadgetbridge sources.
 
+pub mod agps;
 pub mod find;
+pub mod http;
 pub mod music;
 pub mod notification;
 pub mod weather;
+pub mod xfer;
 
 /// `s` cut to at most `max` bytes, never inside a character. `max == 0` means
 /// "no limit" (what the watch sends when it has none).

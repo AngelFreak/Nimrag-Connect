@@ -29,7 +29,7 @@ private fun config() = ClientConfig(
     firstConnect = false,
     archive = true,
     skip = emptyList(),
-    duties = Duties(notifications = false, music = false, findPhone = false, weather = false),
+    duties = Duties(notifications = false, music = false, findPhone = false, weather = false, gpsAssist = false),
 )
 
 private fun now(monoMs: ULong) = Now(

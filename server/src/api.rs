@@ -51,6 +51,8 @@ pub struct AppState {
     pub(crate) export_gate: Arc<tokio::sync::Semaphore>,
     /// Weather for the watch: Open-Meteo client, kill switch and cache (see `weather.rs`).
     pub weather: Arc<crate::weather::Weather>,
+    /// GPS assist: the satellite-data endpoint for the phone (`--no-gps-assist` switches it off).
+    pub(crate) gps_assist: Arc<crate::gps_assist::GpsAssist>,
     clock: Arc<dyn Fn() -> i64 + Send + Sync>,
 }
 
@@ -73,6 +75,7 @@ impl AppState {
                 crate::web_api::export::MAX_EXPORTS,
             )),
             weather: Default::default(),
+            gps_assist: Arc::new(crate::gps_assist::GpsAssist::new(Default::default())),
             clock: Arc::new(system_now),
         }
     }
@@ -104,6 +107,12 @@ impl AppState {
     /// point it at a fake).
     pub fn with_weather(mut self, cfg: crate::weather::WeatherConfig) -> Self {
         self.weather = Arc::new(crate::weather::Weather::new(cfg));
+        self
+    }
+
+    /// Configure GPS assist (the kill switch; tests point the upstream at a fake).
+    pub fn with_gps_assist(mut self, cfg: crate::gps_assist::GpsAssistConfig) -> Self {
+        self.gps_assist = Arc::new(crate::gps_assist::GpsAssist::new(cfg));
         self
     }
 

@@ -81,6 +81,15 @@ class EngineSettings(context: Context) {
         get() = prefs.getBoolean(PHONE_WEATHER, false)
         set(value) = prefs.edit().putBoolean(PHONE_WEATHER, value).apply()
 
+    var phoneGpsAssist: Boolean
+        get() = prefs.getBoolean(PHONE_GPS_ASSIST, false)
+        set(value) = prefs.edit().putBoolean(PHONE_GPS_ASSIST, value).apply()
+
+    /** When satellite data last reached the watch (unix ms); 0 = never. */
+    var gpsAssistLastSentMs: Long
+        get() = prefs.getLong(GPS_ASSIST_LAST_SENT, 0L)
+        set(value) = prefs.edit().putLong(GPS_ASSIST_LAST_SENT, value).apply()
+
     /** Apps whose notifications stay on the phone (package names). A copy: the stored set is never edited in place. */
     var excludedApps: Set<String>
         get() = prefs.getStringSet(EXCLUDED_APPS, null)?.toSet().orEmpty()
@@ -91,6 +100,8 @@ class EngineSettings(context: Context) {
         music = phoneMusic,
         findPhone = phoneFindPhone,
         weather = phoneWeather,
+        gpsAssist = phoneGpsAssist,
+        gpsAssistLastSentMs = gpsAssistLastSentMs,
         excludedApps = excludedApps,
     )
 
@@ -203,6 +214,8 @@ class EngineSettings(context: Context) {
         const val PHONE_MUSIC = "phone_music"
         const val PHONE_FIND = "phone_find_phone"
         const val PHONE_WEATHER = "phone_weather"
+        const val PHONE_GPS_ASSIST = "phone_gps_assist"
+        const val GPS_ASSIST_LAST_SENT = "gps_assist_last_sent_ms"
         const val EXCLUDED_APPS = "phone_excluded_apps"
         const val WATCH_ADDRESS = "watch_address"
         const val WATCH_NAME = "watch_name"

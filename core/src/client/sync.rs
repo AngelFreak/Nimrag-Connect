@@ -372,6 +372,7 @@ impl SyncCycle {
             | Kind::FindWatch
             | Kind::WeatherDefinition
             | Kind::WeatherData
+            | Kind::GpsAssistReply
             | Kind::UploadCreate
             | Kind::UploadRequest
             | Kind::UploadData

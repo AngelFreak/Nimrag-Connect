@@ -2,7 +2,7 @@ package dev.nimrag.app.engine.phone.logic
 
 /*
  * The capability bit numbers (GNCS 6, ADVANCED_MUSIC 7, FIND_MY_PHONE 8, FIND_MY_WATCH 9,
- * WEATHER_CONDITIONS 26, BASIC_MUSIC 52) are taken from Gadgetbridge commit 7257742b (AGPL-3.0-or-later),
+ * CONNECTIQ_HTTP 10, WEATHER_CONDITIONS 26, BASIC_MUSIC 52, HTTP_RAW_RESOURCE_REQUEST 88) are taken from Gadgetbridge commit 7257742b (AGPL-3.0-or-later),
  * app/src/main/java/nodomain/freeyourgadget/gadgetbridge/service/devices/garmin/GarminCapability.java
  * (no copyright line in the file; Gadgetbridge contributors), and which of them a duty claims from
  * GarminSupport.java. WEATHER_CONDITIONS (26) is from the same file; WEATHER_ALERTS (27) is not
@@ -19,8 +19,10 @@ data class DutyMask(
     val music: Boolean = false,
     val findPhone: Boolean = false,
     val weather: Boolean = false,
+    /** The watch's GPS-assist download is answered (satellite data from the server). Needs no system access. */
+    val gpsAssist: Boolean = false,
 ) {
-    val any: Boolean get() = notifications || music || findPhone || weather
+    val any: Boolean get() = notifications || music || findPhone || weather || gpsAssist
 }
 
 /**
@@ -40,6 +42,10 @@ object PhoneDuties {
     /** WEATHER_CONDITIONS; WEATHER_ALERTS (27) is never claimed. */
     const val BIT_WEATHER_CONDITIONS = 26
 
+    /** CONNECTIQ_HTTP and HTTP_RAW_RESOURCE_REQUEST: claimed only with GPS assist on (inferred, Gadgetbridge). */
+    const val BIT_CONNECTIQ_HTTP = 10
+    const val BIT_HTTP_RAW_RESOURCE_REQUEST = 88
+
     /**
      * A duty runs only when it is switched on and the system lets us do it: notifications and
      * music both need "Notification access" (the notification listener and the media sessions);
@@ -50,6 +56,7 @@ object PhoneDuties {
         music = features.music && access.notificationAccess,
         findPhone = features.findPhone,
         weather = features.weather,
+        gpsAssist = features.gpsAssist,
     )
 
     /** The bits a duty set claims. */
@@ -64,6 +71,10 @@ object PhoneDuties {
             add(BIT_FIND_MY_WATCH)
         }
         if (duties.weather) add(BIT_WEATHER_CONDITIONS)
+        if (duties.gpsAssist) {
+            add(BIT_CONNECTIQ_HTTP)
+            add(BIT_HTTP_RAW_RESOURCE_REQUEST)
+        }
     }
 
     /**

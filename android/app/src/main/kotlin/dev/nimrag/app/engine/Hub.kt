@@ -15,6 +15,7 @@ import dev.nimrag.app.engine.auth.AuthStore
 import dev.nimrag.app.engine.auth.SecretVault
 import dev.nimrag.app.engine.auth.WebSession
 import dev.nimrag.app.engine.ble.CompanionAssociation
+import dev.nimrag.app.engine.gps.GpsAssist
 import dev.nimrag.app.engine.local.LocalServerFactory
 import dev.nimrag.app.engine.local.LocalServerHost
 import dev.nimrag.app.engine.phone.NimragNotificationListener
@@ -97,6 +98,9 @@ class Hub(val app: Application) {
 
     /** Workouts built on the web, taken to the watch (stage 4a). Network on its own thread, the rest on [handler]. */
     val workouts = WorkoutSender(this)
+
+    /** GPS assist (stage 2f): satellite data for the watch, from the server. Network on its own thread, the rest on [handler]. */
+    val gpsAssist = GpsAssist(this)
 
     fun update(block: (AppState) -> AppState) = flow.update(block)
 

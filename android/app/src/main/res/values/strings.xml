@@ -236,7 +236,7 @@
     <!-- Phone features -->
     <string name="phone_features_title">Phone features</string>
     <string name="phone_features_value_off">All off</string>
-    <string name="phone_features_value_count">%1$d of 4 on</string>
+    <string name="phone_features_value_count">%1$d of 5 on</string>
     <string name="phone_features_intro">What the phone does for the watch besides syncing. Everything is off until you switch it on, and nothing leaves your phone except to your own watch and your own Nimrag server.</string>
     <string name="phone_group_features">Features</string>
     <string name="phone_notifications_title">Notifications on the watch</string>
@@ -258,6 +258,15 @@
     <string name="phone_weather_issue_no_forecast">the last request got no forecast</string>
     <string name="phone_weather_issue_no_position">the watch sent no position</string>
     <string name="phone_weather_issue_not_taken">the watch did not take the last forecast</string>
+    <string name="gps_group">GPS assist</string>
+    <string name="gps_title">Satellite data for the watch</string>
+    <string name="gps_off">Off</string>
+    <string name="gps_on">On · the watch finds GPS faster</string>
+    <string name="gps_needs_server">On · sign in to your server first</string>
+    <string name="gps_footer">Your Nimrag server downloads satellite data from Garmin so the watch finds GPS faster; this is Nimrag\'s only contact with Garmin, and the phone only talks to your server.</string>
+    <string name="gps_last_title">Last sent to the watch</string>
+    <string name="gps_last_never">Not yet</string>
+    <string name="gps_last_value">%1$s</string>
     <string name="phone_features_footer">Changing a switch reconnects the watch once, so it learns what the phone can do.</string>
     <string name="phone_notifications_explain">Notifications: your phone\'s notifications appear on the watch, with the title and text, and you can dismiss them from the watch. They go straight to your watch and are never stored or logged by Nimrag.</string>
     <string name="phone_music_explain">Music: the watch shows the song that plays on your phone and its buttons play, pause, skip and change the volume. This needs notification access too, because that is how Android shows the player to an app.</string>

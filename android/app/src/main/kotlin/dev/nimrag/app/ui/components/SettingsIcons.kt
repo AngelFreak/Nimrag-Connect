@@ -107,3 +107,8 @@ val PhoneIcon: ImageVector by lazy {
 val CloudIcon: ImageVector by lazy {
     svgIcon("Cloud", "M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z")
 }
+
+/** A target with a centre dot: a GPS fix, for GPS assist. */
+val SatelliteIcon: ImageVector by lazy {
+    svgIcon("Satellite", "M12 8a4 4 0 1 0 0 8a4 4 0 1 0 0-8", "M12 2v3M12 19v3M2 12h3M19 12h3")
+}

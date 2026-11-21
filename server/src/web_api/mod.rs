@@ -61,6 +61,7 @@ pub fn router() -> Router<AppState> {
         .merge(system::routes())
         .merge(export::routes())
         .merge(crate::garmin::api::routes())
+        .merge(crate::gps_assist::routes())
 }
 
 // ---- request context ----------------------------------------------------------

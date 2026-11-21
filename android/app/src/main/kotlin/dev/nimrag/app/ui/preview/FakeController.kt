@@ -167,6 +167,7 @@ class FakeController(
     override fun setPhoneFindPhone(on: Boolean) = setPhone { it.copy(findPhone = on) }
 
     override fun setPhoneWeather(on: Boolean) = setPhone { it.copy(weather = on) }
+    override fun setPhoneGpsAssist(on: Boolean) = setPhone { it.copy(gpsAssist = on) }
 
     private fun setPhone(block: (dev.nimrag.app.model.PhoneFeatures) -> dev.nimrag.app.model.PhoneFeatures) {
         mutable.update { it.copy(settings = it.settings.copy(phone = block(it.settings.phone))) }
