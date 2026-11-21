@@ -81,6 +81,7 @@ class WatchLink(private val hub: Hub, private val scanner: BleScanner) {
 
     init {
         hub.phone.attach(this)
+        hub.workouts.attach(this)
     }
 
     // ---- connection state (HandlerThread only) ----
@@ -350,6 +351,17 @@ class WatchLink(private val hub: Hub, private val scanner: BleScanner) {
     fun sendDuty(input: Input) {
         if (!ready || client == null) return
         feed(input)
+    }
+
+    /**
+     * Hands a file to the client to be sent to the watch (`Input.UploadFile`; a workout is type 128,
+     * sub type 5). False when the link is not ready; otherwise the outcome comes back as
+     * `Event.UploadFinished`, exactly once, whatever happens.
+     */
+    fun sendFile(uploadId: ULong, dataType: UByte, subType: UByte, data: ByteArray): Boolean {
+        if (!ready || client == null) return false
+        feed(Input.UploadFile(uploadId, dataType, subType, data))
+        return true
     }
 
     /**
@@ -1053,6 +1065,7 @@ class WatchLink(private val hub: Hub, private val scanner: BleScanner) {
             is Event.MusicRequested,
             is Event.FindWatch,
             -> hub.phone.onWatchEvent(event)
+            is Event.UploadFinished -> hub.workouts.onUploadFinished(event.uploadId, event.result)
             is Event.Anomaly -> log.warn("Anomaly: ${describe(event.kind)} (message ${event.messageId})")
             is Event.Closed -> onClientClosed(event.reason)
         }
@@ -1078,6 +1091,7 @@ class WatchLink(private val hub: Hub, private val scanner: BleScanner) {
         log.info("Handshake done, watch software $version, ${event.fileTypes.size} file types")
         feed(Input.RequestBattery)
         hub.phone.onLinkReady(connectionDuties)
+        hub.workouts.onLinkReady()
         maybeAutoSync()
         scheduleAutoSync()
     }
@@ -1198,6 +1212,7 @@ class WatchLink(private val hub: Hub, private val scanner: BleScanner) {
         client = null
         ready = false
         hub.phone.onLinkDown()
+        hub.workouts.onLinkDown()
         writeChar = null
         currentNotifyId = null
         connectionHasFirst = false
@@ -1372,6 +1387,7 @@ class WatchLink(private val hub: Hub, private val scanner: BleScanner) {
         AnomalyKind.GFDI_CLOSED_BY_WATCH -> "the watch closed the GFDI channel"
         AnomalyKind.BATTERY_REQUEST_REFUSED -> "battery request refused or unanswered"
         AnomalyKind.DUTY_MESSAGE_REFUSED -> "a phone feature message (notification, music or find my watch) was refused or unanswered"
+        AnomalyKind.UPLOAD_FAILED -> "an upload to the watch failed or was not answered"
     }
 
     private fun describe(reason: CloseReason): String = when (reason) {

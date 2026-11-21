@@ -127,6 +127,9 @@ class UploadWorker(
         )
     }
 
+    /** The same network rule the uploads follow (the workout sender uses it too). Safe from any thread. */
+    fun networkAllowsUploads(): Boolean = UploadPolicy.networkAllows(currentNetwork(), settings.allowMobileData)
+
     /** `GET /api/health`, then an authenticated request. Blocking: call off the main thread. */
     fun testServer(): ServerTest {
         val base = UploadPolicy.normalizeServerUrl(settings.serverUrl)
