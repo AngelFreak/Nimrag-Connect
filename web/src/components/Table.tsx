@@ -45,7 +45,7 @@ export function Table<Row>({ columns, rows, rowKey, caption, captionVisible, den
   return (
     // A scrollable region must be focusable so keyboard users can scroll it (axe: scrollable-region-focusable).
     // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex
-    <div className="table-wrap" role="region" aria-label={caption ? `${caption} (scrollable)` : 'Table (scrollable)'} tabIndex={0}>
+    <div className="table-wrap" role="region" aria-label={caption ? `${caption} (scrollable)` : 'Table (scrollable)'} tabIndex={0} data-scroll="x">
       <table className={cls}>
         {caption ? <caption className={captionVisible ? undefined : 'sr-only'}>{caption}</caption> : null}
         <thead>

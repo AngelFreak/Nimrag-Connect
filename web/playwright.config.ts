@@ -13,7 +13,10 @@ import { ORIGIN, sessionFile } from './e2e/real-server';
 //   `real-teardown` stops them. The specs are real.spec.ts (every route as `demo`, checked for
 //   errors and accessibility), real.layout.spec.ts (the layout audit: every route, dialog and state
 //   at 320 to 1360 px must fit the screen; `node scripts/layout-audit-summary.mjs` prints the counts),
-//   real.login.spec.ts, real.admin.spec.ts and real.firstrun.spec.ts.
+//   real.access.spec.ts (the Gate 3 accessibility check: every route of App.tsx, phone and desktop,
+//   light and dark, axe, h1 and title, keyboard, charts, 200 % zoom), real.widgets.spec.ts (the
+//   checks' own tests, a dialog, the calendar, the map), real.login.spec.ts, real.admin.spec.ts and
+//   real.firstrun.spec.ts.
 const external = process.env['PLAYWRIGHT_BASE_URL'];
 const baseURL = external ?? 'http://127.0.0.1:4173';
 

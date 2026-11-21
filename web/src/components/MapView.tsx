@@ -55,7 +55,7 @@ interface MapViewProps {
   /** Route as [longitude, latitude] pairs. */
   track?: [number, number][];
   tilesUrl?: string;
-  /** Accessible name; the map is not keyboard-operable content, the stats beside it are. */
+  /** Accessible name and summary of the route. The map is a group (not an image) because it holds MapLibre's zoom buttons; the stats beside it are what a screen reader reads. */
   label?: string;
   height?: number;
 }
@@ -79,12 +79,12 @@ export function routePath(track: [number, number][] | undefined, width: number, 
   return { d, start: pt(0) };
 }
 
-function Placeholder({ track, height }: { track?: [number, number][]; height: number }) {
+function Placeholder({ track, height, label }: { track?: [number, number][]; height: number; label: string }) {
   const width = 350;
   const h = Math.round((height / 220) * 150);
   const route = routePath(track, width, h);
   return (
-    <svg viewBox={`0 0 ${width} ${h}`} role="img" aria-label="Route map">
+    <svg viewBox={`0 0 ${width} ${h}`} role="img" aria-label={label}>
       <rect width={width} height={h} fill="#141b1f" />
       {route ? (
         <>
@@ -169,10 +169,10 @@ export function MapView({ track, tilesUrl = DEFAULT_TILES_URL, label = 'Route ma
   return (
     <div className="map">
       {mode === 'map' ? (
-        <div ref={container} className="map__canvas" style={{ height }} role="img" aria-label={label} />
+        <div ref={container} className="map__canvas" style={{ height }} role="group" aria-label={label} />
       ) : (
         <>
-          <Placeholder track={track} height={height} />
+          <Placeholder track={track} height={height} label={label} />
           {mode === 'checking' ? <p className="map__caption">Loading map.</p> : null}
         </>
       )}

@@ -63,7 +63,7 @@ export function BarSeries({ values, labels, label, color = 'var(--stage-deep)', 
       ))}
     </div>
   ) : (
-    <div className="chart__axis" aria-hidden="true" style={{ display: 'grid', gridTemplateColumns: `repeat(${values.length}, 1fr)`, textAlign: 'center' }}>
+    <div className="chart__axis chart__axis--bars" aria-hidden="true" style={{ display: 'grid', gridTemplateColumns: `repeat(${values.length}, minmax(0, 1fr))`, textAlign: 'center' }}>
       {labels.map((t, i) => (
         <span key={`${t}-${i}`}>{t}</span>
       ))}

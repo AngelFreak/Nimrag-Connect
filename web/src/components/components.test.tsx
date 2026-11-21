@@ -5,9 +5,13 @@ import { MemoryRouter } from 'react-router-dom';
 import { createRef, useState, type ReactNode } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import { routePath } from './MapView';
+import { BarList } from './ZoneBars';
+import { routeLabel } from '../pages/activities/ActivityBody';
 import {
   AppShell,
   BarSeries,
+  BottomNav,
+  DesktopNav,
   Button,
   Card,
   ConfirmDialog,
@@ -352,6 +356,43 @@ describe('BarSeries', () => {
   });
 });
 
+describe('narrow screens (a phone at 200 % zoom is 195 px wide)', () => {
+  it('BarSeries day labels sit in columns that may shrink below their text, and the axis can thin itself out', () => {
+    render(<BarSeries values={[1, 2, 3, 4, 5, 6, 7]} labels={['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']} label="Steps" />);
+    const axis = document.querySelector('.chart__axis') as HTMLElement;
+    expect(axis).toHaveClass('chart__axis--bars');
+    expect(axis.style.gridTemplateColumns).toBe('repeat(7, minmax(0px, 1fr))');
+    expect(axis).toHaveAttribute('aria-hidden', 'true');
+    expect(axis.querySelectorAll('span')).toHaveLength(7);
+  });
+
+  it('BarList lets the bar column shrink and caps the label column to a share of the width', () => {
+    render(<BarList label="Time in zones" items={[{ key: 'a', label: 'Zone 4', value: 30, color: 'red' }]} />);
+    const row = document.querySelector('.zones__row') as HTMLElement;
+    expect(row.style.gridTemplateColumns).toBe('minmax(min(96px, 45%), max-content) minmax(0px, 1fr) minmax(40px, auto)');
+  });
+
+  it('a table that scrolls is a named, focusable region marked as wanted scrolling', () => {
+    render(<Table caption="Laps" columns={[{ key: 'a', header: 'A', cell: (r: { a: string }) => r.a }]} rows={[{ a: 'x' }]} rowKey={(r) => r.a} />);
+    const region = screen.getByRole('region', { name: 'Laps (scrollable)' });
+    expect(region).toHaveAttribute('tabindex', '0');
+    expect(region).toHaveAttribute('data-scroll', 'x');
+  });
+
+  it('two navigations on one page can be told apart by a label of their own', () => {
+    wrap(
+      <>
+        <BottomNav active="today" />
+        <BottomNav active="today" label="Example bottom navigation" />
+        <DesktopNav active="today" label="Example desktop navigation" />
+      </>,
+    );
+    expect(screen.getByRole('navigation', { name: 'Main' })).toBeInTheDocument();
+    expect(screen.getByRole('navigation', { name: 'Example bottom navigation' })).toBeInTheDocument();
+    expect(screen.getByRole('navigation', { name: 'Example desktop navigation' })).toBeInTheDocument();
+  });
+});
+
 describe('TopBar back variant with previous and next', () => {
   it('shows both buttons, the next one disabled at the end of the range', () => {
     wrap(<TopBar variant="back" backTo="/health" title="Sleep" prev={{ to: '/sleep/2026-11-17' }} next={null} prevLabel="Previous night" nextLabel="Next night" />);
@@ -558,6 +599,26 @@ describe('MapView without tiles', () => {
     render(<MapView tilesUrl="/tiles/none.pmtiles" />);
     expect(await screen.findByRole('img', { name: 'Route map' })).toBeInTheDocument();
     expect(screen.queryByText(/placeholder|your own server/i)).not.toBeInTheDocument();
+    vi.unstubAllGlobals();
+  });
+});
+
+describe('routeLabel', () => {
+  it('says what the map shows, with the length when it is known', () => {
+    expect(routeLabel(6400)).toBe('Route map: the 6.4 km route of this activity as a line from its start, marked with an orange dot. The numbers are in the stats and laps.');
+    expect(routeLabel(null)).toMatch(/^Route map: the route of this activity/);
+    expect(routeLabel(0)).toMatch(/^Route map: the route of this activity/);
+  });
+  it('is a text of several words, not just a name, so a screen reader gets a summary', () => {
+    expect(routeLabel(1000).split(/\s+/).length).toBeGreaterThan(8);
+  });
+});
+
+describe('MapView label', () => {
+  it('gives the drawn route without tiles the same label', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('', { status: 404 })));
+    render(<MapView tilesUrl="/tiles/none.pmtiles" label="Route map: an example" />);
+    expect(await screen.findByRole('img', { name: 'Route map: an example' })).toBeInTheDocument();
     vi.unstubAllGlobals();
   });
 });

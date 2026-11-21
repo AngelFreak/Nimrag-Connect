@@ -261,7 +261,7 @@ describe('ActivityDetailPage', () => {
     expect(within(zones).getAllByText('unavailable')).toHaveLength(3);
     expect(screen.getByRole('table', { name: 'Laps' })).toBeInTheDocument();
     // The API sends [lat, lon]; the map gets [lon, lat].
-    const map = await screen.findByRole('img', { name: 'Route map' });
+    const map = await screen.findByRole('img', { name: /^Route map: the 6\.4 km route of this activity/ });
     expect(map).toHaveAttribute('data-first', '[10.2,56.1]');
   });
 

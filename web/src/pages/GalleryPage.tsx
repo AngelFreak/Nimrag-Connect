@@ -188,12 +188,12 @@ export function GalleryPage() {
             </div>
           </Frame>
           <Frame label="Bottom navigation, Activities active">
-            <BottomNav active="activities" />
+            <BottomNav active="activities" label="Example bottom navigation" />
           </Frame>
         </div>
         <Frame label="Desktop navigation, Overview active">
           <div style={{ padding: '0 16px' }}>
-            <DesktopNav active="today" />
+            <DesktopNav active="today" label="Example desktop navigation" />
           </div>
         </Frame>
         <div className="gallery__grid">
@@ -464,7 +464,7 @@ export function GalleryPage() {
 
       <Section title="Map" note="Tiles come from /tiles/*.pmtiles on your own server. Without a tile file the design's placeholder shows; no third-party tile server is ever contacted.">
         <Card padding="flush">
-          <MapView />
+          <MapView label="Route map: an example route drawn as a line from its start, marked with an orange dot" />
         </Card>
       </Section>
     </div>

@@ -44,10 +44,10 @@ const DESKTOP_NAV: NavItem[] = [
 ];
 
 /** Phone bottom navigation. */
-export function BottomNav({ active }: { active: NavKey }) {
+export function BottomNav({ active, label = 'Main' }: { active: NavKey; label?: string }) {
   const current = active === 'strength' ? 'activities' : active;
   return (
-    <nav aria-label="Main" className="bottom-nav">
+    <nav aria-label={label} className="bottom-nav">
       {PHONE_NAV.map((n) => (
         <Link key={n.key} to={n.to} aria-current={current === n.key ? 'page' : undefined}>
           {n.icon}
@@ -59,9 +59,9 @@ export function BottomNav({ active }: { active: NavKey }) {
 }
 
 /** Desktop header navigation. */
-export function DesktopNav({ active }: { active: NavKey }) {
+export function DesktopNav({ active, label = 'Main' }: { active: NavKey; label?: string }) {
   return (
-    <nav aria-label="Main" className="desk-nav">
+    <nav aria-label={label} className="desk-nav">
       {DESKTOP_NAV.map((n) => (
         <Link key={n.key} to={n.to} aria-current={active === n.key ? 'page' : undefined}>
           {n.label}

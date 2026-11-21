@@ -7,6 +7,12 @@
 .card .segmented button {
   padding: 0 14px;
 }
+@media (max-width: 359px) {
+  /* "7 nights | 14 nights | 30 nights" is 265 px with the full padding and a 320 px page leaves 246. */
+  .card .segmented button {
+    padding: 0 10px;
+  }
+}
 
 .range-bar {
   display: flex;
@@ -119,7 +125,8 @@
 }
 .status-timeline__day {
   flex: 1 1 0;
-  min-width: 1px;
+  /* Half a year of days is 182 slivers: they may get thinner than a pixel on a narrow screen, never wider than the card. */
+  min-width: 0;
   border-radius: 4px;
 }
 .status-timeline--dense .status-timeline__day {
@@ -220,6 +227,12 @@
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: var(--gap);
+}
+@media (max-width: 260px) {
+  /* A phone at 200 % zoom: one tile per row, so a chart in a tile still has room. */
+  .tile-pair {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 @media (min-width: 1024px) {
   .tile-pair {

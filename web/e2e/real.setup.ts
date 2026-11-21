@@ -147,11 +147,13 @@ setup('start the real servers with seeded data', async ({ playwright }) => {
   const list = (await (await demo.get('/api/activities?limit=100')).json()) as { items: { id: string | number; kind: string }[] };
   const run = list.items.find((a) => a.kind === 'run');
   const strength = list.items.find((a) => a.kind === 'strength');
+  const walk = list.items.find((a) => a.kind === 'walk');
   expect(run, 'the seed has a run').toBeDefined();
   expect(strength, 'the seed has a strength session').toBeDefined();
+  expect(walk, 'the seed has a walk').toBeDefined();
   const [y, m, d] = today.date.split('-').map(Number) as [number, number, number];
   const night = new Date(Date.UTC(y, m - 1, d - 1)).toISOString().slice(0, 10);
-  const fixture: Fixture = { today: today.date, month: today.date.slice(0, 7), night, runId: String(run?.id), strengthId: String(strength?.id) };
+  const fixture: Fixture = { today: today.date, month: today.date.slice(0, 7), night, runId: String(run?.id), strengthId: String(strength?.id), walkId: String(walk?.id) };
   fs.writeFileSync(fixtureFile, JSON.stringify(fixture));
   await demo.dispose();
 });

@@ -352,6 +352,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+  flex-wrap: wrap;
 }
 .card__head {
   display: flex;
@@ -1096,7 +1097,7 @@
 .zones__row {
   display: grid;
   /* The label column is in em so "Zone 4" stays on one line at any text size. */
-  grid-template-columns: 4.5em 1fr minmax(44px, auto);
+  grid-template-columns: 4.5em minmax(0, 1fr) minmax(44px, auto);
   gap: 10px;
   align-items: center;
 }
@@ -1626,4 +1627,44 @@
 .notice p {
   min-width: 0;
   overflow-wrap: anywhere;
+}
+
+/* ------------------------------------------------------------------ very narrow windows
+   A phone at 200 % zoom is 195 px wide. Nothing may scroll the page sideways or be cut off there:
+   what cannot sit side by side stacks, long words break, and a crowded axis names every other tick. */
+@media (max-width: 260px) {
+  .segmented {
+    flex-direction: column;
+  }
+  .segmented--grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .segmented button {
+    white-space: normal;
+    padding: 0 8px;
+  }
+  .legend--grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .stat__value {
+    hyphens: auto;
+    overflow-wrap: anywhere;
+  }
+  .chart__axis--bars > span:nth-child(even) {
+    visibility: hidden;
+  }
+  .footer-bar {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .login__brand {
+    flex-wrap: wrap;
+  }
+  .login__brand > div {
+    min-width: 0;
+  }
+  .login__title,
+  .login__sub {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
 }
