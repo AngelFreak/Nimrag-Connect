@@ -39,7 +39,13 @@ export function zoneEntries(a: Pick<ActivityDetail, 'hr_zones'>): ZoneEntry[] {
   });
 }
 
-function MapCard({ id, hasTrack, height }: { id: string; hasTrack: boolean; height: number }) {
+/** What the route map shows, in words (the drawing itself is not readable by a screen reader). */
+export function routeLabel(distanceM: number | null): string {
+  const length = distanceM !== null && distanceM > 0 ? `${(distanceM / 1000).toFixed(1)} km route` : 'route';
+  return `Route map: the ${length} of this activity as a line from its start, marked with an orange dot. The numbers are in the stats and laps.`;
+}
+
+function MapCard({ id, hasTrack, height, distanceM }: { id: string; hasTrack: boolean; height: number; distanceM: number | null }) {
   const track = useTrack(id, hasTrack);
   // The API sends [lat, lon]; the map wants [lon, lat].
   const points = useMemo(() => track.data?.points.map(([lat, lon]) => [lon, lat] as [number, number]), [track.data]);
@@ -66,7 +72,7 @@ function MapCard({ id, hasTrack, height }: { id: string; hasTrack: boolean; heig
   }
   return (
     <Card padding="flush">
-      <MapView label="Route map" track={points} height={height} />
+      <MapView label={routeLabel(distanceM)} track={points} height={height} />
     </Card>
   );
 }
@@ -190,14 +196,14 @@ export function ActivityBody({ a }: { a: ActivityDetail }) {
 
       {desktop ? (
         <div className="acts-panels">
-          {showMap ? <MapCard id={a.id} hasTrack={a.has_track} height={300} /> : null}
+          {showMap ? <MapCard id={a.id} hasTrack={a.has_track} height={300} distanceM={a.distance_m} /> : null}
           <div className="acts-stack">
             {primary.length ? <div className={gridClass}>{primary}</div> : null}
           </div>
         </div>
       ) : (
         <>
-          {showMap ? <MapCard id={a.id} hasTrack={a.has_track} height={220} /> : null}
+          {showMap ? <MapCard id={a.id} hasTrack={a.has_track} height={220} distanceM={a.distance_m} /> : null}
           {primary.length ? <div className={gridClass}>{primary}</div> : null}
         </>
       )}

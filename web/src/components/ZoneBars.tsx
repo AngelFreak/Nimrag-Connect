@@ -25,7 +25,7 @@ export function BarList({ items, label, labelWidth = 96, max }: { items: BarList
       {items.map((it) => {
         const missing = it.value === null || it.value === undefined || !Number.isFinite(it.value);
         return (
-          <li className="zones__row" key={it.key} style={{ gridTemplateColumns: `minmax(${labelWidth}px, max-content) 1fr minmax(40px, auto)` }}>
+          <li className="zones__row" key={it.key} style={{ gridTemplateColumns: `minmax(min(${labelWidth}px, 45%), max-content) minmax(0, 1fr) minmax(40px, auto)` }}>
             <span>{it.label}</span>
             <div className="progress" style={{ '--h': '10px' } as CSSProperties} aria-hidden="true">
               <div className="progress__fill" style={{ width: missing ? 0 : `${((it.value as number) / top) * 100}%`, background: it.color }} />

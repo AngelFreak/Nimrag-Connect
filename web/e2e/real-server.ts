@@ -66,6 +66,7 @@ export interface Fixture {
   night: string;
   runId: string;
   strengthId: string;
+  walkId: string;
 }
 
 function alive(pid: number): boolean {
