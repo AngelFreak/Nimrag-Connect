@@ -1,6 +1,8 @@
 package dev.nimrag.app.ui.preview
 
 import dev.nimrag.app.model.AccountController
+import dev.nimrag.app.model.AppChoice
+import dev.nimrag.app.model.FindWatchUi
 import dev.nimrag.app.model.AppState
 import dev.nimrag.app.model.FixedAccountController
 import dev.nimrag.app.model.GarminConnectMode
@@ -156,6 +158,30 @@ class FakeController(
     override fun setGarminConnectMode(mode: GarminConnectMode) {
         mutable.update { it.copy(settings = it.settings.copy(garminConnectMode = mode)) }
         log(LogLine.Level.Info, "Demo: Garmin Connect mode ${mode.name}")
+    }
+
+    override fun setPhoneNotifications(on: Boolean) = setPhone { it.copy(notifications = on) }
+
+    override fun setPhoneMusic(on: Boolean) = setPhone { it.copy(music = on) }
+
+    override fun setPhoneFindPhone(on: Boolean) = setPhone { it.copy(findPhone = on) }
+
+    private fun setPhone(block: (dev.nimrag.app.model.PhoneFeatures) -> dev.nimrag.app.model.PhoneFeatures) {
+        mutable.update { it.copy(settings = it.settings.copy(phone = block(it.settings.phone))) }
+    }
+
+    override fun setAppExcluded(packageName: String, excluded: Boolean) = setPhone {
+        it.copy(excludedApps = if (excluded) it.excludedApps + packageName else it.excludedApps - packageName)
+    }
+
+    override suspend fun launchableApps(): List<AppChoice> = PreviewData.apps
+
+    override fun findMyWatch(start: Boolean) {
+        mutable.update { it.copy(phone = it.phone.copy(findWatch = if (start) FindWatchUi.Ringing else FindWatchUi.Idle)) }
+    }
+
+    override fun stopFindPhone() {
+        mutable.update { it.copy(phone = it.phone.copy(findPhoneRinging = false)) }
     }
 
     companion object {

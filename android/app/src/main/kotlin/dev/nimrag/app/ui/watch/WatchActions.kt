@@ -2,6 +2,8 @@ package dev.nimrag.app.ui.watch
 
 import android.Manifest
 import android.bluetooth.BluetoothAdapter
+import android.content.ActivityNotFoundException
+import android.content.ComponentName
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
@@ -15,6 +17,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
+import dev.nimrag.app.engine.phone.NimragNotificationListener
 import dev.nimrag.app.model.WatchController
 import dev.nimrag.app.ui.shell.findActivity
 
@@ -29,6 +32,10 @@ internal class WatchActions(
     val allowNotifications: () -> Unit,
     val turnOnBluetooth: () -> Unit,
     val openGarminConnectInfo: () -> Unit,
+    /** The system's "Notification access" page for Nimrag (notifications on the watch, music control). */
+    val openNotificationAccess: () -> Unit,
+    /** Nimrag's own app info (where "Allow restricted settings" lives for sideloaded apps). */
+    val openOwnAppInfo: () -> Unit,
 )
 
 @Composable
@@ -74,6 +81,24 @@ internal fun rememberWatchActions(controller: WatchController): WatchActions {
             },
             turnOnBluetooth = { enableBluetoothLauncher.launch(Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE)) },
             openGarminConnectInfo = { openAppInfo(GARMIN_CONNECT_PACKAGE) },
+            openNotificationAccess = {
+                val detail = Intent(Settings.ACTION_NOTIFICATION_LISTENER_DETAIL_SETTINGS)
+                    .putExtra(
+                        Settings.EXTRA_NOTIFICATION_LISTENER_COMPONENT_NAME,
+                        ComponentName(context, NimragNotificationListener::class.java).flattenToString(),
+                    )
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                try {
+                    context.startActivity(detail)
+                } catch (_: ActivityNotFoundException) {
+                    try {
+                        context.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                    } catch (_: ActivityNotFoundException) {
+                        openAppInfo(context.packageName)
+                    }
+                }
+            },
+            openOwnAppInfo = { openAppInfo(context.packageName) },
         )
     }
 }

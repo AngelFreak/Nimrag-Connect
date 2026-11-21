@@ -101,6 +101,14 @@ private fun WatchPreview(state: AppState, page: WatchPage = WatchPage.Main) =
 
 @Preview(showBackground = true) @Composable private fun PageSyncHistoryEmpty() = WatchPreview(PreviewData.noServer(), WatchPage.SyncHistory)
 
+@Preview(showBackground = true) @Composable private fun PagePhoneFeaturesOff() = WatchPreview(PreviewData.phoneOff(), WatchPage.PhoneFeatures)
+
+@Preview(showBackground = true, fontScale = 1.3f) @Composable private fun PagePhoneFeaturesNeedAccess() = WatchPreview(PreviewData.phoneNeedsAccess(), WatchPage.PhoneFeatures)
+
+@Preview(showBackground = true) @Composable private fun PagePhoneFeaturesOn() = WatchPreview(PreviewData.phoneOn(), WatchPage.PhoneFeatures)
+
+@Preview(showBackground = true) @Composable private fun PageNotificationApps() = WatchPreview(PreviewData.phoneOn(), WatchPage.NotificationApps)
+
 @Preview(showBackground = true) @Composable private fun PageServer() = WatchPreview(PreviewData.pairedReady(), WatchPage.Server)
 
 @Preview(showBackground = true) @Composable private fun PageServerNotSetUp() = WatchPreview(PreviewData.noServer(), WatchPage.Server)

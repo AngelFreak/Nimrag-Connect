@@ -1,12 +1,17 @@
 package dev.nimrag.app.ui.preview
 
+import dev.nimrag.app.model.AppChoice
 import dev.nimrag.app.model.AppState
+import dev.nimrag.app.model.FindWatchUi
 import dev.nimrag.app.model.FoundDevice
 import dev.nimrag.app.model.GarminConnect
 import dev.nimrag.app.model.GarminConnectMode
 import dev.nimrag.app.model.LinkState
 import dev.nimrag.app.model.LogLine
 import dev.nimrag.app.model.Permissions
+import dev.nimrag.app.model.PhoneAccess
+import dev.nimrag.app.model.PhoneFeatures
+import dev.nimrag.app.model.PhoneStatus
 import dev.nimrag.app.model.ScanState
 import dev.nimrag.app.model.Settings
 import dev.nimrag.app.model.StoredFile
@@ -163,6 +168,33 @@ object PreviewData {
             lastError = "HTTP 401: token rejected",
             waitingForNetwork = true,
         ),
+    )
+
+    /** The apps of the "apps left out" page. */
+    val apps = listOf(
+        AppChoice("com.example.chat", "Chat"),
+        AppChoice("com.example.mail", "Mail"),
+        AppChoice("com.example.maps", "Maps"),
+        AppChoice("com.example.news", "News"),
+        AppChoice("com.example.shop", "Shopping"),
+    )
+
+    /** Phone features: every switch off (the default), notification access not given. */
+    fun phoneOff(now: Long = System.currentTimeMillis()) = pairedReady(now)
+
+    /** Notifications and music on but the system access is missing: the card explains and opens it. */
+    fun phoneNeedsAccess(now: Long = System.currentTimeMillis()) = pairedReady(now).copy(
+        settings = serverSettings.copy(phone = PhoneFeatures(notifications = true, music = true)),
+        phoneAccess = PhoneAccess(notificationAccess = false),
+    )
+
+    /** Everything on, access given, one app left out; the watch is ringing on request. */
+    fun phoneOn(now: Long = System.currentTimeMillis()) = pairedReady(now).copy(
+        settings = serverSettings.copy(
+            phone = PhoneFeatures(notifications = true, music = true, findPhone = true, excludedApps = setOf("com.example.shop")),
+        ),
+        phoneAccess = PhoneAccess(notificationAccess = true, fullScreenAlerts = false),
+        phone = PhoneStatus(findWatch = FindWatchUi.Ringing),
     )
 
     fun noServer(now: Long = System.currentTimeMillis()) = pairedReady(now).copy(

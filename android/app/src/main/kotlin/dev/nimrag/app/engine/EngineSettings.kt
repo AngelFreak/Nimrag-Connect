@@ -4,6 +4,7 @@ import android.content.Context
 import dev.nimrag.app.engine.logic.AlongsideRules
 import dev.nimrag.app.engine.logic.CapabilityHex
 import dev.nimrag.app.model.GarminConnectMode
+import dev.nimrag.app.model.PhoneFeatures
 import dev.nimrag.app.model.Settings
 import dev.nimrag.app.model.SyncResult
 import dev.nimrag.app.model.WebMode
@@ -62,6 +63,31 @@ class EngineSettings(context: Context) {
     var garminConnectMode: GarminConnectMode
         get() = AlongsideRules.modeFromStored(prefs.getString(GARMIN_CONNECT_MODE, null))
         set(value) = prefs.edit().putString(GARMIN_CONNECT_MODE, value.name).apply()
+
+    /** Phone features (stage 2f): every one is off until the owner switches it on. */
+    var phoneNotifications: Boolean
+        get() = prefs.getBoolean(PHONE_NOTIFICATIONS, false)
+        set(value) = prefs.edit().putBoolean(PHONE_NOTIFICATIONS, value).apply()
+
+    var phoneMusic: Boolean
+        get() = prefs.getBoolean(PHONE_MUSIC, false)
+        set(value) = prefs.edit().putBoolean(PHONE_MUSIC, value).apply()
+
+    var phoneFindPhone: Boolean
+        get() = prefs.getBoolean(PHONE_FIND, false)
+        set(value) = prefs.edit().putBoolean(PHONE_FIND, value).apply()
+
+    /** Apps whose notifications stay on the phone (package names). A copy: the stored set is never edited in place. */
+    var excludedApps: Set<String>
+        get() = prefs.getStringSet(EXCLUDED_APPS, null)?.toSet().orEmpty()
+        set(value) = prefs.edit().putStringSet(EXCLUDED_APPS, value.toSet()).apply()
+
+    fun phoneFeatures() = PhoneFeatures(
+        notifications = phoneNotifications,
+        music = phoneMusic,
+        findPhone = phoneFindPhone,
+        excludedApps = excludedApps,
+    )
 
     /** Multi-link client id: random, chosen once per install. */
     val clientId: Long
@@ -153,6 +179,7 @@ class EngineSettings(context: Context) {
         autoSyncMinutes = autoSyncMinutes,
         capabilitiesHex = capabilitiesHex,
         garminConnectMode = garminConnectMode,
+        phone = phoneFeatures(),
     )
 
     private companion object {
@@ -167,6 +194,10 @@ class EngineSettings(context: Context) {
         const val CAPABILITIES = "capabilities_hex"
         const val GARMIN_CONNECT_MODE = "garmin_connect_mode"
         const val CLIENT_ID = "client_id"
+        const val PHONE_NOTIFICATIONS = "phone_notifications"
+        const val PHONE_MUSIC = "phone_music"
+        const val PHONE_FIND = "phone_find_phone"
+        const val EXCLUDED_APPS = "phone_excluded_apps"
         const val WATCH_ADDRESS = "watch_address"
         const val WATCH_NAME = "watch_name"
         const val WATCH_MODEL = "watch_model"
