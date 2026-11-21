@@ -106,6 +106,60 @@ back button goes to the parent). The pure rules (which banner, the status word, 
 live in `ui/watch/logic` with unit tests; the shared rows, group, banner and dialog are in
 `ui/components`.
 
+## Phone features (stage 2f, built, live test pending)
+
+The Watch tab has a "Phone features" page with three switches, **all off by default**:
+notifications on the watch, music control and find my phone, plus a "Find my watch" button.
+Everything here is ported from Gadgetbridge and *inferred (Gadgetbridge)* until it has been tried on
+the owner's Instinct 2; only the unit tests (core byte-exact frames, ffi conversions, the Kotlin
+rules) are verified.
+
+- **Claiming a duty.** The watch only asks for a duty when our Configuration mask claims it
+  (`engine/phone/logic/PhoneDuties.kt`: notifications bit 6, music bits 7 and 52, find my phone bits
+  8 and 9). The mask in Settings stays the base; the bits are added per connection, and the same
+  switches are passed to the client as `ClientConfig.duties`. With a switch off nothing is claimed and
+  the watch behaves as before 2f. Changing a switch (or the system access below) reconnects the watch
+  once (`WatchLink.onDutiesChanged`).
+- **Notification access.** Notifications and music need Android's "Notification access" for Nimrag
+  (`NimragNotificationListener`; system settings only, no dialog). The page shows a card with a button
+  that opens that setting. Apps installed outside the Play Store get the setting greyed out until
+  "Allow restricted settings" is chosen in the app info (Android 13+); the card says so and links the
+  app info. A duty is effective only when its switch is on **and** the access is given
+  (`PhoneDuties.effective`).
+- **Notifications.** Default when on: every app except Nimrag itself and the apps left out on the
+  "Apps left out" page. Group summaries, ongoing notifications (players, navigation, running
+  services; calls stay) and notifications without text are skipped; an unchanged text is not sent
+  twice (`engine/phone/logic/NotificationRules.kt`, tested). The listener does not touch a
+  notification at all while forwarding is off (`PhoneBridge.forwarding`). "Dismiss" on the watch
+  dismisses it on the phone; "Block" adds the app to the left-out list (shown on the page, easy to
+  undo); other watch actions are logged as not supported yet.
+- **Find my phone.** The watch's request rings the alarm stream at full volume (put back afterwards),
+  vibrates and posts a heads-up with "Found it" that also asks for the full screen
+  (`FindPhoneActivity` over the lock screen when Android allows it). It stops on "Found it", when the
+  watch cancels, or after the time the watch asked for (10 s to 2 min, default 30 s).
+- **Music.** The watch follows the phone's active media session (the one that plays, else the one with
+  a track), shows title, artist, state, position and volume, and its buttons play, pause, skip, seek
+  and change the volume (`MusicBridge`, `MusicRules`).
+- **Privacy.** Notification, music and reply content only passes through memory on its way to the
+  watch: never logged (log lines say what happened, not what or from whom), never stored, never
+  uploaded; the types that carry it print nothing of it (`toString`/`Debug`).
+- **Manifest.** `VIBRATE`, `USE_FULL_SCREEN_INTENT`, the listener service (bound by the system, exported
+  with `BIND_NOTIFICATION_LISTENER_SERVICE`), a `<queries>` entry for launcher apps (the left-out list),
+  `FindPhoneActivity` and `FindPhoneReceiver` (not exported).
+
+**To try on the watch** (each line is one of the owner's checks; none is verified yet):
+
+1. Phone features: all three switches are off; watch behaviour and sync are as before.
+2. Switch Notifications on, grant Notification access: the watch reconnects once; send yourself a
+   message: it shows on the watch with title and text; dismiss it on the watch: it goes from the shade.
+3. Leave one app out: its notifications stay on the phone only.
+4. Switch Music on, play something: title, artist and state show on the watch; play/pause, next,
+   previous and volume buttons on the watch act on the phone.
+5. Switch Find my phone on, use find-phone on the watch (also with the phone silent and locked): it
+   rings, vibrates and shows "Found it"; cancelling on the watch stops it.
+6. "Make the watch ring" on the Phone features page rings the watch and stops it.
+7. Switch everything off again: the watch reconnects once and sends nothing more.
+
 ## New data soon (stage 3q, 0.5.1)
 
 The auto-sync interval (default 15 minutes, Settings) is kept by an inexact alarm that is allowed in
