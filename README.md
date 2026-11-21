@@ -44,7 +44,7 @@
 | 🌐 **Web interface** | Today, activities, sleep, HRV, stress, energy, heart rate, training status and load, calendar, strength and body pages, with a detail page per metric (day, week, month and year). Works in any browser and as a PWA. |
 | 🗺️ **Maps without a map service** | Activity routes are drawn on a street map served by your own server from a [PMTiles](https://docs.protomaps.com/pmtiles/) file. No tile requests leave your network. |
 | 📦 **Bring your history** | Imports a Garmin data export, nested zips and all, through the same path as live uploads, and your Garmin Connect history (daily summaries, stress, heart rate and breathing through the day, sleep, HRV, training, activities with routes) so the pages have data from before you switched. The watch's own files always win over imported data. |
-| 🏃 **Workouts and phone features** | Build workouts on the web (steps, repeats, heart-rate, pace and cadence targets) and the phone sends them to the watch. The phone can also show its notifications on the watch, let the watch control music, and ring when the watch asks. Everything is off until you switch it on. |
+| 🏃 **Workouts and phone features** | Build workouts on the web (steps, repeats, heart-rate, pace and cadence targets) and the phone sends them to the watch. The phone can also show its notifications on the watch, let the watch control music, ring when the watch asks, give the watch a weather forecast (from Open-Meteo) and satellite data so it finds GPS faster. Everything is off until you switch it on. |
 | 👥 **Accounts** | Several users on one server, each with their own data. Sign-in with password and two-step codes (TOTP); an admin account sets the server up. |
 | 🔒 **Built to run at home** | A single Rust binary with SQLite, meant to sit behind your own VPN. Scheduled backups, a restore command, and a zip of all your data on request. |
 
@@ -71,7 +71,7 @@ One Rust crate, `nimrag-core`, holds the watch protocol and all FIT decoding. It
 | --- | --- | --- |
 | ✅ | **0. Protocol map:** static analysis and live Bluetooth captures, decoded end to end | Done. Night-sync and fresh-pairing captures still to record. |
 | ✅ | **1. Server:** ingest, file store, FIT decoding, parsers, `reparse`, export importer | Done. Gate passed on a full USB copy of a watch. |
-| 🚧 | **2. Android sync:** protocol client, Android app, upload queue, companion duties, Garmin device support ported from Gadgetbridge | The app pairs, syncs and uploads, and has synced an Instinct 2 every 15 minutes since November 2026. It can also run alongside the Garmin Connect app. Notifications on the watch, music control and find my phone are built (off until switched on) and await a test on a real watch. Still to do: GPS assist and weather, forwarding to Garmin Connect, and the rest of the Gadgetbridge device catalogue. |
+| 🚧 | **2. Android sync:** protocol client, Android app, upload queue, companion duties, Garmin device support ported from Gadgetbridge | The app pairs, syncs and uploads, and has synced an Instinct 2 every 15 minutes since November 2026. It can also run alongside the Garmin Connect app. Notifications on the watch, music control, find my phone, weather and GPS assist are built (off until switched on) and await a test on a real watch. Still to do: forwarding to Garmin Connect, and the rest of the Gadgetbridge device catalogue. |
 | 🚧 | **3. Web interface:** Today, activities, sleep, trends, training, calendar and more | The pages, accounts, maps and the app shell are built and in daily use. Every page passes an automated accessibility check (axe, keyboard, 200% zoom) on sample data. Still to do: the same review on real data, and offline viewing on the phone (an experiment for now). |
 | 🚧 | **4. Writing and operations:** workouts to the watch, backups, export, runbook | Backups, export and the [runbook](docs/RUNBOOK.md) are done. Workouts are built on the web and sent to the watch by the phone; the first test on a real watch is still to do. |
 
@@ -160,7 +160,7 @@ The Android app has its own build notes in [`android/README.md`](android/README.
 
 ## Principles
 
-1. **No cloud.** No component calls Garmin's servers. The one planned exception, GPS-assist data, will be a setting you can turn off. Map tiles come from a file on your own server, not from a map service.
+1. **No cloud.** No component calls Garmin's servers. The one exception, GPS-assist data (a public satellite file, no login and nothing about you), is off until you switch it on in the app, and the server has its own off switch. Map tiles come from a file on your own server, not from a map service.
 2. **Original files are the source of truth.** The database can always be rebuilt from them.
 3. **Never invent data.** Prefer values the watch computed. Missing means *unavailable*.
 4. **Our own design.** Our own interface, names and layout; no Garmin screens, icons or wording.
