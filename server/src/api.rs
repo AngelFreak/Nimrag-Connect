@@ -49,6 +49,8 @@ pub struct AppState {
     pub tiles_dir: Option<Arc<PathBuf>>,
     /// Permits for `GET /api/export` (see `web_api::export::MAX_EXPORTS`).
     pub(crate) export_gate: Arc<tokio::sync::Semaphore>,
+    /// Weather for the watch: Open-Meteo client, kill switch and cache (see `weather.rs`).
+    pub weather: Arc<crate::weather::Weather>,
     clock: Arc<dyn Fn() -> i64 + Send + Sync>,
 }
 
@@ -70,6 +72,7 @@ impl AppState {
             export_gate: Arc::new(tokio::sync::Semaphore::new(
                 crate::web_api::export::MAX_EXPORTS,
             )),
+            weather: Default::default(),
             clock: Arc::new(system_now),
         }
     }
@@ -94,6 +97,13 @@ impl AppState {
     /// Replace the Garmin client configuration (tests point it at a fake Garmin).
     pub fn with_garmin(mut self, cfg: crate::garmin::GarminConfig) -> Self {
         self.garmin = Arc::new(crate::garmin::Garmin::new(cfg));
+        self
+    }
+
+    /// Replace the weather configuration (kill switch, Open-Meteo address; tests
+    /// point it at a fake).
+    pub fn with_weather(mut self, cfg: crate::weather::WeatherConfig) -> Self {
+        self.weather = Arc::new(crate::weather::Weather::new(cfg));
         self
     }
 
@@ -133,6 +143,7 @@ pub fn router(state: AppState) -> Router {
         )
         .route("/api/files/{sha256}", get(file_info))
         .merge(crate::web_api::router())
+        .merge(crate::weather::routes())
         .fallback(crate::web::handler) // the web app (SPA); /api/* misses stay 404
         .layer(DefaultBodyLimit::max(MAX_JSON_BYTES))
         .layer(axum::middleware::from_fn(crate::auth::csrf_guard))

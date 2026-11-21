@@ -487,12 +487,19 @@ impl RecordSet {
     /// The same records as a complete FIT file (all definitions first, then
     /// the data), for tests and tools.
     pub fn to_file(&self) -> Result<Vec<u8>, EncodeError> {
-        let mut data = self.definitions.clone();
-        for r in &self.records {
-            data.extend_from_slice(r);
-        }
-        wrap_file(&data)
+        records_to_file(&self.definitions, &self.records)
     }
+}
+
+/// Definition records and data records (as a [`RecordSet`] hands them out) as
+/// one complete FIT file: header, all definitions, then the data, CRC. For
+/// tests and tools; the watch gets the records without a header.
+pub fn records_to_file(definitions: &[u8], records: &[Vec<u8>]) -> Result<Vec<u8>, EncodeError> {
+    let mut data = definitions.to_vec();
+    for r in records {
+        data.extend_from_slice(r);
+    }
+    wrap_file(&data)
 }
 
 // ---- typed messages by profile name --------------------------------------------------
