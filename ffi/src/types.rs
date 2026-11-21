@@ -29,6 +29,9 @@ pub struct Duties {
     pub notifications: bool,
     pub music: bool,
     pub find_phone: bool,
+    /// Serve the watch's GPS-assist download (the host fetches the file from the
+    /// Nimrag server) and refuse every other HTTP request.
+    pub gps_assist: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
@@ -142,6 +145,17 @@ pub enum UploadStage {
     Data,
 }
 
+/// How a GPS-assist request ended.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
+pub enum GpsAssistOutcome {
+    Sent,
+    NotModified,
+    Unavailable,
+    Refused,
+    Failed,
+    NeedsFileAccess,
+}
+
 /// How an upload to the watch ended.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
 pub enum UploadResult {
@@ -244,6 +258,17 @@ pub enum Input {
         data_type: u8,
         sub_type: u8,
         data: Vec<u8>,
+    },
+    /// The file for `Event::GpsAssistRequest { id }`; `etag` is the header value
+    /// to send (quotes included), empty when there is none.
+    GpsAssistData {
+        id: u32,
+        body: Vec<u8>,
+        etag: String,
+    },
+    /// No file for `Event::GpsAssistRequest { id }`.
+    GpsAssistUnavailable {
+        id: u32,
     },
     Disconnected,
 }
@@ -364,6 +389,25 @@ pub enum Event {
     UploadFinished {
         upload_id: u64,
         result: UploadResult,
+    },
+    /// The watch asks for GPS-assist data: fetch `path_and_query` from the
+    /// Nimrag server and answer with `Input::GpsAssistData` or
+    /// `Input::GpsAssistUnavailable`.
+    GpsAssistRequest {
+        id: u32,
+        path_and_query: String,
+        if_none_match: Option<String>,
+    },
+    GpsAssistDone {
+        id: u32,
+        outcome: GpsAssistOutcome,
+    },
+    /// An HTTP request from the watch that was not served. `host` and `path` are
+    /// cleaned for a log line and never hold the query; both are empty for a
+    /// request with no readable address.
+    HttpRequestRefused {
+        host: String,
+        path: String,
     },
     Anomaly {
         kind: AnomalyKind,

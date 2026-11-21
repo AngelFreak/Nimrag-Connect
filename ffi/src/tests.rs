@@ -28,6 +28,7 @@ fn config() -> ClientConfig {
             notifications: true,
             music: false,
             find_phone: true,
+            gps_assist: true,
         },
     }
 }
@@ -61,7 +62,8 @@ fn config_converts_every_field() {
         core::Duties {
             notifications: true,
             music: false,
-            find_phone: true
+            find_phone: true,
+            gps_assist: true
         }
     );
     assert_eq!(
@@ -755,6 +757,7 @@ fn a_client_with_find_phone_on_reports_the_watchs_request() {
         notifications: false,
         music: false,
         find_phone: true,
+        gps_assist: false,
     };
     let client = NimragClient::new(cfg);
     // Before the handshake a duty input is ignored and produces nothing.
@@ -765,4 +768,75 @@ fn a_client_with_find_phone_on_reports_the_watchs_request() {
         },
     );
     assert!(step.writes.is_empty());
+}
+
+#[test]
+fn gps_assist_inputs_and_events_convert() {
+    let c: core::Input = Input::GpsAssistData {
+        id: 4,
+        body: vec![1, 2, 3],
+        etag: "\"e\"".into(),
+    }
+    .into();
+    assert_eq!(
+        c,
+        core::Input::GpsAssistData {
+            id: 4,
+            body: vec![1, 2, 3],
+            etag: "\"e\"".into()
+        }
+    );
+    let c: core::Input = Input::GpsAssistUnavailable { id: 9 }.into();
+    assert_eq!(c, core::Input::GpsAssistUnavailable { id: 9 });
+    assert_eq!(
+        Event::from(core::Event::GpsAssistRequest {
+            id: 4,
+            path_and_query: "/ephemeris/x?a=b".into(),
+            if_none_match: Some("\"e\"".into()),
+        }),
+        Event::GpsAssistRequest {
+            id: 4,
+            path_and_query: "/ephemeris/x?a=b".into(),
+            if_none_match: Some("\"e\"".into()),
+        }
+    );
+    let outcomes = [
+        (core::GpsAssistOutcome::Sent, GpsAssistOutcome::Sent),
+        (
+            core::GpsAssistOutcome::NotModified,
+            GpsAssistOutcome::NotModified,
+        ),
+        (
+            core::GpsAssistOutcome::Unavailable,
+            GpsAssistOutcome::Unavailable,
+        ),
+        (core::GpsAssistOutcome::Refused, GpsAssistOutcome::Refused),
+        (core::GpsAssistOutcome::Failed, GpsAssistOutcome::Failed),
+        (
+            core::GpsAssistOutcome::NeedsFileAccess,
+            GpsAssistOutcome::NeedsFileAccess,
+        ),
+    ];
+    for (from, want) in outcomes {
+        assert_eq!(
+            Event::from(core::Event::GpsAssistDone {
+                id: 1,
+                outcome: from
+            }),
+            Event::GpsAssistDone {
+                id: 1,
+                outcome: want
+            }
+        );
+    }
+    assert_eq!(
+        Event::from(core::Event::HttpRequestRefused {
+            host: "h.example".into(),
+            path: "/a".into()
+        }),
+        Event::HttpRequestRefused {
+            host: "h.example".into(),
+            path: "/a".into()
+        }
+    );
 }
