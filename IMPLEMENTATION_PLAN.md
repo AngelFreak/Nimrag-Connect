@@ -40,7 +40,7 @@ The finished product: an Android app that pairs with the Instinct 2 without Garm
 | 4 Writing + ops | 4a | FIT encoder + workout builder, sent to the watch via the phone (encoder and upload path ported from Gadgetbridge) | Not Started |
 | | 4b | Scheduled backups + documented restore test | Done and tested (2026-11-21); not yet run on the owner's server |
 | | 4c | Export: originals + CSV per data type | Done and tested (2026-11-21): server, web Profile row; Android download path built, not tried on a phone |
-| | 4d | Runbook: install, upgrade, restore, re-pair, firmware over USB | Not Started |
+| | 4d | Runbook: install, upgrade, restore, re-pair, firmware over USB | Written (2026-11-21); the Docker forms, a fresh pairing and a firmware update not yet tried |
 | | Gate 4 | Final report | — |
 
 Every phase ends with an update to `docs/ARCHITECTURE.md` and a gate report (engineering standards).
@@ -517,7 +517,8 @@ Each page renders from real synced data, shows "unavailable" correctly for missi
 
 ## Stage 4d: runbook (`docs/`)
 **Goal**: install, upgrade, restore, re-pair the watch, firmware updates over USB
-**Status**: Not Started
+**Contract**: [`docs/RUNBOOK.md`](docs/RUNBOOK.md): install (Docker, HTTPS, first run, users, phone, lost password), upgrade, backups (scheduled, one now, off the machine), restore (Docker and plain), "Check that your backups restore" (restore, `reparse`, compare; the same sequence as the real-binary test in `server/tests/backup.rs`), export, re-pairing the watch, firmware over USB, map tiles (points to `server/README.md`), troubleshooting. No real names, hosts or addresses (`alice`, `nimrag.example.ts.net`).
+**Status**: Written. The backup, restore, `reparse` and export commands are the ones the automated tests run. Not tried: the `docker compose` forms of them, pairing a watch that has no bond, and a firmware update followed by a sync (the runbook says so where it matters).
 
 ## Gate 4
 Final report: what works, what was verified and how, what is still unknown.

@@ -72,13 +72,13 @@ One Rust crate, `nimrag-core`, holds the watch protocol and all FIT decoding. It
 | ✅ | **1. Server:** ingest, file store, FIT decoding, parsers, `reparse`, export importer | Done. Gate passed on a full USB copy of a watch. |
 | 🚧 | **2. Android sync:** protocol client, Android app, upload queue, companion duties, Garmin device support ported from Gadgetbridge | The app pairs, syncs and uploads, and has synced an Instinct 2 every 15 minutes since November 2026. It can also run alongside the Garmin Connect app. Still to do: companion duties (GPS assist, weather, notifications, music, find my phone), forwarding to Garmin Connect, and the rest of the Gadgetbridge device catalogue. |
 | 🚧 | **3. Web interface:** Today, activities, sleep, trends, training, calendar and more | The pages, accounts, maps and the app shell are built and in daily use. Still to do: an accessibility pass and offline viewing on the phone (an experiment for now). |
-| ⏳ | **4. Writing and operations:** workouts to the watch, backups, export, runbook | Planned. |
+| 🚧 | **4. Writing and operations:** workouts to the watch, backups, export, runbook | Backups, export and the [runbook](docs/RUNBOOK.md) are done. Workouts to the watch are still to do. |
 
 The full plan, with every stage and its status, is in [`IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md).
 
 ## Getting started
 
-Nimrag Connect is early software. It runs every day for its owner, but expect rough edges, and keep backups of your data directory. Debug builds of the Android app are published as pre-releases on the [Releases page](https://github.com/AngelFreak/Nimrag-Connect/releases).
+Nimrag Connect is early software. It runs every day for its owner, but expect rough edges, and switch on backups (the server can make them itself, see the [runbook](docs/RUNBOOK.md)). Debug builds of the Android app are published as pre-releases on the [Releases page](https://github.com/AngelFreak/Nimrag-Connect/releases).
 
 ### Run the server
 
@@ -92,6 +92,8 @@ This builds the server image and keeps its data in a Docker volume. It listens o
 2. **Users:** in **Admin**, create a user for each person. They sign in with their temporary password and set up their own two-step code.
 3. **Phone:** install the app, and sign in with the server address, username, password and code. Later unlocks use the fingerprint or the password. The app gets its upload credential itself; nobody copies tokens.
 4. **Watch:** pair the watch from the app's **Watch** tab.
+
+The [runbook](docs/RUNBOOK.md) has the full steps: install with HTTPS, upgrade, backups and a restore check, export, re-pairing the watch, firmware updates and troubleshooting.
 
 Optional:
 
