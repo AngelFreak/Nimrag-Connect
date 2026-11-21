@@ -711,14 +711,15 @@ where
 }
 
 /// Reject `POST`/`PATCH`/`PUT`/`DELETE` under `/api` without `X-Nimrag: 1`, except
-/// the device upload (`/api/files`, Bearer token) and `/api/login`.
+/// the device upload (`/api/files`, Bearer token), the phone's endpoints under `/api/device/`
+/// (Bearer token, no cookie, so nothing for a forged page to ride on) and `/api/login`.
 pub async fn csrf_guard(req: Request, next: Next) -> Response {
     let changes = matches!(
         *req.method(),
         Method::POST | Method::PATCH | Method::PUT | Method::DELETE
     );
     let path = req.uri().path();
-    let exempt = path == "/api/files" || path == "/api/login";
+    let exempt = path == "/api/files" || path == "/api/login" || path.starts_with("/api/device/");
     if changes && path.starts_with("/api/") && !exempt {
         let ok = req
             .headers()
