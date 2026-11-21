@@ -2,13 +2,15 @@
 //! three flags do not justify a parser dependency.
 
 use anyhow::{bail, Context, Result};
-use nimrag_server::{api, connect, db, derive, import, ledger, tokens, users};
+use nimrag_server::{api, backup, connect, db, derive, import, ledger, tokens, users};
 use std::path::PathBuf;
+use std::time::Duration;
 
 const USAGE: &str = "\
 usage:
   nimrag-server serve [--data-dir DIR] [--listen ADDR] [--log-json] [--insecure-cookies]
                       [--trusted-proxy CIDR[,CIDR...]] [--tiles-dir DIR]
+                      [--backup-dir DIR [--backup-every 24h] [--backup-keep 7]]
   nimrag-server user set-password [--username NAME] [--data-dir DIR]
                                                    read the new password from stdin (default user: the only admin)
   nimrag-server user reset-2fa --username NAME [--data-dir DIR]
@@ -28,6 +30,10 @@ usage:
                                                    import a directory of Garmin Connect JSON (sleep, HRV, training
                                                    status and load, VO2 max, daily stats, activities) for a user
   nimrag-server rebuild-ledger [--data-dir DIR]   recreate files/uploads rows from sidecars
+  nimrag-server backup --out DIR [--keep N] [--data-dir DIR]
+                                                   one backup now (database snapshot + files); safe while serve runs
+  nimrag-server restore --from BACKUP --data-dir NEWDIR
+                                                   copy a backup folder into a new, empty data dir
 --data-dir defaults to $NIMRAG_DATA_DIR or ./data; --listen to 127.0.0.1:8080.
 --user on token create and import-export names the user who owns the token or the imported files;
   without it they stay unassigned until an admin assigns them in the web app (import-connect
@@ -36,6 +42,9 @@ usage:
   uses the cookie name nimrag_session instead of __Host-nimrag_session.
 --tiles-dir (or $NIMRAG_TILES_DIR) serves the *.pmtiles files of DIR to signed-in users under
   /tiles/<name>.pmtiles (map tiles for the web app); without it /tiles/* is a 404.
+--backup-dir (or $NIMRAG_BACKUP_DIR) makes serve back up by itself: every --backup-every ($NIMRAG_BACKUP_EVERY,
+  default 24h; 30m, 6h, 1d) a folder nimrag-backup-<UTC time> with a database snapshot and the files, of which
+  the newest --backup-keep ($NIMRAG_BACKUP_KEEP, default 7) stay. Without --backup-dir nothing is backed up.
 --trusted-proxy (repeatable, or comma-separated) names the reverse-proxy networks whose
   X-Forwarded-For is believed for login rate limiting: only when the TCP peer is inside one, the
   rightmost entry outside all of them is the client. Without it the peer address is used.";
@@ -47,6 +56,11 @@ struct Opts {
     insecure_cookies: bool,
     trusted_proxies: Vec<nimrag_server::auth::Cidr>,
     tiles_dir: Option<PathBuf>,
+    backup_dir: Option<PathBuf>,
+    backup_every: Duration,
+    backup_keep: usize,
+    from: Option<PathBuf>,
+    keep: Option<usize>,
     out: Option<PathBuf>,
     list_skipped: bool,
     limits: import::Limits,
@@ -62,6 +76,10 @@ fn number<T: std::str::FromStr>(s: &str) -> Result<T> {
         .map_err(|_| anyhow::anyhow!("{s} is not a number"))
 }
 
+fn env_text(name: &str) -> Option<String> {
+    std::env::var(name).ok().filter(|v| !v.is_empty())
+}
+
 fn parse_opts(args: &[String]) -> Result<Opts> {
     let mut o = Opts {
         data_dir: std::env::var_os("NIMRAG_DATA_DIR").map_or_else(|| "data".into(), Into::into),
@@ -72,6 +90,19 @@ fn parse_opts(args: &[String]) -> Result<Opts> {
         tiles_dir: std::env::var_os("NIMRAG_TILES_DIR")
             .filter(|v| !v.is_empty())
             .map(Into::into),
+        backup_dir: std::env::var_os("NIMRAG_BACKUP_DIR")
+            .filter(|v| !v.is_empty())
+            .map(Into::into),
+        backup_every: match env_text("NIMRAG_BACKUP_EVERY") {
+            Some(v) => backup::parse_interval(&v).context("NIMRAG_BACKUP_EVERY")?,
+            None => Duration::from_secs(24 * 3600),
+        },
+        backup_keep: match env_text("NIMRAG_BACKUP_KEEP") {
+            Some(v) => number(&v).context("NIMRAG_BACKUP_KEEP")?,
+            None => 7,
+        },
+        from: None,
+        keep: None,
         out: None,
         list_skipped: false,
         limits: import::Limits::default(),
@@ -102,6 +133,14 @@ fn parse_opts(args: &[String]) -> Result<Opts> {
                     .context("--trusted-proxy")?,
             ),
             "--tiles-dir" => o.tiles_dir = Some(value("--tiles-dir")?.into()),
+            "--backup-dir" => o.backup_dir = Some(value("--backup-dir")?.into()),
+            "--backup-every" => {
+                o.backup_every =
+                    backup::parse_interval(&value("--backup-every")?).context("--backup-every")?;
+            }
+            "--backup-keep" => o.backup_keep = number(&value("--backup-keep")?)?,
+            "--keep" => o.keep = Some(number(&value("--keep")?)?),
+            "--from" => o.from = Some(value("--from")?.into()),
             "--out" => o.out = Some(value("--out")?.into()),
             "--list-skipped" => o.list_skipped = true,
             "--max-depth" => o.limits.max_depth = number(&value("--max-depth")?)?,
@@ -169,6 +208,8 @@ async fn main() -> Result<()> {
             );
             Ok(())
         }
+        "backup" => backup_now(o).await,
+        "restore" => restore(o).await,
         "import-export" => import_export(o).await,
         "import-connect" => import_connect(o).await,
         "token" => token(o).await,
@@ -415,6 +456,29 @@ async fn serve(o: Opts) -> Result<()> {
             "trusting X-Forwarded-For from the configured proxy networks"
         );
     }
+    if let Some(dir) = &o.backup_dir {
+        if o.backup_every < Duration::from_secs(60) {
+            bail!("--backup-every must be at least 1m");
+        }
+        if o.backup_keep == 0 {
+            bail!("--backup-keep must be at least 1");
+        }
+        tracing::info!(
+            dir = %dir.display(),
+            every_s = o.backup_every.as_secs(),
+            keep = o.backup_keep,
+            "scheduled backups on"
+        );
+        backup::spawn_scheduler(
+            state.pool.clone(),
+            state.data_dir.as_ref().clone(),
+            backup::Config {
+                dir: dir.clone(),
+                every: o.backup_every,
+                keep: o.backup_keep,
+            },
+        );
+    }
     // Forward mode: uploads queued activity files to Garmin Connect (idle until a user logs in to Garmin).
     nimrag_server::garmin::queue::spawn_worker(state.clone());
     let app = api::router(state);
@@ -435,6 +499,43 @@ async fn serve(o: Opts) -> Result<()> {
         let _ = tokio::signal::ctrl_c().await;
     })
     .await?;
+    Ok(())
+}
+
+/// `backup`: one backup now. It reads the database through a read-only connection and does not
+/// take the data-dir lock, so it works while `serve` runs.
+async fn backup_now(o: Opts) -> Result<()> {
+    let out = o
+        .out
+        .context("backup needs --out DIR (a folder outside the data dir)")?;
+    let pool = db::open_read_only(&o.data_dir).await?;
+    let r = backup::run_once(&pool, &o.data_dir, &out, o.keep).await?;
+    println!("backup written to {}", r.path.display());
+    println!("{}", r.summary());
+    for p in &r.pruned {
+        println!("pruned {p}");
+    }
+    Ok(())
+}
+
+/// `restore`: copy a backup folder into a new data dir. Run `reparse` on it afterwards to
+/// rebuild the derived tables from the files if you want them freshly derived.
+async fn restore(o: Opts) -> Result<()> {
+    let from = o
+        .from
+        .context("restore needs --from BACKUP (a backup folder)")?;
+    let r = backup::restore(&from, &o.data_dir).await?;
+    println!(
+        "restored {} files ({} bytes) and the database ({} bytes) into {}",
+        r.files,
+        r.files_bytes,
+        r.db_bytes,
+        o.data_dir.display()
+    );
+    if let Some(m) = r.manifest {
+        println!("backup taken {}", m.created_at);
+    }
+    println!("start the server on it, or run `nimrag-server reparse --data-dir ...` first to derive the tables again");
     Ok(())
 }
 

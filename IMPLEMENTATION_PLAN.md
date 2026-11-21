@@ -38,7 +38,7 @@ The finished product: an Android app that pairs with the Instinct 2 without Garm
 | | 3r | Live use, 0.6.x: metric detail pages, Watch/Profile redesign, Connect daily history, maps, sync icon, day-total fix | Done (0.6.0–0.6.2, 2026-11-20/21); see "Live use (2026-11-20/21)" |
 | | Gate 3 | Every page from real data, "unavailable" shown correctly, accessibility check | **In progress**: pages run on real data; the accessibility check has only run on seeded data |
 | 4 Writing + ops | 4a | FIT encoder + workout builder, sent to the watch via the phone (encoder and upload path ported from Gadgetbridge) | Not Started |
-| | 4b | Scheduled backups + documented restore test | Not Started |
+| | 4b | Scheduled backups + documented restore test | Done and tested (2026-11-21); not yet run on the owner's server |
 | | 4c | Export: originals + CSV per data type | Not Started |
 | | 4d | Runbook: install, upgrade, restore, re-pair, firmware over USB | Not Started |
 | | Gate 4 | Final report | — |
@@ -505,7 +505,9 @@ Each page renders from real synced data, shows "unavailable" correctly for missi
 
 ## Stage 4b: backups
 **Goal**: scheduled copy of the file store and database; documented restore test that rebuilds from the files with `reparse`
-**Status**: Not Started
+**Contract** (details in `server/README.md`, "Backups"): `serve --backup-dir DIR [--backup-every 24h] [--backup-keep 7]` (env `NIMRAG_BACKUP_DIR`, `_EVERY`, `_KEEP`; off without the dir). One backup is a folder `nimrag-backup-<UTC time>` with a `VACUUM INTO` snapshot, the file store and `backup.json`; files unchanged since the previous backup are hard-linked (copied when linking fails), never rewritten; written under a temporary name and renamed; pruned only after success. `backup --out DIR` does one now and does not take the data-dir lock; `restore --from BACKUP --data-dir NEWDIR` refuses a non-empty target. The database is part of every backup because file ownership, accounts and tokens live only there.
+**Tests**: `server/tests/backup.rs` (router under load, real binary, incrementality, pruning, failed backup, restore then `reparse` gives identical derived tables).
+**Status**: Done and tested. Not yet switched on for the owner's server (the volume and the first restore check are the owner's step; `docs/RUNBOOK.md`).
 
 ## Stage 4c: export
 **Goal**: all original files plus CSV per data type
