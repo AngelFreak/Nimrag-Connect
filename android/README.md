@@ -108,8 +108,9 @@ live in `ui/watch/logic` with unit tests; the shared rows, group, banner and dia
 
 ## Phone features (stage 2f, built, live test pending)
 
-The Watch tab has a "Phone features" page with three switches, **all off by default**:
-notifications on the watch, music control and find my phone, plus a "Find my watch" button.
+The Watch tab has a "Phone features" page with four switches, **all off by default**:
+notifications on the watch, music control, find my phone and weather (see "Weather" below), plus a
+"Find my watch" button.
 Everything here is ported from Gadgetbridge and *inferred (Gadgetbridge)* until it has been tried on
 the owner's Instinct 2; only the unit tests (core byte-exact frames, ffi conversions, the Kotlin
 rules) are verified.
@@ -159,6 +160,62 @@ rules) are verified.
    rings, vibrates and shows "Found it"; cancelling on the watch stops it.
 6. "Make the watch ring" on the Phone features page rings the watch and stops it.
 7. Switch everything off again: the watch reconnects once and sends nothing more.
+
+## Weather (stage 2f, built, live test pending)
+
+The Phone features page has a fourth switch, **Weather on the watch, off by default**, with one
+sentence under it: your Nimrag server gets the forecast from Open-Meteo for your area, rounded to
+about 10 km. Like the rest of 2f it is ported from Gadgetbridge and *inferred (Gadgetbridge)* until
+the watch has shown a forecast from us; only the unit tests (core byte-exact frames through
+`Client::handle`, ffi conversions, the server tests with a fake Open-Meteo, the Kotlin rules) are
+verified.
+
+- **Flow.** The watch's weather widget sends 5014 with its position. The protocol client ACKs it,
+  rounds the position to 0.1 degree and raises `Event.WeatherRequest`; `engine/phone/WeatherBridge.kt`
+  asks the server (`POST /api/device/weather`, device token, rules and tests in
+  `engine/phone/logic/WeatherRules.kt`), and gives the answer to the client (`Input.SendWeather`),
+  which sends it as 5011 (definitions) and 5012 (data) and reports `Event.WeatherSent`. **The server
+  writes the FIT bytes** (it needs the locally generated FIT profile); the phone only carries them,
+  so the public build contains no profile table and the string check in "No FIT profile on Android"
+  still finds nothing. A server without the profile, or with `NIMRAG_WEATHER=off`, answers 503 and
+  the watch simply gets no weather.
+- **Claiming it.** `PhoneDuties.kt` claims capability bit 26 (`WEATHER_CONDITIONS`) only when the
+  switch is on (bit 27, alerts, never), and passes `Duties.weather` to the client. Changing the
+  switch reconnects the watch once, like the other duties. Weather needs no Notification access.
+- **When the server cannot be reached** (no server set, offline, an error): the last answer for the
+  same cell is sent again if it is under 3 hours old; otherwise nothing more is sent (the request was
+  already acknowledged), which the watch shows as no weather. The page says which of these happened.
+  The last answer is kept in memory only; switching Weather off or restarting the app forgets it.
+- **The page** shows when the watch last took a forecast ("On · last sent 5 min ago", with "an
+  earlier forecast" when it was the 3-hour fallback) and what went wrong last (no forecast, no
+  position, the watch did not take it). It is held in memory, so it starts empty after a restart.
+- **Network rule.** Unlike file uploads this does not wait for Wi-Fi: a request is a few hundred
+  bytes out and a few kilobytes back, and weather is mostly wanted away from home.
+- **Privacy.** The position is never written to settings, the database or the log (not even
+  rounded); log lines say what happened, not where, and the types that hold it print nothing.
+  Open-Meteo only sees the rounded cell and the server's address. Attribution (CC BY 4.0) is in
+  Settings, About, Open-source licences, and in NOTICE and the READMEs.
+
+**To try on the watch** (none is verified yet). Needs a server built with the FIT profile and
+reachable from the phone (the Docker image has none, so it answers 503):
+
+1. Weather is off after a fresh install and nothing about weather changes on the watch.
+2. Switch Weather on: the watch reconnects once. Open the weather widget on the watch (or pull the
+   glance) with the phone connected: after a few seconds it shows the current temperature and
+   condition, hourly and the next days.
+3. In the app's log (the Share log button), a good request reads "Weather: the watch took the forecast";
+   the page's row says "On · last sent just now". The log never shows a position.
+4. Stop the server (or put the phone in flight mode with Bluetooth on) and open the widget again:
+   within 3 hours of a good answer for the same area the log says "sending the earlier forecast for
+   this area" and the row says "an earlier forecast"; with none, "no forecast for the watch ...
+   nothing sent" and the widget shows no weather.
+5. If the widget never asks: the log has no "Weather" line at all (check the watch has the weather
+   widget on and that bit 26 reached the watch: reconnect once). If the log says "the watch did not
+   take the forecast", note the reason (refused, did not answer in time) and the server log's
+   `weather answered` line; that is the capture for OPEN-QUESTIONS Q-COMP-3. Also check the units
+   (the temperature is whole degrees Celsius) and that the place is right (the coordinates are read
+   as FIT semicircles; a forecast for the wrong place means that reading is wrong).
+6. Switch Weather off again: the watch reconnects once and the widget stops asking.
 
 ## Workouts (stage 4a, built, live test pending)
 

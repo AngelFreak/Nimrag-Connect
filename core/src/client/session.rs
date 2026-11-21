@@ -35,10 +35,12 @@ use super::companion::{Companion, Cx, MusicInfo, MusicState};
 use super::sync::{Ctx, SyncCycle};
 use super::transport::REPLY_DEADLINE_MS;
 use super::upload::{self, Uploads};
+use super::weather::Weather;
 use super::{
     AnomalyKind, BatteryReport, ClientConfig, CloseReason, DeviceInfo, Duties, Event, FileType,
     FindWatchState, Now, Phase, GARMIN_EPOCH_UNIX_S,
 };
+use crate::duties::weather as wx;
 use crate::duties::{find, music, notification as notif};
 use crate::gfdi::{Message, Status, RESPONSE};
 use crate::messages as m;
@@ -88,6 +90,10 @@ pub enum Kind {
     MusicVolume,
     /// The protobuf find-my-watch request (5043, find_my_watch 12).
     FindWatch,
+    /// 5011 with the FIT definition records of a weather answer (stage 2f).
+    WeatherDefinition,
+    /// One 5012 with FIT data records of a weather answer.
+    WeatherData,
     /// 5005 CreateFile of an upload (stage 4a).
     UploadCreate,
     /// 5003 UploadFile of an upload.
@@ -109,7 +115,9 @@ impl Kind {
             | Kind::MusicInfo
             | Kind::MusicState
             | Kind::MusicVolume
-            | Kind::FindWatch => Some(AnomalyKind::DutyMessageRefused),
+            | Kind::FindWatch
+            | Kind::WeatherDefinition
+            | Kind::WeatherData => Some(AnomalyKind::DutyMessageRefused),
             Kind::UploadCreate | Kind::UploadRequest | Kind::UploadData | Kind::UploadComplete => {
                 Some(AnomalyKind::UploadFailed)
             }
@@ -256,6 +264,7 @@ pub struct Session {
     battery_requested: bool,
     duties: Duties,
     companion: Companion,
+    weather: Weather,
     req: Requests,
     sync: SyncCycle,
     uploads: Uploads,
@@ -286,6 +295,7 @@ impl Session {
             battery_requested: false,
             duties: config.duties,
             companion: Companion::new(config.duties),
+            weather: Weather::new(config.duties.weather),
             req: Requests::default(),
             sync: SyncCycle::new(config),
             uploads: Uploads::new(config.connection_epoch),
@@ -470,6 +480,7 @@ impl Session {
             Kind::FindWatch => out.events.push(Event::FindWatch {
                 state: FindWatchState::Failed,
             }),
+            Kind::WeatherDefinition | Kind::WeatherData => self.weather.on_timeout(out),
             Kind::UploadCreate | Kind::UploadRequest | Kind::UploadData => {
                 let max_packet = self.device.as_ref().map_or(0, |d| d.max_packet_size);
                 let mut cx = upload::Cx {
@@ -552,6 +563,27 @@ impl Session {
             };
             self.companion.music_volume(percent, &mut cx);
         }
+        self.finish(now, &mut out, false);
+        out
+    }
+
+    /// `Input::SendWeather`.
+    pub fn send_weather(&mut self, now: &Now, definitions: Vec<u8>, records: Vec<Vec<u8>>) -> Out {
+        let mut out = Out::default();
+        let max_packet = self.device.as_ref().map_or(0, |d| d.max_packet_size);
+        let watch_ready = self.ready
+            && self
+                .watch_capabilities
+                .as_deref()
+                .is_some_and(|c| find::has_capability(c, wx::CAP_WEATHER_CONDITIONS));
+        self.weather.send(
+            definitions,
+            records,
+            watch_ready,
+            wx::payload_budget(max_packet),
+            &mut self.req,
+            &mut out,
+        );
         self.finish(now, &mut out, false);
         out
     }
@@ -680,6 +712,16 @@ impl Session {
                         out,
                     };
                     self.companion.on_data_answer(ok, &mut cx);
+                }
+                Kind::WeatherDefinition | Kind::WeatherData => {
+                    // The weather answer reports its own anomaly and result.
+                    self.weather.on_answer(
+                        pending.kind,
+                        ack,
+                        wx::status_code(r.body),
+                        &mut self.req,
+                        out,
+                    );
                 }
                 Kind::FindWatch if !ack => {
                     out.anomaly(anomaly, r.request_id);
@@ -933,6 +975,20 @@ impl Session {
                     out,
                 };
                 self.companion.on_music_entity_request(msg, &mut cx);
+                false
+            }
+            wx::WEATHER_REQUEST if self.duties.weather => {
+                match wx::parse_weather_request(&msg.payload) {
+                    Some(r) => {
+                        out.msgs.push(response(msg, 0, &[]));
+                        out.events.push(Event::WeatherRequest {
+                            format: r.format,
+                            cell: r.cell,
+                            hours: r.hours,
+                        });
+                    }
+                    None => out.anomaly(AnomalyKind::BadFrame, msg.id),
+                }
                 false
             }
             id => {

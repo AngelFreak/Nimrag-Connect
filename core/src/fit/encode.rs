@@ -323,31 +323,10 @@ impl FitWriter {
     /// Append a message, preceded by its definition when no local slot holds
     /// that layout.
     pub fn push(&mut self, message: &RawMessage) -> Result<(), EncodeError> {
-        if message.fields.len() > MAX_FIELDS {
-            return Err(EncodeError::Invalid("a message has too many fields".into()));
-        }
-        let mut fields = Vec::with_capacity(message.fields.len());
-        for f in &message.fields {
-            let size = u8::try_from(f.data.len())
-                .map_err(|_| EncodeError::Invalid(format!("field {} is too long", f.num)))?;
-            if f.data.is_empty() {
-                return Err(EncodeError::Invalid(format!("field {} is empty", f.num)));
-            }
-            fields.push((f.num, size, f.base_type));
-        }
-        // Fields in ascending number, and no number twice, so equal layouts compare equal.
-        if fields.windows(2).any(|w| w[0].0 >= w[1].0) {
-            return Err(EncodeError::Invalid(
-                "fields must be in ascending order, each number once".into(),
-            ));
-        }
-        let layout = Layout {
-            global: message.global,
-            fields,
-        };
+        let layout = layout_of(message)?;
         let (local, define) = self.slot_for(&layout);
         if define {
-            self.write_definition(local, &layout);
+            self.data.extend(definition_record(local, &layout));
             self.slots[local] = Some(layout);
         }
         self.tick += 1;
@@ -378,33 +357,149 @@ impl FitWriter {
         (i, true)
     }
 
-    fn write_definition(&mut self, local: usize, layout: &Layout) {
-        self.data.push(0x40 | local as u8);
-        self.data.push(0); // reserved
-        self.data.push(0); // little endian
-        self.data.extend_from_slice(&layout.global.to_le_bytes());
-        self.data.push(layout.fields.len() as u8);
-        for (num, size, base) in &layout.fields {
-            self.data.extend_from_slice(&[*num, *size, *base]);
-        }
-    }
-
     /// The finished file: header, records, CRC.
     pub fn finish(self) -> Result<Vec<u8>, EncodeError> {
-        let size = u32::try_from(self.data.len()).map_err(|_| EncodeError::TooLarge)?;
-        let mut out = Vec::with_capacity(HEADER_SIZE as usize + self.data.len() + 2);
-        out.push(HEADER_SIZE);
-        out.push(PROTOCOL_VERSION);
-        out.extend_from_slice(&PROFILE_VERSION.to_le_bytes());
-        out.extend_from_slice(&size.to_le_bytes());
-        out.extend_from_slice(b".FIT");
-        let header_crc = crc::checksum(&out);
-        out.extend_from_slice(&header_crc.to_le_bytes());
-        out.extend_from_slice(&self.data);
-        let file_crc = crc::checksum(&out);
-        out.extend_from_slice(&file_crc.to_le_bytes());
-        Ok(out)
+        wrap_file(&self.data)
     }
+}
+
+/// The layout a message needs a definition for: its fields in ascending number
+/// with their sizes and base types.
+fn layout_of(message: &RawMessage) -> Result<Layout, EncodeError> {
+    if message.fields.len() > MAX_FIELDS {
+        return Err(EncodeError::Invalid("a message has too many fields".into()));
+    }
+    let mut fields = Vec::with_capacity(message.fields.len());
+    for f in &message.fields {
+        let size = u8::try_from(f.data.len())
+            .map_err(|_| EncodeError::Invalid(format!("field {} is too long", f.num)))?;
+        if f.data.is_empty() {
+            return Err(EncodeError::Invalid(format!("field {} is empty", f.num)));
+        }
+        fields.push((f.num, size, f.base_type));
+    }
+    // Fields in ascending number, and no number twice, so equal layouts compare equal.
+    if fields.windows(2).any(|w| w[0].0 >= w[1].0) {
+        return Err(EncodeError::Invalid(
+            "fields must be in ascending order, each number once".into(),
+        ));
+    }
+    Ok(Layout {
+        global: message.global,
+        fields,
+    })
+}
+
+/// A definition record for local slot `local`: header, reserved byte,
+/// architecture (little endian), global number, field count and the fields.
+fn definition_record(local: usize, layout: &Layout) -> Vec<u8> {
+    let mut d = vec![0x40 | local as u8, 0, 0];
+    d.extend_from_slice(&layout.global.to_le_bytes());
+    d.push(layout.fields.len() as u8);
+    for (num, size, base) in &layout.fields {
+        d.extend_from_slice(&[*num, *size, *base]);
+    }
+    d
+}
+
+/// A FIT file around `data` (records): header with its CRC, the records, the
+/// file CRC.
+fn wrap_file(data: &[u8]) -> Result<Vec<u8>, EncodeError> {
+    let size = u32::try_from(data.len()).map_err(|_| EncodeError::TooLarge)?;
+    let mut out = Vec::with_capacity(HEADER_SIZE as usize + data.len() + 2);
+    out.push(HEADER_SIZE);
+    out.push(PROTOCOL_VERSION);
+    out.extend_from_slice(&PROFILE_VERSION.to_le_bytes());
+    out.extend_from_slice(&size.to_le_bytes());
+    out.extend_from_slice(b".FIT");
+    let header_crc = crc::checksum(&out);
+    out.extend_from_slice(&header_crc.to_le_bytes());
+    out.extend_from_slice(data);
+    let file_crc = crc::checksum(&out);
+    out.extend_from_slice(&file_crc.to_le_bytes());
+    Ok(out)
+}
+
+// ---- definitions and data records kept apart ---------------------------------------------
+
+/// Definition records and data records kept apart, with a fixed local message
+/// type per layout: what the weather answer needs (GFDI 5011 carries the
+/// definitions, 5012 the data; neither has a FIT file header). Every message
+/// pushed to one local type must have the same layout, as in Gadgetbridge's
+/// `FitLocalMessageBuilder`: a different one is an error, never silently
+/// re-defined. *inferred (Gadgetbridge)*
+#[derive(Debug, Default)]
+pub struct RecordSet {
+    layouts: [Option<Layout>; LOCAL_SLOTS],
+    definitions: Vec<u8>,
+    records: Vec<Vec<u8>>,
+}
+
+impl RecordSet {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Add a data record of local type `local` (0 to 15). The first message of
+    /// a local type adds its definition.
+    pub fn push(&mut self, local: u8, message: &RawMessage) -> Result<(), EncodeError> {
+        let slot = usize::from(local);
+        if slot >= LOCAL_SLOTS {
+            return Err(EncodeError::Invalid(
+                "local message type out of range".into(),
+            ));
+        }
+        let layout = layout_of(message)?;
+        match &self.layouts[slot] {
+            Some(known) if *known != layout => {
+                return Err(EncodeError::Invalid(format!(
+                    "local message type {local} is used with two layouts"
+                )))
+            }
+            Some(_) => {}
+            None => {
+                self.definitions.extend(definition_record(slot, &layout));
+                self.layouts[slot] = Some(layout);
+            }
+        }
+        let mut record = vec![local];
+        for f in &message.fields {
+            record.extend_from_slice(&f.data);
+        }
+        self.records.push(record);
+        Ok(())
+    }
+
+    /// All definition records, in the order the local types were first used.
+    pub fn definitions(&self) -> &[u8] {
+        &self.definitions
+    }
+
+    /// Every data record (header byte included), in push order.
+    pub fn records(&self) -> &[Vec<u8>] {
+        &self.records
+    }
+
+    pub fn into_parts(self) -> (Vec<u8>, Vec<Vec<u8>>) {
+        (self.definitions, self.records)
+    }
+
+    /// The same records as a complete FIT file (all definitions first, then
+    /// the data), for tests and tools.
+    pub fn to_file(&self) -> Result<Vec<u8>, EncodeError> {
+        records_to_file(&self.definitions, &self.records)
+    }
+}
+
+/// Definition records and data records (as a [`RecordSet`] hands them out) as
+/// one complete FIT file: header, all definitions, then the data, CRC. For
+/// tests and tools; the watch gets the records without a header.
+pub fn records_to_file(definitions: &[u8], records: &[Vec<u8>]) -> Result<Vec<u8>, EncodeError> {
+    let mut data = definitions.to_vec();
+    for r in records {
+        data.extend_from_slice(r);
+    }
+    wrap_file(&data)
 }
 
 // ---- typed messages by profile name --------------------------------------------------

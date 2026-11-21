@@ -236,8 +236,8 @@
     <!-- Phone features -->
     <string name="phone_features_title">Phone features</string>
     <string name="phone_features_value_off">All off</string>
-    <string name="phone_features_value_count">%1$d of 3 on</string>
-    <string name="phone_features_intro">What the phone does for the watch besides syncing. Everything is off until you switch it on, and nothing leaves your phone except to your own watch.</string>
+    <string name="phone_features_value_count">%1$d of 4 on</string>
+    <string name="phone_features_intro">What the phone does for the watch besides syncing. Everything is off until you switch it on, and nothing leaves your phone except to your own watch and your own Nimrag server.</string>
     <string name="phone_group_features">Features</string>
     <string name="phone_notifications_title">Notifications on the watch</string>
     <string name="phone_notifications_off">Off</string>
@@ -250,10 +250,19 @@
     <string name="phone_find_title">Find my phone</string>
     <string name="phone_find_off">Off</string>
     <string name="phone_find_on">On · the watch can make the phone ring</string>
+    <string name="phone_weather_title">Weather on the watch</string>
+    <string name="phone_weather_off">Off</string>
+    <string name="phone_weather_idle">On · nothing sent to the watch yet</string>
+    <string name="phone_weather_sent">On · last sent %1$s</string>
+    <string name="phone_weather_sent_earlier">On · last sent %1$s, an earlier forecast</string>
+    <string name="phone_weather_issue_no_forecast">the last request got no forecast</string>
+    <string name="phone_weather_issue_no_position">the watch sent no position</string>
+    <string name="phone_weather_issue_not_taken">the watch did not take the last forecast</string>
     <string name="phone_features_footer">Changing a switch reconnects the watch once, so it learns what the phone can do.</string>
     <string name="phone_notifications_explain">Notifications: your phone\'s notifications appear on the watch, with the title and text, and you can dismiss them from the watch. They go straight to your watch and are never stored or logged by Nimrag.</string>
     <string name="phone_music_explain">Music: the watch shows the song that plays on your phone and its buttons play, pause, skip and change the volume. This needs notification access too, because that is how Android shows the player to an app.</string>
     <string name="phone_find_explain">Find my phone: pressing the find-phone button on the watch makes the phone ring loudly and vibrate, even on silent, until you press \"Found it\", the watch cancels, or the time is up.</string>
+    <string name="phone_weather_explain">Weather: your Nimrag server gets the forecast from Open-Meteo for your area, rounded to about 10 km, and sends it to the watch.</string>
     <string name="phone_access_title">Notification access is off</string>
     <string name="phone_access_body">Android keeps a special switch for apps that read notifications. Notifications and music need it. Turn on \"Nimrag Connect\" on the page that opens; nothing is read until a feature is on.</string>
     <string name="phone_access_open">Open the setting</string>
@@ -311,6 +320,7 @@
     <string name="licences_libraries">Libraries</string>
     <string name="licences_rust">Rust crates in libnimrag_ffi.so (%1$d)</string>
     <string name="licences_fonts">Fonts</string>
+    <string name="licences_data">Data sources (fetched by your server, not bundled)</string>
 
     <!-- Trouble connecting -->
     <string name="help_title">Trouble connecting?</string>

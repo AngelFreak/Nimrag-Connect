@@ -2,10 +2,11 @@ package dev.nimrag.app.engine.phone.logic
 
 /*
  * The capability bit numbers (GNCS 6, ADVANCED_MUSIC 7, FIND_MY_PHONE 8, FIND_MY_WATCH 9,
- * BASIC_MUSIC 52) are taken from Gadgetbridge commit 7257742b (AGPL-3.0-or-later),
+ * WEATHER_CONDITIONS 26, BASIC_MUSIC 52) are taken from Gadgetbridge commit 7257742b (AGPL-3.0-or-later),
  * app/src/main/java/nodomain/freeyourgadget/gadgetbridge/service/devices/garmin/GarminCapability.java
  * (no copyright line in the file; Gadgetbridge contributors), and which of them a duty claims from
- * GarminSupport.java. The rest of the file is our own. Inferred (Gadgetbridge) until the stage 2f
+ * GarminSupport.java. WEATHER_CONDITIONS (26) is from the same file; WEATHER_ALERTS (27) is not
+ * claimed. The rest of the file is our own. Inferred (Gadgetbridge) until the stage 2f
  * live test confirms that the watch asks for a duty when its bit is claimed. See docs/PORTED.md.
  */
 
@@ -17,8 +18,9 @@ data class DutyMask(
     val notifications: Boolean = false,
     val music: Boolean = false,
     val findPhone: Boolean = false,
+    val weather: Boolean = false,
 ) {
-    val any: Boolean get() = notifications || music || findPhone
+    val any: Boolean get() = notifications || music || findPhone || weather
 }
 
 /**
@@ -35,6 +37,9 @@ object PhoneDuties {
     const val BIT_FIND_MY_WATCH = 9
     const val BIT_BASIC_MUSIC = 52
 
+    /** WEATHER_CONDITIONS; WEATHER_ALERTS (27) is never claimed. */
+    const val BIT_WEATHER_CONDITIONS = 26
+
     /**
      * A duty runs only when it is switched on and the system lets us do it: notifications and
      * music both need "Notification access" (the notification listener and the media sessions);
@@ -44,6 +49,7 @@ object PhoneDuties {
         notifications = features.notifications && access.notificationAccess,
         music = features.music && access.notificationAccess,
         findPhone = features.findPhone,
+        weather = features.weather,
     )
 
     /** The bits a duty set claims. */
@@ -57,6 +63,7 @@ object PhoneDuties {
             add(BIT_FIND_MY_PHONE)
             add(BIT_FIND_MY_WATCH)
         }
+        if (duties.weather) add(BIT_WEATHER_CONDITIONS)
     }
 
     /**

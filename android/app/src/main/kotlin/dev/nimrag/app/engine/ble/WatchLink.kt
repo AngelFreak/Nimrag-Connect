@@ -81,6 +81,7 @@ class WatchLink(private val hub: Hub, private val scanner: BleScanner) {
 
     init {
         hub.phone.attach(this)
+        hub.weather.attach(this)
         hub.workouts.attach(this)
     }
 
@@ -372,6 +373,7 @@ class WatchLink(private val hub: Hub, private val scanner: BleScanner) {
     fun onDutiesChanged() {
         val want = PhoneDuties.effective(settings.phoneFeatures(), hub.phoneAccess())
         hub.phone.onDutiesChanged(want)
+        hub.weather.onDutiesChanged(want)
         if (client == null || want == connectionDuties) return
         log.info("Phone features changed, reconnecting to apply them")
         teardown()
@@ -858,6 +860,7 @@ class WatchLink(private val hub: Hub, private val scanner: BleScanner) {
                     notifications = duties.notifications,
                     music = duties.music,
                     findPhone = duties.findPhone,
+                    weather = duties.weather,
                 ),
             ),
         )
@@ -1065,6 +1068,9 @@ class WatchLink(private val hub: Hub, private val scanner: BleScanner) {
             is Event.MusicRequested,
             is Event.FindWatch,
             -> hub.phone.onWatchEvent(event)
+            is Event.WeatherRequest,
+            is Event.WeatherSent,
+            -> hub.weather.onWatchEvent(event)
             is Event.UploadFinished -> hub.workouts.onUploadFinished(event.uploadId, event.result)
             is Event.Anomaly -> log.warn("Anomaly: ${describe(event.kind)} (message ${event.messageId})")
             is Event.Closed -> onClientClosed(event.reason)
@@ -1091,6 +1097,7 @@ class WatchLink(private val hub: Hub, private val scanner: BleScanner) {
         log.info("Handshake done, watch software $version, ${event.fileTypes.size} file types")
         feed(Input.RequestBattery)
         hub.phone.onLinkReady(connectionDuties)
+        hub.weather.onLinkReady()
         hub.workouts.onLinkReady()
         maybeAutoSync()
         scheduleAutoSync()
@@ -1212,6 +1219,7 @@ class WatchLink(private val hub: Hub, private val scanner: BleScanner) {
         client = null
         ready = false
         hub.phone.onLinkDown()
+        hub.weather.onLinkDown()
         hub.workouts.onLinkDown()
         writeChar = null
         currentNotifyId = null

@@ -11,6 +11,7 @@ usage:
   nimrag-server serve [--data-dir DIR] [--listen ADDR] [--log-json] [--insecure-cookies]
                       [--trusted-proxy CIDR[,CIDR...]] [--tiles-dir DIR]
                       [--backup-dir DIR [--backup-every 24h] [--backup-keep 7]]
+                      [--weather on|off] [--weather-url URL]
   nimrag-server user set-password [--username NAME] [--data-dir DIR]
                                                    read the new password from stdin (default user: the only admin)
   nimrag-server user reset-2fa --username NAME [--data-dir DIR]
@@ -48,6 +49,9 @@ usage:
 --backup-dir (or $NIMRAG_BACKUP_DIR) makes serve back up by itself: every --backup-every ($NIMRAG_BACKUP_EVERY,
   default 24h; 30m, 6h, 1d) a folder nimrag-backup-<UTC time> with a database snapshot and the files, of which
   the newest --backup-keep ($NIMRAG_BACKUP_KEEP, default 7) stay. Without --backup-dir nothing is backed up.
+--weather off (or $NIMRAG_WEATHER=off) switches the watch's weather off: POST /api/device/weather answers
+  503 and Open-Meteo is never contacted. Default on. --weather-url (or $NIMRAG_WEATHER_URL) replaces
+  https://api.open-meteo.com (tests and proxies); the phone only ever talks to this server.
 --trusted-proxy (repeatable, or comma-separated) names the reverse-proxy networks whose
   X-Forwarded-For is believed for login rate limiting: only when the TCP peer is inside one, the
   rightmost entry outside all of them is the client. Without it the peer address is used.";
@@ -59,6 +63,8 @@ struct Opts {
     insecure_cookies: bool,
     trusted_proxies: Vec<nimrag_server::auth::Cidr>,
     tiles_dir: Option<PathBuf>,
+    weather: bool,
+    weather_url: Option<String>,
     backup_dir: Option<PathBuf>,
     backup_every: Duration,
     backup_keep: usize,
@@ -79,6 +85,15 @@ fn number<T: std::str::FromStr>(s: &str) -> Result<T> {
         .map_err(|_| anyhow::anyhow!("{s} is not a number"))
 }
 
+/// `on` / `off` (also 1, 0, true, false, yes, no).
+fn on_off(s: &str) -> Result<bool> {
+    match s.to_ascii_lowercase().as_str() {
+        "on" | "1" | "true" | "yes" => Ok(true),
+        "off" | "0" | "false" | "no" => Ok(false),
+        _ => bail!("{s} is not on or off"),
+    }
+}
+
 fn env_text(name: &str) -> Option<String> {
     std::env::var(name).ok().filter(|v| !v.is_empty())
 }
@@ -93,6 +108,11 @@ fn parse_opts(args: &[String]) -> Result<Opts> {
         tiles_dir: std::env::var_os("NIMRAG_TILES_DIR")
             .filter(|v| !v.is_empty())
             .map(Into::into),
+        weather: match env_text("NIMRAG_WEATHER") {
+            Some(v) => on_off(&v).context("NIMRAG_WEATHER")?,
+            None => true,
+        },
+        weather_url: env_text("NIMRAG_WEATHER_URL"),
         backup_dir: std::env::var_os("NIMRAG_BACKUP_DIR")
             .filter(|v| !v.is_empty())
             .map(Into::into),
@@ -136,6 +156,8 @@ fn parse_opts(args: &[String]) -> Result<Opts> {
                     .context("--trusted-proxy")?,
             ),
             "--tiles-dir" => o.tiles_dir = Some(value("--tiles-dir")?.into()),
+            "--weather" => o.weather = on_off(&value("--weather")?).context("--weather")?,
+            "--weather-url" => o.weather_url = Some(value("--weather-url")?),
             "--backup-dir" => o.backup_dir = Some(value("--backup-dir")?.into()),
             "--backup-every" => {
                 o.backup_every =
@@ -438,7 +460,19 @@ async fn serve(o: Opts) -> Result<()> {
     let state = api::AppState::new(pool, o.data_dir, api::MAX_BODY_BYTES)
         .with_insecure_cookies(o.insecure_cookies)
         .with_trusted_proxies(o.trusted_proxies.clone())
-        .with_tiles_dir(o.tiles_dir.clone());
+        .with_tiles_dir(o.tiles_dir.clone())
+        .with_weather(nimrag_server::weather::WeatherConfig {
+            enabled: o.weather,
+            base_url: o
+                .weather_url
+                .clone()
+                .unwrap_or_else(|| nimrag_server::weather::DEFAULT_BASE_URL.into()),
+            ..Default::default()
+        });
+    tracing::info!(
+        weather = if o.weather { "on" } else { "off" },
+        "weather for the watch (Open-Meteo)"
+    );
     if let Some(dir) = &o.tiles_dir {
         let files = std::fs::read_dir(dir).map(|d| {
             d.flatten()

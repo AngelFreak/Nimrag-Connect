@@ -20,7 +20,8 @@ were not run in the build session.
 7. [Re-pair the watch](#re-pair-the-watch)
 8. [Firmware updates over USB](#firmware-updates-over-usb)
 9. [Map tiles](#map-tiles)
-10. [Troubleshooting](#troubleshooting)
+10. [Weather for the watch](#weather-for-the-watch)
+11. [Troubleshooting](#troubleshooting)
 
 ## Install
 
@@ -310,6 +311,22 @@ extract around where you train, mount it, and switch it on is in "Map tiles" in
 [`server/README.md`](../server/README.md). In Docker, mount the folder read-only and set
 `NIMRAG_TILES_DIR` (the lines are in `docker-compose.yml`). A new file replaces the old one without a
 restart. The map data is OpenStreetMap; the web app shows the attribution.
+
+## Weather for the watch
+
+The phone feature "Weather" (off by default, switched on per phone in the app) asks this server for
+the forecast, and the server asks [Open-Meteo](https://open-meteo.com/) (free, no key, CC BY 4.0).
+That is the only thing the server fetches from the internet for the watch. What leaves your server:
+a request to `api.open-meteo.com` with a position rounded to 0.1 degree (about 10 km) and nothing
+that says who you are. The server keeps no position, writes none to its log, and caches each answer
+for 30 minutes per 10 km cell, in memory only.
+
+To switch it off for the whole server, set `NIMRAG_WEATHER: "off"` (or start with `--weather off`);
+`/api/device/weather` then answers `503` and Open-Meteo is never contacted. `NIMRAG_WEATHER_URL`
+(`--weather-url`) points the server at another Open-Meteo compatible address, for example your own.
+The server needs the locally generated FIT profile to write the answer, so the default build and the
+Docker image answer `503` ("without the FIT profile") and the phone then shows no weather. Details
+are in "Weather" in [`server/README.md`](../server/README.md).
 
 ## Troubleshooting
 

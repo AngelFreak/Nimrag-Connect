@@ -24,6 +24,7 @@ impl From<ClientConfig> for core::ClientConfig {
                 notifications: c.duties.notifications,
                 music: c.duties.music,
                 find_phone: c.duties.find_phone,
+                weather: c.duties.weather,
             },
         }
     }
@@ -128,6 +129,28 @@ impl From<core::UploadStage> for UploadStage {
     }
 }
 
+impl From<core::WeatherCell> for WeatherCell {
+    fn from(c: core::WeatherCell) -> Self {
+        WeatherCell {
+            lat_tenths: c.lat_tenths,
+            lon_tenths: c.lon_tenths,
+        }
+    }
+}
+
+impl From<core::WeatherResult> for WeatherResult {
+    fn from(r: core::WeatherResult) -> Self {
+        match r {
+            core::WeatherResult::Sent => WeatherResult::Sent,
+            core::WeatherResult::NotSupported => WeatherResult::NotSupported,
+            core::WeatherResult::Busy => WeatherResult::Busy,
+            core::WeatherResult::Invalid => WeatherResult::Invalid,
+            core::WeatherResult::Refused => WeatherResult::Refused,
+            core::WeatherResult::TimedOut => WeatherResult::TimedOut,
+        }
+    }
+}
+
 impl From<core::UploadResult> for UploadResult {
     fn from(r: core::UploadResult) -> Self {
         match r {
@@ -198,6 +221,13 @@ impl From<Input> for core::Input {
             },
             Input::MusicVolume { percent } => core::Input::MusicVolume { percent },
             Input::FindWatch { start } => core::Input::FindWatch { start },
+            Input::SendWeather {
+                definitions,
+                records,
+            } => core::Input::SendWeather {
+                definitions,
+                records,
+            },
             Input::UploadFile {
                 upload_id,
                 data_type,
@@ -350,6 +380,18 @@ impl From<core::Event> for Event {
             core::Event::MusicRequested => Event::MusicRequested,
             core::Event::FindWatch { state } => Event::FindWatch {
                 state: state.into(),
+            },
+            core::Event::WeatherRequest {
+                format,
+                cell,
+                hours,
+            } => Event::WeatherRequest {
+                format,
+                cell: cell.map(WeatherCell::from),
+                hours,
+            },
+            core::Event::WeatherSent { result } => Event::WeatherSent {
+                result: result.into(),
             },
             core::Event::UploadFinished { upload_id, result } => Event::UploadFinished {
                 upload_id,

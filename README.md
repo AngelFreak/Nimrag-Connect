@@ -190,6 +190,8 @@ A big thank you to **[Gadgetbridge](https://codeberg.org/Freeyourgadget/Gadgetbr
 
 Nimrag Connect ports Gadgetbridge's Garmin work under the AGPL, with each ported file credited in its header and listed in [`docs/PORTED.md`](docs/PORTED.md). Ported behaviour is still checked against our own captures before we call it verified. Gadgetbridge's original copyright stays with its authors. If you can, [support Gadgetbridge on Liberapay](https://liberapay.com/Gadgetbridge/donate) too.
 
+Weather for the watch (an optional phone feature, off by default) comes from [Open-Meteo.com](https://open-meteo.com/), licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Your server asks for a forecast for an area rounded to about 10 km; see "Weather for the watch" in [`server/README.md`](server/README.md).
+
 ## Licence and disclaimer
 
 Nimrag Connect is free software under the [GNU Affero General Public License v3.0 or later](LICENSE). If you run a modified server for other people, the AGPL asks you to offer them its source. See [`NOTICE`](NOTICE) for attributions.

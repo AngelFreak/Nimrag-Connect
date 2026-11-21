@@ -31,11 +31,13 @@ mod session;
 mod sync;
 mod transport;
 mod upload;
+mod weather;
 
 pub use crate::duties::music::MusicCommand;
 pub use crate::duties::notification::{
     NotificationAction, NotificationCategory, PhoneNotification,
 };
+pub use crate::duties::weather::{WeatherCell, WeatherResult};
 pub use companion::{MusicInfo, MusicState};
 use reliable::MIN_ATT_MTU;
 use session::{Out, Session};
@@ -90,7 +92,7 @@ pub struct ClientConfig {
 /// with "not supported" and sends nothing unasked, as before 2f. The caller also
 /// has to claim the matching bits in `ClientConfig::capabilities`, or the watch
 /// does not ask (notifications: bit 6, music: bits 7 and 52, find my phone: bits
-/// 8 and 9; *inferred (Gadgetbridge)*, `GarminCapability`).
+/// 8 and 9, weather: bit 26; *inferred (Gadgetbridge)*, `GarminCapability`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct Duties {
     /// Show the phone's notifications on the watch.
@@ -99,6 +101,9 @@ pub struct Duties {
     pub music: bool,
     /// Let the watch ring the phone (find my phone).
     pub find_phone: bool,
+    /// Answer the watch's weather request (5014) with a forecast the host
+    /// fetched (`Input::SendWeather`). The caller also claims bit 26.
+    pub weather: bool,
 }
 
 /// What names a file on the watch across connections: the directory entry's
@@ -188,6 +193,15 @@ pub enum Input {
     MusicState { state: MusicState },
     /// The phone's media volume, 0-100 (music duty).
     MusicVolume { percent: u8 },
+    /// The forecast for the watch's last weather request (weather duty): FIT
+    /// `weather_conditions` definition records and data records as the server
+    /// made them, without a FIT file header. The client sends them as 5011 and
+    /// 5012 and always answers with one `Event::WeatherSent`. The content is
+    /// private: never log it.
+    SendWeather {
+        definitions: Vec<u8>,
+        records: Vec<Vec<u8>>,
+    },
     /// Ask the watch to ring (`start`) or to stop ringing. Needs the watch's
     /// find-my-watch capability; the outcome is `Event::FindWatch`.
     FindWatch { start: bool },
@@ -318,6 +332,19 @@ pub enum Event {
     /// Progress of `Input::FindWatch`, or the watch cancelling by itself.
     FindWatch {
         state: FindWatchState,
+    },
+    /// The watch asks for weather (5014; weather duty on). Already
+    /// acknowledged. `cell` is the watch's position rounded to 0.1 degree, or
+    /// `None` when it has no usable position; the exact position is never
+    /// reported. Answer with `Input::SendWeather` or not at all.
+    WeatherRequest {
+        format: u8,
+        cell: Option<WeatherCell>,
+        hours: u8,
+    },
+    /// `Input::SendWeather` ended.
+    WeatherSent {
+        result: WeatherResult,
     },
     /// The upload `upload_id` of `Input::UploadFile` ended. Failure is not the
     /// session's: it goes on (with `AnomalyKind::UploadFailed` unless the
@@ -553,6 +580,11 @@ impl Client {
                     result: UploadResult::Aborted,
                 });
             }
+            Input::SendWeather { .. } if self.state == State::Idle => {
+                step.events.push(Event::WeatherSent {
+                    result: WeatherResult::NotSupported,
+                });
+            }
             _ if self.state == State::Idle => {}
             input => {
                 self.apply_input(&now, input, &mut step);
@@ -636,6 +668,13 @@ impl Client {
             }
             Input::FindWatch { start } => {
                 let out = self.session.find_watch(now, start);
+                self.apply_session(now, out, step);
+            }
+            Input::SendWeather {
+                definitions,
+                records,
+            } => {
+                let out = self.session.send_weather(now, definitions, records);
                 self.apply_session(now, out, step);
             }
             Input::UploadFile {

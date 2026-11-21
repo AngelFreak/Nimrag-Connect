@@ -33,6 +33,17 @@ Garmin devices made it possible for Nimrag Connect to support wearables
 without decoding every one of them from scratch.
 
 -------------------------------------------------------------------------
+Open-Meteo
+-------------------------------------------------------------------------
+
+The optional weather feature gets its forecasts from Open-Meteo
+(https://open-meteo.com). Weather data by Open-Meteo.com, licensed under
+Creative Commons Attribution 4.0 (CC BY 4.0,
+https://creativecommons.org/licenses/by/4.0/). No Open-Meteo data is
+redistributed with this program; it is fetched at run time by the user's
+own server.
+
+-------------------------------------------------------------------------
 Garmin
 -------------------------------------------------------------------------
 

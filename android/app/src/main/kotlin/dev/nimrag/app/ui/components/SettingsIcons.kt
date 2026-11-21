@@ -102,3 +102,8 @@ val MusicIcon: ImageVector by lazy {
 val PhoneIcon: ImageVector by lazy {
     svgIcon("Phone", "M8 3h8a1.5 1.5 0 0 1 1.5 1.5v15A1.5 1.5 0 0 1 16 21H8a1.5 1.5 0 0 1-1.5-1.5v-15A1.5 1.5 0 0 1 8 3z", "M11 18h2")
 }
+
+/** A cloud, for the weather. */
+val CloudIcon: ImageVector by lazy {
+    svgIcon("Cloud", "M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z")
+}

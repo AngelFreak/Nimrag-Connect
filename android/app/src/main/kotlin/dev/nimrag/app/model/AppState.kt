@@ -52,6 +52,8 @@ data class PhoneFeatures(
     val music: Boolean = false,
     /** Let the watch ring the phone. */
     val findPhone: Boolean = false,
+    /** Answer the watch's weather widget: the Nimrag server gets the forecast from Open-Meteo. */
+    val weather: Boolean = false,
     /** Package names whose notifications stay on the phone. */
     val excludedApps: Set<String> = emptySet(),
 )
@@ -69,7 +71,37 @@ data class PhoneStatus(
     /** The phone is ringing because the watch asked. */
     val findPhoneRinging: Boolean = false,
     val findWatch: FindWatchUi = FindWatchUi.Idle,
+    /** The weather feature since the app started (held in memory only). */
+    val weather: WeatherStatus = WeatherStatus(),
 )
+
+/** When the watch last took a weather forecast and what happened to the latest request. */
+data class WeatherStatus(
+    /** Unix milliseconds of the last forecast the watch took, or null. */
+    val sentAtMs: Long? = null,
+    val last: WeatherLast = WeatherLast.None,
+)
+
+/** What the Phone features page says about the latest weather request. */
+enum class WeatherLast {
+    /** No request since the app started. */
+    None,
+
+    /** The watch took a fresh forecast. */
+    Sent,
+
+    /** The watch took an earlier forecast because the server could not be reached. */
+    Reused,
+
+    /** The server gave nothing and there was no earlier forecast for this area. */
+    NoForecast,
+
+    /** The watch asked without a usable position. */
+    NoPosition,
+
+    /** The forecast was ready but the watch did not take it. */
+    NotTaken,
+}
 
 /** Progress of "Find my watch" as the Phone features page shows it. */
 enum class FindWatchUi {
@@ -298,6 +330,9 @@ interface WatchController {
 
     /** Let the watch ring the phone (default off). Reconnects the watch once to tell it. */
     fun setPhoneFindPhone(on: Boolean) {}
+
+    /** Weather on the watch (default off). Reconnects the watch once to tell it. */
+    fun setPhoneWeather(on: Boolean) {}
 
     /** Keep (or stop keeping) one app's notifications on the phone. */
     fun setAppExcluded(packageName: String, excluded: Boolean) {}

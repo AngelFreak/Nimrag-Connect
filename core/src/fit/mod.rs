@@ -34,6 +34,7 @@ mod decode;
 pub mod encode;
 pub mod interpret;
 pub mod profile;
+pub mod weather;
 pub mod workout;
 
 pub use decode::decode;

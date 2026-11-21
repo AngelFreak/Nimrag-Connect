@@ -21,6 +21,7 @@ pub mod tiles;
 pub mod tokens;
 pub mod totp;
 pub mod users;
+pub mod weather;
 pub mod web;
 pub mod web_api;
 

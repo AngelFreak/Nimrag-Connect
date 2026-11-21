@@ -30,6 +30,14 @@ val BundledFonts: List<Component> = listOf(
 )
 
 /**
+ * Data the app's server fetches for features that are switched on. Nothing of it is bundled or
+ * redistributed; the attribution is the licence's condition (also in NOTICE and the READMEs).
+ */
+val DataSources: List<Component> = listOf(
+    Component("Weather data by Open-Meteo.com", "", "CC-BY-4.0"),
+)
+
+/**
  * The Rust crates linked into libnimrag_ffi.so. Generated once (not at build time) on 2026-11-19
  * from the repository root with:
  *
