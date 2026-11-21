@@ -52,6 +52,7 @@ nimrag-server reparse                    # derived tables from the blobs
 nimrag-server rebuild-ledger             # files/uploads rows from the sidecars
 nimrag-server backup --out DIR [--keep N]    # one backup now, safe while serve runs (see "Backups")
 nimrag-server restore --from BACKUP --data-dir NEWDIR   # a backup into a new, empty data dir
+nimrag-server export --user USERNAME --out FILE.zip     # one user's originals and CSV files (see "Export")
 nimrag-server user list                  # accounts (no secrets)
 nimrag-server user set-password [--username NAME]   # new password from stdin (first line), argon2id
 nimrag-server user reset-2fa --username NAME        # the user enrols 2FA again at the next login
@@ -453,6 +454,61 @@ survival of a failure), and the real binary: `serve --backup-dir`, `backup` besi
 server, `restore`, a server started on the restored dir that accepts the old token, and
 restore then `reparse` giving the same derived tables as the original. The runbook has the same
 check as commands (`docs/RUNBOOK.md`).
+
+## Export
+
+```
+GET /api/export                                                  # signed-in user, plain download link
+nimrag-server export --user USERNAME --out FILE.zip [--data-dir DIR]
+```
+
+A zip of one user's own data, the same from both entry points:
+
+```
+README.txt
+csv/<kind>.csv            one per kind of data the user has; kinds with no rows are left out
+csv/files.csv             every original: name in the zip, sha256, size, arrival, source
+originals/<sha256>.fit    the user's original files, byte for byte (.fit by content, .json for an
+                          imported Garmin Connect record, no extension for anything else)
+```
+
+CSV kinds: `activities`, `activity_sessions`, `activity_laps`, `activity_records` (with
+positions), `activity_time_in_zone`, `strength_sets`, `exercise_titles`, `strength_set_edits`,
+`sleep_sessions`, `sleep_stages`, `heart_rate`, `resting_hr`, `steps_activity`,
+`intensity_minutes`, `daily_totals`, `connect_daily`, `stress_body_battery`, `respiration`, `spo2`,
+`hrv_values`, `hrv_summary`, `training_status`, `training_load`, `training_balance`,
+`recovery_time`, `vo2max`, `body_measurements`, `watch_battery`, `settings` (the list is `TABLES`
+in `src/export.rs`; a new user-owned table gets an entry there).
+
+* **Whose.** Sample tables by `user_id`; per-file tables (activities and what hangs on them, sleep
+  sessions) through `activities_current` and `sleep_sessions_current`, which keep each user's best
+  file per activity or night; originals through `file_owners`. Rows with `user_id` 0 and files
+  nobody owns are in nobody's export. The `file` column of the activity CSVs is the original's
+  name, so activities, sessions, laps, records and sets join on it.
+* **Format.** UTF-8, header row, RFC 4180 quoting, `\n` line ends. Each time is two columns:
+  ISO 8601 in the user's time zone and `<name>_epoch_s` (Unix seconds, UTC). A day (`daily_totals`,
+  `connect_daily`) is `date` plus `date_start_epoch_s`. An empty cell is "no value", never 0. Units are in
+  the column names. No internal ids beyond `file`, `session`, `lap`, `set` and `idx` (the position inside a file).
+* **Access.** `GET /api/export` needs the session cookie of a user with data: an admin gets 403, a
+  device token and no session get 401. No CSRF header (it is a `GET`, a link works), and the usual
+  `Cache-Control: no-store`. At most two exports run at once server-wide; another gets 429 with
+  `Retry-After`. The file name is `nimrag-export-<user>-<date>.zip`.
+* **Streaming.** The zip is written to a non-seekable writer on a blocking thread as the rows and
+  files are read, through a queue of 8 pieces of 64 KiB to the response body: a slow client slows
+  the export, one that stops reading for two minutes ends it, and memory stays flat whatever the
+  size. A failure part-way aborts the transfer instead of sending a short archive. Entries use
+  zip64 sizes and data descriptors, deflate compression.
+* **CLI.** `export` reads the database through a read-only connection and does not take the data-dir
+  lock, so it works while `serve` runs; it writes `FILE.zip.part` and renames it when whole. It
+  refuses an admin or unknown user, and a database a newer build has not migrated yet.
+* A file the database lists but the store has lost is left out of `originals/`, logged, listed in
+  `files.csv` with an empty name and counted in `README.txt`.
+
+Tests: `tests/export.rs` (isolation between two users, the admin's 403, tokens and sessions, layout,
+headers, time columns, quoting, activity joins, a lost file, every table of the seed against the
+database row counts, the two-at-once limit, the CLI beside a running server) and
+`tests/export_stream.rs` (48 MiB of incompressible files: resident memory grows by under 1 MiB, far
+under the data size, while the client reads slowly and after).
 
 ## Docker
 

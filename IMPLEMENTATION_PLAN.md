@@ -39,7 +39,7 @@ The finished product: an Android app that pairs with the Instinct 2 without Garm
 | | Gate 3 | Every page from real data, "unavailable" shown correctly, accessibility check | **In progress**: pages run on real data; the accessibility check has only run on seeded data |
 | 4 Writing + ops | 4a | FIT encoder + workout builder, sent to the watch via the phone (encoder and upload path ported from Gadgetbridge) | Not Started |
 | | 4b | Scheduled backups + documented restore test | Done and tested (2026-11-21); not yet run on the owner's server |
-| | 4c | Export: originals + CSV per data type | Not Started |
+| | 4c | Export: originals + CSV per data type | Done and tested (2026-11-21): server, web Profile row; Android download path built, not tried on a phone |
 | | 4d | Runbook: install, upgrade, restore, re-pair, firmware over USB | Not Started |
 | | Gate 4 | Final report | — |
 
@@ -511,7 +511,9 @@ Each page renders from real synced data, shows "unavailable" correctly for missi
 
 ## Stage 4c: export
 **Goal**: all original files plus CSV per data type
-**Status**: Not Started
+**Contract** (details in `server/README.md`, "Export"): `GET /api/export` streams a zip for the signed-in user (originals by their stored names, one CSV per kind of data the user has, positions included, ISO 8601 in the user's zone plus a UTC epoch column); an admin gets 403, a device token 401; two exports at a time. `nimrag-server export --user NAME --out FILE.zip` makes the same zip and does not need the data-dir lock. The web Profile has a "Download my data" row (a plain link); the Android shell hands downloads on the server's origin to `DownloadManager` with the session cookie.
+**Tests**: `server/tests/export.rs`, `server/tests/export_stream.rs`, web `profile.test.tsx`, Android `DownloadPolicyTest`.
+**Status**: Done and tested. Not tried: the download inside the Android WebView on a real phone (no phone in the build session).
 
 ## Stage 4d: runbook (`docs/`)
 **Goal**: install, upgrade, restore, re-pair the watch, firmware updates over USB

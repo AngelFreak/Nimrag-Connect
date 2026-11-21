@@ -32,6 +32,8 @@ usage:
   nimrag-server rebuild-ledger [--data-dir DIR]   recreate files/uploads rows from sidecars
   nimrag-server backup --out DIR [--keep N] [--data-dir DIR]
                                                    one backup now (database snapshot + files); safe while serve runs
+  nimrag-server export --user USERNAME --out FILE.zip [--data-dir DIR]
+                                                   a user's originals and CSV files as a zip (reads only; safe while serve runs)
   nimrag-server restore --from BACKUP --data-dir NEWDIR
                                                    copy a backup folder into a new, empty data dir
 --data-dir defaults to $NIMRAG_DATA_DIR or ./data; --listen to 127.0.0.1:8080.
@@ -210,6 +212,7 @@ async fn main() -> Result<()> {
         }
         "backup" => backup_now(o).await,
         "restore" => restore(o).await,
+        "export" => export(o).await,
         "import-export" => import_export(o).await,
         "import-connect" => import_connect(o).await,
         "token" => token(o).await,
@@ -516,6 +519,80 @@ async fn backup_now(o: Opts) -> Result<()> {
         println!("pruned {p}");
     }
     Ok(())
+}
+
+/// `export`: the same zip as `GET /api/export`, for a named user, into a file. Reads the database
+/// through a read-only connection and does not take the data-dir lock.
+async fn export(o: Opts) -> Result<()> {
+    let name = o.user.as_deref().context("export needs --user USERNAME")?;
+    let out = o.out.context("export needs --out FILE.zip")?;
+    let pool = db::open_read_only(&o.data_dir).await?;
+    db::require_current_schema(&pool).await?;
+    let user = find_user(&pool, name).await?;
+    if user.role == users::Role::Admin {
+        bail!(
+            "{} is an admin account, which owns no data; pick a normal user",
+            user.username
+        );
+    }
+    let prefs = nimrag_server::settings::load(&pool, user.id).await?;
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.as_secs() as i64);
+    // Written beside the target and renamed when whole: a failed export leaves no half archive.
+    let mut part = out.clone().into_os_string();
+    part.push(".part");
+    let part = PathBuf::from(part);
+    let (data_dir, rt) = (o.data_dir.clone(), tokio::runtime::Handle::current());
+    let (p2, part2) = (pool.clone(), part.clone());
+    let who = nimrag_server::export::ExportUser {
+        id: user.id,
+        username: user.username.clone(),
+    };
+    let result = tokio::task::spawn_blocking(move || {
+        let file = std::fs::File::create_new(&part2)
+            .with_context(|| format!("creating {}", part2.display()))?;
+        let (summary, file) = nimrag_server::export::write_zip(
+            &rt,
+            &p2,
+            &data_dir,
+            &who,
+            prefs.tz,
+            now,
+            std::io::BufWriter::new(file),
+        )?;
+        file.into_inner()
+            .map_err(|e| anyhow::anyhow!("writing the archive: {e}"))?
+            .sync_all()?;
+        anyhow::Ok(summary)
+    })
+    .await?;
+    match result {
+        Ok(s) => {
+            std::fs::rename(&part, &out)
+                .with_context(|| format!("renaming into {}", out.display()))?;
+            println!(
+                "{}: {} CSV files ({} rows), {} original files{}",
+                out.display(),
+                s.csv_files,
+                s.rows,
+                s.originals,
+                if s.originals_missing > 0 {
+                    format!(
+                        " ({} listed files are not in the store)",
+                        s.originals_missing
+                    )
+                } else {
+                    String::new()
+                }
+            );
+            Ok(())
+        }
+        Err(e) => {
+            let _ = std::fs::remove_file(&part);
+            Err(e)
+        }
+    }
 }
 
 /// `restore`: copy a backup folder into a new data dir. Run `reparse` on it afterwards to
