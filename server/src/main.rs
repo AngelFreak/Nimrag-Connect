@@ -26,7 +26,8 @@ usage:
                       [--max-depth N] [--max-entries N] [--max-total-bytes N] <archive.zip | extracted-dir>
   nimrag-server import-connect --user USERNAME [--data-dir DIR] [--timezone IANA] <dir>
                                                    import a directory of Garmin Connect JSON (sleep, HRV, training
-                                                   status and load, VO2 max, daily stats, activities) for a user
+                                                   status and load, VO2 max, daily stats, stress, heart rate
+                                                   and breathing of a day, activities) for a user
   nimrag-server rebuild-ledger [--data-dir DIR]   recreate files/uploads rows from sidecars
 --data-dir defaults to $NIMRAG_DATA_DIR or ./data; --listen to 127.0.0.1:8080.
 --user on token create and import-export names the user who owns the token or the imported files;

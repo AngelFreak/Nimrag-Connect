@@ -1,0 +1,14 @@
+{
+ "userProfilePK": 9999001,
+ "calendarDate": "2026-11-14",
+ "startTimestampGMT": "2026-11-13T23:00:00.0",
+ "endTimestampGMT": "2026-11-14T08:02:00.0",
+ "startTimestampLocal": "2026-11-14T00:00:00.0",
+ "endTimestampLocal": "2026-11-14T09:02:00.0",
+ "maxHeartRate": 68,
+ "minHeartRate": 66,
+ "restingHeartRate": 66,
+ "heartRateValueDescriptors": [{"index": 0, "key": "timestamp"}, {"index": 1, "key": "heartrate"}],
+ "heartRateValues": [[1794643200000, 66],
+  [1794643320000, 68]]
+}

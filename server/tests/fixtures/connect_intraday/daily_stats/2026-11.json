@@ -1,0 +1,5 @@
+[
+ {"date": "2026-11-12", "steps": 1000, "hr_min": 30, "hr_max": 200, "stress_avg": 90, "bb_charged": 99, "bb_drained": 98, "bb_high": 97, "bb_low": 1, "resp_avg": 25.0, "resp_high": 40.0, "resp_low": 5.0},
+ {"date": "2026-11-13", "steps": 2000, "hr_min": 31, "hr_max": 201, "stress_avg": 91, "bb_charged": 96, "bb_drained": 95, "bb_high": 94, "bb_low": 2, "resp_avg": 26.0, "resp_high": 41.0, "resp_low": 6.0},
+ {"date": "2026-11-14", "steps": 3000, "hr_min": 40, "hr_max": 150, "stress_avg": 33, "bb_charged": 20, "bb_drained": 25, "bb_high": 80, "bb_low": 40, "resp_avg": 15.0, "resp_high": 19.0, "resp_low": 11.0}
+]

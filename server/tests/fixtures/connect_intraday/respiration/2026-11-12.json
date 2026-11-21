@@ -1,0 +1,19 @@
+{
+ "userProfilePK": 9999001,
+ "calendarDate": "2026-11-12",
+ "startTimestampGMT": "2026-11-11T23:00:00.0",
+ "endTimestampGMT": "2026-11-12T07:06:00.0",
+ "startTimestampLocal": "2026-11-12T00:00:00.0",
+ "endTimestampLocal": "2026-11-12T08:06:00.0",
+ "lowestRespirationValue": 11.0,
+ "highestRespirationValue": 16.0,
+ "avgWakingRespirationValue": 14.0,
+ "avgSleepRespirationValue": 12.0,
+ "respirationValueDescriptorsDTOList": [{"index": 0, "key": "timestamp"}, {"index": 1, "key": "respiration"}],
+ "respirationValuesArray": [[1794445200000, 11.0],
+  [1794448800000, 13.0],
+  [1794466800000, 14.0],
+  [1794466920000, -1.0],
+  [1794467040000, 16.0],
+  [1794467160000, 12.0]]
+}

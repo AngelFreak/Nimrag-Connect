@@ -21,8 +21,9 @@ use nimrag_core::derive::activity::{
 use nimrag_core::derive::{
     HrvSummary, RestingHr, SleepSession, TrainingBalance, TrainingLoad, TrainingStatus, Vo2max,
 };
+use nimrag_core::derive::{MonHr, Respiration, Stress};
 use serde_json::Value;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 type R = Result<(), String>;
 
@@ -38,6 +39,9 @@ pub fn fill(kind: Kind, data: &Value, tz: Tz, p: &mut Parsed) -> R {
         Kind::DailyStats => daily_stats(data, tz, p),
         Kind::Activity => activity(data, tz, p),
         Kind::ActivitySummary => activity_summary(data, tz, p),
+        Kind::IntradayStress => intraday_stress(data, p),
+        Kind::IntradayHeartRate => intraday_heart_rate(data, p),
+        Kind::IntradayRespiration => intraday_respiration(data, p),
     }
 }
 
@@ -436,6 +440,174 @@ fn daily_stats(data: &Value, tz: Tz, p: &mut Parsed) -> R {
             p.rows += 1;
             p.seen(ts);
         }
+    }
+    Ok(())
+}
+
+// ---- intraday series ------------------------------------------------------------------------
+
+/// Where the columns of a values array are, by descriptor key (lower case): `[{"key":
+/// "timestamp", "index": 0}, ...]`, and for the body battery `{"bodyBatteryValueDescriptorKey":
+/// ..., "bodyBatteryValueDescriptorIndex": ...}`. The columns are read by key, never by
+/// position.
+fn columns(data: &Value, list_key: &str) -> Result<HashMap<String, usize>, String> {
+    let mut out = HashMap::new();
+    for d in list(data, list_key)? {
+        let Some(obj) = d.as_object() else { continue };
+        let key = obj
+            .iter()
+            .find(|(k, v)| k.to_ascii_lowercase().ends_with("key") && v.is_string())
+            .and_then(|(_, v)| v.as_str());
+        let index = obj
+            .iter()
+            .find(|(k, v)| k.to_ascii_lowercase().ends_with("index") && v.is_u64())
+            .and_then(|(_, v)| v.as_u64());
+        if let (Some(k), Some(i)) = (key, index) {
+            out.insert(k.to_ascii_lowercase(), i as usize);
+        }
+    }
+    Ok(out)
+}
+
+fn column(cols: &HashMap<String, usize>, key: &str, list_key: &str) -> Result<usize, String> {
+    cols.get(key)
+        .copied()
+        .ok_or_else(|| format!("\"{list_key}\" has no \"{key}\" column"))
+}
+
+/// One number of a sample (`[epoch_ms, value, ...]`); `None` for null, a gap or a non-number.
+fn cell(row: &Value, col: usize) -> Option<f64> {
+    row.get(col)?.as_f64().filter(|x| x.is_finite())
+}
+
+/// The instant of a sample (epoch milliseconds in the file), in seconds.
+fn sample_ts(row: &Value, col: usize) -> Option<i64> {
+    cell(row, col).map(|ms| (ms as i64).div_euclid(1000))
+}
+
+/// A one-value series (`values_key` rows of `[epoch_ms, value]`): the rows with a value that
+/// passes `valid`, by second. A sample without an instant counts as skipped; a gap (null, -1,
+/// -2: Garmin's "no reading" and "too much motion") is simply no row. Two samples in the same
+/// second: the first stays.
+fn one_series(
+    data: &Value,
+    values_key: &str,
+    list_key: &str,
+    value_key: &str,
+    valid: impl Fn(f64) -> bool,
+    p: &mut Parsed,
+) -> Result<BTreeMap<i64, f64>, String> {
+    let cols = columns(data, list_key)?;
+    let (ts_col, val_col) = (
+        column(&cols, "timestamp", list_key)?,
+        column(&cols, value_key, list_key)?,
+    );
+    let mut out = BTreeMap::new();
+    for row in list(data, values_key)? {
+        let Some(ts) = sample_ts(row, ts_col) else {
+            p.skipped += 1;
+            continue;
+        };
+        if let Some(v) = cell(row, val_col).filter(|v| valid(*v)) {
+            out.entry(ts).or_insert(v);
+        }
+    }
+    Ok(out)
+}
+
+fn empty_stress(ts: i64) -> Stress {
+    Stress {
+        ts,
+        stress: None,
+        stress_raw: None,
+        body_battery: None,
+        body_battery_status: None,
+    }
+}
+
+/// A day of Connect's stress response: `stressValuesArray` ([epoch_ms, stressLevel]; below 0 is
+/// no value) and `bodyBatteryValuesArray` ([epoch_ms, status, level, version], read by the
+/// descriptor keys) join by instant into `stress` rows. A row has what its source has: the
+/// stress level in `stress` (`stress_raw`, the watch's raw reading, stays empty), the body
+/// battery level in `body_battery` (its status is Connect's word, not the watch's code, so
+/// `body_battery_status` stays empty); an instant with neither is no row.
+fn intraday_stress(data: &Value, p: &mut Parsed) -> R {
+    let stress = one_series(
+        data,
+        "stressValuesArray",
+        "stressValueDescriptorsDTOList",
+        "stresslevel",
+        |v| v >= 0.0,
+        p,
+    )?;
+    let battery = if data.get("bodyBatteryValuesArray").is_some() {
+        one_series(
+            data,
+            "bodyBatteryValuesArray",
+            "bodyBatteryValueDescriptorsDTOList",
+            "bodybatterylevel",
+            |v| v >= 0.0,
+            p,
+        )?
+    } else {
+        BTreeMap::new()
+    };
+    let mut rows: BTreeMap<i64, Stress> = BTreeMap::new();
+    for (ts, v) in stress {
+        rows.entry(ts).or_insert_with(|| empty_stress(ts)).stress = Some(v);
+    }
+    for (ts, v) in battery {
+        rows.entry(ts)
+            .or_insert_with(|| empty_stress(ts))
+            .body_battery = Some(v);
+    }
+    for (ts, row) in rows {
+        p.derived.stress.push(row);
+        p.rows += 1;
+        p.seen(ts);
+    }
+    Ok(())
+}
+
+/// A day of Connect's heart rate response: `heartRateValues` ([epoch_ms, bpm|null]) into
+/// `mon_hr`. The day's own figures (`restingHeartRate`, min, max) stay in the envelope.
+fn intraday_heart_rate(data: &Value, p: &mut Parsed) -> R {
+    let rows = one_series(
+        data,
+        "heartRateValues",
+        "heartRateValueDescriptors",
+        "heartrate",
+        |v| v > 0.0,
+        p,
+    )?;
+    for (ts, bpm) in rows {
+        p.derived.mon_hr.push(MonHr { ts, bpm });
+        p.rows += 1;
+        p.seen(ts);
+    }
+    Ok(())
+}
+
+/// A day of Connect's respiration response: `respirationValuesArray` ([epoch_ms, brpm]; -1.0 is
+/// no value) into `respiration` (`brpm_raw` stays empty). The sleep window and the day's
+/// lowest, highest and mean figures stay in the envelope.
+fn intraday_respiration(data: &Value, p: &mut Parsed) -> R {
+    let rows = one_series(
+        data,
+        "respirationValuesArray",
+        "respirationValueDescriptorsDTOList",
+        "respiration",
+        |v| v > 0.0,
+        p,
+    )?;
+    for (ts, brpm) in rows {
+        p.derived.respiration.push(Respiration {
+            ts,
+            brpm: Some(brpm),
+            brpm_raw: None,
+        });
+        p.rows += 1;
+        p.seen(ts);
     }
     Ok(())
 }

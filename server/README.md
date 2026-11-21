@@ -462,11 +462,16 @@ it again).
 | `{"sport", "trend": [{vo2_max, ...}]}` | `vo2max` | `vo2max` (carried-forward days skipped) |
 | `{"days": [{steps, total_calories, ...}]}` | `stats` | `daily_totals` (days in progress or without data skipped) |
 | `[{date, steps, stress_avg, bb_high, resp_avg, moderate_min, ...}]` (a list of days, `daily_stats/YYYY-MM.json`) | `daily_stats` | `connect_daily` (see "Daily summaries" below) |
+| `{stressValueDescriptorsDTOList, stressValuesArray, ...}` (a day, `intraday/stress/YYYY-MM-DD.json`) | `intraday_stress` | `stress` (stress level, body battery level), see "Intraday series" below |
+| `{heartRateValueDescriptors, heartRateValues, ...}` (a day, `intraday/heart_rate/YYYY-MM-DD.json`) | `intraday_heart_rate` | `mon_hr` |
+| `{respirationValueDescriptorsDTOList, respirationValuesArray, ...}` (a day, `intraday/respiration/YYYY-MM-DD.json`) | `intraday_respiration` | `respiration` |
 | `{"activities": [...]}` (the list) | `activity_summary` | one blob per entry: `activities`, `activity_sessions` |
 | `{"summary": {...}, "fit": {"messages": [...]}}` | `activity` | `activities`, `activity_sessions`, `activity_laps`, `strength_sets`, `exercise_titles`, `activity_metrics` |
 
-Anything else is listed as "not Connect JSON" and not stored. Not imported (not in the data):
-minute-level heart rate, stress, body battery, HR zone boundaries.
+Anything else is listed as "not Connect JSON" and not stored. Not imported (not in the data): HR
+zone boundaries. Not imported from the intraday files: steps (the watch's cumulative counter covers
+the whole day), the resting heart rate and the day's own minimum, maximum and averages (those
+figures stay in the stored envelope), the body battery status words.
 
 **Daily summaries (optional).** `<dir>/daily_stats/YYYY-MM.json`, a month per file, is a JSON array
 of days (a folder that is absent is skipped silently; the importer finds the files by their shape
@@ -492,13 +497,52 @@ another blob that outranks the old one (later data, more rows), so every day it 
 old row (no duplicates); the same file changes nothing. Pull complete days: a half day (today)
 would stand as the day's figures until the watch has data for it.
 
-**Fallback to the daily summaries.** The watch's FIT data always wins. A page reads Connect's
-summary only for a day, and a metric, that the watch has no row of; if the watch has any row of
-that metric for the day, its numbers are used as they are (a figure it lacks stays `null`). The
-helpers in `web_api/daily.rs` and `metrics.rs` do it, so a day shows the same number on Today, the
-Day view, Movement, Calendar, the metric ranges and Trends:
+**Intraday series (optional).** `<dir>/intraday/{stress,heart_rate,respiration}/YYYY-MM-DD.json`,
+a day per file, is what the Connect connector returns for one day (found by shape like the others,
+so the folder names do not matter; a folder that is absent is skipped). The columns are read by the
+descriptor keys of each file, not by position, and the instants are epoch milliseconds, so a day
+with a DST change (500 stress points) needs no special care. Every file becomes a blob of its own
+(a day pulled again later with more samples is another blob that outranks the old one by its later
+data; the same file changes nothing) and its rows go through the same derive path as a watch file,
+so `reparse` rebuilds them. The account's `userProfilePK`, which these responses carry, is removed
+before the envelope is stored (the rest of the response is kept as it came).
 
-| metric | from `connect_daily` | watch row that makes the watch win |
+| file | rows | mapping |
+| --- | --- | --- |
+| `stress` | `stress`, one per instant with a value | `stressValuesArray` `[ms, level]` into `stress` (below 0, null and Garmin's -1 "no reading" and -2 "too much motion" are no value); `bodyBatteryValuesArray` `[ms, status, level, version]` into `body_battery` at the same instant (a null level is none). `stress_raw` (the watch's raw reading) and `body_battery_status` (a code, Connect sends a word) stay `NULL`. An instant with neither value is no row. |
+| `heart_rate` | `mon_hr` | `heartRateValues` `[ms, bpm]` (null and 0 are no reading) |
+| `respiration` | `respiration` | `respirationValuesArray` `[ms, brpm]` (-1.0 is no reading); `brpm_raw` stays `NULL` |
+
+The rows are owned by the import's user and carry the Connect source's rank, which is below every
+FIT source, so the sample tables' rank-based upsert decides per sample (the primary key is the
+user and the instant): at an instant the watch also has a row for, the watch's row wins as a whole
+(whatever the import order), and Connect's samples fill the rest of the day.
+
+**Mixed days.** A day can have both: the first day of watch data (2026-11-19, watch rows only from
+21:06) has Connect's from the start of the day and the watch's after. The Day, Today, Movement,
+Calendar and metric pages compute every figure from the day's merged rows, never per source:
+the stress average and the time at each level (a level stands for the time to the next reading,
+at most 10 minutes), the energy series with its charged, drained, high, low and "now" (the latest
+sample of either source), the heart rate low, high and 5-minute series, breathing (the awake and
+asleep means by the night's start and end, the hourly chart) and the sleep window's lowest heart
+rate and breathing. Notes: a stress reading of -1 or -2 is a gap (no row), so the time it spans
+is not counted as the activity level (the watch gives movement a negative raw reading and an
+activity level) but stands for the reading before it, up to 10 minutes; where Connect and the
+watch both cover the same period at different instants their rows interleave, so the means weigh
+that period by both sample counts (the time per stress level does not, it follows the clock).
+`system.last_data_ts` still only looks at FIT sources, so Connect's samples never make the data
+look fresh.
+
+**Fallback to the daily summaries.** The watch's FIT data always wins. A page reads Connect's
+summary only for a day, and a metric, that has no sample row (the watch's, or intraday rows of
+Connect's, which fill the same tables); if the day has any row of that metric, the numbers
+computed from the rows are used as they are (a figure they lack stays `null`; the summary is not
+mixed in), so a day with intraday series never shows the summary's numbers for those metrics and
+a month pulled as summaries only still does. The helpers in `web_api/daily.rs` and `metrics.rs`
+do it, so a day shows the same number on Today, the Day view, Movement, Calendar, the metric
+ranges and Trends:
+
+| metric | from `connect_daily` | row that makes the day count as measured (the watch's or Connect's intraday) |
 | --- | --- | --- |
 | stress | `stress_avg` as `stress.average` (no levels, no series, `main_level` null) | any `stress` row with a stress value or a raw status |
 | energy (body battery) | `bb_high`, `bb_low`, `bb_charged`, `bb_drained` as `high`, `low`, `charged`, `drained` (no `now`, no series) | any `stress` row with `body_battery` |
@@ -518,8 +562,10 @@ Where it shows: `/api/today` (`stress`, `energy`, `heart_rate`, `steps`, `intens
 `distance_m`, `intensity`), `/api/calendar/{month}` (`energy_high`, `energy_low`, `steps`),
 `/api/metrics/{stress,energy,heart_rate,respiration,intensity_minutes,steps}` (series, stats and
 `has_prev`), `/api/trends` (`breathing.awake_avg_brpm`: with days the watch has no breathing
-reading for, the mean of the days' awake means). There is no intraday Connect data, so the Day
-view's series and hourly charts stay empty for such a day.
+reading for, the mean of the days' awake means). A day that only has the summary (no intraday
+series pulled for it) has no series and no hourly charts in the Day view; a day with intraday series
+has them. Pull complete days: a day pulled while it is still going on has the samples until then,
+and the summary of the same day is not read for the rest.
 
 **Records and zones (optional).** `<dir>/records/<activity id>_<offset>.json` holds the pages of the
 connector's `get_activity_fit_messages(include_records=true, message_types=["record",
@@ -587,6 +633,16 @@ Migration `0012_connect_daily.sql`: the `connect_daily` table. Migration `0011_c
 views, and a rebuild of `files` so its `source` CHECK accepts `connect` (SQLite cannot alter a
 CHECK; the rows go through a temp table with the foreign keys deferred to commit, nothing is lost,
 tested in `tests/migration_connect.rs`).
+
+Tests for the intraday series: `tests/connect_intraday.rs` with the fixture
+`tests/fixtures/connect_intraday/` (made-up numbers; the DST day is generated in the test): the
+three shapes found anywhere below the directory, the import, its re-run and `reparse`, a day pulled
+again, `userProfilePK` stored nowhere, a Connect-only day (series, stress levels, energy, heart rate,
+breathing, Today, the metric pages), the sleep window, a mixed day with a watch sample at the same
+instant as a Connect one (watch wins, in either import order) and the day's figures from the
+merged rows, the summary used only for a day (and metric) without samples, the 25-hour DST day,
+and another user seeing nothing; unit tests for the shapes, the descriptor keys and the
+-1, -2 and null values in `connect/` and `connect/import.rs`.
 
 Tests for the daily summaries: `tests/connect_daily.rs` with the fixture
 `tests/fixtures/connect_daily/daily_stats/` (made-up numbers): the import and its re-run, a later
