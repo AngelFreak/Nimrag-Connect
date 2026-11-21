@@ -21,7 +21,10 @@ import dev.nimrag.app.model.FindWatchUi
 import dev.nimrag.app.model.LinkState
 import dev.nimrag.app.model.WatchController
 import dev.nimrag.app.model.WatchState
+import dev.nimrag.app.model.WeatherLast
+import dev.nimrag.app.model.WeatherStatus
 import dev.nimrag.app.ui.components.BellIcon
+import dev.nimrag.app.ui.components.CloudIcon
 import dev.nimrag.app.ui.components.Footnote
 import dev.nimrag.app.ui.components.MessageCard
 import dev.nimrag.app.ui.components.MusicIcon
@@ -29,6 +32,7 @@ import dev.nimrag.app.ui.components.NimragButton
 import dev.nimrag.app.ui.components.NimragOutlinedButton
 import dev.nimrag.app.ui.components.PageColumn
 import dev.nimrag.app.ui.components.PhoneIcon
+import dev.nimrag.app.ui.components.relativeTime
 import dev.nimrag.app.ui.components.RowTrailing
 import dev.nimrag.app.ui.components.SettingsGroup
 import dev.nimrag.app.ui.components.SettingsPage
@@ -36,11 +40,11 @@ import dev.nimrag.app.ui.components.SettingsRow
 import dev.nimrag.app.ui.components.ShieldIcon
 import dev.nimrag.app.ui.components.WatchIcon
 
-/** "All off" or "2 of 3 on": the Watch page's one-line summary of the phone features. */
+/** "All off" or "2 of 4 on": the Watch page's one-line summary of the phone features. */
 @Composable
 internal fun phoneFeaturesSummary(state: AppState): String {
     val phone = state.settings.phone
-    val on = listOf(phone.notifications, phone.music, phone.findPhone).count { it }
+    val on = listOf(phone.notifications, phone.music, phone.findPhone, phone.weather).count { it }
     return if (on == 0) stringResource(R.string.phone_features_value_off) else stringResource(R.string.phone_features_value_count, on)
 }
 
@@ -127,6 +131,14 @@ internal fun PhoneFeaturesPage(
                         trailing = RowTrailing.Toggle(phone.findPhone, controller::setPhoneFindPhone),
                     )
                 }
+                item {
+                    SettingsRow(
+                        title = stringResource(R.string.phone_weather_title),
+                        value = weatherValue(phone.weather, state.phone.weather),
+                        icon = CloudIcon,
+                        trailing = RowTrailing.Toggle(phone.weather, controller::setPhoneWeather),
+                    )
+                }
             }
 
             if (phone.notifications) {
@@ -191,8 +203,28 @@ internal fun PhoneFeaturesPage(
             Footnote(stringResource(R.string.phone_notifications_explain), Modifier.fillMaxWidth())
             Footnote(stringResource(R.string.phone_music_explain), Modifier.fillMaxWidth())
             Footnote(stringResource(R.string.phone_find_explain), Modifier.fillMaxWidth())
+            Footnote(stringResource(R.string.phone_weather_explain), Modifier.fillMaxWidth())
         }
     }
+}
+
+/** The Weather row's second line: off, or when the watch last took a forecast and what went wrong last. */
+@Composable
+private fun weatherValue(on: Boolean, status: WeatherStatus): String {
+    if (!on) return stringResource(R.string.phone_weather_off)
+    val sentAt = status.sentAtMs
+    val base = when {
+        sentAt == null -> stringResource(R.string.phone_weather_idle)
+        status.last == WeatherLast.Reused -> stringResource(R.string.phone_weather_sent_earlier, relativeTime(sentAt))
+        else -> stringResource(R.string.phone_weather_sent, relativeTime(sentAt))
+    }
+    val issue = when (status.last) {
+        WeatherLast.NoForecast -> R.string.phone_weather_issue_no_forecast
+        WeatherLast.NoPosition -> R.string.phone_weather_issue_no_position
+        WeatherLast.NotTaken -> R.string.phone_weather_issue_not_taken
+        else -> null
+    }
+    return if (issue == null) base else "$base · ${stringResource(issue)}"
 }
 
 /** One switch per app: on means the app's notifications stay on the phone. */

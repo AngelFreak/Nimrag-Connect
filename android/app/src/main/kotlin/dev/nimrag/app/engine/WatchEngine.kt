@@ -262,6 +262,12 @@ class WatchEngine(private val hub: Hub) : WatchController {
         phoneFeatureChanged("Find my phone", on)
     }
 
+    override fun setPhoneWeather(on: Boolean) {
+        if (hub.settings.phoneWeather == on) return
+        hub.settings.phoneWeather = on
+        phoneFeatureChanged("Weather", on)
+    }
+
     private fun phoneFeatureChanged(name: String, on: Boolean) {
         publishSettings()
         hub.log.info("$name: ${if (on) "on" else "off"}")

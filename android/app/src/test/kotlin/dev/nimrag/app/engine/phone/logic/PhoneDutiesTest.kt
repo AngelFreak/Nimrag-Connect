@@ -94,5 +94,34 @@ class PhoneDutiesTest {
         assertEquals(listOf(6), PhoneDuties.bits(DutyMask(notifications = true)))
         assertEquals(listOf(7, 52), PhoneDuties.bits(DutyMask(music = true)))
         assertEquals(listOf(8, 9), PhoneDuties.bits(DutyMask(findPhone = true)))
+        assertEquals(listOf(26), PhoneDuties.bits(DutyMask(weather = true)))
+    }
+
+    @Test
+    fun `weather is off by default and needs nothing from the system`() {
+        assertFalse(PhoneFeatures().weather)
+        assertFalse(PhoneDuties.effective(PhoneFeatures(), granted).weather)
+        assertEquals(DutyMask(weather = true), PhoneDuties.effective(PhoneFeatures(weather = true), denied))
+        assertTrue(DutyMask(weather = true).any)
+        assertFalse(DutyMask().any)
+    }
+
+    @Test
+    fun `weather claims capability 26 only when it is on, and never the alerts bit 27`() {
+        val base = CapabilityHex.parse(CapabilityHex.DEFAULT)!!
+        assertEquals(0x20, base[3].toInt() and 0xFF)
+        // bit 26 = byte 3, 1 shl 2
+        val weather = PhoneDuties.claim(base, DutyMask(weather = true))
+        assertEquals(0x24, weather[3].toInt() and 0xFF)
+        assertEquals(0, weather[3].toInt() and 0x08) // bit 27 stays clear
+        assertArrayEquals(base.copyOfRange(0, 3), weather.copyOfRange(0, 3))
+        assertArrayEquals(base.copyOfRange(4, base.size), weather.copyOfRange(4, weather.size))
+        // the other duties leave bit 26 alone
+        val others = PhoneDuties.claim(base, DutyMask(notifications = true, music = true, findPhone = true))
+        assertEquals(0x20, others[3].toInt() and 0xFF)
+        // a short mask grows to byte 3
+        val grown = PhoneDuties.claim(byteArrayOf(0x01), DutyMask(weather = true))
+        assertEquals(4, grown.size)
+        assertEquals(0x04, grown[3].toInt() and 0xFF)
     }
 }

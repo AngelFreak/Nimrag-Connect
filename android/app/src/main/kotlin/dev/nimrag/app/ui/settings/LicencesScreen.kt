@@ -36,6 +36,7 @@ fun LicencesScreen(modifier: Modifier = Modifier) {
         ComponentSection(stringResource(R.string.licences_libraries), BundledLibraries)
         ComponentSection(stringResource(R.string.licences_fonts), BundledFonts)
         ComponentSection(stringResource(R.string.licences_rust, RustCrates.size), RustCrates)
+        ComponentSection(stringResource(R.string.licences_data), DataSources)
     }
 }
 

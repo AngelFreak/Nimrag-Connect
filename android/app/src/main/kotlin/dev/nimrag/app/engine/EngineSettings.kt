@@ -77,6 +77,10 @@ class EngineSettings(context: Context) {
         get() = prefs.getBoolean(PHONE_FIND, false)
         set(value) = prefs.edit().putBoolean(PHONE_FIND, value).apply()
 
+    var phoneWeather: Boolean
+        get() = prefs.getBoolean(PHONE_WEATHER, false)
+        set(value) = prefs.edit().putBoolean(PHONE_WEATHER, value).apply()
+
     /** Apps whose notifications stay on the phone (package names). A copy: the stored set is never edited in place. */
     var excludedApps: Set<String>
         get() = prefs.getStringSet(EXCLUDED_APPS, null)?.toSet().orEmpty()
@@ -86,6 +90,7 @@ class EngineSettings(context: Context) {
         notifications = phoneNotifications,
         music = phoneMusic,
         findPhone = phoneFindPhone,
+        weather = phoneWeather,
         excludedApps = excludedApps,
     )
 
@@ -197,6 +202,7 @@ class EngineSettings(context: Context) {
         const val PHONE_NOTIFICATIONS = "phone_notifications"
         const val PHONE_MUSIC = "phone_music"
         const val PHONE_FIND = "phone_find_phone"
+        const val PHONE_WEATHER = "phone_weather"
         const val EXCLUDED_APPS = "phone_excluded_apps"
         const val WATCH_ADDRESS = "watch_address"
         const val WATCH_NAME = "watch_name"

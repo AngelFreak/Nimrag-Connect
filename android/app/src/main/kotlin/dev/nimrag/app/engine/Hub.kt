@@ -19,6 +19,7 @@ import dev.nimrag.app.engine.local.LocalServerFactory
 import dev.nimrag.app.engine.local.LocalServerHost
 import dev.nimrag.app.engine.phone.NimragNotificationListener
 import dev.nimrag.app.engine.phone.PhoneBridge
+import dev.nimrag.app.engine.phone.WeatherBridge
 import dev.nimrag.app.engine.store.EngineDb
 import dev.nimrag.app.engine.store.EngineLog
 import dev.nimrag.app.engine.store.FileStore
@@ -90,6 +91,9 @@ class Hub(val app: Application) {
 
     /** The phone features (stage 2f): notifications, find my phone, music. Everything on [handler]. */
     val phone = PhoneBridge(this)
+
+    /** Weather for the watch (stage 2f): asks the Nimrag server, network on its own thread, the rest on [handler]. */
+    val weather = WeatherBridge(this)
 
     /** Workouts built on the web, taken to the watch (stage 4a). Network on its own thread, the rest on [handler]. */
     val workouts = WorkoutSender(this)
