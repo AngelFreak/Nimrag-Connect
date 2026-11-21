@@ -42,6 +42,7 @@ instead of appending, in both the sidecar and `uploads`.
 ```
 nimrag-server serve [--data-dir DIR] [--listen 127.0.0.1:8080] [--log-json]
                     [--insecure-cookies] [--trusted-proxy CIDR[,CIDR...]] [--tiles-dir DIR]
+                    [--backup-dir DIR [--backup-every 24h] [--backup-keep 7]]
 nimrag-server token create --name NAME [--user USERNAME]   # for tools and scripts; phones get theirs by signing in to the app
 nimrag-server token list
 nimrag-server token revoke ID
@@ -49,6 +50,9 @@ nimrag-server import-export [--user USERNAME] <archive.zip | dir>   # a Garmin d
 nimrag-server import-connect --user USERNAME [--timezone IANA] <dir> # Garmin Connect JSON history (see below)
 nimrag-server reparse                    # derived tables from the blobs
 nimrag-server rebuild-ledger             # files/uploads rows from the sidecars
+nimrag-server backup --out DIR [--keep N]    # one backup now, safe while serve runs (see "Backups")
+nimrag-server restore --from BACKUP --data-dir NEWDIR   # a backup into a new, empty data dir
+nimrag-server export --user USERNAME --out FILE.zip     # one user's originals and CSV files (see "Export")
 nimrag-server user list                  # accounts (no secrets)
 nimrag-server user set-password [--username NAME]   # new password from stdin (first line), argon2id
 nimrag-server user reset-2fa --username NAME        # the user enrols 2FA again at the next login
@@ -66,7 +70,8 @@ most 4096 bytes; without `--username` the only admin is meant, and with several 
 required). It signs the user's sessions and trusted phones out. `token create --user` and
 `import-export --user` give the token or the imported files to that user; without `--user` they
 stay unassigned until an admin assigns them in the web app. The `user` and `token` commands do not
-take the data-dir lock; `dev-seed` does.
+take the data-dir lock; `dev-seed` does. `backup` and `export` only read and do not take it either;
+`restore` locks the new dir it fills.
 
 `--data-dir` defaults to `$NIMRAG_DATA_DIR`, else `./data`. Logs go to stderr
 (`RUST_LOG` filter; `--log-json` for structured JSON). `reparse` processes files
@@ -393,6 +398,117 @@ Map data: © OpenStreetMap contributors (the web app shows the attribution).
 
 Tests: `tests/tiles.rs` (whole file, ranges, HEAD, 416, validators, traversal, missing, sign-in,
 a seek deep in a sparse 5 GiB file) and the unit tests in `src/tiles.rs`.
+
+## Backups
+
+Files are the source of truth, but who owns a file, the accounts, the tokens and every setting live
+only in `nimrag.db`. A backup therefore holds both.
+
+```
+nimrag-server serve --backup-dir DIR [--backup-every 24h] [--backup-keep 7]   # or NIMRAG_BACKUP_DIR,
+                                                                              # NIMRAG_BACKUP_EVERY, NIMRAG_BACKUP_KEEP
+nimrag-server backup --data-dir DIR --out BACKUPS [--keep N]                  # one backup now
+nimrag-server restore --from BACKUPS/nimrag-backup-<time> --data-dir NEWDIR
+```
+
+One backup is a folder `nimrag-backup-<UTC time>` (`-1`, `-2` if two start in the same second):
+
+```
+nimrag.db      snapshot taken with VACUUM INTO: consistent, and writers keep going while it runs
+files/         the file store (blobs and sidecars), same layout as the data dir
+backup.json    created_at, schema version, counts and sizes
+```
+
+* **Off unless `--backup-dir` is given.** `--backup-every` takes `30m`, `6h`, `1d` (a unit is
+  required, at least `1m`). The first backup is due when the newest one in the folder is older than
+  the interval (at once when there is none), so restarting the server does not add backups.
+* **Incremental for files.** The database goes first, then the files, so every file the snapshot
+  knows is in the copy. A file whose size and modification time match its copy in the previous
+  backup is hard-linked from it; otherwise (or when linking fails, for instance on another
+  filesystem) it is copied. A file inside a backup is never rewritten. Blobs never change;
+  sidecars are replaced atomically, so a changed sidecar has a new modification time and is copied.
+  A file modified in the last 100 ms is copied again next time (its time could still repeat).
+* **All or nothing.** The backup is written to `.tmp-nimrag-backup-*` and renamed when complete. A
+  failure (an unreadable file, a full disk) removes the temporary folder and keeps the old backups.
+  Old backups are pruned only after a new one succeeded, never below one. Only folders named
+  `nimrag-backup-<time>` are ever removed.
+* **Logging.** One info line per backup (`backup done`: files, bytes, linked, copied, duration), a
+  warning when one fails. A failed scheduled backup is tried again after `min(every, 1 h)`. The
+  server keeps running either way.
+* **The CLI** reads the database through a read-only connection and does not take the data-dir lock,
+  so it works while `serve` runs (and runs beside a scheduled backup: one backup at a time per
+  backup folder, guarded by `.backup.lock`). It refuses a backup folder inside the data dir.
+  Without `--keep` it prunes nothing.
+* **Restore** copies a backup folder into a new or empty data dir (a dir with anything in it is
+  refused), checks the database with `PRAGMA quick_check`, and empties the target again if anything
+  fails. It copies, it does not link, so the restored dir does not share files with the backup.
+  Then start `serve` on it, or run `reparse` first. A file that arrived between the snapshot and the
+  file copy has no database row; `rebuild-ledger` adds it (unowned).
+* The database is copied whole, derived tables included (`fit_messages` is the bulk): a restore is
+  then ready at once. Expect the backup to be about as big as `nimrag.db` plus the files.
+
+Tests: `tests/backup.rs`. It runs backups while the router takes uploads, restores and compares every
+table row by row, checks that the second backup hard-links (same inode) and copies only what
+changed, pruning, a failing backup (no temporary folder, old backups kept), the scheduler (including
+survival of a failure), and the real binary: `serve --backup-dir`, `backup` beside the running
+server, `restore`, a server started on the restored dir that accepts the old token, and
+restore then `reparse` giving the same derived tables as the original. The runbook has the same
+check as commands (`docs/RUNBOOK.md`).
+
+## Export
+
+```
+GET /api/export                                                  # signed-in user, plain download link
+nimrag-server export --user USERNAME --out FILE.zip [--data-dir DIR]
+```
+
+A zip of one user's own data, the same from both entry points:
+
+```
+README.txt
+csv/<kind>.csv            one per kind of data the user has; kinds with no rows are left out
+csv/files.csv             every original: name in the zip, sha256, size, arrival, source
+originals/<sha256>.fit    the user's original files, byte for byte (.fit by content, .json for an
+                          imported Garmin Connect record, no extension for anything else)
+```
+
+CSV kinds: `activities`, `activity_sessions`, `activity_laps`, `activity_records` (with
+positions), `activity_time_in_zone`, `strength_sets`, `exercise_titles`, `strength_set_edits`,
+`sleep_sessions`, `sleep_stages`, `heart_rate`, `resting_hr`, `steps_activity`,
+`intensity_minutes`, `daily_totals`, `connect_daily`, `stress_body_battery`, `respiration`, `spo2`,
+`hrv_values`, `hrv_summary`, `training_status`, `training_load`, `training_balance`,
+`recovery_time`, `vo2max`, `body_measurements`, `watch_battery`, `settings` (the list is `TABLES`
+in `src/export.rs`; a new user-owned table gets an entry there).
+
+* **Whose.** Sample tables by `user_id`; per-file tables (activities and what hangs on them, sleep
+  sessions) through `activities_current` and `sleep_sessions_current`, which keep each user's best
+  file per activity or night; originals through `file_owners`. Rows with `user_id` 0 and files
+  nobody owns are in nobody's export. The `file` column of the activity CSVs is the original's
+  name, so activities, sessions, laps, records and sets join on it.
+* **Format.** UTF-8, header row, RFC 4180 quoting, `\n` line ends. Each time is two columns:
+  ISO 8601 in the user's time zone and `<name>_epoch_s` (Unix seconds, UTC). A day (`daily_totals`,
+  `connect_daily`) is `date` plus `date_start_epoch_s`. An empty cell is "no value", never 0. Units are in
+  the column names. No internal ids beyond `file`, `session`, `lap`, `set` and `idx` (the position inside a file).
+* **Access.** `GET /api/export` needs the session cookie of a user with data: an admin gets 403, a
+  device token and no session get 401. No CSRF header (it is a `GET`, a link works), and the usual
+  `Cache-Control: no-store`. At most two exports run at once server-wide; another gets 429 with
+  `Retry-After`. The file name is `nimrag-export-<user>-<date>.zip`.
+* **Streaming.** The zip is written to a non-seekable writer on a blocking thread as the rows and
+  files are read, through a queue of 8 pieces of 64 KiB to the response body: a slow client slows
+  the export, one that stops reading for two minutes ends it, and memory stays flat whatever the
+  size. A failure part-way aborts the transfer instead of sending a short archive. Entries use
+  zip64 sizes and data descriptors, deflate compression.
+* **CLI.** `export` reads the database through a read-only connection and does not take the data-dir
+  lock, so it works while `serve` runs; it writes `FILE.zip.part` and renames it when whole. It
+  refuses an admin or unknown user, and a database a newer build has not migrated yet.
+* A file the database lists but the store has lost is left out of `originals/`, logged, listed in
+  `files.csv` with an empty name and counted in `README.txt`.
+
+Tests: `tests/export.rs` (isolation between two users, the admin's 403, tokens and sessions, layout,
+headers, time columns, quoting, activity joins, a lost file, every table of the seed against the
+database row counts, the two-at-once limit, the CLI beside a running server) and
+`tests/export_stream.rs` (48 MiB of incompressible files: resident memory grows by under 1 MiB, far
+under the data size, while the client reads slowly and after).
 
 ## Docker
 

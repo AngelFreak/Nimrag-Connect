@@ -14,8 +14,14 @@ services:
       # /tiles/map.pmtiles. Make the file with `pmtiles extract`, see server/README.md "Map tiles".
       # The folder and the file must be readable by uid 10001.
       # - ./tiles:/tiles:ro
+      # Backups (optional): scheduled backups of the database and the files, see docs/RUNBOOK.md.
+      # Use a folder on another disk; it must be writable by uid 10001.
+      # - ./backups:/backups
     # environment:
     #   NIMRAG_TILES_DIR: /tiles
+    #   NIMRAG_BACKUP_DIR: /backups
+    #   NIMRAG_BACKUP_EVERY: 1d    # 30m, 6h, 1d ...
+    #   NIMRAG_BACKUP_KEEP: "7"
     ports:
       # Local access only; put a TLS proxy in front for phones and browsers.
       - "127.0.0.1:8096:8080"

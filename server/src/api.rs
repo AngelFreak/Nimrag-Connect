@@ -47,6 +47,8 @@ pub struct AppState {
     pub garmin: Arc<crate::garmin::Garmin>,
     /// Where `/tiles/<name>.pmtiles` is served from (`--tiles-dir`); `None`: no tiles route.
     pub tiles_dir: Option<Arc<PathBuf>>,
+    /// Permits for `GET /api/export` (see `web_api::export::MAX_EXPORTS`).
+    pub(crate) export_gate: Arc<tokio::sync::Semaphore>,
     clock: Arc<dyn Fn() -> i64 + Send + Sync>,
 }
 
@@ -65,6 +67,9 @@ impl AppState {
             trusted_proxies: Default::default(),
             garmin: Default::default(),
             tiles_dir: None,
+            export_gate: Arc::new(tokio::sync::Semaphore::new(
+                crate::web_api::export::MAX_EXPORTS,
+            )),
             clock: Arc::new(system_now),
         }
     }

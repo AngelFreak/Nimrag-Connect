@@ -61,7 +61,7 @@ Library choices so far (versions pinned; see `server/README.md` for licences):
 | argon2 0.6 | server | owner password hash (argon2id) |
 | chrono 0.4, chrono-tz 0.10, iana-time-zone | server | local days in the owner's IANA zone, DST-safe |
 | ts-rs 12 | server | TypeScript types generated from the API structs (chosen over OpenAPI: no schema layer to maintain, the Rust structs are the contract) |
-| zip 9.6 (deflate only) | server | export import; `enclosed_name` path checks; caps enforced on bytes read |
+| zip 9.6 (deflate only) | server | export import (`enclosed_name` path checks, caps enforced on bytes read) and the user's export archive (written to a non-seekable writer) |
 | own FIT decoder | core | see the decision above |
 
 Still to evaluate when their phase starts: UniFFI and the Android stack (2b), React/Vite/TanStack Query, uPlot, MapLibre + PMTiles (3b).

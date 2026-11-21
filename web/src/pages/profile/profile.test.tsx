@@ -89,6 +89,22 @@ describe('Profile: the list', () => {
     expect(screen.getByRole('button', { name: 'Log out' })).toBeInTheDocument();
   });
 
+  it('offers "Download my data" as a plain same-tab download link to /api/export, for a user and not for the admin', async () => {
+    mockApi(routes());
+    const { unmount } = renderApp('/profile');
+    const link = await screen.findByRole('link', { name: /^Download my data/ });
+    expect(link).toHaveAttribute('href', '/api/export');
+    expect(link).toHaveAttribute('download');
+    // Same tab: the app's web view hands the download to the system, a new tab would not be followed.
+    expect(link).not.toHaveAttribute('target');
+    unmount();
+
+    mockApi(routes({ '/api/me': { ...me, username: 'boss', role: 'admin' } }));
+    renderApp('/profile');
+    await screen.findByRole('link', { name: 'Admin area' });
+    expect(screen.queryByRole('link', { name: /Download my data/ })).not.toBeInTheDocument();
+  });
+
   it('groups the rows Account, Preferences, Garmin Connect, About, Log out, with no form on the list', async () => {
     mockApi(routes());
     renderApp('/profile');

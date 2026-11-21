@@ -24,6 +24,7 @@ getrandom = "0.4.3"
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = { version = "1.0.154", features = ["preserve_order"] }
 http-body-util = "0.1.5"
+futures-util = { version = "0.3.34", default-features = false, features = ["std"] }
 sha2 = "0.11.1"
 rust-embed = { version = "=8.14.0", default-features = false }
 sqlx = { version = "0.9.1", default-features = false, features = ["runtime-tokio", "sqlite", "macros", "migrate"] }

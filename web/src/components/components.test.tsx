@@ -634,6 +634,14 @@ describe('SettingsRow and SettingsGroup', () => {
     expect(link).toHaveAttribute('rel', expect.stringContaining('noopener'));
   });
 
+  it('a download row is a same-tab link with the download attribute', () => {
+    wrap(<SettingsRow icon={<KeyIcon />} title="Download my data" download="/api/export" />);
+    const link = screen.getByRole('link', { name: 'Download my data' });
+    expect(link).toHaveAttribute('href', '/api/export');
+    expect(link).toHaveAttribute('download');
+    expect(link).not.toHaveAttribute('target');
+  });
+
   it('a group is a named section with its rows in one list, and renders nothing when empty', () => {
     const { container, rerender } = wrap(
       <SettingsGroup title="Account">

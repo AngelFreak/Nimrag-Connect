@@ -16,6 +16,7 @@ pub mod app;
 pub mod body;
 pub mod daily;
 pub mod days;
+pub mod export;
 pub mod hrv;
 pub mod metrics;
 pub mod prefs;
@@ -56,6 +57,7 @@ pub fn router() -> Router<AppState> {
         .merge(training::routes())
         .merge(body::routes())
         .merge(system::routes())
+        .merge(export::routes())
         .merge(crate::garmin::api::routes())
 }
 

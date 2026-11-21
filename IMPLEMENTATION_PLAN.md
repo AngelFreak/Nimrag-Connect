@@ -38,9 +38,9 @@ The finished product: an Android app that pairs with the Instinct 2 without Garm
 | | 3r | Live use, 0.6.x: metric detail pages, Watch/Profile redesign, Connect daily history, maps, sync icon, day-total fix | Done (0.6.0–0.6.2, 2026-11-20/21); see "Live use (2026-11-20/21)" |
 | | Gate 3 | Every page from real data, "unavailable" shown correctly, accessibility check | **In progress**: pages run on real data; the accessibility check has only run on seeded data |
 | 4 Writing + ops | 4a | FIT encoder + workout builder, sent to the watch via the phone (encoder and upload path ported from Gadgetbridge) | Not Started |
-| | 4b | Scheduled backups + documented restore test | Not Started |
-| | 4c | Export: originals + CSV per data type | Not Started |
-| | 4d | Runbook: install, upgrade, restore, re-pair, firmware over USB | Not Started |
+| | 4b | Scheduled backups + documented restore test | Done and tested (2026-11-21); not yet run on the owner's server |
+| | 4c | Export: originals + CSV per data type | Done and tested (2026-11-21): server, web Profile row; Android download path built, not tried on a phone |
+| | 4d | Runbook: install, upgrade, restore, re-pair, firmware over USB | Written (2026-11-21); the Docker forms, a fresh pairing and a firmware update not yet tried |
 | | Gate 4 | Final report | — |
 
 Every phase ends with an update to `docs/ARCHITECTURE.md` and a gate report (engineering standards).
@@ -505,15 +505,20 @@ Each page renders from real synced data, shows "unavailable" correctly for missi
 
 ## Stage 4b: backups
 **Goal**: scheduled copy of the file store and database; documented restore test that rebuilds from the files with `reparse`
-**Status**: Not Started
+**Contract** (details in `server/README.md`, "Backups"): `serve --backup-dir DIR [--backup-every 24h] [--backup-keep 7]` (env `NIMRAG_BACKUP_DIR`, `_EVERY`, `_KEEP`; off without the dir). One backup is a folder `nimrag-backup-<UTC time>` with a `VACUUM INTO` snapshot, the file store and `backup.json`; files unchanged since the previous backup are hard-linked (copied when linking fails), never rewritten; written under a temporary name and renamed; pruned only after success. `backup --out DIR` does one now and does not take the data-dir lock; `restore --from BACKUP --data-dir NEWDIR` refuses a non-empty target. The database is part of every backup because file ownership, accounts and tokens live only there.
+**Tests**: `server/tests/backup.rs` (router under load, real binary, incrementality, pruning, failed backup, restore then `reparse` gives identical derived tables).
+**Status**: Done and tested. Not yet switched on for the owner's server (the volume and the first restore check are the owner's step; `docs/RUNBOOK.md`).
 
 ## Stage 4c: export
 **Goal**: all original files plus CSV per data type
-**Status**: Not Started
+**Contract** (details in `server/README.md`, "Export"): `GET /api/export` streams a zip for the signed-in user (originals by their stored names, one CSV per kind of data the user has, positions included, ISO 8601 in the user's zone plus a UTC epoch column); an admin gets 403, a device token 401; two exports at a time. `nimrag-server export --user NAME --out FILE.zip` makes the same zip and does not need the data-dir lock. The web Profile has a "Download my data" row (a plain link); the Android shell hands downloads on the server's origin to `DownloadManager` with the session cookie.
+**Tests**: `server/tests/export.rs`, `server/tests/export_stream.rs`, web `profile.test.tsx`, Android `DownloadPolicyTest`.
+**Status**: Done and tested. Not tried: the download inside the Android WebView on a real phone (no phone in the build session).
 
 ## Stage 4d: runbook (`docs/`)
 **Goal**: install, upgrade, restore, re-pair the watch, firmware updates over USB
-**Status**: Not Started
+**Contract**: [`docs/RUNBOOK.md`](docs/RUNBOOK.md): install (Docker, HTTPS, first run, users, phone, lost password), upgrade, backups (scheduled, one now, off the machine), restore (Docker and plain), "Check that your backups restore" (restore, `reparse`, compare; the same sequence as the real-binary test in `server/tests/backup.rs`), export, re-pairing the watch, firmware over USB, map tiles (points to `server/README.md`), troubleshooting. No real names, hosts or addresses (`alice`, `nimrag.example.ts.net`).
+**Status**: Written. The backup, restore, `reparse` and export commands are the ones the automated tests run. Not tried: the `docker compose` forms of them, pairing a watch that has no bond, and a firmware update followed by a sync (the runbook says so where it matters).
 
 ## Gate 4
 Final report: what works, what was verified and how, what is still unknown.
