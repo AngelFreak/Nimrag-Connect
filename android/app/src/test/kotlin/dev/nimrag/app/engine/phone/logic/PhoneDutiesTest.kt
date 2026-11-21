@@ -95,4 +95,31 @@ class PhoneDutiesTest {
         assertEquals(listOf(7, 52), PhoneDuties.bits(DutyMask(music = true)))
         assertEquals(listOf(8, 9), PhoneDuties.bits(DutyMask(findPhone = true)))
     }
+
+    @Test
+    fun `GPS assist is off by default, needs no system access and claims the two HTTP bits only when on`() {
+        assertFalse(PhoneFeatures().gpsAssist)
+        assertEquals(0L, PhoneFeatures().gpsAssistLastSentMs)
+        assertFalse(PhoneDuties.effective(PhoneFeatures(), granted).gpsAssist)
+        assertEquals(DutyMask(gpsAssist = true), PhoneDuties.effective(PhoneFeatures(gpsAssist = true), denied))
+        assertTrue(DutyMask(gpsAssist = true).any)
+        assertEquals(listOf(10, 88), PhoneDuties.bits(DutyMask(gpsAssist = true)))
+        // 28 (GPS_EPHEMERIS_DOWNLOAD) is not claimed: the EPO messages are not implemented.
+        assertFalse(PhoneDuties.bits(DutyMask(true, true, true, true)).contains(28))
+        assertEquals(listOf(6, 7, 52, 8, 9, 10, 88), PhoneDuties.bits(DutyMask(true, true, true, true)))
+        assertEquals(emptyList<Int>(), PhoneDuties.bits(DutyMask(notifications = false)))
+    }
+
+    @Test
+    fun `claiming GPS assist sets bit 10 and bit 88 on the default mask and nothing else`() {
+        val base = CapabilityHex.parse(CapabilityHex.DEFAULT)!!
+        val out = PhoneDuties.claim(base, DutyMask(gpsAssist = true))
+        assertEquals(0x04, out[1].toInt() and 0xFF) // bit 10 = byte 1, 1 shl 2
+        assertEquals(0x01, out[11].toInt() and 0xFF) // bit 88 = byte 11, 1 shl 0
+        for (i in base.indices) {
+            if (i != 1 && i != 11) assertEquals(base[i], out[i], "byte $i")
+        }
+        // Without the duty the mask is returned unchanged.
+        assertSame(base, PhoneDuties.claim(base, DutyMask(gpsAssist = false)))
+    }
 }

@@ -52,6 +52,13 @@ data class PhoneFeatures(
     val music: Boolean = false,
     /** Let the watch ring the phone. */
     val findPhone: Boolean = false,
+    /**
+     * GPS assist: the server downloads satellite data from Garmin and the phone gives it to the watch,
+     * so the watch finds GPS faster. Nimrag's only contact with Garmin is that download.
+     */
+    val gpsAssist: Boolean = false,
+    /** When satellite data last reached the watch (unix ms); 0 = never. Kept across restarts. */
+    val gpsAssistLastSentMs: Long = 0L,
     /** Package names whose notifications stay on the phone. */
     val excludedApps: Set<String> = emptySet(),
 )
@@ -298,6 +305,9 @@ interface WatchController {
 
     /** Let the watch ring the phone (default off). Reconnects the watch once to tell it. */
     fun setPhoneFindPhone(on: Boolean) {}
+
+    /** GPS assist (default off). Reconnects the watch once to tell it. */
+    fun setPhoneGpsAssist(on: Boolean) {}
 
     /** Keep (or stop keeping) one app's notifications on the phone. */
     fun setAppExcluded(packageName: String, excluded: Boolean) {}

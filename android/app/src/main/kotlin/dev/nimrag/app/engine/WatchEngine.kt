@@ -262,6 +262,12 @@ class WatchEngine(private val hub: Hub) : WatchController {
         phoneFeatureChanged("Find my phone", on)
     }
 
+    override fun setPhoneGpsAssist(on: Boolean) {
+        if (hub.settings.phoneGpsAssist == on) return
+        hub.settings.phoneGpsAssist = on
+        phoneFeatureChanged("GPS assist", on)
+    }
+
     private fun phoneFeatureChanged(name: String, on: Boolean) {
         publishSettings()
         hub.log.info("$name: ${if (on) "on" else "off"}")

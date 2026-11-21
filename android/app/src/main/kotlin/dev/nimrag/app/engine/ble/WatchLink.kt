@@ -82,6 +82,7 @@ class WatchLink(private val hub: Hub, private val scanner: BleScanner) {
     init {
         hub.phone.attach(this)
         hub.workouts.attach(this)
+        hub.gpsAssist.attach(this)
     }
 
     // ---- connection state (HandlerThread only) ----
@@ -858,6 +859,7 @@ class WatchLink(private val hub: Hub, private val scanner: BleScanner) {
                     notifications = duties.notifications,
                     music = duties.music,
                     findPhone = duties.findPhone,
+                    gpsAssist = duties.gpsAssist,
                 ),
             ),
         )
@@ -1050,6 +1052,7 @@ class WatchLink(private val hub: Hub, private val scanner: BleScanner) {
                 settings.lastSync = result
                 log.info(AlongsideRules.syncSummary(result, connectionMode))
                 hub.update { it.copy(sync = it.sync.copy(running = false, currentBytes = 0, currentSize = 0, lastResult = result)) }
+                hub.gpsAssist.onSyncFinished()
             }
             is Event.Unsupported -> log.info("The watch asked for something we do not do (message ${event.messageId})")
             is Event.Battery -> {
@@ -1066,6 +1069,11 @@ class WatchLink(private val hub: Hub, private val scanner: BleScanner) {
             is Event.FindWatch,
             -> hub.phone.onWatchEvent(event)
             is Event.UploadFinished -> hub.workouts.onUploadFinished(event.uploadId, event.result)
+            // GPS assist: the watch's web request for satellite data, answered from the phone's copy or the server.
+            is Event.GpsAssistRequest,
+            is Event.GpsAssistDone,
+            is Event.HttpRequestRefused,
+            -> hub.gpsAssist.onWatchEvent(event)
             is Event.Anomaly -> log.warn("Anomaly: ${describe(event.kind)} (message ${event.messageId})")
             is Event.Closed -> onClientClosed(event.reason)
         }
@@ -1213,6 +1221,7 @@ class WatchLink(private val hub: Hub, private val scanner: BleScanner) {
         ready = false
         hub.phone.onLinkDown()
         hub.workouts.onLinkDown()
+        hub.gpsAssist.onLinkDown()
         writeChar = null
         currentNotifyId = null
         connectionHasFirst = false

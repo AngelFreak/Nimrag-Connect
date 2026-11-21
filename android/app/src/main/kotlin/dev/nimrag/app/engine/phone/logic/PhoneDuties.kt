@@ -2,7 +2,7 @@ package dev.nimrag.app.engine.phone.logic
 
 /*
  * The capability bit numbers (GNCS 6, ADVANCED_MUSIC 7, FIND_MY_PHONE 8, FIND_MY_WATCH 9,
- * BASIC_MUSIC 52) are taken from Gadgetbridge commit 7257742b (AGPL-3.0-or-later),
+ * CONNECTIQ_HTTP 10, BASIC_MUSIC 52, HTTP_RAW_RESOURCE_REQUEST 88) are taken from Gadgetbridge commit 7257742b (AGPL-3.0-or-later),
  * app/src/main/java/nodomain/freeyourgadget/gadgetbridge/service/devices/garmin/GarminCapability.java
  * (no copyright line in the file; Gadgetbridge contributors), and which of them a duty claims from
  * GarminSupport.java. The rest of the file is our own. Inferred (Gadgetbridge) until the stage 2f
@@ -17,8 +17,10 @@ data class DutyMask(
     val notifications: Boolean = false,
     val music: Boolean = false,
     val findPhone: Boolean = false,
+    /** The watch's GPS-assist download is answered (satellite data from the server). Needs no system access. */
+    val gpsAssist: Boolean = false,
 ) {
-    val any: Boolean get() = notifications || music || findPhone
+    val any: Boolean get() = notifications || music || findPhone || gpsAssist
 }
 
 /**
@@ -35,6 +37,10 @@ object PhoneDuties {
     const val BIT_FIND_MY_WATCH = 9
     const val BIT_BASIC_MUSIC = 52
 
+    /** CONNECTIQ_HTTP and HTTP_RAW_RESOURCE_REQUEST: claimed only with GPS assist on (inferred, Gadgetbridge). */
+    const val BIT_CONNECTIQ_HTTP = 10
+    const val BIT_HTTP_RAW_RESOURCE_REQUEST = 88
+
     /**
      * A duty runs only when it is switched on and the system lets us do it: notifications and
      * music both need "Notification access" (the notification listener and the media sessions);
@@ -44,6 +50,7 @@ object PhoneDuties {
         notifications = features.notifications && access.notificationAccess,
         music = features.music && access.notificationAccess,
         findPhone = features.findPhone,
+        gpsAssist = features.gpsAssist,
     )
 
     /** The bits a duty set claims. */
@@ -56,6 +63,10 @@ object PhoneDuties {
         if (duties.findPhone) {
             add(BIT_FIND_MY_PHONE)
             add(BIT_FIND_MY_WATCH)
+        }
+        if (duties.gpsAssist) {
+            add(BIT_CONNECTIQ_HTTP)
+            add(BIT_HTTP_RAW_RESOURCE_REQUEST)
         }
     }
 

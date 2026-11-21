@@ -30,17 +30,19 @@ import dev.nimrag.app.ui.components.NimragOutlinedButton
 import dev.nimrag.app.ui.components.PageColumn
 import dev.nimrag.app.ui.components.PhoneIcon
 import dev.nimrag.app.ui.components.RowTrailing
+import dev.nimrag.app.ui.components.SatelliteIcon
 import dev.nimrag.app.ui.components.SettingsGroup
 import dev.nimrag.app.ui.components.SettingsPage
 import dev.nimrag.app.ui.components.SettingsRow
 import dev.nimrag.app.ui.components.ShieldIcon
 import dev.nimrag.app.ui.components.WatchIcon
+import dev.nimrag.app.ui.components.relativeTime
 
 /** "All off" or "2 of 3 on": the Watch page's one-line summary of the phone features. */
 @Composable
 internal fun phoneFeaturesSummary(state: AppState): String {
     val phone = state.settings.phone
-    val on = listOf(phone.notifications, phone.music, phone.findPhone).count { it }
+    val on = listOf(phone.notifications, phone.music, phone.findPhone, phone.gpsAssist).count { it }
     return if (on == 0) stringResource(R.string.phone_features_value_off) else stringResource(R.string.phone_features_value_count, on)
 }
 
@@ -126,6 +128,36 @@ internal fun PhoneFeaturesPage(
                         icon = PhoneIcon,
                         trailing = RowTrailing.Toggle(phone.findPhone, controller::setPhoneFindPhone),
                     )
+                }
+            }
+
+            SettingsGroup(heading = stringResource(R.string.gps_group), footer = stringResource(R.string.gps_footer)) {
+                item {
+                    SettingsRow(
+                        title = stringResource(R.string.gps_title),
+                        value = stringResource(
+                            when {
+                                !phone.gpsAssist -> R.string.gps_off
+                                !state.settings.hasToken -> R.string.gps_needs_server
+                                else -> R.string.gps_on
+                            },
+                        ),
+                        icon = SatelliteIcon,
+                        trailing = RowTrailing.Toggle(phone.gpsAssist, controller::setPhoneGpsAssist),
+                    )
+                }
+                if (phone.gpsAssist) {
+                    item {
+                        SettingsRow(
+                            title = stringResource(R.string.gps_last_title),
+                            value = if (phone.gpsAssistLastSentMs > 0) {
+                                stringResource(R.string.gps_last_value, relativeTime(phone.gpsAssistLastSentMs))
+                            } else {
+                                stringResource(R.string.gps_last_never)
+                            },
+                            icon = WatchIcon,
+                        )
+                    }
                 }
             }
 
