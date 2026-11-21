@@ -9,7 +9,7 @@ use std::collections::{BTreeMap, VecDeque};
 
 use nimrag_core::capture::{self, Direction, L2capReassembler, ATT_CID};
 use nimrag_core::client::reliable::MlrEndpoint;
-use nimrag_core::client::{Client, ClientConfig, Event, Input, Now, Phase};
+use nimrag_core::client::{Client, ClientConfig, Duties, Event, Input, Now, Phase};
 use nimrag_core::cobs::{self, FrameDecoder};
 use nimrag_core::gfdi::Message;
 use nimrag_core::link::{Event as LinkEvent, InfoPage, LinkDecoder};
@@ -571,6 +571,7 @@ fn host_config(s: &SessionTranscript) -> Result<ClientConfig, String> {
         first_connect: false,
         archive: true,
         skip: vec![],
+        duties: Duties::default(),
     })
 }
 

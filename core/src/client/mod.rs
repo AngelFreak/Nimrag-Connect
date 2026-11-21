@@ -25,11 +25,17 @@
 use crate::cobs;
 use crate::describe::DirEntry;
 
+mod companion;
 pub mod reliable;
 mod session;
 mod sync;
 mod transport;
 
+pub use crate::duties::music::MusicCommand;
+pub use crate::duties::notification::{
+    NotificationAction, NotificationCategory, PhoneNotification,
+};
+pub use companion::{MusicInfo, MusicState};
 use reliable::MIN_ATT_MTU;
 use session::{Out, Session};
 use transport::{Transport, TransportOut};
@@ -73,6 +79,24 @@ pub struct ClientConfig {
     /// only skip; they never cause an archive. The host passes the files it
     /// copied on earlier connections when `archive` is false.
     pub skip: Vec<FileKey>,
+    /// The companion duties of stage 2f the host has switched on.
+    pub duties: Duties,
+}
+
+/// The companion duties (stage 2f) a host can switch on. Each defaults to off
+/// in the hosts; with a duty off the client answers the watch's messages for it
+/// with "not supported" and sends nothing unasked, as before 2f. The caller also
+/// has to claim the matching bits in `ClientConfig::capabilities`, or the watch
+/// does not ask (notifications: bit 6, music: bits 7 and 52, find my phone: bits
+/// 8 and 9; *inferred (Gadgetbridge)*, `GarminCapability`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct Duties {
+    /// Show the phone's notifications on the watch.
+    pub notifications: bool,
+    /// Music control from the watch and now-playing on the watch.
+    pub music: bool,
+    /// Let the watch ring the phone (find my phone).
+    pub find_phone: bool,
 }
 
 /// What names a file on the watch across connections: the directory entry's
@@ -150,6 +174,21 @@ pub enum Input {
     /// every handshake, but our bring-up sequence is verified against our own
     /// captures and stays as it is, so the host decides when to ask. [ours]
     RequestBattery,
+    /// A notification appeared or changed on the phone (notifications duty;
+    /// ignored unless the duty is on and the watch has subscribed). Reuse the id
+    /// to change a notification. The content is private: never log it.
+    PostNotification { notification: PhoneNotification },
+    /// The notification with this id is gone on the phone.
+    RemoveNotification { id: u32 },
+    /// The track that is playing (music duty). Replaces an update still waiting.
+    MusicInfo { info: MusicInfo },
+    /// The player state (music duty). Replaces an update still waiting.
+    MusicState { state: MusicState },
+    /// The phone's media volume, 0-100 (music duty).
+    MusicVolume { percent: u8 },
+    /// Ask the watch to ring (`start`) or to stop ringing. Needs the watch's
+    /// find-my-watch capability; the outcome is `Event::FindWatch`.
+    FindWatch { start: bool },
     /// The GATT link is gone. Terminal.
     Disconnected,
 }
@@ -239,6 +278,33 @@ pub enum Event {
         level_percent: u8,
         report: BatteryReport,
     },
+    /// The watch subscribed to (`enabled`) or left the notification stream
+    /// (notifications duty).
+    NotificationSubscription {
+        enabled: bool,
+    },
+    /// The wearer did something to notification `id` on the watch.
+    NotificationAction {
+        id: u32,
+        action: NotificationAction,
+    },
+    /// The watch asks the phone to ring (find my phone duty).
+    FindPhoneStart {
+        duration_s: u8,
+    },
+    /// The watch cancels the ring request.
+    FindPhoneStop,
+    /// A watch button asks the player to do something (music duty).
+    MusicCommand {
+        command: MusicCommand,
+    },
+    /// The watch asked what it can control: push the current track and state
+    /// again (music duty).
+    MusicRequested,
+    /// Progress of `Input::FindWatch`, or the watch cancelling by itself.
+    FindWatch {
+        state: FindWatchState,
+    },
     /// Something unexpected that did not end the session.
     Anomaly {
         kind: AnomalyKind,
@@ -281,6 +347,20 @@ pub enum BatteryReport {
         battery_status: Option<u32>,
         hours_remaining: Option<u32>,
     },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FindWatchState {
+    /// The watch does not advertise find my watch; nothing was sent.
+    NotSupported,
+    /// The watch confirmed it is ringing.
+    Ringing,
+    /// The watch confirmed it stopped.
+    Stopped,
+    /// The watch refused or the request failed.
+    Failed,
+    /// The wearer cancelled on the watch.
+    FoundOnWatch,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -338,6 +418,11 @@ pub enum AnomalyKind {
     /// with a non-ACK status, or not answered within the reply deadline (it
     /// is then dropped). Not fatal; the session goes on.
     BatteryRequestRefused,
+    /// A message of a companion duty (a notification update or its data, a
+    /// now-playing update, a find-my-watch request) was refused by the watch or
+    /// not answered in time. Not fatal: the message is dropped and the session
+    /// goes on.
+    DutyMessageRefused,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -492,6 +577,30 @@ impl Client {
             }
             Input::FileStoreFailed { transfer_id } => {
                 let out = self.session.file_stored(now, transfer_id, false);
+                self.apply_session(now, out, step);
+            }
+            Input::PostNotification { notification } => {
+                let out = self.session.post_notification(now, notification);
+                self.apply_session(now, out, step);
+            }
+            Input::RemoveNotification { id } => {
+                let out = self.session.remove_notification(now, id);
+                self.apply_session(now, out, step);
+            }
+            Input::MusicInfo { info } => {
+                let out = self.session.music_info(now, &info);
+                self.apply_session(now, out, step);
+            }
+            Input::MusicState { state } => {
+                let out = self.session.music_state(now, state);
+                self.apply_session(now, out, step);
+            }
+            Input::MusicVolume { percent } => {
+                let out = self.session.music_volume(now, percent);
+                self.apply_session(now, out, step);
+            }
+            Input::FindWatch { start } => {
+                let out = self.session.find_watch(now, start);
                 self.apply_session(now, out, step);
             }
             Input::Connected { .. } | Input::Disconnected => {}

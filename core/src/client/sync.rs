@@ -357,7 +357,13 @@ impl SyncCycle {
             | Kind::FileTypes
             | Kind::HandshakeComplete
             | Kind::FirstConnect(_)
-            | Kind::BatteryRequest => {}
+            | Kind::BatteryRequest
+            | Kind::NotificationUpdate
+            | Kind::NotificationData
+            | Kind::MusicInfo
+            | Kind::MusicState
+            | Kind::MusicVolume
+            | Kind::FindWatch => {}
         }
     }
 
