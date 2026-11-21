@@ -118,6 +118,40 @@ impl From<core::FindWatchState> for FindWatchState {
     }
 }
 
+impl From<core::UploadStage> for UploadStage {
+    fn from(s: core::UploadStage) -> Self {
+        match s {
+            core::UploadStage::Create => UploadStage::Create,
+            core::UploadStage::Request => UploadStage::Request,
+            core::UploadStage::Data => UploadStage::Data,
+        }
+    }
+}
+
+impl From<core::UploadResult> for UploadResult {
+    fn from(r: core::UploadResult) -> Self {
+        match r {
+            core::UploadResult::Sent => UploadResult::Sent,
+            core::UploadResult::Refused { stage, status } => UploadResult::Refused {
+                stage: stage.into(),
+                status,
+            },
+            core::UploadResult::Nak { stage, status } => UploadResult::Nak {
+                stage: stage.into(),
+                status,
+            },
+            core::UploadResult::TimedOut { stage } => UploadResult::TimedOut {
+                stage: stage.into(),
+            },
+            core::UploadResult::BadReply { stage } => UploadResult::BadReply {
+                stage: stage.into(),
+            },
+            core::UploadResult::Aborted => UploadResult::Aborted,
+            core::UploadResult::Invalid => UploadResult::Invalid,
+        }
+    }
+}
+
 impl From<FileKey> for core::FileKey {
     fn from(k: FileKey) -> Self {
         core::FileKey {
@@ -164,6 +198,17 @@ impl From<Input> for core::Input {
             },
             Input::MusicVolume { percent } => core::Input::MusicVolume { percent },
             Input::FindWatch { start } => core::Input::FindWatch { start },
+            Input::UploadFile {
+                upload_id,
+                data_type,
+                sub_type,
+                data,
+            } => core::Input::UploadFile {
+                upload_id,
+                data_type,
+                sub_type,
+                data,
+            },
             Input::Disconnected => core::Input::Disconnected,
         }
     }
@@ -306,6 +351,10 @@ impl From<core::Event> for Event {
             core::Event::FindWatch { state } => Event::FindWatch {
                 state: state.into(),
             },
+            core::Event::UploadFinished { upload_id, result } => Event::UploadFinished {
+                upload_id,
+                result: result.into(),
+            },
             core::Event::Anomaly { kind, message_id } => Event::Anomaly {
                 kind: kind.into(),
                 message_id,
@@ -370,6 +419,7 @@ impl From<core::AnomalyKind> for AnomalyKind {
             core::AnomalyKind::GfdiClosedByWatch => AnomalyKind::GfdiClosedByWatch,
             core::AnomalyKind::BatteryRequestRefused => AnomalyKind::BatteryRequestRefused,
             core::AnomalyKind::DutyMessageRefused => AnomalyKind::DutyMessageRefused,
+            core::AnomalyKind::UploadFailed => AnomalyKind::UploadFailed,
         }
     }
 }

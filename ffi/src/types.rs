@@ -134,6 +134,41 @@ pub enum FindWatchState {
     FoundOnWatch,
 }
 
+/// Which message of an upload was being answered.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
+pub enum UploadStage {
+    Create,
+    Request,
+    Data,
+}
+
+/// How an upload to the watch ended.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
+pub enum UploadResult {
+    Sent,
+    /// The watch refused; `status` is the create, upload or transfer status of
+    /// that stage (see `nimrag_core::client::UploadResult`).
+    Refused {
+        stage: UploadStage,
+        status: u8,
+    },
+    /// The watch answered with a status other than ACK.
+    Nak {
+        stage: UploadStage,
+        status: u8,
+    },
+    TimedOut {
+        stage: UploadStage,
+    },
+    BadReply {
+        stage: UploadStage,
+    },
+    /// The link closed first.
+    Aborted,
+    /// Nothing was sent: no data, too much, a full queue, or a link too small.
+    Invalid,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, uniffi::Record)]
 pub struct FileKey {
     pub data_type: u8,
@@ -200,6 +235,15 @@ pub enum Input {
     /// Ask the watch to ring or to stop ringing.
     FindWatch {
         start: bool,
+    },
+    /// Send a file to the watch (a workout is `data_type` 128, `sub_type` 5).
+    /// The caller's `upload_id` comes back in `Event::UploadFinished`. The
+    /// content is private: never log it.
+    UploadFile {
+        upload_id: u64,
+        data_type: u8,
+        sub_type: u8,
+        data: Vec<u8>,
     },
     Disconnected,
 }
@@ -317,6 +361,10 @@ pub enum Event {
     FindWatch {
         state: FindWatchState,
     },
+    UploadFinished {
+        upload_id: u64,
+        result: UploadResult,
+    },
     Anomaly {
         kind: AnomalyKind,
         message_id: u16,
@@ -373,6 +421,7 @@ pub enum AnomalyKind {
     GfdiClosedByWatch,
     BatteryRequestRefused,
     DutyMessageRefused,
+    UploadFailed,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
