@@ -355,6 +355,58 @@ Workouts are the user's own data: they are in the export (`csv/workouts.csv`) an
 user. The `X-Nimrag` rule is unchanged for the owner side; `/api/device/` is exempt like
 `/api/files`.
 
+## Weather for the watch (stage 2f)
+
+When the phone's "Weather" feature is on, the watch can ask for a forecast (message 5014). The phone
+asks this server, the server gets the forecast from [Open-Meteo](https://open-meteo.com/) and writes
+it as the FIT `weather_conditions` records the watch expects; the phone only carries the bytes.
+Code in `src/weather.rs`; tests in `tests/weather.rs` (a local fake Open-Meteo; no test reaches the
+real one) and the unit tests in the module.
+
+Phone side (a device token, `Authorization: Bearer`, no CSRF header; the token must belong to a
+user):
+
+| endpoint | what |
+|---|---|
+| `POST /api/device/weather` | body `{lat, lon, hours?, format?}`. Answers `{definitions, records, fetched_at}`: the FIT definition records and each data record in base64 and the time the forecast was fetched (Unix seconds). `400` for a position that is not on the globe, `401` without a device token, `403` for a token without a user, `502` when Open-Meteo did not answer (10 s timeout), `503` when weather is switched off or this build has no FIT profile |
+
+`hours` (0 or missing means 12, at most 12) sets the number of hourly records. The answer holds one
+"current" record, up to 12 hourly ones and 5 daily ones. `format` is the watch's format byte and is
+accepted and ignored.
+
+**Privacy.** The watch position is rounded to 0.1 degree (about 10 km) on the phone's core, and
+again here. Only the rounded cell goes to Open-Meteo, with this server's address and nothing about
+the user or the watch. A position is never stored and never logged, not even rounded: the log line
+says `weather answered` with whether the cache was used and the number of records. Error words
+from the upstream are fixed (`timeout`, `unreachable`, a status number, `bad answer`) because an
+HTTP client's own error text contains the URL, and the URL contains the cell. Answers are cached in
+memory (not on disk) for 30 minutes per cell, 256 cells at most, so one cell is asked for at most
+twice an hour however often the watch asks, and the cache is gone at a restart. The one place the
+cell appears again is the "current" record's observed location, which goes back to the watch.
+
+**Switches.** `NIMRAG_WEATHER=off` or `--weather off` switches the endpoint off (`503`, Open-Meteo
+is never contacted); the default is on, but nothing happens until a phone switches the feature on.
+`NIMRAG_WEATHER_URL` / `--weather-url` replace the Open-Meteo address (for your own instance, and
+for the tests).
+
+**What is mapped.** Temperature, apparent temperature, humidity, wind speed and direction, rain
+probability, condition and the day's high and low; dew point, UV index and air pressure when the
+FIT profile has the field. Open-Meteo's WMO weather codes become Garmin conditions with our own
+table, written out at the top of `src/weather.rs` (clear, partly cloudy, cloudy, fog, light rain,
+rain, heavy rain, scattered showers, wintry mix, light snow, snow, heavy snow, thunderstorms; an
+unknown code gives no condition). There is no place name and no air quality.
+
+**The FIT profile.** Like workouts, the file is made with `nimrag_core::fit` and the locally
+generated FIT profile (Garmin data, never redistributed, `docs/LICENSING.md`), so a server built
+without it (the default, `NIMRAG_FIT_PROFILE=none`, and the Docker image) answers `503` with "this
+server was built without the FIT profile ...", and the phone then sends the watch nothing. The
+phone never needs the profile, which is why the public Android build can carry weather.
+
+**Attribution.** Weather data by [Open-Meteo.com](https://open-meteo.com/), licensed under
+[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Open-Meteo's free service is for
+non-commercial use; a self-hosted household server fetching a few forecasts an hour is well inside
+it, but read their [terms](https://open-meteo.com/en/terms) if you run it for others.
+
 ## Building (sqlx offline)
 
 Queries in the ingest and parse code are checked at compile time (the owner API
