@@ -370,6 +370,8 @@ impl SyncCycle {
             | Kind::MusicState
             | Kind::MusicVolume
             | Kind::FindWatch
+            | Kind::WeatherDefinition
+            | Kind::WeatherData
             | Kind::UploadCreate
             | Kind::UploadRequest
             | Kind::UploadData

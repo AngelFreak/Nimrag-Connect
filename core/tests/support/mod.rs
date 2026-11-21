@@ -68,6 +68,7 @@ pub fn all_duties() -> Duties {
         notifications: true,
         music: true,
         find_phone: true,
+        ..Duties::default()
     }
 }
 
