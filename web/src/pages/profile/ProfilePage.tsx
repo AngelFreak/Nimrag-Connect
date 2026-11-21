@@ -4,6 +4,7 @@ import { useLogout, useMe } from '../../account/queries';
 import {
   Chip,
   ConfirmDialog,
+  DownloadIcon,
   FilesIcon,
   GlobeIcon,
   InfoIcon,
@@ -28,6 +29,8 @@ import { GARMIN_STATE_VALUE } from './GarminPage';
 /** Where the code lives; the About page links here. */
 export const SOURCE_URL = 'https://github.com/AngelFreak/Nimrag-Connect';
 export const LICENCE = 'AGPL-3.0';
+/** The signed-in user's data as a zip (originals and CSV files). A plain link, so the browser and the app's web view both save it. */
+export const EXPORT_URL = '/api/export';
 
 export type ProfileSection = 'account' | 'preferences' | 'about';
 
@@ -73,6 +76,7 @@ function UserRows() {
             value={tokens.data ? phonesSummary(tokens.data.tokens) : tokens.isError ? 'Could not load' : undefined}
             to="/profile/phones"
           />
+          <SettingsRow icon={<DownloadIcon />} tone="steps" title="Download my data" value="Originals and CSV, as a zip" download={EXPORT_URL} />
         </SettingsGroup>
       </div>
       <div data-pane="preferences">

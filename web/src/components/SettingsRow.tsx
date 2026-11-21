@@ -23,6 +23,10 @@ interface LinkRow extends RowBase {
 interface ExternalRow extends RowBase {
   href: string;
 }
+/** The row downloads a file from this server: a plain same-tab link the browser (or the app's web view) saves. */
+interface DownloadRow extends RowBase {
+  download: string;
+}
 /** The row is a button: the whole row runs `onClick`. */
 interface ButtonRow extends RowBase {
   onClick: () => void;
@@ -47,7 +51,7 @@ interface InfoRow extends RowBase {
   info: true;
 }
 
-export type SettingsRowProps = LinkRow | ExternalRow | ButtonRow | SwitchRow | ActionRow | InfoRow;
+export type SettingsRowProps = LinkRow | ExternalRow | DownloadRow | ButtonRow | SwitchRow | ActionRow | InfoRow;
 
 function Body({ icon, tone = 'accent', title, value }: RowBase) {
   return (
@@ -81,6 +85,14 @@ export function SettingsRow(props: SettingsRowProps) {
         <Body {...props} />
         <NextIcon size={18} />
       </Link>
+    );
+  }
+  if ('download' in props) {
+    return (
+      <a href={props.download} className="srow" download>
+        <Body {...props} />
+        <NextIcon size={18} />
+      </a>
     );
   }
   if ('href' in props) {

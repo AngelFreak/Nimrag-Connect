@@ -4,6 +4,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.compose.rememberLauncherForActivityResult
 import android.annotation.SuppressLint
 import android.app.AlertDialog
+import android.app.DownloadManager
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
@@ -13,9 +14,11 @@ import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
 import android.net.Uri
+import android.os.Environment
 import android.os.Handler
 import android.os.Looper
 import android.view.View
+import android.widget.Toast
 import android.webkit.CookieManager
 import android.webkit.JavascriptInterface
 import android.webkit.JsResult
@@ -46,6 +49,7 @@ import dev.nimrag.app.engine.local.LocalWeb
 import dev.nimrag.app.model.WatchController
 import dev.nimrag.app.ui.shell.logic.BridgeScripts
 import dev.nimrag.app.ui.shell.logic.BridgeStatus
+import dev.nimrag.app.ui.shell.logic.DownloadPolicy
 import dev.nimrag.app.ui.shell.logic.NavigationDecision
 import dev.nimrag.app.ui.shell.logic.Origin
 import dev.nimrag.app.ui.shell.logic.ServerOrigin
@@ -375,6 +379,10 @@ private fun createWebView(
         documentStart = true
     }
 
+    // A web view saves no file by itself. "Download my data" (a link to /api/export) ends here.
+    webView.setDownloadListener { url, userAgent, contentDisposition, mimeType, _ ->
+        startDownload(context, target.origin, url, userAgent, contentDisposition, mimeType)
+    }
     webView.webViewClient = ShellWebViewClient(target.origin, state, documentStart)
     webView.webChromeClient = ShellChromeClient(chooseFile)
     if (localWeb != null) {
@@ -385,6 +393,38 @@ private fun createWebView(
         webView.loadUrl(target.startUrl)
     }
     return webView
+}
+
+/**
+ * Hands a download of the server's own origin to Android's DownloadManager, which saves it to the
+ * Downloads folder and shows its own progress and "done" notification. The request carries the web
+ * view's cookies for that URL (the session), so it is signed in as the page was. Anything from
+ * another origin is dropped: the cookie goes nowhere else.
+ */
+private fun startDownload(
+    context: Context,
+    origin: Origin,
+    url: String?,
+    userAgent: String?,
+    contentDisposition: String?,
+    mimeType: String?,
+) {
+    if (url == null || !DownloadPolicy.allow(url, origin)) return
+    val name = DownloadPolicy.fileName(contentDisposition, url)
+    try {
+        val request = DownloadManager.Request(Uri.parse(url))
+            .setTitle(name)
+            .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+            .setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, name)
+        CookieManager.getInstance().getCookie(url)?.let { request.addRequestHeader("Cookie", it) }
+        userAgent?.let { request.addRequestHeader("User-Agent", it) }
+        if (!mimeType.isNullOrBlank()) request.setMimeType(mimeType)
+        context.getSystemService(DownloadManager::class.java).enqueue(request)
+        Toast.makeText(context, "Downloading $name", Toast.LENGTH_SHORT).show()
+    } catch (e: Exception) {
+        // No download manager, or the system refused the request.
+        Toast.makeText(context, "Could not start the download", Toast.LENGTH_LONG).show()
+    }
 }
 
 private fun cacheModeFor(context: Context): Int =

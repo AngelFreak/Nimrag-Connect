@@ -40,9 +40,10 @@ export default defineConfig({
         runtimeCaching: [
           {
             // Offline viewing: network first, fall back to the last good response.
-            // Credentialed same-origin GETs only; mutations are never cached.
+            // Credentialed same-origin GETs only; mutations are never cached. The data export
+            // (a zip that can be hundreds of MB) is a download, not a page: it bypasses the cache.
             urlPattern: ({ url, request }) =>
-              url.pathname.startsWith('/api/') && request.method === 'GET',
+              url.pathname.startsWith('/api/') && url.pathname !== '/api/export' && request.method === 'GET',
             handler: 'NetworkFirst',
             options: {
               cacheName: 'nimrag-api',
