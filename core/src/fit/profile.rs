@@ -247,6 +247,19 @@ pub fn enum_name(type_name: &str, value: u64) -> Option<&'static str> {
     enum_name_in(&ALL, type_name, value)
 }
 
+/// Enum value for a value name, the reverse of [`enum_name`]: `("file", "workout")` -> `5`.
+/// Used by the FIT writer (`encode`), which looks every value up by name.
+pub fn enum_value(type_name: &str, name: &str) -> Option<u64> {
+    enum_value_in(&ALL, type_name, name)
+}
+
+fn enum_value_in(t: &[Tables], type_name: &str, name: &str) -> Option<u64> {
+    t.iter().find_map(|t| {
+        let i = t.enums.binary_search_by_key(&type_name, |e| e.0).ok()?;
+        t.enums[i].1.iter().find(|v| v.1 == name).map(|v| v.0)
+    })
+}
+
 /// Profile version, if the table provides one.
 pub fn profile_version() -> Option<u32> {
     ALL.iter().find_map(|t| t.version)
@@ -321,6 +334,19 @@ mod tests {
         assert!(field_by_name(20, "no_such_field").is_none());
         assert_eq!(enum_name("no_such_type", 0), None);
         assert_eq!(enum_name("file", 0xFFFF), None);
+        assert_eq!(enum_value("no_such_type", "x"), None);
+        assert_eq!(enum_value("file", "no_such_value"), None);
+    }
+
+    #[cfg(fit_profile)]
+    #[test]
+    fn enum_values_resolve_by_name() {
+        assert_eq!(enum_value("file", "workout"), Some(5));
+        assert_eq!(enum_value("mesg_num", "workout_step"), Some(27));
+        for (ty, v) in [("file", 4), ("sport", 1), ("intensity", 3)] {
+            let name = enum_name(ty, v).expect("name");
+            assert_eq!(enum_value(ty, name), Some(v));
+        }
     }
 
     #[cfg(fit_profile)]
@@ -406,6 +432,7 @@ mod tests {
             assert!(field(20, 3).is_none());
             assert!(field_by_name(20, "heart_rate").is_none());
             assert!(enum_name("file", 4).is_none());
+            assert!(enum_value("file", "activity").is_none());
             assert!(profile_version().is_none());
         }
     }
