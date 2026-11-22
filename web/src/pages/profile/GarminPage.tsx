@@ -363,7 +363,7 @@ export function GarminPage() {
 
   return (
     <SubPage title="Send to Garmin" backTo="/profile">
-      <p className="subpage__lede">Your watch&apos;s files are also sent to your Garmin Connect account. You choose below whether that is activities only or everything.</p>
+      <p className="subpage__lede">Your server can send your watch&apos;s files to your own Garmin Connect account too: activities only, or everything from the watch.</p>
       {query.isPending ? (
         <Card padding="lg" aria-label="Loading the Garmin status">
           <Skeleton height={20} lines={3} />

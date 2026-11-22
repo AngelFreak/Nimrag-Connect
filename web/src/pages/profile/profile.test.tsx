@@ -437,7 +437,7 @@ describe('Profile: send to Garmin', () => {
     renderApp('/profile/garmin');
     const toggle = await screen.findByRole('switch', { name: /Send to Garmin/ });
     expect(toggle).not.toBeChecked();
-    expect(screen.getByText(/Your watch.s files are also sent to your Garmin Connect account/)).toBeInTheDocument();
+    expect(screen.getByText(/Your server can send your watch.s files to your own Garmin Connect account too/)).toBeInTheDocument();
     expect(screen.queryByLabelText('Garmin email')).not.toBeInTheDocument();
     expect(screen.queryByText(/unofficial/)).not.toBeInTheDocument();
     await u.click(toggle);
