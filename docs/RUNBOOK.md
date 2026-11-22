@@ -273,7 +273,7 @@ after a watch reset, or after Bluetooth was cleared on either side.
 
 If the watch is also paired with the Garmin Connect app, the two compete: only one app should be the
 watch's phone. To switch for good, remove the watch in Garmin Connect (Devices), forget it in the
-phone's Bluetooth settings, then pair it in Nimrag Connect. To keep both, set the app to **Alongside Garmin Connect** (Watch tab, Garmin Connect settings); Connect's "Nearby devices" permission must then stay on.
+phone's Bluetooth settings, then pair it in Nimrag Connect. To keep both, set the app to **Alongside Garmin Connect** (Watch tab, Garmin Connect settings); Connect's "Nearby devices" permission must then stay on. In Alongside the phone syncs only when the app is opened, on Sync now, or when the watch asks: timed syncs left monitoring files on the watch that nothing cleared, and the watch stopped recording heart rate and stress once too many piled up.
 
 Pairing a watch that has no old pairing at all has not been tried yet on a real watch: the live
 runs reused an existing Garmin Connect pairing. If a fresh pairing fails, the app's sync history

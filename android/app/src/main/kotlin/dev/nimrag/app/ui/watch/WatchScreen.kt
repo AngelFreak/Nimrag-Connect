@@ -91,7 +91,11 @@ internal fun WatchScreen(
                 item {
                     SettingsRow(
                         title = stringResource(R.string.auto_sync_title),
-                        value = intervalLabel(settings.autoSyncMinutes),
+                        value = if (settings.garminConnectMode == GarminConnectMode.Alongside && settings.autoSyncMinutes > 0) {
+                            stringResource(R.string.auto_sync_value_alongside)
+                        } else {
+                            intervalLabel(settings.autoSyncMinutes)
+                        },
                         icon = SyncIcon,
                         trailing = RowTrailing.Chevron,
                         onClick = { onOpen(WatchPage.AutoSync) },

@@ -396,6 +396,7 @@ class WatchLink(private val hub: Hub, private val scanner: BleScanner) {
      */
     fun onGarminConnectModeChanged(mode: GarminConnectMode) {
         otherAppHinted = false
+        scheduleAutoSync()
         if (client == null) {
             log.info("Garmin Connect mode: ${mode.name}, used from the next connection")
         } else {
@@ -1328,7 +1329,10 @@ class WatchLink(private val hub: Hub, private val scanner: BleScanner) {
         hub.state.value.sync.running || LinkRules.syncAskPending(syncAskedAtMs?.let { SystemClock.elapsedRealtime() - it })
 
     private fun autoSyncDue(): Boolean =
-        LinkRules.shouldStartAutoSync(ready, syncBusy(), settings.lastSync?.finishedAtMs, System.currentTimeMillis(), settings.autoSyncMinutes)
+        LinkRules.shouldStartAutoSync(ready, syncBusy(), settings.lastSync?.finishedAtMs, System.currentTimeMillis(), timedSyncMinutes())
+
+    /** The stored interval, or 0 in Alongside ([AlongsideRules.timedSyncMinutes]). */
+    private fun timedSyncMinutes(): Int = AlongsideRules.timedSyncMinutes(settings.autoSyncMinutes, settings.garminConnectMode)
 
     /** Starts a sync when the interval since the last finished one has run out (after the handshake, on a watch event, on the alarm). */
     private fun maybeAutoSync() {
@@ -1341,11 +1345,11 @@ class WatchLink(private val hub: Hub, private val scanner: BleScanner) {
      * Sets the one auto-sync alarm for when the interval since the last finished sync runs out.
      * It stays set while the service runs, also while the link is down, because it is what hurries
      * a reconnect that waits out its delay. A Handler delay counts uptime and would stand still in
-     * deep sleep, so this is an alarm ([AutoSyncAlarm]). Off (0), a stopped service and a forgotten
-     * watch cancel it.
+     * deep sleep, so this is an alarm ([AutoSyncAlarm]). Off (0), Alongside, a stopped service and
+     * a forgotten watch cancel it.
      */
     private fun scheduleAutoSync() {
-        val minutes = settings.autoSyncMinutes
+        val minutes = timedSyncMinutes()
         if (!running || settings.watch == null || minutes <= 0) {
             autoSyncAlarm.cancel()
             return

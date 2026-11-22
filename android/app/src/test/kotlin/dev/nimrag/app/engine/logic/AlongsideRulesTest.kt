@@ -26,6 +26,14 @@ class AlongsideRulesTest {
     }
 
     @Test
+    fun `Alongside has no timed sync, Off keeps the stored interval`() {
+        assertEquals(15, AlongsideRules.timedSyncMinutes(15, off))
+        assertEquals(0, AlongsideRules.timedSyncMinutes(0, off))
+        assertEquals(0, AlongsideRules.timedSyncMinutes(15, alongside))
+        assertEquals(0, AlongsideRules.timedSyncMinutes(60, alongside))
+    }
+
+    @Test
     fun `the other-app hint is for Off only`() {
         assertTrue(AlongsideRules.hintsOtherApp(off))
         assertFalse(AlongsideRules.hintsOtherApp(alongside))

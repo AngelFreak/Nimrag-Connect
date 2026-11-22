@@ -26,14 +26,23 @@ import dev.nimrag.app.ui.watch.logic.SyncIntervals
 
 // ---------------------------------------------------------------- automatic sync
 
-/** How often the phone asks a connected watch to sync: a radio list, one footer line. */
+/**
+ * How often the phone asks a connected watch to sync: a radio list, one footer line. In
+ * [alongside] the interval is kept but not used, and the footer says so.
+ */
 @Composable
-internal fun AutoSyncPage(minutes: Int, onSelect: (Int) -> Unit, onBack: () -> Unit) {
+internal fun AutoSyncPage(minutes: Int, alongside: Boolean, onSelect: (Int) -> Unit, onBack: () -> Unit) {
     SettingsPage(title = stringResource(R.string.auto_sync_title), onBack = onBack) {
         PageColumn {
             SettingsGroup(
                 modifier = Modifier.selectableGroup(),
-                footer = stringResource(if (minutes == 0) R.string.auto_sync_off_hint else R.string.auto_sync_hint),
+                footer = stringResource(
+                    when {
+                        alongside && minutes > 0 -> R.string.auto_sync_alongside_hint
+                        minutes == 0 -> R.string.auto_sync_off_hint
+                        else -> R.string.auto_sync_hint
+                    },
+                ),
             ) {
                 SyncIntervals.options(minutes).forEach { option ->
                     item {

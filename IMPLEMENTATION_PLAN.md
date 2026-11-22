@@ -418,7 +418,7 @@ Design (integrator, 2026-11-19): Jetpack Compose + Material 3 (dynamic colour, l
 
 **Success Criteria**: core tests: archive false never emits 5008 in any path (including retries and stale confirmations); skip keys suppress download and are counted; archive true unchanged (all existing tests pass untouched). Live: with Connect's permission on and Alongside set, both apps stay connected, Connect still shows new data, and Nimrag stores the same files.
 **Tests**: `core/tests/client_synthetic.rs` cases for archive false / skip; Android unit tests for the copied-key store and mode switch; live test by the owner.
-**Status**: Alongside built (0.3.0, live test pending; the owner runs Nimrag only). Forward: server and web built (night of 2026-11-19), tested against a fake Garmin only.
+**Status**: Alongside built (0.3.0) and used live from 2026-11-21. Found live on 2026-11-22: every phone sync makes the watch close its monitoring file, Garmin Connect cleared none of them, and once about 75 were waiting (03:52, after about 14 hours of 15-minute syncs) the Instinct 2 stopped recording heart rate, stress and respiration until 09:09. Those readings are lost in both apps; sleep was recorded. 0.7.3: Alongside runs no timed syncs, only on app open, a tap or a watch request (`AlongsideRules.timedSyncMinutes`). Forward: server and web built (night of 2026-11-19), tested against a fake Garmin only.
 
 ## Gate 2
 A week of normal wear syncs with no manual steps and no lost or duplicated files; file counts and hashes compared against a USB copy of the watch (note: the watch cuts monitoring/metrics files per sync, so compare at the level of files the watch lists, plus a USB copy taken at the end of the week).

@@ -12,6 +12,16 @@ object AlongsideRules {
     fun archive(mode: GarminConnectMode): Boolean = mode == GarminConnectMode.Off
 
     /**
+     * The interval the timed auto-sync uses: none in Alongside. Every sync makes the watch close
+     * its monitoring file, nothing archives those for Garmin Connect, and on 2026-11-22 the
+     * Instinct 2 stopped recording heart rate and stress once about 75 of them were waiting
+     * [ours, observed once]. Alongside syncs only when the app is opened, on a tap, or when the
+     * watch asks.
+     */
+    fun timedSyncMinutes(autoSyncMinutes: Int, mode: GarminConnectMode): Int =
+        if (mode == GarminConnectMode.Alongside) 0 else autoSyncMinutes
+
+    /**
      * Garmin Connect owns the pairing in Alongside, so no first-connection events are sent
      * then. [wanted] is the budget's answer; the saved flag is not touched either way.
      */

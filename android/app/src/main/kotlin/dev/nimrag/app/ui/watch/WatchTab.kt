@@ -5,6 +5,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.nimrag.app.model.AppState
+import dev.nimrag.app.model.GarminConnectMode
 import dev.nimrag.app.model.WatchController
 import dev.nimrag.app.model.WatchState
 import dev.nimrag.app.ui.settings.LicencesScreen
@@ -38,7 +39,12 @@ fun WatchTab(
 
     when (page) {
         WatchPage.Main -> WatchScreen(state, account, controller, actions, onOpen = onPage, onSignIn = onSignIn)
-        WatchPage.AutoSync -> AutoSyncPage(state.settings.autoSyncMinutes, controller::setAutoSyncMinutes, back)
+        WatchPage.AutoSync -> AutoSyncPage(
+            minutes = state.settings.autoSyncMinutes,
+            alongside = state.settings.garminConnectMode == GarminConnectMode.Alongside,
+            onSelect = controller::setAutoSyncMinutes,
+            onBack = back,
+        )
         WatchPage.GarminConnect -> GarminConnectPage(
             mode = state.settings.garminConnectMode,
             garminConnect = state.garminConnect,
