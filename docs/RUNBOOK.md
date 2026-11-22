@@ -22,7 +22,8 @@ were not run in the build session.
 9. [Map tiles](#map-tiles)
 10. [Weather for the watch](#weather-for-the-watch)
 11. [GPS assist (satellite data for the watch)](#gps-assist-satellite-data-for-the-watch)
-12. [Troubleshooting](#troubleshooting)
+12. [Send your files to Garmin Connect](#send-your-files-to-garmin-connect)
+13. [Troubleshooting](#troubleshooting)
 
 ## Install
 
@@ -273,7 +274,7 @@ after a watch reset, or after Bluetooth was cleared on either side.
 
 If the watch is also paired with the Garmin Connect app, the two compete: only one app should be the
 watch's phone. To switch for good, remove the watch in Garmin Connect (Devices), forget it in the
-phone's Bluetooth settings, then pair it in Nimrag Connect. To keep both, set the app to **Alongside Garmin Connect** (Watch tab, Garmin Connect settings); Connect's "Nearby devices" permission must then stay on. In Alongside the phone syncs only when the app is opened, on Sync now, or when the watch asks: timed syncs left monitoring files on the watch that nothing cleared, and the watch stopped recording heart rate and stress once too many piled up.
+phone's Bluetooth settings, then pair it in Nimrag Connect. To keep Garmin Connect up to date as well, do not share the watch: let your server send the files to your Garmin Connect account (see [Send your files to Garmin Connect](#send-your-files-to-garmin-connect)). The "Alongside Garmin Connect" mode, where both phone apps shared the watch, is being removed from the app: it left monitoring files on the watch that nothing cleared, and the watch stopped recording heart rate and stress once too many piled up.
 
 Pairing a watch that has no old pairing at all has not been tried yet on a real watch: the live
 runs reused an existing Garmin Connect pairing. If a fresh pairing fails, the app's sync history
@@ -335,13 +336,39 @@ With the "GPS assist" switch on the phone's Phone features page, the watch gets 
 data and finds GPS faster. The phone asks your server, and your server downloads the file from
 Garmin (`api.gcs.garmin.com`, no login, about 66 KB, cached for 4 hours). This is the **only**
 request Nimrag ever makes to Garmin, and nothing about you is sent with it (no token, no unit id,
-no position). The phone switch is off by default.
+no position). The phone switch is off by default. (The one other contact is the opt-in
+[Garmin Connect upload](#send-your-files-to-garmin-connect), which you switch on yourself.)
 
 To make the server refuse to contact Garmin at all, set `NIMRAG_GPS_ASSIST=off` (or start with
 `serve --no-gps-assist`) and restart: `/api/device/gps-assist` then answers 404 and the phone's
 switch simply finds nothing. In Docker add `NIMRAG_GPS_ASSIST: "off"` under `environment:`. The
 downloaded files sit in `<data dir>/gps-assist/`; the folder is a cache, is not backed up, and can be
 deleted. Details in "GPS assist" in [`server/README.md`](../server/README.md).
+
+## Send your files to Garmin Connect
+
+If you also want your data in Garmin Connect (Body Battery, heart rate, stress, sleep, HRV and
+training metrics as well as activities), your server can upload the watch's files to your own
+Garmin Connect account. It is off until you turn it on, and it is the owner's choice per user:
+**Profile → Send to Garmin**.
+
+1. Turn the switch on and log in with your Garmin email and password. The password is used once
+   and never stored; only login tokens are kept, on your server. The login copies Garmin's phone
+   app, is unofficial and can stop working without notice. If Garmin refuses the login from the
+   server, log in with python-garminconnect elsewhere and choose "Use a token file instead".
+2. Choose what to send. **Activities only** is the default: each activity the watch records.
+   **Everything from the watch** sends every file the watch produces, so Garmin Connect stays
+   complete. Garmin takes these files and ignores what it already has (checked on 2026-11-22 with an
+   Instinct 2, see [`docs/research/garmin-forward.md`](research/garmin-forward.md)). Files that
+   came from a Garmin export or Garmin Connect history are never sent back.
+3. Choosing Everything does not send your older files by itself. The page then offers **Also send
+   what Garmin Connect is missing** with a start date (7 days back to begin with). The files go
+   oldest first, about one a second, so a few hundred files take a few minutes; leaving the page
+   is fine. Repeating it is safe: files already sent are skipped, and Garmin ignores duplicates.
+
+The page shows what waits, what was sent and what needs you; "Try the failed ones again" gives
+failed files a fresh set of tries. A refused login pauses sending until you log in again. Turning
+the switch off deletes the stored tokens and forgets the files not yet sent.
 
 ## Troubleshooting
 

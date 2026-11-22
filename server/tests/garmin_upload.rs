@@ -416,6 +416,336 @@ async fn backfill_queues_the_last_n_days_once() {
     assert_eq!(r.status().await["done"], 2);
 }
 
+// ---- everything from the watch (send_all) ----------------------------------------------------
+
+const MONITORING: &str = "data_type=128&sub_type=32&source=watch";
+const SLEEP: &str = "data_type=128&sub_type=49&source=usb";
+
+#[tokio::test]
+async fn the_choice_defaults_to_activities_only_and_is_changed_through_the_api() {
+    let r = rig().await;
+    // No account: nothing to change.
+    assert_eq!(r.status().await["send_all"], false);
+    let (s, _) = r
+        .post("/api/garmin/settings", json!({"send_all": true}))
+        .await;
+    assert_eq!(s, StatusCode::CONFLICT);
+
+    r.connect().await;
+    assert_eq!(
+        r.status().await["send_all"],
+        false,
+        "a new account sends activities only"
+    );
+    r.set_send_all(true).await;
+    assert_eq!(r.status().await["send_all"], true);
+    // The choice is a setting, not a backfill: nothing was queued, and logging in again keeps it.
+    assert_eq!(r.queue_len().await, 0);
+    r.connect().await;
+    assert_eq!(r.status().await["send_all"], true);
+    r.set_send_all(false).await;
+    assert_eq!(r.status().await["send_all"], false);
+
+    // Bad bodies and a missing CSRF header are refused.
+    let (s, _) = r
+        .post("/api/garmin/settings", json!({"send_all": "yes"}))
+        .await;
+    assert!(s.is_client_error());
+    let (s, _) = r.post("/api/garmin/settings", json!({})).await;
+    assert!(s.is_client_error());
+    let (s, _) = r
+        .env
+        .request(
+            axum::http::Method::POST,
+            "/api/garmin/settings",
+            None,
+            b"{}".to_vec(),
+        )
+        .await;
+    assert!(s.is_client_error(), "no session, no CSRF header");
+
+    // Logging out forgets the choice with the account.
+    r.set_send_all(true).await;
+    let (s, _) = r.post("/api/garmin/logout", json!({})).await;
+    assert_eq!(s, StatusCode::NO_CONTENT);
+    r.connect().await;
+    assert_eq!(r.status().await["send_all"], false);
+}
+
+#[tokio::test]
+async fn send_all_off_queues_only_activities() {
+    let r = rig().await;
+    r.connect().await;
+    r.file(MONITORING, 1).await;
+    r.file(SLEEP, 2).await;
+    let act = r.activity(3).await;
+    assert_eq!(r.queue_len().await, 1);
+    assert_eq!(r.run().await, 1);
+    assert_eq!(r.item(&act).await.0, "done");
+    assert_eq!(r.uploaded_tags([1, 2, 3]), [3]);
+}
+
+#[tokio::test]
+async fn send_all_on_queues_watch_files_and_never_the_ones_that_came_from_garmin() {
+    let r = rig().await;
+    r.connect().await;
+    r.set_send_all(true).await;
+    // Garmin sends no activity id for anything but an activity.
+    r.fake.with(|f| f.default_upload = Up::OkNoId);
+    let mon = r.file(MONITORING, 1).await;
+    let sleep = r.file(SLEEP, 2).await;
+    let act = r.activity(3).await;
+    let metrics = r.file("data_type=128&sub_type=44&source=watch", 4).await;
+    // From Garmin (an export or Connect history), not from the watch: never sent back.
+    r.file("data_type=128&sub_type=32&source=import", 5).await;
+    // Not FIT bytes, not a FIT data type, no metadata.
+    let (s, _) = r.env.upload(MONITORING, b"this is not a FIT file").await;
+    assert_eq!(s, StatusCode::CREATED);
+    r.file("data_type=8&sub_type=32&source=watch", 7).await;
+    r.file("source=watch", 8).await;
+
+    let queued: Vec<String> = sqlx::query_scalar("SELECT file_sha256 FROM garmin_uploads")
+        .fetch_all(&r.env.pool)
+        .await
+        .unwrap();
+    for sha in [&mon, &sleep, &act, &metrics] {
+        assert!(queued.contains(sha), "{sha} is queued");
+    }
+    assert_eq!(queued.len(), 4, "{queued:?}");
+
+    assert_eq!(r.run().await, 4);
+    let st = r.status().await;
+    assert_eq!(
+        (st["done"].as_i64(), st["pending"].as_i64()),
+        (Some(4), Some(0))
+    );
+    // A file that is not an activity is done with no activity id.
+    assert_eq!(r.item(&mon).await.3, None);
+
+    // A re-upload of a stored file is not queued again.
+    let (s, _) = r.env.upload(MONITORING, &common::tiny_fit(1)).await;
+    assert_eq!(s, StatusCode::OK);
+    assert_eq!(r.queue_len().await, 4);
+
+    // Back to activities only: new monitoring files are not queued any more.
+    r.set_send_all(false).await;
+    r.file(MONITORING, 20).await;
+    r.activity(21).await;
+    assert_eq!(r.queue_len().await, 5);
+}
+
+#[tokio::test]
+async fn a_non_activity_file_is_sent_like_any_other_file() {
+    let r = rig().await;
+    r.connect().await;
+    r.set_send_all(true).await;
+    r.fake.script([Up::OkNoId]);
+    let sha = r.file(MONITORING, 1).await;
+    assert_eq!(r.run().await, 1);
+    let (status, attempts, _, id, err) = r.item(&sha).await;
+    assert_eq!(
+        (status.as_str(), attempts, id, err),
+        ("done", 1, None, None)
+    );
+    r.fake.with(|f| {
+        let (_, body) = &f.uploads[0];
+        assert!(contains(body, "name=\"file\"; filename=\""));
+        assert_eq!(f.requests.last().unwrap(), "POST /upload-service/upload");
+    });
+}
+
+#[tokio::test]
+async fn a_duplicate_answer_for_a_non_activity_file_is_done_and_says_file() {
+    let r = rig().await;
+    r.connect().await;
+    r.set_send_all(true).await;
+    r.fake.script([Up::Dup, Up::Dup]);
+    let mon = r.file(MONITORING, 1).await;
+    let act = r.activity(2).await;
+    assert_eq!(r.run().await, 2);
+
+    let (status, attempts, _, id, note) = r.item(&mon).await;
+    assert_eq!((status.as_str(), attempts, id), ("done", 1, None));
+    let note = note.unwrap();
+    assert!(note.contains("already had this file"), "{note}");
+    assert!(!note.contains("activity"), "{note}");
+    // An activity keeps its own wording.
+    let (status, _, _, _, note) = r.item(&act).await;
+    assert_eq!(status, "done");
+    assert!(note.unwrap().contains("already had this activity"));
+
+    let st = r.status().await;
+    assert_eq!(
+        (st["done"].as_i64(), st["failed"].as_i64()),
+        (Some(2), Some(0))
+    );
+    assert!(st["last_error"].is_null(), "a duplicate is not an error");
+}
+
+#[tokio::test]
+async fn backfill_all_queues_watch_files_since_the_time_oldest_first_and_skips_queued_ones() {
+    let r = rig().await;
+    let t0 = r.now();
+    let day = 86_400;
+    // Stored (and timed) out of order, while Forward is off, so nothing is queued yet.
+    let newest = r.activity(1).await; // 1 day ago
+    let oldest = r.file(MONITORING, 2).await; // 5 days ago
+    let too_old = r.file(MONITORING, 3).await; // 10 days ago
+    let middle = r.file(SLEEP, 4).await; // 3 days ago
+    let from_garmin = r.file("data_type=128&sub_type=32&source=import", 5).await; // 2 days ago
+    let same_instant_a = r.file(MONITORING, 6).await; // 4 days ago, same second as the next
+    let same_instant_b = r.file(MONITORING, 7).await;
+    r.received(&newest, t0 - day, 0).await;
+    r.received(&oldest, t0 - 5 * day, 0).await;
+    r.received(&too_old, t0 - 10 * day, 0).await;
+    r.received(&middle, t0 - 3 * day, 500).await;
+    r.received(&from_garmin, t0 - 2 * day, 0).await;
+    r.received(&same_instant_a, t0 - 4 * day, 100).await;
+    r.received(&same_instant_b, t0 - 4 * day, 200).await;
+    assert_eq!(r.queue_len().await, 0);
+
+    // Needs Forward on, and exactly one way to say how far back.
+    let (s, _) = r
+        .post("/api/garmin/backfill", json!({"days": 7, "mode": "all"}))
+        .await;
+    assert_eq!(s, StatusCode::CONFLICT);
+    r.connect().await;
+    for bad in [
+        json!({"mode": "all"}),
+        json!({"days": 7, "since": "2026-11-15", "mode": "all"}),
+        json!({"days": 0, "mode": "all"}),
+        json!({"since": "yesterday", "mode": "all"}),
+        json!({"since": "2099-01-01", "mode": "all"}),
+        json!({"since": "2001-01-01", "mode": "all"}),
+        json!({"days": 7, "mode": "everything"}),
+    ] {
+        let (s, j) = r.post("/api/garmin/backfill", bad.clone()).await;
+        assert!(s.is_client_error(), "{bad}: {s} {j}");
+    }
+    assert_eq!(r.queue_len().await, 0);
+
+    let (s, j) = r
+        .post("/api/garmin/backfill", json!({"days": 7, "mode": "all"}))
+        .await;
+    assert_eq!((s, j["queued"].as_i64()), (StatusCode::OK, Some(5)), "{j}");
+    let queued: Vec<String> = sqlx::query_scalar("SELECT file_sha256 FROM garmin_uploads")
+        .fetch_all(&r.env.pool)
+        .await
+        .unwrap();
+    assert!(!queued.contains(&too_old) && !queued.contains(&from_garmin));
+
+    // Oldest first, by the time the server received the file.
+    assert_eq!(r.run().await, 5);
+    assert_eq!(r.uploaded_tags(1..=7), [2, 6, 7, 4, 1]);
+    assert_eq!(r.item(&newest).await.0, "done");
+
+    // Everything is queued or sent now: the same window queues nothing, a wider one only the
+    // file it adds.
+    let (_, j) = r
+        .post("/api/garmin/backfill", json!({"days": 7, "mode": "all"}))
+        .await;
+    assert_eq!(j["queued"], 0);
+    let (_, j) = r
+        .post("/api/garmin/backfill", json!({"days": 30, "mode": "all"}))
+        .await;
+    assert_eq!(j["queued"], 1);
+    assert_eq!(r.item(&too_old).await.0, "pending");
+    // Already-queued files are skipped even while they wait.
+    let (_, j) = r
+        .post("/api/garmin/backfill", json!({"days": 30, "mode": "all"}))
+        .await;
+    assert_eq!(j["queued"], 0);
+    assert_eq!(r.run().await, 1);
+    assert_eq!(r.uploaded_tags(1..=7), [2, 6, 7, 4, 1, 3]);
+}
+
+#[tokio::test]
+async fn backfill_all_takes_a_start_date_and_only_the_users_own_files() {
+    let r = rig().await;
+    let a = r.file(MONITORING, 1).await;
+    // Another user's file is not this user's to send.
+    let other = r
+        .env
+        .add_user("someone-else", nimrag_server::users::Role::User)
+        .await;
+    let token = r.env.token_for(other).await;
+    let (s, j) = r
+        .env
+        .request(
+            axum::http::Method::POST,
+            &format!("/api/files?{MONITORING}"),
+            Some(&token),
+            common::tiny_fit(2),
+        )
+        .await;
+    assert_eq!(s, StatusCode::CREATED, "{j}");
+    let theirs = j["sha256"].as_str().unwrap().to_owned();
+    r.received(&a, r.now() - 3600, 0).await;
+    r.connect().await;
+
+    let (s, j) = r
+        .post(
+            "/api/garmin/backfill",
+            json!({"since": "2020-01-01", "mode": "all"}),
+        )
+        .await;
+    assert_eq!((s, j["queued"].as_i64()), (StatusCode::OK, Some(1)), "{j}");
+    assert_eq!(r.item(&a).await.0, "pending");
+    assert_eq!(r.queue_len().await, 1);
+    let theirs_queued: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM garmin_uploads WHERE file_sha256 = ?")
+            .bind(&theirs)
+            .fetch_one(&r.env.pool)
+            .await
+            .unwrap();
+    assert_eq!(theirs_queued, 0);
+}
+
+#[tokio::test]
+async fn the_activities_backfill_still_works_and_leaves_other_files_alone() {
+    let r = rig().await;
+    let act = derived_activity(&r, 1, r.now() - 86_400).await;
+    r.file(MONITORING, 2).await;
+    r.connect().await;
+    // No mode = activities, as before; the monitoring file is not queued.
+    let (s, j) = r.post("/api/garmin/backfill", json!({"days": 7})).await;
+    assert_eq!((s, j["queued"].as_i64()), (StatusCode::OK, Some(1)), "{j}");
+    let (_, j) = r
+        .post(
+            "/api/garmin/backfill",
+            json!({"days": 7, "mode": "activities"}),
+        )
+        .await;
+    assert_eq!(j["queued"], 0);
+    assert_eq!(r.queue_len().await, 1);
+    assert_eq!(r.item(&act).await.0, "pending");
+}
+
+#[tokio::test]
+async fn the_worker_pauses_between_uploads() {
+    let r = rig().await;
+    r.connect().await;
+    for tag in 1..=3 {
+        r.activity(tag).await;
+    }
+    let mut cfg = r.fake.config();
+    cfg.upload_pause_ms = 150;
+    let state = r.state.clone().with_garmin(cfg);
+    let started = std::time::Instant::now();
+    assert_eq!(
+        nimrag_server::garmin::queue::run_due(&state).await.unwrap(),
+        3
+    );
+    // A breath between uploads, none after the last one.
+    let took = started.elapsed();
+    assert!(took >= std::time::Duration::from_millis(300), "{took:?}");
+    assert!(
+        took < std::time::Duration::from_millis(450 + 2000),
+        "{took:?}"
+    );
+    assert_eq!(r.fake.upload_count(), 3);
+}
+
 #[tokio::test]
 async fn retry_needs_forward_on_and_a_valid_login() {
     let r = rig().await;

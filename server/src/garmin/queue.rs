@@ -5,10 +5,12 @@
 //! worked until an admin assigns it to a user.
 //!
 //! Queue contract (IMPLEMENTATION_PLAN.md, Stage 2g): table `garmin_uploads`;
-//! every activity file stored while Forward is on is queued; transient errors
+//! every activity file stored while Forward is on is queued, and with the account's `send_all`
+//! choice every other watch/USB FIT file too; the oldest file goes first and the worker pauses
+//! [`GarminConfig::upload_pause_ms`](super::GarminConfig) between uploads; transient errors
 //! back off 1 min doubling to 6 h; 429 honours Retry-After; 401 gets one
 //! refresh and then pauses the queue; Garmin's duplicate answer counts as
-//! done; no file is tried more than 10 times without an owner action.
+//! done (for every file type); no file is tried more than 10 times without an owner action.
 //!
 //! Runtime queries (not `query!` macros), so `.sqlx` needs no update.
 
@@ -62,11 +64,13 @@ pub struct Account {
     pub tokens: Option<Tokens>,
     pub status: AccountStatus,
     pub last_error: Option<String>,
+    /// False: new activities only. True: every FIT file the watch produces.
+    pub send_all: bool,
 }
 
 pub async fn load_account(pool: &SqlitePool, uid: i64) -> Result<Option<Account>> {
     let row = sqlx::query(
-        "SELECT di_token, di_refresh_token, di_client_id, status, last_error
+        "SELECT di_token, di_refresh_token, di_client_id, status, last_error, send_all
          FROM garmin_account WHERE user_id = ?",
     )
     .bind(uid)
@@ -82,8 +86,21 @@ pub async fn load_account(pool: &SqlitePool, uid: i64) -> Result<Option<Account>
             }),
             status: AccountStatus::parse(&r.get::<String, _>(3)),
             last_error: r.get(4),
+            send_all: r.get::<i64, _>(5) != 0,
         }
     }))
+}
+
+/// The owner's choice: activities only, or every file from the watch. False when the user has
+/// no account row. Changing it queues nothing by itself (backfill is explicit).
+pub async fn set_send_all(pool: &SqlitePool, uid: i64, send_all: bool, now: i64) -> Result<bool> {
+    let r = sqlx::query("UPDATE garmin_account SET send_all = ?, updated_at = ? WHERE user_id = ?")
+        .bind(send_all as i64)
+        .bind(now)
+        .bind(uid)
+        .execute(pool)
+        .await?;
+    Ok(r.rows_affected() > 0)
 }
 
 /// Store the tokens of a fresh login or import: Forward is now on and connected.
@@ -172,17 +189,38 @@ pub async fn delete_account(pool: &SqlitePool, uid: i64) -> Result<()> {
     Ok(())
 }
 
-/// Queue one file of user `uid` if that user has Forward on. True when a row was added.
+/// Queue one activity file of user `uid` if that user has Forward on. True when a row was added.
 pub async fn enqueue(pool: &SqlitePool, uid: i64, sha256: &str, now: i64) -> Result<bool> {
     let r = sqlx::query(
-        "INSERT INTO garmin_uploads (file_sha256, status, attempts, next_attempt_at, created_at, user_id)
-         SELECT ?, 'pending', 0, ?, ?, ? WHERE EXISTS (SELECT 1 FROM garmin_account WHERE user_id = ?)
+        "INSERT INTO garmin_uploads (file_sha256, status, attempts, next_attempt_at, created_at, user_id, order_ts)
+         SELECT ?, 'pending', 0, ?, ?, ?, ? WHERE EXISTS (SELECT 1 FROM garmin_account WHERE user_id = ?)
          ON CONFLICT (file_sha256) DO NOTHING",
     )
     .bind(sha256)
     .bind(now)
     .bind(now)
     .bind(uid)
+    .bind(now * 1000)
+    .bind(uid)
+    .execute(pool)
+    .await?;
+    Ok(r.rows_affected() > 0)
+}
+
+/// Queue one non-activity file of user `uid` if that user has Forward on with `send_all`.
+/// True when a row was added.
+pub async fn enqueue_other(pool: &SqlitePool, uid: i64, sha256: &str, now: i64) -> Result<bool> {
+    let r = sqlx::query(
+        "INSERT INTO garmin_uploads (file_sha256, status, attempts, next_attempt_at, created_at, user_id, order_ts)
+         SELECT ?, 'pending', 0, ?, ?, ?, ?
+         WHERE EXISTS (SELECT 1 FROM garmin_account WHERE user_id = ? AND send_all = 1)
+         ON CONFLICT (file_sha256) DO NOTHING",
+    )
+    .bind(sha256)
+    .bind(now)
+    .bind(now)
+    .bind(uid)
+    .bind(now * 1000)
     .bind(uid)
     .execute(pool)
     .await?;
@@ -192,8 +230,9 @@ pub async fn enqueue(pool: &SqlitePool, uid: i64, sha256: &str, now: i64) -> Res
 /// Queue the best file of every activity of user `uid` that started at or after `since_ts`.
 pub async fn backfill(pool: &SqlitePool, uid: i64, since_ts: i64, now: i64) -> Result<u64> {
     let r = sqlx::query(
-        "INSERT INTO garmin_uploads (file_sha256, status, attempts, next_attempt_at, created_at, user_id)
-         SELECT sha256, 'pending', 0, ?, ?, ? FROM activities_current
+        "INSERT INTO garmin_uploads (file_sha256, status, attempts, next_attempt_at, created_at, user_id, order_ts)
+         SELECT sha256, 'pending', 0, ?, ?, ?, COALESCE(start_ts, ts, time_created) * 1000
+         FROM activities_current
          WHERE user_id = ? AND origin = 'fit' AND COALESCE(start_ts, ts, time_created) >= ?
          ON CONFLICT (file_sha256) DO NOTHING",
     )
@@ -205,6 +244,56 @@ pub async fn backfill(pool: &SqlitePool, uid: i64, since_ts: i64, now: i64) -> R
     .execute(pool)
     .await?;
     Ok(r.rows_affected())
+}
+
+/// Queue every FIT file of user `uid` that came from the watch or USB and was received at or
+/// after `since_ts` (unix seconds), activities included; files Garmin gave us (`import`,
+/// `connect`) are left out. The worker sends them oldest first. Files already in the queue (done,
+/// failed or waiting) are skipped.
+pub async fn backfill_all(pool: &SqlitePool, uid: i64, since_ts: i64, now: i64) -> Result<u64> {
+    // `received_at` is `2026-11-19T06:42:00.123Z`: unix seconds plus the three digits of the
+    // fraction, in milliseconds, so files of one sync keep their order.
+    let r = sqlx::query(
+        "INSERT INTO garmin_uploads (file_sha256, status, attempts, next_attempt_at, created_at, user_id, order_ts)
+         SELECT sha256, 'pending', 0, ?, ?, ?, ms FROM (
+             SELECT f.sha256 AS sha256,
+                    CAST(strftime('%s', f.received_at) AS INTEGER) * 1000
+                        + CAST(substr(f.received_at, 21, 3) AS INTEGER) AS ms
+             FROM files f JOIN file_owners o ON o.sha256 = f.sha256
+             WHERE o.user_id = ? AND f.source IN ('watch', 'usb') AND f.data_type = 128
+         ) WHERE ms >= ?
+         ON CONFLICT (file_sha256) DO NOTHING",
+    )
+        .bind(now)
+        .bind(now)
+        .bind(uid)
+        .bind(uid)
+        .bind(since_ts * 1000)
+        .execute(pool)
+        .await?;
+    Ok(r.rows_affected())
+}
+
+/// Is this stored file an activity (FIT 128/4)? Only the wording of the messages depends on it.
+async fn is_activity(pool: &SqlitePool, sha: &str) -> bool {
+    sqlx::query_scalar::<_, i64>(
+        "SELECT 1 FROM files WHERE sha256 = ? AND data_type = 128 AND sub_type = 4",
+    )
+    .bind(sha)
+    .fetch_optional(pool)
+    .await
+    .ok()
+    .flatten()
+    .is_some()
+}
+
+/// The note stored on a file Garmin already had.
+fn duplicate_note(activity: bool) -> &'static str {
+    if activity {
+        "Garmin already had this activity"
+    } else {
+        "Garmin already had this file"
+    }
 }
 
 #[derive(Debug, Default, PartialEq, Eq)]
@@ -344,7 +433,12 @@ pub async fn run_due(state: &AppState) -> Result<usize> {
 /// [`run_due`] for one user.
 pub async fn run_due_user(state: &AppState, uid: i64) -> Result<usize> {
     let mut handled = 0;
+    let pause_ms = state.garmin.cfg.upload_pause_ms;
     loop {
+        // Gentle with Garmin: a breath between two uploads (not after the last one).
+        if handled > 0 && pause_ms > 0 && next_due(&state.pool, uid, state.now()).await?.is_some() {
+            tokio::time::sleep(Duration::from_millis(pause_ms)).await;
+        }
         let now = state.now();
         let Some(account) = load_account(&state.pool, uid).await? else {
             break;
@@ -371,7 +465,8 @@ async fn next_due(pool: &SqlitePool, uid: i64, now: i64) -> Result<Option<(Strin
     let row = sqlx::query(
         "SELECT file_sha256, attempts FROM garmin_uploads
          WHERE status = 'pending' AND next_attempt_at <= ? AND user_id = ?
-         ORDER BY next_attempt_at, created_at, file_sha256 LIMIT 1",
+         ORDER BY next_attempt_at, COALESCE(order_ts, created_at * 1000), created_at, file_sha256
+         LIMIT 1",
     )
     .bind(now)
     .bind(uid)
@@ -509,15 +604,14 @@ async fn process(
     };
     let name = format!("{}.fit", &sha[..16]);
 
-    let mut outcome =
-        upload::upload_activity(&g.cfg, g.api().as_ref(), &tokens, &name, &bytes).await;
+    let mut outcome = upload::upload_file(&g.cfg, g.api().as_ref(), &tokens, &name, &bytes).await;
     if outcome == UploadOutcome::AuthExpired {
         // One refresh, one more try; a second 401 pauses the queue.
         match refresh_tokens(state, uid, &tokens).await? {
             Refreshed::Fresh(t) => {
                 tokens = t;
                 outcome =
-                    upload::upload_activity(&g.cfg, g.api().as_ref(), &tokens, &name, &bytes).await;
+                    upload::upload_file(&g.cfg, g.api().as_ref(), &tokens, &name, &bytes).await;
             }
             Refreshed::LoginExpired => return Ok(Flow::Stop),
             Refreshed::Later(s) => {
@@ -548,17 +642,9 @@ async fn process(
             clear_account_error(pool, uid).await?;
         }
         UploadOutcome::Duplicate => {
-            tracing::info!(sha = short, "garmin already has this activity");
-            finish(
-                pool,
-                sha,
-                tries,
-                "done",
-                None,
-                Some("Garmin already had this activity"),
-                now,
-            )
-            .await?;
+            let note = duplicate_note(is_activity(pool, sha).await);
+            tracing::info!(sha = short, "{}", note.to_lowercase());
+            finish(pool, sha, tries, "done", None, Some(note), now).await?;
             clear_account_error(pool, uid).await?;
         }
         UploadOutcome::Rejected(why) => {
@@ -646,6 +732,12 @@ async fn finish(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn duplicate_note_names_the_kind() {
+        assert_eq!(duplicate_note(true), "Garmin already had this activity");
+        assert_eq!(duplicate_note(false), "Garmin already had this file");
+    }
 
     #[test]
     fn backoff_doubles_to_six_hours() {
