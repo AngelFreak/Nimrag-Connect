@@ -61,7 +61,7 @@ const ROUTES: [name: string, path: (f: Fixture) => string][] = [
   ['Signed-in phones', () => '/profile/phones'],
   ['Timezone', () => '/profile/timezone'],
   ['Goals', () => '/profile/goals'],
-  ['Send activities to Garmin', () => '/profile/garmin'],
+  ['Send to Garmin', () => '/profile/garmin'],
   ['Old settings address', () => '/settings'],
   ['Page not found', () => '/does-not-exist'],
 ];

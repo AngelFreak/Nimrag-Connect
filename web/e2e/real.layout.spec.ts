@@ -130,7 +130,7 @@ const DEMO_PAGES: Scenario[] = [
   { name: 'Signed-in phones, sign-out confirmation', path: () => '/profile/phones', open: click(/^Sign out /) },
   { name: 'Timezone', path: () => '/profile/timezone' },
   { name: 'Goals', path: () => '/profile/goals' },
-  { name: 'Send activities to Garmin', path: () => '/profile/garmin' },
+  { name: 'Send to Garmin', path: () => '/profile/garmin' },
   { name: 'Page not found', path: () => '/does-not-exist' },
   // States: empty, loading, failed.
   {

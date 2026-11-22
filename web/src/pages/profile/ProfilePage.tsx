@@ -96,7 +96,7 @@ function UserRows() {
           <SettingsRow
             icon={<SendIcon />}
             tone="steps"
-            title="Send activities to Garmin"
+            title="Send to Garmin"
             value={garmin.data ? GARMIN_STATE_VALUE[garmin.data.state] : garmin.isError ? 'Could not load' : undefined}
             to="/profile/garmin"
           />
