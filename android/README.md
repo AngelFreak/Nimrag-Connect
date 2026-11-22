@@ -92,12 +92,16 @@ AndroidX and Compose are used for the UI (versions in `gradle/libs.versions.toml
 
 ## Web shell (stage 3n)
 
-The app is a native bottom bar (Today, Activities, Health, Strength, Watch). The first four show one
+The app is a native bottom bar (Today, Activities, Health, Watch). The first four show one
 `WebView` (`ui/shell/ServerWebView.kt`) that loads the saved server address and keeps running while
 the Watch tab (one native page and its sub-pages) is on screen. The web page talks to the
 app through `window.NimragApp` (document-start script, server origin only) over the
 `NimragAppNative` JavaScript interface; the pure rules (origin checks, URL validation, route to tab,
 status JSON) live in `ui/shell/logic` with unit tests. See IMPLEMENTATION_PLAN.md, stage 3n.
+A page without a tab (Profile, Send to Garmin) highlights no tab, as the web app does. Downloads:
+the web app's download rows call `NimragApp.download(path, name)` (0.8.1), which hands the file to
+Android's DownloadManager with the session cookie. The web view's own download listener stays for
+plain links, but the Samsung's WebView 157 never called it for "Download my data".
 
 The Watch tab is one page (`ui/watch/WatchScreen.kt`: a problem banner, the status card or the setup
 checklist, then settings rows in three groups) and sub-pages opened from its rows; `WatchPage` names

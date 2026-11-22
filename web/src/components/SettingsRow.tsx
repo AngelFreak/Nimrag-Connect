@@ -1,6 +1,7 @@
 import { Children, useId, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { NextIcon } from './icons';
+import { nativeDownload } from '../native';
 
 export type RowTone = 'accent' | 'energy' | 'sleep' | 'warn' | 'heart' | 'steps' | 'muted';
 
@@ -23,9 +24,11 @@ interface LinkRow extends RowBase {
 interface ExternalRow extends RowBase {
   href: string;
 }
-/** The row downloads a file from this server: a plain same-tab link the browser (or the app's web view) saves. */
+/** The row downloads a file from this server: a plain same-tab link the browser saves; inside the app the app saves it. */
 interface DownloadRow extends RowBase {
   download: string;
+  /** The file name the app saves it as (the browser takes the server's name). */
+  downloadName?: string;
 }
 /** The row is a button: the whole row runs `onClick`. */
 interface ButtonRow extends RowBase {
@@ -89,7 +92,14 @@ export function SettingsRow(props: SettingsRowProps) {
   }
   if ('download' in props) {
     return (
-      <a href={props.download} className="srow" download>
+      <a
+        href={props.download}
+        className="srow"
+        download
+        onClick={(e) => {
+          if (nativeDownload(props.download, props.downloadName ?? null)) e.preventDefault();
+        }}
+      >
         <Body {...props} />
         <NextIcon size={18} />
       </a>

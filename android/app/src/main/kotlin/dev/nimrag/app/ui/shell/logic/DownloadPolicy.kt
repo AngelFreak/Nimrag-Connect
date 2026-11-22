@@ -37,5 +37,19 @@ object DownloadPolicy {
         return FALLBACK_NAME
     }
 
+    /**
+     * The address for a download the page asks for through the bridge (`NimragApp.download`): a
+     * path on the server's own origin. Null for anything that is not a plain absolute path (another
+     * host, `//host`, a backslash, control characters) or is over [MAX_BRIDGE_PATH] characters.
+     */
+    fun bridgeUrl(path: String?, server: Origin?): String? {
+        if (server == null || path == null || path.length > MAX_BRIDGE_PATH) return null
+        if (!path.startsWith("/") || path.startsWith("//") || path.any { it == '\\' || it < ' ' }) return null
+        val url = server.rule + path
+        return url.takeIf { allow(it, server) }
+    }
+
+    const val MAX_BRIDGE_PATH = 2048
+
     private val FILENAME = Regex("""filename\s*=\s*"?([^";]+)"?""", RegexOption.IGNORE_CASE)
 }

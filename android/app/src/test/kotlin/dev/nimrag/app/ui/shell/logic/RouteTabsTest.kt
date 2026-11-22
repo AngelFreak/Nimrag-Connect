@@ -88,9 +88,25 @@ class RouteTabsTest {
     }
 
     @Test
-    fun `an unknown route keeps the highlight`() {
+    fun `a missing route keeps the highlight`() {
         val nav = ShellNav(MainTab.Health)
-        assertEquals(nav, nav.routed("/login"))
         assertEquals(nav, nav.routed(null))
+        assertEquals(nav, nav.routed(""))
+    }
+
+    @Test
+    fun `a route without a tab highlights nothing and keeps the web tab`() {
+        val nav = ShellNav(MainTab.Today).routed("/profile/garmin")
+        assertEquals(null, nav.highlighted)
+        assertEquals(MainTab.Today, nav.webTab)
+        assertEquals(MainTab.Activities, nav.routed("/activities").highlighted)
+        assertEquals(MainTab.Watch, nav.openedWatch().highlighted)
+        assertEquals(MainTab.Health, nav.tapped(MainTab.Health).highlighted)
+    }
+
+    @Test
+    fun `the watch row that opens Send to Garmin leaves the watch with nothing highlighted`() {
+        val nav = ShellNav(MainTab.Today, inWatch = true).tapped(MainTab.Today).routed("/profile/garmin")
+        assertEquals(null, nav.highlighted)
     }
 }

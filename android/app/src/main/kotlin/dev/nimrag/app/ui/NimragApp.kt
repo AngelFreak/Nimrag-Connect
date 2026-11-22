@@ -344,7 +344,7 @@ private val BarItems = listOf(
 
 /** The canvas's bottom bar: raised background, a line on top, the selected tab in the link colour. */
 @Composable
-private fun ShellBar(selected: MainTab, watchNeedsAttention: Boolean, onTab: (MainTab) -> Unit) {
+private fun ShellBar(selected: MainTab?, watchNeedsAttention: Boolean, onTab: (MainTab) -> Unit) {
     val line = NimragColors.Line
     NavigationBar(
         modifier = Modifier.drawBehind { drawLine(line, Offset(0f, 0f), Offset(size.width, 0f), strokeWidth = 1.dp.toPx()) },
@@ -379,7 +379,7 @@ private fun ShellBar(selected: MainTab, watchNeedsAttention: Boolean, onTab: (Ma
 
 /** The same tabs as [ShellBar] for landscape: a narrow rail on the start edge, icons only (labels are the accessibility names). */
 @Composable
-private fun ShellRail(selected: MainTab, watchNeedsAttention: Boolean, onTab: (MainTab) -> Unit) {
+private fun ShellRail(selected: MainTab?, watchNeedsAttention: Boolean, onTab: (MainTab) -> Unit) {
     val line = NimragColors.Line
     NavigationRail(
         modifier = Modifier.fillMaxHeight().drawBehind { drawLine(line, Offset(size.width, 0f), Offset(size.width, size.height), strokeWidth = 1.dp.toPx()) },

@@ -13,8 +13,8 @@ enum class MainTab(val webPath: String?) {
 
 /**
  * Which tab a web route belongs to. Mirrors `navKeyFor` in web/src/components/AppShell.tsx so the
- * native bar and the web app agree; routes without a tab (login, settings, devices, unknown) give
- * null and the bar keeps what it shows.
+ * native bar and the web app agree; routes without a tab (profile, Send to Garmin, devices,
+ * unknown) give null and the bar highlights nothing, as the web app does.
  */
 object RouteTabs {
     val webTabs: List<MainTab> = MainTab.entries.filter { it.isWeb }
@@ -43,11 +43,18 @@ object RouteTabs {
 
 /**
  * What the bar highlights and where the shell is. [webTab] is the last tab the web app reported
- * (or the owner tapped); [inWatch] is whether the native Watch tab is on screen. The web view
- * stays alive behind the Watch tab, so a route the page reports meanwhile only changes [webTab].
+ * (or the owner tapped); [inWatch] is whether the native Watch tab is on screen; [tabless] is
+ * whether the page shows a route without a tab (then nothing is highlighted, but [webTab] stays
+ * as the tab the web view belongs to). The web view stays alive behind the Watch tab, so a route
+ * the page reports meanwhile only changes [webTab] and [tabless].
  */
-data class ShellNav(val webTab: MainTab = MainTab.Today, val inWatch: Boolean = false) {
-    val highlighted: MainTab get() = if (inWatch) MainTab.Watch else webTab
+data class ShellNav(val webTab: MainTab = MainTab.Today, val inWatch: Boolean = false, val tabless: Boolean = false) {
+    val highlighted: MainTab?
+        get() = when {
+            inWatch -> MainTab.Watch
+            tabless -> null
+            else -> webTab
+        }
 
     /** The owner tapped [tab] in the bar. */
     fun tapped(tab: MainTab): ShellNav = if (tab == MainTab.Watch) copy(inWatch = true) else ShellNav(tab, false)
@@ -55,6 +62,9 @@ data class ShellNav(val webTab: MainTab = MainTab.Today, val inWatch: Boolean = 
     /** `NimragApp.openWatch()` from the page. */
     fun openedWatch(): ShellNav = copy(inWatch = true)
 
-    /** `NimragApp.onRoute(path)` from the page. */
-    fun routed(route: String?): ShellNav = RouteTabs.tabForRoute(route)?.let { copy(webTab = it) } ?: this
+    /** `NimragApp.onRoute(path)` from the page; a missing route changes nothing. */
+    fun routed(route: String?): ShellNav {
+        if (route.isNullOrBlank()) return this
+        return RouteTabs.tabForRoute(route)?.let { copy(webTab = it, tabless = false) } ?: copy(tabless = true)
+    }
 }

@@ -29,6 +29,11 @@ export interface NimragAppBridge {
    * password) and reloads the page; the web app shows no login page of its own meanwhile.
    */
   sessionExpired?: () => void;
+  /**
+   * Saves `path` (on this server) as `name` through the phone's download manager (apps from 0.8.1;
+   * some web views never hand a download link to the app).
+   */
+  download?: (path: string, name: string | null) => void;
 }
 
 declare global {
@@ -135,3 +140,18 @@ export const NATIVE_NAVIGATE_EVENT = 'nimrag:navigate';
  * were uploaded); `src/dataRefresh.ts` refetches what the page shows.
  */
 export const NATIVE_DATA_EVENT = 'nimrag:data';
+
+/**
+ * Inside the app: asks it to save `path` as `name`. Returns false in a plain browser or an app
+ * without the call; the caller then lets the link download as usual.
+ */
+export function nativeDownload(path: string, name: string | null): boolean {
+  const bridge = getBridge();
+  if (!isNativeApp() || typeof bridge?.download !== 'function') return false;
+  try {
+    bridge.download(path, name);
+    return true;
+  } catch {
+    return false;
+  }
+}

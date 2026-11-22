@@ -21,6 +21,17 @@ class DownloadPolicyTest {
     }
 
     @Test
+    fun `a bridge download is a path on the server's own origin only`() {
+        assertEquals("https://nimrag.example.ts.net/api/export", DownloadPolicy.bridgeUrl("/api/export", server))
+        val local = ServerOrigin.parse("http://127.0.0.1:18210")!!.origin
+        assertEquals("http://127.0.0.1:18210/api/export?x=1", DownloadPolicy.bridgeUrl("/api/export?x=1", local))
+        for (bad in listOf(null, "", "api/export", "//evil.example/x", "https://evil.example/x", "/a\\b", "/a\nb", "/" + "a".repeat(DownloadPolicy.MAX_BRIDGE_PATH))) {
+            assertEquals(null, DownloadPolicy.bridgeUrl(bad, server), bad)
+        }
+        assertEquals(null, DownloadPolicy.bridgeUrl("/api/export", null))
+    }
+
+    @Test
     fun `the name comes from Content-Disposition, quoted or not`() {
         assertEquals(
             "nimrag-export-alice-2026-11-21.zip",

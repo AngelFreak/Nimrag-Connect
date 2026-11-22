@@ -19,6 +19,7 @@ import {
   TopBar,
   UsersIcon,
 } from '../../components';
+import { todayIn } from '../../lib/dates';
 import { fmtInt } from '../../lib/format';
 import { usePageTitle } from '../../lib/hooks';
 import { useSettings } from '../today/queries';
@@ -31,6 +32,11 @@ export const SOURCE_URL = 'https://github.com/AngelFreak/Nimrag-Connect';
 export const LICENCE = 'AGPL-3.0';
 /** The signed-in user's data as a zip (originals and CSV files). A plain link, so the browser and the app's web view both save it. */
 export const EXPORT_URL = '/api/export';
+
+/** The server's name for the export zip (server/src/web_api/export.rs), for the app to save it under. */
+export function exportFileName(username: string | undefined, day: string): string {
+  return username ? `nimrag-export-${username}-${day}.zip` : `nimrag-export-${day}.zip`;
+}
 
 export type ProfileSection = 'account' | 'preferences' | 'about';
 
@@ -57,6 +63,7 @@ function Head({ name, host, admin }: { name: string | undefined; host: string; a
 
 /** Rows that need the person's own data: only for role `user`, so an admin never asks for them. */
 function UserRows() {
+  const me = useMe();
   const settings = useSettings();
   const tokens = useTokens();
   const garmin = useGarmin();
@@ -76,7 +83,14 @@ function UserRows() {
             value={tokens.data ? phonesSummary(tokens.data.tokens) : tokens.isError ? 'Could not load' : undefined}
             to="/profile/phones"
           />
-          <SettingsRow icon={<DownloadIcon />} tone="steps" title="Download my data" value="Originals and CSV, as a zip" download={EXPORT_URL} />
+          <SettingsRow
+            icon={<DownloadIcon />}
+            tone="steps"
+            title="Download my data"
+            value="Originals and CSV, as a zip"
+            download={EXPORT_URL}
+            downloadName={exportFileName(me.data?.username, todayIn(s?.timezone))}
+          />
         </SettingsGroup>
       </div>
       <div data-pane="preferences">

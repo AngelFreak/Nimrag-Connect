@@ -379,7 +379,9 @@ private fun createWebView(
         documentStart = true
     }
 
-    // A web view saves no file by itself. "Download my data" (a link to /api/export) ends here.
+    // A web view saves no file by itself. A plain download link ends here; the web app's own rows
+    // ask through the bridge instead (NimragWebBridge.download), because some web views never call
+    // this listener for them.
     webView.setDownloadListener { url, userAgent, contentDisposition, mimeType, _ ->
         startDownload(context, target.origin, url, userAgent, contentDisposition, mimeType)
     }
@@ -595,6 +597,20 @@ internal class NimragWebBridge(
     @JavascriptInterface
     fun openWatch() {
         main.post { if (trusted()) onOpenWatch() }
+    }
+
+    /**
+     * The page asks to save [path] (on the server's origin) as [name]: the same hand-over to the
+     * DownloadManager as a download link, without depending on the web view to report the link.
+     */
+    @JavascriptInterface
+    fun download(path: String?, name: String?) {
+        main.post {
+            if (!trusted()) return@post
+            val url = DownloadPolicy.bridgeUrl(path, origin) ?: return@post
+            val disposition = name?.let { "attachment; filename=\"$it\"" }
+            startDownload(webView.context, origin, url, webView.settings.userAgentString, disposition, null)
+        }
     }
 
     @JavascriptInterface

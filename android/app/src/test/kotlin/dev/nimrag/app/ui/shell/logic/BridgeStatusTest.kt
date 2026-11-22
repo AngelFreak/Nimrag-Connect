@@ -113,7 +113,7 @@ class BridgeStatusTest {
     @Test
     fun `the bridge script defines the web contract`() {
         val js = BridgeScripts.DEFINE_BRIDGE
-        for (needle in listOf("window.NimragApp", "native: true", "syncNow", "status", "openWatch", "onRoute", "NimragAppNative")) {
+        for (needle in listOf("window.NimragApp", "native: true", "syncNow", "status", "openWatch", "onRoute", "download", "NimragAppNative")) {
             assertTrue(js.contains(needle), needle)
         }
         assertEquals("NimragAppNative", BridgeScripts.INTERFACE_NAME)

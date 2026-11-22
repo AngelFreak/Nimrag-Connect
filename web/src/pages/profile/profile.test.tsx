@@ -11,7 +11,7 @@ import { formFrom, validateGoals } from './goals';
 import { navKeyForProfile } from './ProfileLayout';
 import { activePhones, phonesSummary } from './common';
 import { phoneLine } from './PhonesPage';
-import { sectionFromSearch } from './ProfilePage';
+import { exportFileName, sectionFromSearch } from './ProfilePage';
 
 const settings: SettingsResponse = {
   timezone: 'Europe/Copenhagen',
@@ -103,6 +103,30 @@ describe('Profile: the list', () => {
     renderApp('/profile');
     await screen.findByRole('link', { name: 'Admin area' });
     expect(screen.queryByRole('link', { name: /Download my data/ })).not.toBeInTheDocument();
+  });
+
+  it('inside the app, "Download my data" asks the app to save the zip under the server\'s name', async () => {
+    const download = vi.fn();
+    window.NimragApp = { native: true, download };
+    try {
+      mockApi(routes());
+      renderApp('/profile');
+      const link = await screen.findByRole('link', { name: /^Download my data/ });
+      await waitFor(() => expect(link).not.toHaveTextContent('Could not load'));
+      const click = new MouseEvent('click', { bubbles: true, cancelable: true });
+      link.dispatchEvent(click);
+      expect(click.defaultPrevented).toBe(true);
+      expect(download).toHaveBeenCalledTimes(1);
+      expect(download.mock.calls[0]?.[0]).toBe('/api/export');
+      expect(download.mock.calls[0]?.[1]).toMatch(/^nimrag-export-demo-\d{4}-\d{2}-\d{2}\.zip$/);
+    } finally {
+      delete window.NimragApp;
+    }
+  });
+
+  it('names the export like the server does', () => {
+    expect(exportFileName('demo', '2026-11-22')).toBe('nimrag-export-demo-2026-11-22.zip');
+    expect(exportFileName(undefined, '2026-11-22')).toBe('nimrag-export-2026-11-22.zip');
   });
 
   it('groups the rows Account, Preferences, Garmin Connect, About, Log out, with no form on the list', async () => {

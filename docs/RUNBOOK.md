@@ -239,8 +239,8 @@ Remove the scratch directory when you are done (`rm -r /tmp/nimrag-check`).
 
 Each user can take all their own data out, at any time, in open formats.
 
-* **Web:** Profile, **Download my data**. In the Android app the same row hands the download to the phone's download manager (not yet
-  tried on a real phone). An admin has no data and gets nothing.
+* **Web:** Profile, **Download my data**. In the Android app (0.8.1 and later) the same row hands the download to the
+  phone's download manager; the zip lands in Downloads (checked on a Samsung, 2026-11-22). An admin has no data and gets nothing.
 * **Command line**, for any user, while the server runs:
 
   ```sh

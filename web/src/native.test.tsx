@@ -5,7 +5,7 @@ import { MemoryRouter, useLocation } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AppShell, WatchLink } from './components';
 import { useNativeRouting } from './lib/hooks';
-import { NATIVE_NAVIGATE_EVENT, hasNativeSession, hasNativeWatch, isNativeApp, navigatePath, notifySessionExpired, openWatch, reportRoute } from './native';
+import { NATIVE_NAVIGATE_EVENT, hasNativeSession, hasNativeWatch, isNativeApp, navigatePath, nativeDownload, notifySessionExpired, openWatch, reportRoute } from './native';
 
 afterEach(() => {
   delete window.NimragApp;
@@ -25,6 +25,18 @@ describe('bridge helpers', () => {
     expect(hasNativeWatch()).toBe(false);
     expect(openWatch()).toBe(false);
     expect(() => reportRoute('/health')).not.toThrow();
+  });
+
+  it('nativeDownload asks the app only when it has the call', () => {
+    expect(nativeDownload('/api/export', 'x.zip')).toBe(false);
+    window.NimragApp = { native: true };
+    expect(nativeDownload('/api/export', 'x.zip')).toBe(false);
+    const download = vi.fn();
+    window.NimragApp = { native: true, download };
+    expect(nativeDownload('/api/export', 'x.zip')).toBe(true);
+    expect(download).toHaveBeenCalledWith('/api/export', 'x.zip');
+    window.NimragApp = { native: true, download: () => { throw new Error('gone'); } };
+    expect(nativeDownload('/api/export', null)).toBe(false);
   });
 
   it('isNativeApp needs the native flag', () => {
