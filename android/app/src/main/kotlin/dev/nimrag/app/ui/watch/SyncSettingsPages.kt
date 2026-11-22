@@ -12,7 +12,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import dev.nimrag.app.R
 import dev.nimrag.app.model.GarminConnect
-import dev.nimrag.app.model.GarminConnectMode
 import dev.nimrag.app.ui.components.Footnote
 import dev.nimrag.app.ui.components.MessageCard
 import dev.nimrag.app.ui.components.NimragButton
@@ -26,23 +25,14 @@ import dev.nimrag.app.ui.watch.logic.SyncIntervals
 
 // ---------------------------------------------------------------- automatic sync
 
-/**
- * How often the phone asks a connected watch to sync: a radio list, one footer line. In
- * [alongside] the interval is kept but not used, and the footer says so.
- */
+/** How often the phone asks a connected watch to sync: a radio list, one footer line. */
 @Composable
-internal fun AutoSyncPage(minutes: Int, alongside: Boolean, onSelect: (Int) -> Unit, onBack: () -> Unit) {
+internal fun AutoSyncPage(minutes: Int, onSelect: (Int) -> Unit, onBack: () -> Unit) {
     SettingsPage(title = stringResource(R.string.auto_sync_title), onBack = onBack) {
         PageColumn {
             SettingsGroup(
                 modifier = Modifier.selectableGroup(),
-                footer = stringResource(
-                    when {
-                        alongside && minutes > 0 -> R.string.auto_sync_alongside_hint
-                        minutes == 0 -> R.string.auto_sync_off_hint
-                        else -> R.string.auto_sync_hint
-                    },
-                ),
+                footer = stringResource(if (minutes == 0) R.string.auto_sync_off_hint else R.string.auto_sync_hint),
             ) {
                 SyncIntervals.options(minutes).forEach { option ->
                     item {
@@ -65,36 +55,43 @@ internal fun AutoSyncPage(minutes: Int, alongside: Boolean, onSelect: (Int) -> U
 
 // ---------------------------------------------------------------- Garmin Connect
 
-/** Nimrag only, or alongside the Garmin Connect app: two radio rows with one line each. */
+/**
+ * What to know about Garmin Connect: Nimrag is the only app that syncs the watch, and the server's
+ * "Send to Garmin Connect" (in the web profile) keeps the Garmin account up to date. [onOpenProfile]
+ * opens that page; it is offered only when a server is set up.
+ */
 @Composable
 internal fun GarminConnectPage(
-    mode: GarminConnectMode,
+    serverConfigured: Boolean,
     garminConnect: GarminConnect,
-    onSelect: (GarminConnectMode) -> Unit,
+    onOpenProfile: () -> Unit,
     onHelp: () -> Unit,
     onBack: () -> Unit,
 ) {
-    SettingsPage(title = stringResource(R.string.settings_garmin_connect_app), onBack = onBack) {
+    SettingsPage(title = stringResource(R.string.settings_garmin_connect), onBack = onBack) {
         PageColumn {
-            SettingsGroup(modifier = Modifier.selectableGroup(), footer = stringResource(R.string.garmin_mode_note)) {
-                item {
-                    SettingsRow(
-                        title = stringResource(R.string.garmin_mode_off),
-                        value = stringResource(R.string.garmin_mode_off_hint),
-                        trailing = RowTrailing.Radio(mode == GarminConnectMode.Off),
-                        onClick = { onSelect(GarminConnectMode.Off) },
-                    )
-                }
-                item {
-                    SettingsRow(
-                        title = stringResource(R.string.garmin_mode_alongside),
-                        value = stringResource(R.string.garmin_mode_alongside_hint),
-                        trailing = RowTrailing.Radio(mode == GarminConnectMode.Alongside),
-                        onClick = { onSelect(GarminConnectMode.Alongside) },
-                    )
-                }
+            MessageCard(
+                icon = Icons.Filled.Info,
+                title = stringResource(R.string.garmin_info_title),
+                containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+            ) {
+                Text(stringResource(R.string.garmin_info_body), style = MaterialTheme.typography.bodyMedium)
             }
-            if (mode == GarminConnectMode.Alongside) Footnote(stringResource(R.string.garmin_mode_alongside_note))
+            if (serverConfigured) {
+                SettingsGroup(heading = stringResource(R.string.garmin_forward_heading), footer = stringResource(R.string.garmin_forward_body)) {
+                    item {
+                        SettingsRow(
+                            title = stringResource(R.string.garmin_forward_row),
+                            value = stringResource(R.string.garmin_forward_row_value),
+                            trailing = RowTrailing.Chevron,
+                            onClick = onOpenProfile,
+                        )
+                    }
+                }
+            } else {
+                Footnote(stringResource(R.string.garmin_forward_body), Modifier.fillMaxWidth())
+            }
             if (garminConnect != GarminConnect.Absent) {
                 SettingsGroup {
                     item {
@@ -111,16 +108,14 @@ internal fun GarminConnectPage(
 }
 
 /**
- * "How to fix": what Garmin Connect does to the watch and how to keep it out of the way (or, when
- * the two share the watch, how to give Connect its Bluetooth access back). The text follows the
- * mode and what Connect can do on this phone right now.
+ * "How to fix": what Garmin Connect does to the watch and how to keep it out of the way. The text
+ * follows what Connect can do on this phone right now.
  *
  * Garmin Connect holds the watch's session whenever it runs, and the system restarts it when the
  * watch is in range, so Force stop does not last. Revoking its "Nearby devices" permission does.
  */
 @Composable
 internal fun GarminHelpPage(
-    mode: GarminConnectMode,
     garminConnect: GarminConnect,
     onOpenGarminConnectInfo: () -> Unit,
     onBack: () -> Unit,
@@ -133,18 +128,6 @@ internal fun GarminHelpPage(
         PageColumn {
             when {
                 garminConnect == GarminConnect.Absent -> Footnote(stringResource(R.string.garmin_help_absent), Modifier.fillMaxWidth())
-                mode == GarminConnectMode.Alongside -> MessageCard(
-                    icon = if (bluetoothOff) Icons.Filled.Warning else Icons.Filled.Info,
-                    title = stringResource(R.string.garmin_alongside_title),
-                    containerColor = if (bluetoothOff) MaterialTheme.status.warnContainer else MaterialTheme.colorScheme.secondaryContainer,
-                    contentColor = if (bluetoothOff) MaterialTheme.status.onWarnContainer else MaterialTheme.colorScheme.onSecondaryContainer,
-                    actions = if (bluetoothOff) open else null,
-                ) {
-                    Text(stringResource(R.string.garmin_alongside_body), style = MaterialTheme.typography.bodyMedium)
-                    if (bluetoothOff) {
-                        Text(stringResource(R.string.garmin_alongside_off_body), style = MaterialTheme.typography.bodyMedium)
-                    }
-                }
                 bluetoothOff -> MessageCard(
                     icon = Icons.Filled.Info,
                     title = stringResource(R.string.garmin_connect_off_title),

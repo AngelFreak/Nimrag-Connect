@@ -41,7 +41,7 @@ private fun Host(content: @Composable () -> Unit) {
 
 @Composable
 private fun WatchPreview(state: AppState, page: WatchPage = WatchPage.Main) =
-    Host { WatchTab(state, FakeController(state), page, onPage = {}, onSignIn = {}) }
+    Host { WatchTab(state, FakeController(state), page, onPage = {}, onSignIn = {}, onOpenWeb = {}) }
 
 @Preview(showBackground = true) @Composable private fun WatchPairedReady() = WatchPreview(PreviewData.pairedReady())
 
@@ -89,7 +89,7 @@ private fun WatchPreview(state: AppState, page: WatchPage = WatchPage.Main) =
 
 @Preview(showBackground = true) @Composable private fun PageAutoSync() = WatchPreview(PreviewData.pairedReady(), WatchPage.AutoSync)
 
-@Preview(showBackground = true) @Composable private fun PageGarminConnect() = WatchPreview(PreviewData.alongside(), WatchPage.GarminConnect)
+@Preview(showBackground = true) @Composable private fun PageGarminConnect() = WatchPreview(PreviewData.pairedReady(), WatchPage.GarminConnect)
 
 @Preview(showBackground = true) @Composable private fun PageGarminHelp() = WatchPreview(PreviewData.pairedGarminHolding(), WatchPage.GarminHelp)
 

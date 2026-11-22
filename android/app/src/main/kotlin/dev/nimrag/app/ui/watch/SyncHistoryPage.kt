@@ -51,7 +51,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.nimrag.app.R
 import dev.nimrag.app.model.AppState
-import dev.nimrag.app.model.GarminConnectMode
 import dev.nimrag.app.model.LogLine
 import dev.nimrag.app.model.StoredFile
 import dev.nimrag.app.model.SyncState
@@ -94,11 +93,7 @@ internal fun SyncHistoryPage(
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             item(key = "sync") {
-                SyncCard(
-                    state.sync,
-                    paired = state.watch is WatchState.Paired,
-                    alongside = state.settings.garminConnectMode == GarminConnectMode.Alongside,
-                )
+                SyncCard(state.sync, paired = state.watch is WatchState.Paired)
             }
             item(key = "uploads") {
                 UploadsCard(
@@ -154,7 +149,7 @@ internal fun SyncHistoryPage(
 // ---------------------------------------------------------------- sync
 
 @Composable
-internal fun SyncCard(sync: SyncState, paired: Boolean, modifier: Modifier = Modifier, alongside: Boolean = false) {
+internal fun SyncCard(sync: SyncState, paired: Boolean, modifier: Modifier = Modifier) {
     SectionCard(modifier) {
         if (sync.running) {
             CardTitle(stringResource(R.string.sync_title_running))
@@ -196,16 +191,8 @@ internal fun SyncCard(sync: SyncState, paired: Boolean, modifier: Modifier = Mod
                 )
             } else {
                 val problems = result.failed > 0
-                val line = when {
-                    alongside && result.skipped > 0 ->
-                        stringResource(R.string.sync_result_alongside_skipped, result.downloaded, result.failed, result.skipped)
-                    alongside -> stringResource(R.string.sync_result_alongside, result.downloaded, result.failed)
-                    result.skipped > 0 ->
-                        stringResource(R.string.sync_result_skipped, result.downloaded, result.archived, result.failed, result.skipped)
-                    else -> stringResource(R.string.sync_result, result.downloaded, result.archived, result.failed)
-                }
                 Text(
-                    line + " · " + clockTime(result.finishedAtMs),
+                    stringResource(R.string.sync_result, result.downloaded, result.archived, result.failed) + " · " + clockTime(result.finishedAtMs),
                     style = MaterialTheme.typography.bodyLarge,
                     color = if (problems) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
                 )
@@ -217,13 +204,6 @@ internal fun SyncCard(sync: SyncState, paired: Boolean, modifier: Modifier = Mod
                     )
                 }
             }
-        }
-        if (alongside && sync.leftForGarminConnect > 0) {
-            Text(
-                stringResource(R.string.sync_left_for_connect, sync.leftForGarminConnect),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
         }
     }
 }

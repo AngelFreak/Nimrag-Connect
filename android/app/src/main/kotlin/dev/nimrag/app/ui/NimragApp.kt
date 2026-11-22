@@ -291,6 +291,11 @@ internal fun NimragShell(
                                 forceRemote = true
                                 nav = nav.tapped(nav.webTab)
                             },
+                            // A native row that points at a web page: back to the web view, then the route.
+                            onOpenWeb = { path ->
+                                nav = nav.tapped(nav.webTab)
+                                webState.navigate(path)
+                            },
                         )
                         source == WebSource.Unlock -> UnlockScreen(
                             account = account,

@@ -23,23 +23,11 @@ data class FileRow(
     val lastError: String?,
 )
 
-/** One row of the `copied` table: a watch file copied while Garmin Connect runs alongside (stage 2g). */
-data class CopiedRow(
-    val dataType: Int,
-    val subType: Int,
-    val fileNumber: Int,
-    val size: Long,
-    /** Raw Garmin-epoch seconds, as in the directory entry. */
-    val timestamp: Long,
-    val sha256: String,
-    val copiedAt: Long,
-)
-
 data class LogRow(val atMs: Long, val level: Int, val text: String)
 
 /**
  * The phone's SQLite database (framework API, no Room): `files` (stored watch files and
- * their upload state), `copied` (files left for Garmin Connect) and `log`. Safe to call
+ * their upload state), `copied` (unused since 0.8.0, see [createCopied]) and `log`. Safe to call
  * from any thread; every call is one statement or one transaction. Default journal mode and
  * synchronous=FULL, so a committed row is durable before [insertFile] returns.
  */
@@ -75,15 +63,16 @@ class EngineDb(context: Context) : SQLiteOpenHelper(context, "nimrag.db", null, 
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
-        // 1 -> 2: the `copied` table (Garmin Connect alongside, stage 2g).
+        // 1 -> 2: the `copied` table (Alongside, stage 2g; the mode is gone, see [createCopied]).
         if (oldVersion < 2) createCopied(db)
         // 2 -> 3: when a file went into the local server (personal flavor); NULL = not yet.
         if (oldVersion < 3) db.execSQL("ALTER TABLE files ADD COLUMN local_at INTEGER")
     }
 
     /**
-     * Files copied while Garmin Connect archives them: what the watch's directory entry
-     * says (the index is not stable, so it is not kept) and the hash of the stored copy.
+     * Unused since 0.8.0, when the Alongside mode that filled it was removed. The table stays
+     * in the schema (and keeps its old rows) because dropping it would be a migration nothing
+     * here can test; nothing reads or writes it any more.
      */
     private fun createCopied(db: SQLiteDatabase) {
         db.execSQL(
@@ -211,49 +200,6 @@ class EngineDb(context: Context) : SQLiteOpenHelper(context, "nimrag.db", null, 
     fun markLocal(sha256: String, nowMs: Long) {
         val v = ContentValues().apply { put("local_at", nowMs) }
         writableDatabase.update("files", v, "sha256 = ?", arrayOf(sha256))
-    }
-
-    // ---- copied (alongside) ----
-
-    /** Records a copied file; the same key again only refreshes `copied_at` and the hash. */
-    fun insertCopied(row: CopiedRow) {
-        val values = ContentValues().apply {
-            put("data_type", row.dataType)
-            put("sub_type", row.subType)
-            put("file_number", row.fileNumber)
-            put("size", row.size)
-            put("timestamp", row.timestamp)
-            put("sha256", row.sha256)
-            put("copied_at", row.copiedAt)
-        }
-        writableDatabase.insertWithOnConflict("copied", null, values, SQLiteDatabase.CONFLICT_REPLACE)
-    }
-
-    /** The files copied at or after [sinceMs]: what the next connection leaves alone. */
-    fun copiedSince(sinceMs: Long): List<CopiedRow> = readableDatabase.rawQuery(
-        "SELECT data_type, sub_type, file_number, size, timestamp, sha256, copied_at FROM copied WHERE copied_at >= ?",
-        arrayOf(sinceMs.toString()),
-    ).use { c ->
-        buildList {
-            while (c.moveToNext()) {
-                add(CopiedRow(c.getInt(0), c.getInt(1), c.getInt(2), c.getLong(3), c.getLong(4), c.getString(5), c.getLong(6)))
-            }
-        }
-    }
-
-    fun copiedCountSince(sinceMs: Long): Int = readableDatabase.rawQuery(
-        "SELECT COUNT(*) FROM copied WHERE copied_at >= ?",
-        arrayOf(sinceMs.toString()),
-    ).use { c -> if (c.moveToFirst()) c.getInt(0) else 0 }
-
-    /** Drops rows older than [beforeMs]: they no longer go into the skip list. */
-    fun pruneCopied(beforeMs: Long) {
-        writableDatabase.delete("copied", "copied_at < ?", arrayOf(beforeMs.toString()))
-    }
-
-    /** The watch was forgotten: its keys mean nothing for another one. */
-    fun clearCopied() {
-        writableDatabase.delete("copied", null, null)
     }
 
     // ---- log ----

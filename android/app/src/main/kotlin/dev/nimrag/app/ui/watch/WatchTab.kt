@@ -5,7 +5,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.nimrag.app.model.AppState
-import dev.nimrag.app.model.GarminConnectMode
 import dev.nimrag.app.model.WatchController
 import dev.nimrag.app.model.WatchState
 import dev.nimrag.app.ui.settings.LicencesScreen
@@ -14,10 +13,14 @@ import dev.nimrag.app.ui.watch.logic.WatchPage
 import androidx.compose.ui.res.stringResource
 import dev.nimrag.app.R
 
+/** The web profile page where "Send to Garmin Connect" is switched on (web/src/App.tsx). */
+private const val GARMIN_PROFILE_PATH = "/profile/garmin"
+
 /**
  * The Watch tab: [WatchScreen] and the sub-pages its rows open. Which page is on screen is owned
  * by the shell (it survives rotation and answers the system back button); [onPage] moves between
- * pages and a sub-page's back arrow goes to its parent.
+ * pages and a sub-page's back arrow goes to its parent. [onOpenWeb] leaves the tab for a route
+ * of the web app.
  */
 @Composable
 fun WatchTab(
@@ -26,6 +29,7 @@ fun WatchTab(
     page: WatchPage,
     onPage: (WatchPage) -> Unit,
     onSignIn: () -> Unit,
+    onOpenWeb: (path: String) -> Unit,
 ) {
     val actions = rememberWatchActions(controller)
     val account by controller.account.state.collectAsStateWithLifecycle()
@@ -41,19 +45,17 @@ fun WatchTab(
         WatchPage.Main -> WatchScreen(state, account, controller, actions, onOpen = onPage, onSignIn = onSignIn)
         WatchPage.AutoSync -> AutoSyncPage(
             minutes = state.settings.autoSyncMinutes,
-            alongside = state.settings.garminConnectMode == GarminConnectMode.Alongside,
             onSelect = controller::setAutoSyncMinutes,
             onBack = back,
         )
         WatchPage.GarminConnect -> GarminConnectPage(
-            mode = state.settings.garminConnectMode,
+            serverConfigured = state.settings.serverUrl.isNotBlank(),
             garminConnect = state.garminConnect,
-            onSelect = controller::setGarminConnectMode,
+            onOpenProfile = { onOpenWeb(GARMIN_PROFILE_PATH) },
             onHelp = { onPage(WatchPage.GarminHelp) },
             onBack = back,
         )
         WatchPage.GarminHelp -> GarminHelpPage(
-            mode = state.settings.garminConnectMode,
             garminConnect = state.garminConnect,
             onOpenGarminConnectInfo = actions.openGarminConnectInfo,
             onBack = back,

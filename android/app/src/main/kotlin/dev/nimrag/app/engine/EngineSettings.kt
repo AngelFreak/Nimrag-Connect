@@ -1,9 +1,8 @@
 package dev.nimrag.app.engine
 
 import android.content.Context
-import dev.nimrag.app.engine.logic.AlongsideRules
 import dev.nimrag.app.engine.logic.CapabilityHex
-import dev.nimrag.app.model.GarminConnectMode
+import dev.nimrag.app.engine.logic.RemovedSettings
 import dev.nimrag.app.model.PhoneFeatures
 import dev.nimrag.app.model.Settings
 import dev.nimrag.app.model.SyncResult
@@ -60,9 +59,17 @@ class EngineSettings(context: Context) {
         get() = prefs.getString(CAPABILITIES, null)?.let { CapabilityHex.normalize(it) } ?: CapabilityHex.DEFAULT
         set(value) = prefs.edit().putString(CAPABILITIES, value).apply()
 
-    var garminConnectMode: GarminConnectMode
-        get() = AlongsideRules.modeFromStored(prefs.getString(GARMIN_CONNECT_MODE, null))
-        set(value) = prefs.edit().putString(GARMIN_CONNECT_MODE, value.name).apply()
+    /**
+     * 0.8.0 removed the Garmin Connect mode: whatever was stored is ignored (everyone is
+     * "Nimrag only") and the key is cleared. True when it held Alongside, so the caller can log it once.
+     */
+    fun dropRemovedGarminConnectMode(): Boolean {
+        val key = RemovedSettings.GARMIN_CONNECT_MODE_KEY
+        if (!prefs.contains(key)) return false
+        val wasAlongside = RemovedSettings.alongsideWasStored(prefs.getString(key, null))
+        prefs.edit().remove(key).apply()
+        return wasAlongside
+    }
 
     /** Phone features (stage 2f): every one is off until the owner switches it on. */
     var phoneNotifications: Boolean
@@ -170,7 +177,6 @@ class EngineSettings(context: Context) {
                 downloaded = prefs.getInt(SYNC_DOWNLOADED, 0),
                 archived = prefs.getInt(SYNC_ARCHIVED, 0),
                 failed = prefs.getInt(SYNC_FAILED, 0),
-                skipped = prefs.getInt(SYNC_SKIPPED, 0),
             )
         }
         set(value) {
@@ -182,7 +188,6 @@ class EngineSettings(context: Context) {
                     .putInt(SYNC_DOWNLOADED, value.downloaded)
                     .putInt(SYNC_ARCHIVED, value.archived)
                     .putInt(SYNC_FAILED, value.failed)
-                    .putInt(SYNC_SKIPPED, value.skipped)
             }
             edit.apply()
         }
@@ -194,7 +199,6 @@ class EngineSettings(context: Context) {
         allowMobileData = allowMobileData,
         autoSyncMinutes = autoSyncMinutes,
         capabilitiesHex = capabilitiesHex,
-        garminConnectMode = garminConnectMode,
         phone = phoneFeatures(),
     )
 
@@ -208,7 +212,6 @@ class EngineSettings(context: Context) {
         /** Applies to everyone who never changed the interval (the preference is simply absent). */
         const val DEFAULT_AUTO_SYNC_MINUTES = 15
         const val CAPABILITIES = "capabilities_hex"
-        const val GARMIN_CONNECT_MODE = "garmin_connect_mode"
         const val CLIENT_ID = "client_id"
         const val PHONE_NOTIFICATIONS = "phone_notifications"
         const val PHONE_MUSIC = "phone_music"
@@ -229,6 +232,5 @@ class EngineSettings(context: Context) {
         const val SYNC_DOWNLOADED = "last_sync_downloaded"
         const val SYNC_ARCHIVED = "last_sync_archived"
         const val SYNC_FAILED = "last_sync_failed"
-        const val SYNC_SKIPPED = "last_sync_skipped"
     }
 }

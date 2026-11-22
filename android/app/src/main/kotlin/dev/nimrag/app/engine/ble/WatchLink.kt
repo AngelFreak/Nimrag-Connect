@@ -20,7 +20,6 @@ import dev.nimrag.app.engine.AutoSyncAlarm
 import dev.nimrag.app.engine.Hub
 import dev.nimrag.app.engine.RememberedWatch
 import dev.nimrag.app.engine.WatchService
-import dev.nimrag.app.engine.logic.AlongsideRules
 import dev.nimrag.app.engine.logic.Backoff
 import dev.nimrag.app.engine.logic.CapabilityHex
 import dev.nimrag.app.engine.logic.DstRule
@@ -33,9 +32,7 @@ import dev.nimrag.app.engine.logic.StallAction
 import dev.nimrag.app.engine.logic.WriteQueue
 import dev.nimrag.app.engine.phone.logic.DutyMask
 import dev.nimrag.app.engine.phone.logic.PhoneDuties
-import dev.nimrag.app.engine.store.CopiedRow
 import dev.nimrag.app.model.GarminConnect
-import dev.nimrag.app.model.GarminConnectMode
 import dev.nimrag.app.model.LinkState
 import dev.nimrag.app.model.SyncResult
 import dev.nimrag.app.model.SyncState
@@ -50,7 +47,6 @@ import uniffi.nimrag_ffi.DstPair
 import uniffi.nimrag_ffi.Duties
 import uniffi.nimrag_ffi.Event
 import uniffi.nimrag_ffi.FileFailure
-import uniffi.nimrag_ffi.FileKey
 import uniffi.nimrag_ffi.Input
 import uniffi.nimrag_ffi.NimragClient
 import uniffi.nimrag_ffi.Now
@@ -112,9 +108,6 @@ class WatchLink(private val hub: Hub, private val scanner: BleScanner) {
 
     /** The current connection carries `first_connect`; it is charged on `HandshakeDone`. */
     private var connectionHasFirst = false
-
-    /** The mode the current client was built with: files are copied, never archived, in Alongside. */
-    private var connectionMode = GarminConnectMode.Off
 
     /**
      * The phone features the current client was built with (and claimed in its capability mask).
@@ -249,11 +242,8 @@ class WatchLink(private val hub: Hub, private val scanner: BleScanner) {
         otherAppHinted = false
         hub.update { it.copy(watch = WatchState.Pairing(address, name), pairingError = null) }
         when (hub.garminConnect()) {
-            GarminConnect.HasBluetooth -> if (AlongsideRules.hintsOtherApp(settings.garminConnectMode)) {
+            GarminConnect.HasBluetooth ->
                 log.warn("Garmin Connect has Bluetooth access. While it runs it holds the watch, and Nimrag cannot talk to it at the same time")
-            } else {
-                log.info("Garmin Connect has Bluetooth access. It shares the watch with Nimrag (Alongside mode)")
-            }
             GarminConnect.BluetoothOff -> log.info("Garmin Connect's Bluetooth access is off")
             GarminConnect.Absent -> Unit
         }
@@ -337,8 +327,6 @@ class WatchLink(private val hub: Hub, private val scanner: BleScanner) {
         settings.firstConnectTries = 0
         settings.lastSync = null
         settings.lastConnectedAtMs = 0L
-        // Its file keys mean nothing for another watch.
-        runCatching { hub.db.clearCopied() }
         running = false
         autoSyncAlarm.cancel()
         hub.update { it.copy(watch = WatchState.NotPaired, sync = SyncState(), scan = ScanState()) }
@@ -390,23 +378,6 @@ class WatchLink(private val hub: Hub, private val scanner: BleScanner) {
         requestBatteryAndSync()
     }
 
-    /**
-     * The Garmin Connect mode was saved ([mode] is the new one). The client carries the mode it
-     * was built with, so a connected watch is reconnected to apply it at once.
-     */
-    fun onGarminConnectModeChanged(mode: GarminConnectMode) {
-        otherAppHinted = false
-        scheduleAutoSync()
-        if (client == null) {
-            log.info("Garmin Connect mode: ${mode.name}, used from the next connection")
-        } else {
-            log.info("Garmin Connect mode: ${mode.name}, reconnecting to apply it")
-            teardown()
-            scheduleReconnect(MODE_RECONNECT_MS)
-        }
-        refreshLeftForGarminConnect()
-    }
-
     /** The auto-sync interval changed: the alarm is set again (or gone for Off), and a sync that is now due starts. */
     fun onAutoSyncChanged() {
         scheduleAutoSync()
@@ -446,12 +417,6 @@ class WatchLink(private val hub: Hub, private val scanner: BleScanner) {
                 sync = it.sync.copy(lastResult = settings.lastSync),
             )
         }
-    }
-
-    /** Re-counts the files copied in the last 60 days (a database read: HandlerThread only). */
-    fun refreshLeftForGarminConnect() {
-        val left = runCatching { hub.db.copiedCountSince(AlongsideRules.skipSince(System.currentTimeMillis())) }.getOrDefault(0)
-        hub.update { it.copy(sync = it.sync.copy(leftForGarminConnect = left)) }
     }
 
     // ---- bonding and adapter broadcasts ----
@@ -833,11 +798,7 @@ class WatchLink(private val hub: Hub, private val scanner: BleScanner) {
     /** Notifications are on: a new client for this connection (one per connection). */
     private fun startClient() {
         // Charged against the budget only when the handshake finishes (see onHandshakeDone).
-        val mode = settings.garminConnectMode
-        connectionMode = mode
-        // Alongside sends no first_connect events (Garmin Connect owns the pairing) and leaves the
-        // saved flag alone, so switching back to Off still announces the pairing.
-        val first = AlongsideRules.firstConnect(mode, settings.firstConnect && LinkRules.firstConnectFor(settings.firstConnectTries))
+        val first = settings.firstConnect && LinkRules.firstConnectFor(settings.firstConnectTries)
         connectionHasFirst = first
         epoch += 1
         val base = CapabilityHex.parse(settings.capabilitiesHex) ?: CapabilityHex.parse(CapabilityHex.DEFAULT)!!
@@ -856,8 +817,10 @@ class WatchLink(private val hub: Hub, private val scanner: BleScanner) {
                 appVersion = APP_VERSION.toUShort(),
                 capabilities = capabilities,
                 firstConnect = first,
-                archive = AlongsideRules.archive(mode),
-                skip = skipKeys(mode),
+                // Nimrag is the only sync app: each stored file is archived on the watch. The core
+                // can also leave files for another app (archive = false, a skip list); we never do.
+                archive = true,
+                skip = emptyList(),
                 duties = Duties(
                     notifications = duties.notifications,
                     music = duties.music,
@@ -871,28 +834,6 @@ class WatchLink(private val hub: Hub, private val scanner: BleScanner) {
         writes.clear()
         busyRetries = 0
         feed(Input.Connected(attMtu.toUShort()))
-    }
-
-    /** Alongside: every file copied in the last 60 days stays on the watch for Garmin Connect, so it is not fetched again. */
-    private fun skipKeys(mode: GarminConnectMode): List<FileKey> {
-        if (mode != GarminConnectMode.Alongside) return emptyList()
-        val rows = try {
-            val since = AlongsideRules.skipSince(System.currentTimeMillis())
-            hub.db.pruneCopied(since)
-            hub.db.copiedSince(since)
-        } catch (e: Exception) {
-            log.warn("Could not read the copied files: ${e.javaClass.simpleName}")
-            return emptyList()
-        }
-        return rows.map {
-            FileKey(
-                dataType = it.dataType.toUByte(),
-                subType = it.subType.toUByte(),
-                fileNumber = it.fileNumber.toUShort(),
-                size = it.size.toUInt(),
-                timestamp = it.timestamp.toUInt(),
-            )
-        }
     }
 
     private fun hostName(): String {
@@ -1037,7 +978,7 @@ class WatchLink(private val hub: Hub, private val scanner: BleScanner) {
                 log.warn("File not synced ($kind): ${describe(event.reason)}${if (event.willRetry) ", will retry" else ""}")
                 hub.update { it.copy(sync = it.sync.copy(filesDone = it.sync.filesDone + 1, currentBytes = 0, currentSize = 0)) }
             }
-            // Counted in SyncFinished and summed up in its one log line, not logged per file.
+            // The skip list is always empty here, so this does not happen; counted as done if it ever does.
             is Event.FileSkipped -> {
                 hub.update { it.copy(sync = it.sync.copy(filesDone = it.sync.filesDone + 1, currentBytes = 0, currentSize = 0)) }
             }
@@ -1051,10 +992,9 @@ class WatchLink(private val hub: Hub, private val scanner: BleScanner) {
                     downloaded = event.downloaded.toInt(),
                     archived = event.archived.toInt(),
                     failed = event.failed.toInt(),
-                    skipped = event.skipped.toInt(),
                 )
                 settings.lastSync = result
-                log.info(AlongsideRules.syncSummary(result, connectionMode))
+                log.info("Sync finished: ${result.downloaded} downloaded, ${result.archived} archived, ${result.failed} failed")
                 hub.update { it.copy(sync = it.sync.copy(running = false, currentBytes = 0, currentSize = 0, lastResult = result)) }
                 hub.gpsAssist.onSyncFinished()
             }
@@ -1117,7 +1057,6 @@ class WatchLink(private val hub: Hub, private val scanner: BleScanner) {
         val entry = event.entry
         val kind = kindOf(entry)
         hub.update { it.copy(sync = it.sync.copy(currentBytes = event.data.size.toLong(), currentSize = entry.size.toLong())) }
-        var sha: String? = null
         val stored = try {
             val saved = hub.store.save(
                 dataType = entry.dataType.toInt(),
@@ -1128,7 +1067,6 @@ class WatchLink(private val hub: Hub, private val scanner: BleScanner) {
                 data = event.data,
                 nowMs = System.currentTimeMillis(),
             )
-            sha = saved.sha256
             log.info(
                 if (saved.alreadyStored) "Stored a $kind file (${event.data.size} bytes), already on the phone"
                 else "Stored a $kind file (${event.data.size} bytes)",
@@ -1142,34 +1080,7 @@ class WatchLink(private val hub: Hub, private val scanner: BleScanner) {
             hub.uploader.wake()
             hub.local.onFileStored() // the phone's own copy of the data (personal flavor), off this thread
         }
-        if (stored && sha != null && connectionMode == GarminConnectMode.Alongside) rememberCopied(entry, sha)
         feed(if (stored) Input.FileStored(event.transferId) else Input.FileStoreFailed(event.transferId))
-    }
-
-    /**
-     * Alongside: the file is copied and stays on the watch for Garmin Connect, so no archive
-     * follows. The key goes into `copied` so later connections do not fetch it again; a failed
-     * write only means one more download later (the store dedupes by hash).
-     */
-    private fun rememberCopied(entry: DirEntry, sha256: String) {
-        try {
-            hub.db.insertCopied(
-                CopiedRow(
-                    dataType = entry.dataType.toInt(),
-                    subType = entry.subType.toInt(),
-                    fileNumber = entry.fileNumber.toInt(),
-                    size = entry.size.toLong(),
-                    timestamp = entry.timestamp.toLong(),
-                    sha256 = sha256,
-                    copiedAt = System.currentTimeMillis(),
-                ),
-            )
-        } catch (e: Exception) {
-            log.warn("Could not remember a copied file: ${e.javaClass.simpleName}")
-        }
-        // No FileArchived follows in this mode, so the file counts as done here.
-        hub.update { it.copy(sync = it.sync.copy(filesDone = it.sync.filesDone + 1, currentBytes = 0, currentSize = 0)) }
-        refreshLeftForGarminConnect()
     }
 
     private fun onClientClosed(reason: CloseReason) {
@@ -1210,7 +1121,7 @@ class WatchLink(private val hub: Hub, private val scanner: BleScanner) {
 
     /** A link that will not come up while Garmin Connect is installed is most likely its doing. */
     private fun hintOtherApp() {
-        if (otherAppHinted || !AlongsideRules.hintsOtherApp(settings.garminConnectMode)) return
+        if (otherAppHinted) return
         if (hub.garminConnect() != GarminConnect.HasBluetooth) return
         otherAppHinted = true
         log.warn("Garmin Connect probably holds the watch. Turn off its Nearby devices permission (Watch tab, Garmin Connect card) and Nimrag will reconnect")
@@ -1329,10 +1240,7 @@ class WatchLink(private val hub: Hub, private val scanner: BleScanner) {
         hub.state.value.sync.running || LinkRules.syncAskPending(syncAskedAtMs?.let { SystemClock.elapsedRealtime() - it })
 
     private fun autoSyncDue(): Boolean =
-        LinkRules.shouldStartAutoSync(ready, syncBusy(), settings.lastSync?.finishedAtMs, System.currentTimeMillis(), timedSyncMinutes())
-
-    /** The stored interval, or 0 in Alongside ([AlongsideRules.timedSyncMinutes]). */
-    private fun timedSyncMinutes(): Int = AlongsideRules.timedSyncMinutes(settings.autoSyncMinutes, settings.garminConnectMode)
+        LinkRules.shouldStartAutoSync(ready, syncBusy(), settings.lastSync?.finishedAtMs, System.currentTimeMillis(), settings.autoSyncMinutes)
 
     /** Starts a sync when the interval since the last finished one has run out (after the handshake, on a watch event, on the alarm). */
     private fun maybeAutoSync() {
@@ -1345,11 +1253,11 @@ class WatchLink(private val hub: Hub, private val scanner: BleScanner) {
      * Sets the one auto-sync alarm for when the interval since the last finished sync runs out.
      * It stays set while the service runs, also while the link is down, because it is what hurries
      * a reconnect that waits out its delay. A Handler delay counts uptime and would stand still in
-     * deep sleep, so this is an alarm ([AutoSyncAlarm]). Off (0), Alongside, a stopped service and
-     * a forgotten watch cancel it.
+     * deep sleep, so this is an alarm ([AutoSyncAlarm]). Off (0), a stopped service and a
+     * forgotten watch cancel it.
      */
     private fun scheduleAutoSync() {
-        val minutes = timedSyncMinutes()
+        val minutes = settings.autoSyncMinutes
         if (!running || settings.watch == null || minutes <= 0) {
             autoSyncAlarm.cancel()
             return
