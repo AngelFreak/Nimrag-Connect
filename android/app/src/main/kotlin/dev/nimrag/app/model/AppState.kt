@@ -137,15 +137,6 @@ enum class GarminConnect {
     BluetoothOff,
 }
 
-/** How Nimrag shares the watch with Garmin Connect (IMPLEMENTATION_PLAN.md, stage 2g). */
-enum class GarminConnectMode {
-    /** Nimrag is the only sync app: it archives each file on the watch after storing it. */
-    Off,
-
-    /** Garmin Connect keeps syncing too: Nimrag copies every file and leaves it for Connect. */
-    Alongside,
-}
-
 /** Runtime permissions the engine needs; the UI asks for the missing ones. */
 data class Permissions(
     val bluetooth: Boolean = false, // BLUETOOTH_SCAN + BLUETOOTH_CONNECT
@@ -220,8 +211,6 @@ data class SyncState(
     val currentBytes: Long = 0,
     val currentSize: Long = 0,
     val lastResult: SyncResult? = null,
-    /** Alongside: files copied in the last 60 days (the skip list); Garmin Connect may have archived some since. */
-    val leftForGarminConnect: Int = 0,
 )
 
 data class SyncResult(
@@ -229,8 +218,6 @@ data class SyncResult(
     val downloaded: Int,
     val archived: Int,
     val failed: Int,
-    /** Files left alone because they were copied before (Alongside). */
-    val skipped: Int = 0,
 )
 
 data class UploadState(
@@ -269,8 +256,6 @@ data class Settings(
     val autoSyncMinutes: Int = 15,
     /** Our 5050 capability mask as hex (advanced; see IMPLEMENTATION_PLAN.md 2c). */
     val capabilitiesHex: String = "",
-    /** Takes effect on the next connection; changing it reconnects. */
-    val garminConnectMode: GarminConnectMode = GarminConnectMode.Off,
     /** The phone features (stage 2f); changing a switch reconnects the watch once. */
     val phone: PhoneFeatures = PhoneFeatures(),
 )
@@ -325,9 +310,6 @@ interface WatchController {
 
     /** Validated hex; takes effect on the next connection. Returns false if invalid. */
     fun setCapabilitiesHex(hex: String): Boolean
-
-    /** Saved; a connected watch is reconnected so the new mode applies at once. */
-    fun setGarminConnectMode(mode: GarminConnectMode)
 
     /** Notifications on the watch (default off). Reconnects the watch once to tell it. */
     fun setPhoneNotifications(on: Boolean) {}

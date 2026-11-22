@@ -5,7 +5,6 @@ import dev.nimrag.app.model.AppState
 import dev.nimrag.app.model.FindWatchUi
 import dev.nimrag.app.model.FoundDevice
 import dev.nimrag.app.model.GarminConnect
-import dev.nimrag.app.model.GarminConnectMode
 import dev.nimrag.app.model.LinkState
 import dev.nimrag.app.model.LogLine
 import dev.nimrag.app.model.Permissions
@@ -128,16 +127,6 @@ object PreviewData {
     fun pairedGarminHolding(now: Long = System.currentTimeMillis()) = pairedReady(now).copy(
         watch = paired(now, LinkState.Waiting),
         garminConnect = GarminConnect.HasBluetooth,
-    )
-
-    /** Sharing the watch with Garmin Connect, which is allowed to use Bluetooth. */
-    fun alongside(now: Long = System.currentTimeMillis()) = pairedReady(now).copy(
-        settings = serverSettings.copy(garminConnectMode = GarminConnectMode.Alongside),
-        garminConnect = GarminConnect.HasBluetooth,
-        sync = SyncState(
-            lastResult = SyncResult(now - 12 * MIN, downloaded = 4, archived = 0, failed = 0),
-            leftForGarminConnect = 17,
-        ),
     )
 
     /** Uploads keep failing: the banner offers Retry. */

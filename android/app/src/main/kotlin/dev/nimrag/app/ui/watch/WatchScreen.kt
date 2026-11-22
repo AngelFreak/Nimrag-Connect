@@ -22,7 +22,6 @@ import dev.nimrag.app.R
 import dev.nimrag.app.engine.auth.logic.AuthPhase
 import dev.nimrag.app.model.AccountState
 import dev.nimrag.app.model.AppState
-import dev.nimrag.app.model.GarminConnectMode
 import dev.nimrag.app.model.WatchController
 import dev.nimrag.app.model.WatchState
 import dev.nimrag.app.ui.components.BellIcon
@@ -91,11 +90,7 @@ internal fun WatchScreen(
                 item {
                     SettingsRow(
                         title = stringResource(R.string.auto_sync_title),
-                        value = if (settings.garminConnectMode == GarminConnectMode.Alongside && settings.autoSyncMinutes > 0) {
-                            stringResource(R.string.auto_sync_value_alongside)
-                        } else {
-                            intervalLabel(settings.autoSyncMinutes)
-                        },
+                        value = intervalLabel(settings.autoSyncMinutes),
                         icon = SyncIcon,
                         trailing = RowTrailing.Chevron,
                         onClick = { onOpen(WatchPage.AutoSync) },
@@ -111,10 +106,8 @@ internal fun WatchScreen(
                 }
                 item {
                     SettingsRow(
-                        title = stringResource(R.string.settings_garmin_connect_app),
-                        value = stringResource(
-                            if (settings.garminConnectMode == GarminConnectMode.Alongside) R.string.garmin_value_alongside else R.string.garmin_value_off,
-                        ),
+                        title = stringResource(R.string.settings_garmin_connect),
+                        value = stringResource(R.string.garmin_value),
                         icon = LinkIcon,
                         trailing = RowTrailing.Chevron,
                         onClick = { onOpen(WatchPage.GarminConnect) },
@@ -279,9 +272,7 @@ private fun ProblemBanner(
             message = stringResource(R.string.cannot_sync_yet, (state.watch as? WatchState.Paired)?.unsupportedReason.orEmpty()),
         )
         WatchProblem.GarminConnect -> StatusBanner(
-            message = stringResource(
-                if (state.settings.garminConnectMode == GarminConnectMode.Alongside) R.string.banner_garmin_alongside else R.string.banner_garmin_connect,
-            ),
+            message = stringResource(R.string.banner_garmin_connect),
             actionLabel = stringResource(R.string.banner_how_to_fix),
             onAction = { onOpen(WatchPage.GarminHelp) },
         )

@@ -274,7 +274,7 @@ after a watch reset, or after Bluetooth was cleared on either side.
 
 If the watch is also paired with the Garmin Connect app, the two compete: only one app should be the
 watch's phone. To switch for good, remove the watch in Garmin Connect (Devices), forget it in the
-phone's Bluetooth settings, then pair it in Nimrag Connect. To keep Garmin Connect up to date as well, do not share the watch: let your server send the files to your Garmin Connect account (see [Send your files to Garmin Connect](#send-your-files-to-garmin-connect)). The "Alongside Garmin Connect" mode, where both phone apps shared the watch, is being removed from the app: it left monitoring files on the watch that nothing cleared, and the watch stopped recording heart rate and stress once too many piled up.
+phone's Bluetooth settings, then pair it in Nimrag Connect. Nimrag Connect must be the only app that syncs the watch (keep Garmin Connect's "Nearby devices" permission off). To keep your Garmin Connect account up to date as well, use **Send to Garmin** in your Nimrag profile (Forward, see [Send your files to Garmin Connect](#send-your-files-to-garmin-connect)): the server sends your activities, or everything from the watch, to your own Garmin account. The app's earlier "Alongside" mode, where both apps synced the watch, was removed in 0.8.0: Garmin Connect never archived the files Nimrag copied, and on 2026-11-22 the watch stopped recording heart rate and stress once about 75 of them piled up.
 
 Pairing a watch that has no old pairing at all has not been tried yet on a real watch: the live
 runs reused an existing Garmin Connect pairing. If a fresh pairing fails, the app's sync history

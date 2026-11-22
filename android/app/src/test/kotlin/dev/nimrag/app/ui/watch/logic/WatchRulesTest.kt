@@ -2,7 +2,6 @@ package dev.nimrag.app.ui.watch.logic
 
 import dev.nimrag.app.model.AppState
 import dev.nimrag.app.model.GarminConnect
-import dev.nimrag.app.model.GarminConnectMode
 import dev.nimrag.app.model.LinkState
 import dev.nimrag.app.model.Permissions
 import dev.nimrag.app.model.Settings
@@ -24,14 +23,13 @@ class WatchRulesTest {
         watch: WatchState = paired(),
         permissions: Permissions = allowed,
         garmin: GarminConnect = GarminConnect.Absent,
-        mode: GarminConnectMode = GarminConnectMode.Off,
         server: String = "https://nimrag.example.ts.net",
         uploadError: String? = null,
     ) = AppState(
         permissions = permissions,
         watch = watch,
         garminConnect = garmin,
-        settings = Settings(serverUrl = server, garminConnectMode = mode),
+        settings = Settings(serverUrl = server),
         uploads = UploadState(lastError = uploadError),
     )
 
@@ -85,14 +83,6 @@ class WatchRulesTest {
         assertNull(WatchProblems.top(state(garmin = GarminConnect.HasBluetooth, watch = paired(LinkState.Ready))))
         // Kept away on purpose: nothing to fix.
         assertNull(WatchProblems.top(state(garmin = GarminConnect.BluetoothOff, watch = paired(LinkState.Waiting))))
-    }
-
-    @Test
-    fun `alongside is a problem only when connect lost its bluetooth access`() {
-        val alongside = GarminConnectMode.Alongside
-        assertNull(WatchProblems.top(state(garmin = GarminConnect.HasBluetooth, mode = alongside, watch = paired(LinkState.Waiting))))
-        assertEquals(WatchProblem.GarminConnect, WatchProblems.top(state(garmin = GarminConnect.BluetoothOff, mode = alongside)))
-        assertNull(WatchProblems.top(state(garmin = GarminConnect.Absent, mode = alongside)))
     }
 
     @Test

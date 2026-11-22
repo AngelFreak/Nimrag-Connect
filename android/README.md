@@ -106,6 +106,19 @@ back button goes to the parent). The pure rules (which banner, the status word, 
 live in `ui/watch/logic` with unit tests; the shared rows, group, banner and dialog are in
 `ui/components`.
 
+## Garmin Connect (0.8.0)
+
+The Watch tab has a "Garmin Connect" page (same row under Sync as before). It is information only:
+Nimrag must be the only app that syncs the watch (Garmin Connect's Nearby devices permission off), and
+to keep a Garmin account up to date the owner turns on "Send to Garmin" in the Nimrag profile
+(Forward, done by the server: activities, or everything from the watch). A row opens that web page
+(`/profile/garmin`) through the web view. The earlier Alongside mode (both apps sync, Nimrag copies and
+never archives) was removed: the app always connects with `archive = true` and an empty skip list. The
+core still supports `archive = false`; only the app no longer uses it. A stored Alongside setting is
+ignored and cleared at the next start (one log line); files that were copied but never archived are listed
+again on the next sync, the store dedupes them by hash and they are archived, which clears the watch.
+The `copied` table stays in the database, unused.
+
 ## Phone features (stage 2f, built, live test pending)
 
 The Watch tab has a "Phone features" page with five switches, **all off by default**:

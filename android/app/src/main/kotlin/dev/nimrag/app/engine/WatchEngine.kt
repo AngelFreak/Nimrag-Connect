@@ -5,6 +5,7 @@ import android.os.SystemClock
 import dev.nimrag.app.engine.ble.BleScanner
 import dev.nimrag.app.engine.ble.WatchLink
 import dev.nimrag.app.engine.logic.CapabilityHex
+import dev.nimrag.app.engine.logic.RemovedSettings
 import dev.nimrag.app.engine.logic.ServiceStartGate
 import dev.nimrag.app.engine.logic.StartDecision
 import dev.nimrag.app.engine.logic.StartRequest
@@ -14,7 +15,6 @@ import dev.nimrag.app.engine.phone.PhoneBridge
 import dev.nimrag.app.model.AccountController
 import dev.nimrag.app.model.AppChoice
 import dev.nimrag.app.model.AppState
-import dev.nimrag.app.model.GarminConnectMode
 import dev.nimrag.app.model.ServerTest
 import dev.nimrag.app.model.WatchController
 import dev.nimrag.app.model.WebMode
@@ -69,7 +69,7 @@ class WatchEngine(private val hub: Hub) : WatchController {
         link.restore()
         hub.handler.post {
             hub.log.load()
-            link.refreshLeftForGarminConnect()
+            if (hub.settings.dropRemovedGarminConnectMode()) hub.log.info(RemovedSettings.ALONGSIDE_REMOVED)
             hub.refreshPermissions()
             startServiceIfPaired(StartSource.ProcessStart)
         }
@@ -235,13 +235,6 @@ class WatchEngine(private val hub: Hub) : WatchController {
         publishSettings()
         hub.log.info("Capability mask saved, used from the next connection")
         return true
-    }
-
-    override fun setGarminConnectMode(mode: GarminConnectMode) {
-        if (hub.settings.garminConnectMode == mode) return
-        hub.settings.garminConnectMode = mode
-        publishSettings()
-        hub.handler.post { link.onGarminConnectModeChanged(mode) }
     }
 
     override fun setPhoneNotifications(on: Boolean) {

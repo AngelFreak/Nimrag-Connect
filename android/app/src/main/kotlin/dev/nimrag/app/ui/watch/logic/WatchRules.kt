@@ -2,7 +2,6 @@ package dev.nimrag.app.ui.watch.logic
 
 import dev.nimrag.app.model.AppState
 import dev.nimrag.app.model.GarminConnect
-import dev.nimrag.app.model.GarminConnectMode
 import dev.nimrag.app.model.LinkState
 import dev.nimrag.app.model.Permissions
 import dev.nimrag.app.model.WatchState
@@ -40,16 +39,10 @@ object WatchProblems {
         }
     }
 
-    /**
-     * Garmin Connect holds the watch's session whenever it runs (so Nimrag cannot connect), or,
-     * when the two share the watch, it has lost its own Bluetooth access (so it gets nothing).
-     */
+    /** Garmin Connect holds the watch's session whenever it runs, so Nimrag cannot connect. */
     fun garminConnectInTheWay(state: AppState): Boolean {
         val ready = (state.watch as? WatchState.Paired)?.link == LinkState.Ready
-        return when (state.settings.garminConnectMode) {
-            GarminConnectMode.Off -> state.garminConnect == GarminConnect.HasBluetooth && !ready
-            GarminConnectMode.Alongside -> state.garminConnect == GarminConnect.BluetoothOff
-        }
+        return state.garminConnect == GarminConnect.HasBluetooth && !ready
     }
 
     /** The dot on the Watch tab: a banner is showing, or Bluetooth is not usable yet. */
