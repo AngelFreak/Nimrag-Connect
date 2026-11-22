@@ -497,6 +497,43 @@ impl Rig {
         j["sha256"].as_str().unwrap().to_owned()
     }
 
+    /// Choose what Forward sends through the API; panics unless it works.
+    pub async fn set_send_all(&self, on: bool) {
+        let (s, j) = self
+            .post("/api/garmin/settings", json!({"send_all": on}))
+            .await;
+        assert_eq!(s, StatusCode::OK, "{j}");
+        assert_eq!(j["send_all"], on);
+    }
+
+    /// Pretend the server received `sha` at unix second `ts` (+ `ms` milliseconds).
+    pub async fn received(&self, sha: &str, ts: i64, ms: u32) {
+        self.env
+            .exec(&format!(
+                "UPDATE files SET received_at = strftime('%Y-%m-%dT%H:%M:%S', {ts}, 'unixepoch') || '.{ms:03}Z' WHERE sha256 = '{sha}'"
+            ))
+            .await;
+    }
+
+    /// The `tiny_fit` tags of the files the fake received, in order.
+    pub fn uploaded_tags(&self, tags: impl IntoIterator<Item = u32>) -> Vec<u32> {
+        let tags: Vec<u32> = tags.into_iter().collect();
+        self.fake.with(|f| {
+            f.uploads
+                .iter()
+                .map(|(_, body)| {
+                    *tags
+                        .iter()
+                        .find(|t| {
+                            let fit = super::common::tiny_fit(**t);
+                            body.windows(fit.len()).any(|w| w == fit.as_slice())
+                        })
+                        .expect("an upload of a file nobody knows")
+                })
+                .collect()
+        })
+    }
+
     pub async fn run(&self) -> usize {
         nimrag_server::garmin::queue::run_due(&self.state)
             .await

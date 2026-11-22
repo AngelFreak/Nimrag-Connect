@@ -1,7 +1,7 @@
 import { useId, useRef, useState, type ChangeEvent, type FormEvent } from 'react';
 import type { GarminImportTokens, GarminStatus } from '../../api/generated';
 import type { GarminState } from '../../api/generated/GarminState';
-import { Button, Card, ConfirmDialog, DataList, ErrorState, Notice, SendIcon, SettingsGroup, SettingsRow, Skeleton, StatusBanner, TextField } from '../../components';
+import { Button, Card, ConfirmDialog, DataList, ErrorState, Notice, SegmentedControl, SendIcon, SettingsGroup, SettingsRow, Skeleton, StatusBanner, TextField } from '../../components';
 import { fmtInt } from '../../lib/format';
 import { fmtDateTime } from '../today/format';
 import { useSettings } from '../today/queries';
@@ -9,7 +9,7 @@ import { errorMessage } from '../system/errors';
 import { useGarmin, useGarminActions } from '../system/queries';
 import { SubPage } from './common';
 
-/** The one-line value of the "Send activities to Garmin" row. A lost login and a paused queue read the same: the way out is to log in again. */
+/** The one-line value of the "Send to Garmin" row. A lost login and a paused queue read the same: the way out is to log in again. */
 export const GARMIN_STATE_VALUE: Record<GarminState, string> = {
   off: 'Off',
   needs_login: 'Log in again',
@@ -183,14 +183,139 @@ function Counts({ s, timezone }: { s: GarminStatus; timezone: string }) {
   );
 }
 
-function ConnectedTools({ status, timezone }: { status: GarminStatus; timezone: string }) {
-  const { retry, backfill } = useGarminActions();
+const SEND_CHOICES = [
+  { value: 'activities', label: 'Activities only' },
+  { value: 'everything', label: 'Everything from the watch' },
+] as const;
+
+/** `YYYY-MM-DD` of `ms` in `timeZone` (what the date field and the server's `since` use). */
+export function isoDay(ms: number, timeZone: string): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(ms));
+}
+
+/** The choice between activities only and every file the watch makes. Changing it queues nothing. */
+function WhatToSend({ status }: { status: GarminStatus }) {
+  const { chooseWhatToSend } = useGarminActions();
+  const value = status.send_all ? 'everything' : 'activities';
+  return (
+    <div className="form__group">
+      <SegmentedControl
+        label="What to send"
+        options={SEND_CHOICES}
+        value={value}
+        onChange={(next) => {
+          if (next !== value && !chooseWhatToSend.isPending) chooseWhatToSend.mutate({ send_all: next === 'everything' });
+        }}
+      />
+      <p className="card__intro">
+        <strong>Activities only:</strong> each activity your watch records. Garmin Connect gets no health or sleep data from this server.
+      </p>
+      <p className="card__intro">
+        <strong>Everything:</strong> health, sleep and all-day data too, so Garmin Connect stays complete.
+      </p>
+      {chooseWhatToSend.isError ? <Failure error={chooseWhatToSend.error} /> : null}
+    </div>
+  );
+}
+
+/** Everything mode: send the files Garmin Connect has not got yet, from a start date (oldest first). */
+function SendMissing({ timezone }: { timezone: string }) {
+  const { backfill } = useGarminActions();
+  const [today] = useState(() => isoDay(Date.now(), timezone));
+  const [since, setSince] = useState(() => isoDay(Date.now() - 7 * 86_400_000, timezone));
+  const sinceOk = /^\d{4}-\d{2}-\d{2}$/.test(since) && since <= today;
+
+  return (
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (sinceOk) backfill.mutate({ since, mode: 'all' });
+      }}
+      className="form__group"
+      aria-label="Send what Garmin Connect is missing"
+    >
+      <TextField
+        label="Files from the watch since"
+        type="date"
+        max={today}
+        value={since}
+        onChange={(e) => {
+          setSince(e.target.value);
+          backfill.reset();
+        }}
+        aria-invalid={since !== '' && !sinceOk ? true : undefined}
+        hint={
+          since !== '' && !sinceOk
+            ? 'Pick a day up to today.'
+            : 'New files are sent on their own. This queues the older ones too, oldest first, about one a second. Garmin skips what it already has.'
+        }
+      />
+      <Button type="submit" disabled={!sinceOk || backfill.isPending} aria-busy={backfill.isPending}>
+        {backfill.isPending ? 'Queuing' : 'Also send what Garmin Connect is missing'}
+      </Button>
+      {backfill.isSuccess ? (
+        <p className="status-msg status-msg--ok" role="status">
+          {backfill.data.queued === 0
+            ? 'Nothing new to queue: those files are already queued or sent.'
+            : `Queued ${fmtInt(backfill.data.queued)} ${backfill.data.queued === 1 ? 'file' : 'files'}.`}
+        </p>
+      ) : null}
+      {backfill.isError ? <Failure error={backfill.error} /> : null}
+    </form>
+  );
+}
+
+/** Activities only: queue the activities already stored. */
+function SendOlderActivities() {
+  const { backfill } = useGarminActions();
   const [days, setDays] = useState('30');
   const n = Number(days);
   const daysOk = Number.isInteger(n) && n >= 1 && n <= 3650;
 
   return (
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (daysOk) backfill.mutate({ days: n });
+      }}
+      className="form__group"
+      aria-label="Send older activities"
+    >
+      <TextField
+        label="Also send activities from the last (days)"
+        type="number"
+        inputMode="numeric"
+        min={1}
+        max={3650}
+        value={days}
+        onChange={(e) => {
+          setDays(e.target.value);
+          backfill.reset();
+        }}
+        aria-invalid={days !== '' && !daysOk ? true : undefined}
+        hint={days !== '' && !daysOk ? 'Enter a whole number of days from 1 to 3650.' : 'New activities are sent on their own. This queues the ones you already have.'}
+      />
+      <Button type="submit" disabled={!daysOk || backfill.isPending} aria-busy={backfill.isPending}>
+        {backfill.isPending ? 'Queuing' : 'Send older activities'}
+      </Button>
+      {backfill.isSuccess ? (
+        <p className="status-msg status-msg--ok" role="status">
+          {backfill.data.queued === 0
+            ? 'Nothing new to queue: those activities are already queued or sent.'
+            : `Queued ${fmtInt(backfill.data.queued)} ${backfill.data.queued === 1 ? 'file' : 'files'}.`}
+        </p>
+      ) : null}
+      {backfill.isError ? <Failure error={backfill.error} /> : null}
+    </form>
+  );
+}
+
+function ConnectedTools({ status, timezone }: { status: GarminStatus; timezone: string }) {
+  const { retry } = useGarminActions();
+
+  return (
     <>
+      <WhatToSend status={status} />
       <Counts s={status} timezone={timezone} />
       <div className="form__group" style={{ gap: 6 }}>
         <Button disabled={retry.isPending || status.failed === 0} onClick={() => retry.mutate()} aria-busy={retry.isPending}>
@@ -198,40 +323,7 @@ function ConnectedTools({ status, timezone }: { status: GarminStatus; timezone: 
         </Button>
         {retry.isError ? <Failure error={retry.error} /> : null}
       </div>
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (daysOk) backfill.mutate({ days: n });
-        }}
-        className="form__group"
-        aria-label="Send older activities"
-      >
-        <TextField
-          label="Also send activities from the last (days)"
-          type="number"
-          inputMode="numeric"
-          min={1}
-          max={3650}
-          value={days}
-          onChange={(e) => {
-            setDays(e.target.value);
-            backfill.reset();
-          }}
-          aria-invalid={days !== '' && !daysOk ? true : undefined}
-          hint={days !== '' && !daysOk ? 'Enter a whole number of days from 1 to 3650.' : 'New activities are sent on their own. This queues the ones you already have.'}
-        />
-        <Button type="submit" disabled={!daysOk || backfill.isPending} aria-busy={backfill.isPending}>
-          {backfill.isPending ? 'Queuing' : 'Send older activities'}
-        </Button>
-        {backfill.isSuccess ? (
-          <p className="status-msg status-msg--ok" role="status">
-            {backfill.data.queued === 0
-              ? 'Nothing new to queue: those activities are already queued or sent.'
-              : `Queued ${fmtInt(backfill.data.queued)} ${backfill.data.queued === 1 ? 'file' : 'files'}.`}
-          </p>
-        ) : null}
-        {backfill.isError ? <Failure error={backfill.error} /> : null}
-      </form>
+      {status.send_all ? <SendMissing timezone={timezone} /> : <SendOlderActivities />}
     </>
   );
 }
@@ -251,9 +343,10 @@ function LoginPanel({ again, onLoggedIn }: { again: boolean; onLoggedIn: () => v
 }
 
 /**
- * Profile, Send activities to Garmin: the server sends activity files to the owner's Garmin Connect
- * account. The page is a switch and two lines of explanation; the login form appears only when the
- * switch is turned on, and turning it off again (after a login) asks first.
+ * Profile, Send to Garmin: the server sends the watch's files to the owner's Garmin Connect
+ * account, activities only or everything. The page is a switch and a line of explanation; the login
+ * form appears only when the switch is turned on, and turning it off again (after a login) asks first.
+ * Once connected, the choice (and, for Everything, the offer to send older files) sits under the counts.
  */
 export function GarminPage() {
   const query = useGarmin();
@@ -269,9 +362,8 @@ export function GarminPage() {
   const on = state !== null && state !== 'off';
 
   return (
-    <SubPage title="Send activities to Garmin" backTo="/profile">
-      <p className="subpage__lede">Each activity your watch records is also sent to your Garmin Connect account.</p>
-      <p className="subpage__lede">Activities only: Garmin takes no sleep, HRV or other health data this way.</p>
+    <SubPage title="Send to Garmin" backTo="/profile">
+      <p className="subpage__lede">Your watch&apos;s files are also sent to your Garmin Connect account. You choose below whether that is activities only or everything.</p>
       {query.isPending ? (
         <Card padding="lg" aria-label="Loading the Garmin status">
           <Skeleton height={20} lines={3} />
@@ -290,7 +382,7 @@ export function GarminPage() {
             <SettingsRow
               icon={<SendIcon />}
               tone="steps"
-              title="Send activities to Garmin"
+              title="Send to Garmin"
               value={enabling && state === 'off' ? 'Log in to turn it on' : GARMIN_STATE_VALUE[state]}
               checked={on || enabling}
               onCheckedChange={(next) => {
@@ -345,7 +437,7 @@ export function GarminPage() {
       {confirmOff ? (
         <ConfirmDialog
           title="Stop sending to Garmin?"
-          consequence="New activities stop going to Garmin Connect, and the stored login tokens are deleted from your server."
+          consequence="New files stop going to Garmin Connect, and the stored login tokens are deleted from your server."
           confirmLabel="Turn off"
           pending={logout.isPending}
           error={logout.isError ? errorMessage(logout.error) : undefined}

@@ -26,6 +26,7 @@ pub fn routes() -> Router<AppState> {
         .route("/api/garmin/logout", post(logout))
         .route("/api/garmin/retry", post(retry))
         .route("/api/garmin/backfill", post(backfill))
+        .route("/api/garmin/settings", post(settings_update))
         .route("/api/garmin/import-tokens", post(import_tokens))
 }
 
@@ -46,6 +47,9 @@ pub enum GarminState {
 #[derive(Debug, Serialize, Deserialize, TS)]
 pub struct GarminStatus {
     pub state: GarminState,
+    /// The owner's choice: false sends activities only, true sends every file the watch
+    /// produces (health, sleep and all-day data too). False while Forward is off.
+    pub send_all: bool,
     /// Files waiting for a try (including those waiting out a back-off).
     #[ts(type = "number")]
     pub pending: i64,
@@ -94,11 +98,32 @@ impl std::fmt::Debug for GarminMfaRequest {
     }
 }
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case")]
+pub enum GarminBackfillMode {
+    /// The activities that started in the window (the default).
+    #[default]
+    Activities,
+    /// Every FIT file from the watch or USB received in the window, oldest first.
+    All,
+}
+
 #[derive(Debug, Serialize, Deserialize, TS)]
 pub struct GarminBackfillRequest {
-    /// Queue activities that started within the last this many days (1 to 3650).
-    #[ts(type = "number")]
-    pub days: i64,
+    /// The window as the last this many days (1 to 3650). Give this or `since`.
+    #[serde(default)]
+    #[ts(optional, type = "number")]
+    pub days: Option<i64>,
+    /// The window as a start date, `YYYY-MM-DD` in the owner's timezone (at most 3650 days back).
+    /// Give this or `days`.
+    #[serde(default)]
+    #[ts(optional)]
+    pub since: Option<String>,
+    /// What to queue; `activities` when missing. `all` goes by the time the server received the
+    /// file, `activities` by the time the activity started.
+    #[serde(default)]
+    #[ts(optional)]
+    pub mode: Option<GarminBackfillMode>,
 }
 
 #[derive(Debug, Serialize, Deserialize, TS)]
@@ -106,6 +131,12 @@ pub struct GarminBackfillResponse {
     /// Files newly queued (files already queued or sent are not counted).
     #[ts(type = "number")]
     pub queued: i64,
+}
+
+#[derive(Debug, Serialize, Deserialize, TS)]
+pub struct GarminSettingsRequest {
+    /// True: send every file the watch produces. False: activities only.
+    pub send_all: bool,
 }
 
 /// The token file python-garminconnect 0.3.20 writes (`garmin_tokens.json`).
@@ -145,6 +176,7 @@ async fn build_status(state: &AppState, uid: i64) -> Result<GarminStatus, ApiErr
             Some(AccountStatus::NeedsLogin) => GarminState::NeedsLogin,
         }
     };
+    let send_all = account.as_ref().is_some_and(|a| a.send_all);
     let last_error = match account.and_then(|a| a.last_error) {
         Some(e) => Some(e),
         None => queue::last_item_error(&state.pool, uid).await?,
@@ -156,6 +188,7 @@ async fn build_status(state: &AppState, uid: i64) -> Result<GarminStatus, ApiErr
     };
     Ok(GarminStatus {
         state: st,
+        send_all,
         pending: counts.pending,
         done: counts.done,
         failed: counts.failed,
@@ -325,18 +358,65 @@ async fn backfill(
     State(state): State<AppState>,
     ApiJson(body): ApiJson<GarminBackfillRequest>,
 ) -> Result<Json<GarminBackfillResponse>, ApiError> {
-    if !(1..=3650).contains(&body.days) {
-        return Err(ApiError::bad_request("days must be between 1 and 3650"));
-    }
+    let now = state.now();
+    let since_ts = match (body.days, body.since.as_deref()) {
+        (Some(days), None) => {
+            if !(1..=3650).contains(&days) {
+                return Err(ApiError::bad_request("days must be between 1 and 3650"));
+            }
+            now - days * 86_400
+        }
+        (None, Some(since)) => {
+            let tz = settings::load(&state.pool, user.id).await?.tz;
+            let date = settings::parse_date(since)
+                .ok_or_else(|| ApiError::bad_request("since must be a date like 2026-11-15"))?;
+            let ts = settings::day_start(tz, date);
+            if ts > now {
+                return Err(ApiError::bad_request("since must not be in the future"));
+            }
+            if ts < now - 3650 * 86_400 {
+                return Err(ApiError::bad_request(
+                    "since must be within the last 3650 days",
+                ));
+            }
+            ts
+        }
+        _ => {
+            return Err(ApiError::bad_request(
+                "give either days (1 to 3650) or since (a date)",
+            ))
+        }
+    };
     if queue::load_account(&state.pool, user.id).await?.is_none() {
         return Err(ApiError::new(StatusCode::CONFLICT, "Garmin is not set up"));
     }
-    let now = state.now();
-    let queued = queue::backfill(&state.pool, user.id, now - body.days * 86_400, now).await?;
+    let queued = match body.mode.unwrap_or_default() {
+        GarminBackfillMode::Activities => {
+            queue::backfill(&state.pool, user.id, since_ts, now).await?
+        }
+        GarminBackfillMode::All => queue::backfill_all(&state.pool, user.id, since_ts, now).await?,
+    };
     state.garmin.wake();
     Ok(Json(GarminBackfillResponse {
         queued: queued as i64,
     }))
+}
+
+/// Choose what Forward sends. Queues nothing by itself: the web offers a backfill afterwards.
+async fn settings_update(
+    user: DataUser,
+    State(state): State<AppState>,
+    ApiJson(body): ApiJson<GarminSettingsRequest>,
+) -> Result<Json<GarminStatus>, ApiError> {
+    if !queue::set_send_all(&state.pool, user.id, body.send_all, state.now()).await? {
+        return Err(ApiError::new(StatusCode::CONFLICT, "Garmin is not set up"));
+    }
+    tracing::info!(
+        user_id = user.id,
+        send_all = body.send_all,
+        "garmin forward choice changed"
+    );
+    Ok(Json(build_status(&state, user.id).await?))
 }
 
 async fn import_tokens(

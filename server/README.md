@@ -443,6 +443,37 @@ the phone cannot choose it.
 Tests: `tests/gps_assist.rs` (a fake Garmin on 127.0.0.1; fetch, cache, 304, revalidation, switch,
 token, whitelist, failures, the cap, redirects) and the unit tests in `src/gps_assist.rs`.
 
+## Garmin Connect upload (Forward, stage 2g)
+
+Opt-in and per user: the server uploads the user's FIT files to their own Garmin Connect account
+(`POST connectapi.garmin.com/upload-service/upload`, field `file`). Login (mobile SSO, optional MFA
+or a python-garminconnect token file), the queue and the worker live in `src/garmin/`; the password
+is never stored or logged and no token is ever returned by the API. Research and what was verified
+live: `docs/research/garmin-forward.md`. Every user has a `garmin_account` row (migrations 0009,
+0010, 0014) and queue rows in `garmin_uploads`.
+
+What is sent is the user's choice, `send_all` on the account: **activities only** (default; new
+activity files, FIT 128/4) or **everything from the watch** (also every other new FIT file of
+`data_type 128` whose `source` is `watch` or `usb`; files from `import` or `connect` came from
+Garmin and are never sent). Garmin's duplicate answer (409, code 202) counts as done for every file.
+The worker sends the oldest file first, pauses about 1 s between uploads, backs off 1 min doubling to
+6 h on errors, honours `Retry-After` on 429 and stops a file after 10 tries until the owner retries.
+
+All calls need the session cookie, and the writes the header `X-Nimrag: 1`:
+
+| Endpoint | |
+| --- | --- |
+| `GET /api/garmin` | `{state: off\|needs_login\|needs_mfa\|connected\|paused, send_all, pending, done, failed, last_error, next_attempt_at}` |
+| `POST /api/garmin/login {email, password}` | `{mfa_required}`; then `POST /api/garmin/mfa {code}` |
+| `POST /api/garmin/import-tokens {di_token, di_refresh_token, di_client_id?}` | log in with a python-garminconnect token file |
+| `POST /api/garmin/settings {send_all}` | choose activities only (`false`) or everything (`true`); returns the status; `409` when not set up. Queues nothing |
+| `POST /api/garmin/backfill {days \| since, mode?}` | queue older files, `{queued}`. `days` 1 to 3650 or `since` `YYYY-MM-DD` (the user's timezone), exactly one. `mode`: `activities` (default; activities that started in the window) or `all` (every watch/USB FIT file received in the window, oldest first). Files already queued or sent are skipped. `409` when not set up |
+| `POST /api/garmin/retry` | failed files get fresh tries; a paused queue resumes |
+| `POST /api/garmin/logout` | tokens and unsent files are forgotten (the choice goes with the account) |
+
+Tests: `tests/garmin_upload.rs`, `tests/garmin_auth.rs` against a fake Garmin (`tests/garmin_fake/`);
+no test reaches Garmin.
+
 ## Building (sqlx offline)
 
 Queries in the ingest and parse code are checked at compile time (the owner API

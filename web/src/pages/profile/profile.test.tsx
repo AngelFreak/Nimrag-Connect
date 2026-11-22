@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter, useLocation } from 'react-router-dom';
@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { App } from '../../App';
 import type { GarminStatus, SettingsResponse, TokenList } from '../../api/generated';
 import { json, mockApi } from '../body/testUtils';
-import { parseTokenFile } from './GarminPage';
+import { isoDay, parseTokenFile } from './GarminPage';
 import { formFrom, validateGoals } from './goals';
 import { navKeyForProfile } from './ProfileLayout';
 import { activePhones, phonesSummary } from './common';
@@ -22,7 +22,7 @@ const settings: SettingsResponse = {
 };
 
 const me = { authenticated: true, username: 'demo', role: 'user', timezone: 'Europe/Copenhagen', sample: false };
-const garmin = (over: Partial<GarminStatus> = {}): GarminStatus => ({ state: 'off', pending: 0, done: 0, failed: 0, last_error: null, next_attempt_at: null, ...over });
+const garmin = (over: Partial<GarminStatus> = {}): GarminStatus => ({ state: 'off', send_all: false, pending: 0, done: 0, failed: 0, last_error: null, next_attempt_at: null, ...over });
 
 const phone = (over: Record<string, unknown> = {}) => ({
   id: 1,
@@ -83,7 +83,7 @@ describe('Profile: the list', () => {
     expect(await screen.findByRole('link', { name: 'Signed-in phones Pixel 9a (this phone) and 1 more' })).toHaveAttribute('href', '/profile/phones');
     link('Timezone Europe/Copenhagen', '/profile/timezone');
     link('Goals 8,000 steps · 150 intensity min', '/profile/goals');
-    link('Send activities to Garmin Off', '/profile/garmin');
+    link('Send to Garmin Off', '/profile/garmin');
     expect(screen.getByText('Server 0.1.0 · AGPL-3.0')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /^Source code/ })).toHaveAttribute('href', 'https://github.com/AngelFreak/Nimrag-Connect');
     expect(screen.getByRole('button', { name: 'Log out' })).toBeInTheDocument();
@@ -430,14 +430,14 @@ describe('goal validation', () => {
   });
 });
 
-describe('Profile: send activities to Garmin', () => {
+describe('Profile: send to Garmin', () => {
   it('off: two short lines and a switch; the warning and the login appear only after turning it on', async () => {
     mockApi(routes());
     const u = userEvent.setup();
     renderApp('/profile/garmin');
-    const toggle = await screen.findByRole('switch', { name: /Send activities to Garmin/ });
+    const toggle = await screen.findByRole('switch', { name: /Send to Garmin/ });
     expect(toggle).not.toBeChecked();
-    expect(screen.getByText(/Activities only/)).toBeInTheDocument();
+    expect(screen.getByText(/Your watch.s files are also sent to your Garmin Connect account/)).toBeInTheDocument();
     expect(screen.queryByLabelText('Garmin email')).not.toBeInTheDocument();
     expect(screen.queryByText(/unofficial/)).not.toBeInTheDocument();
     await u.click(toggle);
@@ -483,7 +483,7 @@ describe('Profile: send activities to Garmin', () => {
     );
     const u = userEvent.setup();
     renderApp('/profile/garmin');
-    await u.click(await screen.findByRole('switch', { name: /Send activities to Garmin/ }));
+    await u.click(await screen.findByRole('switch', { name: /Send to Garmin/ }));
     await u.type(screen.getByLabelText('Garmin email'), 'me@example.com');
     await u.type(screen.getByLabelText('Garmin password'), 's3cret!');
     await u.click(screen.getByRole('button', { name: 'Log in to Garmin' }));
@@ -497,7 +497,7 @@ describe('Profile: send activities to Garmin', () => {
     expect(JSON.parse(String(calls.find((c) => c.url === '/api/garmin/mfa')?.init?.body))).toEqual({ code: '123456' });
 
     expect(await screen.findByText('Waiting to send')).toBeInTheDocument();
-    expect(screen.getByRole('switch', { name: /Send activities to Garmin/ })).toBeChecked();
+    expect(screen.getByRole('switch', { name: /Send to Garmin/ })).toBeChecked();
     expect(screen.queryByLabelText('Garmin password')).not.toBeInTheDocument();
   });
 
@@ -505,7 +505,7 @@ describe('Profile: send activities to Garmin', () => {
     mockApi(routes({ 'POST /api/garmin/login': () => json({ error: 'Garmin rejected the email or password' }, { status: 422 }) }));
     const u = userEvent.setup();
     renderApp('/profile/garmin');
-    await u.click(await screen.findByRole('switch', { name: /Send activities to Garmin/ }));
+    await u.click(await screen.findByRole('switch', { name: /Send to Garmin/ }));
     await u.type(screen.getByLabelText('Garmin email'), 'me@example.com');
     await u.type(screen.getByLabelText('Garmin password'), 'bad');
     await u.click(screen.getByRole('button', { name: 'Log in to Garmin' }));
@@ -517,7 +517,7 @@ describe('Profile: send activities to Garmin', () => {
     const { calls } = mockApi(routes({ 'POST /api/garmin/import-tokens': garmin({ state: 'connected' }) }));
     const u = userEvent.setup();
     renderApp('/profile/garmin');
-    await u.click(await screen.findByRole('switch', { name: /Send activities to Garmin/ }));
+    await u.click(await screen.findByRole('switch', { name: /Send to Garmin/ }));
     const input = screen.getByLabelText('Garmin token file', { selector: 'input' });
     const file = new File([JSON.stringify({ di_token: 'aaa', di_refresh_token: 'bbb', di_client_id: 'cid', extra: 'ignored' })], 'garmin_tokens.json', {
       type: 'application/json',
@@ -535,7 +535,7 @@ describe('Profile: send activities to Garmin', () => {
     const { calls } = mockApi(routes());
     const u = userEvent.setup();
     renderApp('/profile/garmin');
-    await u.click(await screen.findByRole('switch', { name: /Send activities to Garmin/ }));
+    await u.click(await screen.findByRole('switch', { name: /Send to Garmin/ }));
     await u.upload(screen.getByLabelText('Garmin token file', { selector: 'input' }), new File(['{"hello": 1}'], 'other.json', { type: 'application/json' }));
     expect(await screen.findByText(/not a python-garminconnect token file/)).toBeInTheDocument();
     expect(calls.some((c) => c.url.includes('import-tokens'))).toBe(false);
@@ -569,7 +569,7 @@ describe('Profile: send activities to Garmin', () => {
     renderApp('/profile/garmin');
     const row = (label: string) => screen.getByText(label, { selector: 'dt' }).nextElementSibling as HTMLElement;
     await waitFor(() => expect(row('Waiting to send')).toHaveTextContent('2'));
-    expect(screen.getByRole('switch', { name: /Send activities to Garmin/ })).toBeChecked();
+    expect(screen.getByRole('switch', { name: /Send to Garmin/ })).toBeChecked();
     expect(row('Sent or already there')).toHaveTextContent('40');
     expect(row('Needs you')).toHaveTextContent('1');
     expect(row('Next try')).toHaveTextContent('19 Nov');
@@ -586,12 +586,12 @@ describe('Profile: send activities to Garmin', () => {
     expect(await screen.findByText('Queued 7 files.')).toBeInTheDocument();
     expect(JSON.parse(String(calls.find((c) => c.url === '/api/garmin/backfill')?.init?.body))).toEqual({ days: 60 });
 
-    await u.click(screen.getByRole('switch', { name: /Send activities to Garmin/ }));
+    await u.click(screen.getByRole('switch', { name: /Send to Garmin/ }));
     const dialog = screen.getByRole('dialog', { name: 'Stop sending to Garmin?' });
     expect(dialog).toHaveTextContent('stored login tokens are deleted from your server');
     expect(calls.some((c) => c.url === '/api/garmin/logout')).toBe(false);
     await u.click(within(dialog).getByRole('button', { name: 'Turn off' }));
-    await waitFor(() => expect(screen.getByRole('switch', { name: /Send activities to Garmin/ })).not.toBeChecked());
+    await waitFor(() => expect(screen.getByRole('switch', { name: /Send to Garmin/ })).not.toBeChecked());
     expect(calls.some((c) => c.url === '/api/garmin/logout')).toBe(true);
   });
 
@@ -599,10 +599,10 @@ describe('Profile: send activities to Garmin', () => {
     mockApi(routes({ '/api/garmin': garmin({ state: 'connected' }) }));
     const u = userEvent.setup();
     renderApp('/profile/garmin');
-    await u.click(await screen.findByRole('switch', { name: /Send activities to Garmin/ }));
+    await u.click(await screen.findByRole('switch', { name: /Send to Garmin/ }));
     await u.click(screen.getByRole('button', { name: 'Cancel' }));
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-    expect(screen.getByRole('switch', { name: /Send activities to Garmin/ })).toBeChecked();
+    expect(screen.getByRole('switch', { name: /Send to Garmin/ })).toBeChecked();
   });
 
   it('refuses backfill days outside 1 to 3650', async () => {
@@ -614,6 +614,72 @@ describe('Profile: send activities to Garmin', () => {
     await u.type(days, '4000');
     expect(screen.getByRole('button', { name: 'Send older activities' })).toBeDisabled();
     expect(days).toHaveAttribute('aria-invalid', 'true');
+  });
+
+  it('connected: offers Activities only and Everything from the watch, and changing it queues nothing', async () => {
+    let status = garmin({ state: 'connected' });
+    const { calls } = mockApi(
+      routes({
+        '/api/garmin': () => json(status),
+        'POST /api/garmin/settings': () => {
+          status = { ...status, send_all: true };
+          return json(status);
+        },
+      }),
+    );
+    const u = userEvent.setup();
+    renderApp('/profile/garmin');
+    const group = await screen.findByRole('group', { name: 'What to send' });
+    expect(within(group).getByRole('button', { name: 'Activities only' })).toHaveAttribute('aria-pressed', 'true');
+    expect(within(group).getByRole('button', { name: 'Everything from the watch' })).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.getByText(/health, sleep and all-day data too, so Garmin Connect stays complete/)).toBeInTheDocument();
+    // Activities only: the older-activities form, not the "missing files" one.
+    expect(screen.getByRole('button', { name: 'Send older activities' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Also send what Garmin Connect is missing' })).not.toBeInTheDocument();
+
+    await u.click(within(group).getByRole('button', { name: 'Everything from the watch' }));
+    await waitFor(() => expect(within(group).getByRole('button', { name: 'Everything from the watch' })).toHaveAttribute('aria-pressed', 'true'));
+    const post = calls.find((c) => c.url === '/api/garmin/settings')!;
+    expect(post.init?.method).toBe('POST');
+    expect(JSON.parse(String(post.init?.body))).toEqual({ send_all: true });
+    // Switching does not backfill; the page offers it.
+    expect(calls.some((c) => c.url === '/api/garmin/backfill')).toBe(false);
+    expect(await screen.findByRole('button', { name: 'Also send what Garmin Connect is missing' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Send older activities' })).not.toBeInTheDocument();
+  });
+
+  it('Everything: the offer starts 7 days back and sends the whole watch from that date', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-11-22T10:00:00Z'));
+    try {
+      const { calls } = mockApi(routes({ '/api/garmin': garmin({ state: 'connected', send_all: true }), 'POST /api/garmin/backfill': { queued: 612 } }));
+      const u = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+      renderApp('/profile/garmin');
+      const since = await screen.findByLabelText('Files from the watch since');
+      expect(since).toHaveValue('2026-11-15');
+      expect(since).toHaveAttribute('max', '2026-11-22');
+      await u.click(screen.getByRole('button', { name: 'Also send what Garmin Connect is missing' }));
+      expect(await screen.findByText('Queued 612 files.')).toBeInTheDocument();
+      expect(JSON.parse(String(calls.find((c) => c.url === '/api/garmin/backfill')?.init?.body))).toEqual({ since: '2026-11-15', mode: 'all' });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('Everything: a date in the future cannot be sent', async () => {
+    mockApi(routes({ '/api/garmin': garmin({ state: 'connected', send_all: true }) }));
+    renderApp('/profile/garmin');
+    const since = await screen.findByLabelText('Files from the watch since');
+    fireEvent.change(since, { target: { value: '2999-01-01' } });
+    expect(screen.getByRole('button', { name: 'Also send what Garmin Connect is missing' })).toBeDisabled();
+    expect(since).toHaveAttribute('aria-invalid', 'true');
+  });
+
+  it('isoDay gives the date in the owner\'s timezone', () => {
+    const t = Date.parse('2026-11-22T23:30:00Z');
+    expect(isoDay(t, 'UTC')).toBe('2026-11-22');
+    expect(isoDay(t, 'Europe/Copenhagen')).toBe('2026-11-23');
+    expect(isoDay(t - 7 * 86_400_000, 'Europe/Copenhagen')).toBe('2026-11-16');
   });
 
   it('a failed status request offers a retry', async () => {

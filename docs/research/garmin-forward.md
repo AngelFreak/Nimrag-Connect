@@ -208,8 +208,21 @@ Source: GitHub API issue listing of cyberjunky/python-garminconnect updated sinc
 ## 6. Non-activity FIT files through `/upload-service/upload`?
 
 - **Weight-scale FIT (file type 9) is accepted**: `add_body_composition()` builds a FIT with `FILE_TYPE = 9` and POSTs it to the same `/upload-service/upload`, multipart `file`, name `body_composition.fit` [src api/body.py:101-105 (upload block), fit.py:199, 271]. garth-ng does the same (PR #12 "add body composition FIT upload", `garth-ng/src/garth/data/weight.py:242`). So at least one non-activity type works.
-- **Monitoring / wellness (type 32 monitoring_b, type 15 monitoring_a), sleep, HRV, stress FIT**: **unknown.** No source, issue or doc I read uploads or tests them; the python-garminconnect FIT encoder only writes weight files (fit.py). Web searches (Garmin forums) only surfaced "We don't support the file type you tried to import" errors for corrupt *activity* FIT files, nothing on monitoring files. Garmin's own docs on Import Data were not retrievable (support.garmin.com returned 403). Reading wellness data from the watch is normally via device sync (Garmin Connect Mobile/Express), not via this endpoint; I found no evidence this endpoint ingests it. Treat as "likely rejected or ignored, test with one throwaway file" **[unverified]**.
-  - **Verified live 2026-11-22:** one Instinct 2 monitoring file (FIT 128/32, 962 bytes, 15 minutes of heart rate) sent through Forward's normal path (`POST /upload-service/upload`, field `file`) got a 2xx with no activity id. Within a minute Garmin Connect's heart-rate series for that day showed the file's 15 minutes. Sleep, metrics, HRV and device files are still untested.
+- **Monitoring / wellness (type 32 monitoring_b, type 15 monitoring_a), sleep, HRV, stress FIT**: **unknown from source, then verified live (see below).** No source, issue or doc I read uploads or tests them; the python-garminconnect FIT encoder only writes weight files (fit.py). Web searches (Garmin forums) only surfaced "We don't support the file type you tried to import" errors for corrupt *activity* FIT files, nothing on monitoring files. Garmin's own docs on Import Data were not retrievable (support.garmin.com returned 403). Reading wellness data from the watch is normally via device sync (Garmin Connect Mobile/Express), not via this endpoint; I found no evidence this endpoint ingests it. The static reading guessed "likely rejected or ignored"; the live check below showed the opposite.
+  - **Verified live 2026-11-22** (Instinct 2, a real account, Forward's normal path: `POST /upload-service/upload`, field `file`, the same code as for activities). The first row is the original check; the others came the same day.
+
+    | FIT `data_type` / `sub_type` | What it is | Answer | Status |
+    |---|---|---|---|
+    | 128 / 32 | monitoring (a file of 15 minutes of heart rate) | 2xx, no activity id; Garmin Connect's heart-rate series showed the file's 15 minutes within a minute | **accepted, verified** (one 962-byte file) |
+    | 128 / 41 | (unnamed type) | 2xx, no activity id | **accepted, verified** |
+    | 128 / 58 | (unnamed type) | 2xx, no activity id | **accepted, verified** |
+    | 128 / 44 | metrics | 409, code 202 (Garmin already had the data) | duplicate answer verified; first-time acceptance **not** observed |
+    | 128 / 49 | sleep | 409, code 202 | duplicate answer verified; first-time acceptance **not** observed |
+    | 128 / 68 | (unnamed type) | 409, code 202 | duplicate answer verified; first-time acceptance **not** observed |
+    | 128 / 72 | (unnamed type) | 409, code 202 | duplicate answer verified; first-time acceptance **not** observed |
+    | 128 / 4 | activity | as in section 3.4 | the case Forward was built for |
+
+    Conclusions: Garmin takes watch files other than activities through this endpoint; for the types whose first upload was not seen, the duplicate answer shows Garmin already had them and tells nothing about whether a first upload would be accepted, but it is harmless: the queue counts 409/202 as done for every file type. Forward therefore sends every FIT file of `data_type 128` from the watch or USB when the owner chooses "Everything from the watch"; the success body has no `successes[0].internalId` for these files, so the activity id stays empty. Types the table does not list (for example HRV, 128 / other values) have not been seen.
 - Related: the maintainer's own change log says Health Snapshot FIT can be *downloaded*, but that is download, not upload [src CHANGELOG 0.3.19].
 
 ## 7. Minimal Rust implementation sketch (from the above)
@@ -218,7 +231,7 @@ Source: GitHub API issue listing of cyberjunky/python-garminconnect updated sinc
 2. Per call: decode JWT `exp`; if `now > exp-900` -> refresh (section 1 "Refresh"); send native headers + Bearer.
 3. Upload: POST multipart `file` to `https://connectapi.garmin.com/upload-service/upload`; handle 409 (`detailedImportResult.failures[0].messages[0].code == 202`) as "already there"; 401 -> refresh once and re-send; 429 -> back off yourself (the reference does none); 5xx -> bounded retry.
 4. First-time login: Steps 1-4 above with a cookie-store client; implement MFA as two phases (return state, then verify). Decide whether to bring the login in-process (fingerprint risk) or bootstrap tokens out-of-band.
-5. Cheap probes to run once you are allowed to touch Garmin (not done here): (a) does plain reqwest refresh against diauth work; (b) does plain reqwest `GET /userprofile-service/socialProfile` with Bearer + native headers return 200; (c) real success body of upload; (d) whether type-32 FIT is accepted.
+5. Cheap probes to run once you are allowed to touch Garmin (not done here): (a) does plain reqwest refresh against diauth work; (b) does plain reqwest `GET /userprofile-service/socialProfile` with Bearer + native headers return 200; (c) real success body of upload; (d) whether type-32 FIT is accepted (yes, verified 2026-11-22, section 6).
 
 ## 8. Things I did not verify
 - Any live behaviour (by instruction).

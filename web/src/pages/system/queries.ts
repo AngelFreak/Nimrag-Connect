@@ -10,6 +10,7 @@ import type {
   GarminLoginRequest,
   GarminLoginResponse,
   GarminMfaRequest,
+  GarminSettingsRequest,
   GarminStatus,
   Me,
   SettingsPatch,
@@ -80,6 +81,11 @@ export function useGarminActions() {
     backfill: useMutation({
       mutationFn: (body: GarminBackfillRequest) => api.post<GarminBackfillResponse>('/api/garmin/backfill', body),
       onSuccess: refresh,
+    }),
+    /** Activities only, or everything from the watch. Queues nothing by itself. */
+    chooseWhatToSend: useMutation({
+      mutationFn: (body: GarminSettingsRequest) => api.post<GarminStatus>('/api/garmin/settings', body),
+      onSuccess: setStatus,
     }),
     logout: useMutation({ mutationFn: () => api.post<void>('/api/garmin/logout'), onSuccess: refresh }),
   };

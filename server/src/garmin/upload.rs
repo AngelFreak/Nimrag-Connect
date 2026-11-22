@@ -1,12 +1,14 @@
-//! Upload one activity FIT file to Garmin Connect.
+//! Upload one FIT file (an activity, or any other file the watch produced) to Garmin Connect.
 //!
 //! `POST {connectapi}/upload-service/upload`, multipart field `file`, bearer
 //! token + native headers (python-garminconnect 0.3.20 `api/activities.py:
 //! 200-254`; garth-ng does the same). Answers per `docs/research/garmin-forward.md`
 //! section 3.4-3.5: duplicate = HTTP 409 with `detailedImportResult.failures[0].
-//! messages[0].code == 202`. The success status and body are **unverified**
-//! against a live account: any 2xx counts as uploaded and the activity id is
-//! read from `detailedImportResult.successes[0].internalId` when present.
+//! messages[0].code == 202`, for every file type. Verified live on 2026-11-22: monitoring
+//! (128/32), 41 and 58 files get a 2xx with no activity id (Garmin Connect shows their data);
+//! sub types 44, 49, 68 and 72 that Garmin already had get the duplicate answer. Any 2xx counts as
+//! uploaded; the activity id is read from `detailedImportResult.successes[0].internalId` when
+//! present (an activity file only).
 
 use super::auth::{api_headers, Tokens};
 use super::http::{self, GarminHttp, Request};
@@ -15,9 +17,9 @@ use serde_json::Value;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum UploadOutcome {
-    /// Accepted. The id is `None` while Garmin is still processing the file.
+    /// Accepted. The id is `None` while Garmin is still processing an activity, and for every other file.
     Uploaded { garmin_activity_id: Option<i64> },
-    /// Garmin already has this activity (409, code 202). Counts as done.
+    /// Garmin already has this file (409, code 202). Counts as done.
     Duplicate,
     /// Garmin refused the file for good (other 4xx); the reason is short and secret-free.
     Rejected(String),
@@ -29,7 +31,7 @@ pub enum UploadOutcome {
     Transient(String),
 }
 
-pub async fn upload_activity(
+pub async fn upload_file(
     cfg: &GarminConfig,
     api: &dyn GarminHttp,
     tokens: &Tokens,

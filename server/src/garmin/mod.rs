@@ -1,8 +1,10 @@
-//! Forward mode (Stage 2g): upload a user's activity files (FIT 128/4) to their own Garmin
-//! Connect account. Every user has their own account row, queue rows and pending MFA login.
+//! Forward mode (Stage 2g): upload a user's FIT files to their own Garmin Connect account:
+//! activities (FIT 128/4) always, and with the account's `send_all` choice every other file the
+//! watch produces too (monitoring, sleep, metrics). Every user has their own account row, queue
+//! rows and pending MFA login.
 //!
 //! * [`auth`]: unofficial mobile SSO login (+ MFA), DI OAuth2 tokens, refresh.
-//! * [`upload`]: POST one FIT file, classify the answer.
+//! * [`upload`]: POST one FIT file (activity or not), classify the answer.
 //! * [`queue`]: the `garmin_account` row, the `garmin_uploads` queue, the worker.
 //! * [`api`]: the signed-in user's endpoints under `/api/garmin`.
 //! * [`http`]: the `GarminHttp` seam (plain reqwest today).
@@ -77,6 +79,9 @@ pub struct GarminConfig {
     /// Random pause between the sign-in page and the credential POST, in ms
     /// (min, max). The reference client waits 2 to 5 s; `(0, 0)` skips it.
     pub login_delay_ms: (u64, u64),
+    /// Pause between two uploads of one user's queue, in ms, so a backfill of hundreds of small
+    /// files does not hammer Garmin. `0` skips it.
+    pub upload_pause_ms: u64,
 }
 
 impl Default for GarminConfig {
@@ -85,17 +90,19 @@ impl Default for GarminConfig {
             urls: GarminUrls::default(),
             http: ReqwestHttp::factory(true),
             login_delay_ms: (2000, 5000),
+            upload_pause_ms: 1000,
         }
     }
 }
 
 impl GarminConfig {
-    /// Local fake: every host on `base`, no proxy, no login delay.
+    /// Local fake: every host on `base`, no proxy, no login delay, no pause between uploads.
     pub fn for_fake(base: &str) -> Self {
         Self {
             urls: GarminUrls::all_on(base),
             http: ReqwestHttp::factory(false),
             login_delay_ms: (0, 0),
+            upload_pause_ms: 0,
         }
     }
 }
@@ -188,10 +195,32 @@ impl Default for Garmin {
     }
 }
 
+/// What a stored file is to Forward.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Wanted {
+    /// A new activity file (`data_type 128`, `sub_type 4`): queued whenever Forward is on.
+    Activity,
+    /// Any other FIT file from the watch or USB: queued only when the account has `send_all`.
+    Other,
+}
+
+/// Whether a newly stored file goes to Garmin, and under which rule. Pure: the account's
+/// `send_all` choice is checked by the queue. Files that came from Garmin (`import`, `connect`)
+/// are never "other", so they are not sent back.
+pub fn wanted(meta: &Meta, is_fit: bool, created: bool) -> Option<Wanted> {
+    if !(created && is_fit && meta.data_type == Some(128)) {
+        return None;
+    }
+    if meta.sub_type == Some(4) {
+        return Some(Wanted::Activity);
+    }
+    matches!(meta.source.as_str(), "watch" | "usb").then_some(Wanted::Other)
+}
+
 /// Ingest hook: a file was just stored for `owner`. Queues it when it is a new activity
-/// FIT file (`data_type 128`, `sub_type 4`), the file has an owner and that user has Forward
-/// on. Never fails the ingest; imports (no upload metadata) are not queued, backfill covers
-/// them.
+/// FIT file (`data_type 128`, `sub_type 4`) or, when that user's account has `send_all` on, any
+/// other new FIT file from the watch or USB; the file must have an owner with Forward on. Never
+/// fails the ingest; imports (no upload metadata) are not queued, backfill covers them.
 pub async fn on_stored(
     state: &AppState,
     sha256: &str,
@@ -201,12 +230,81 @@ pub async fn on_stored(
     created: bool,
 ) {
     let Some(owner) = owner else { return };
-    if !(created && is_fit && meta.data_type == Some(128) && meta.sub_type == Some(4)) {
-        return;
-    }
-    match queue::enqueue(&state.pool, owner, sha256, state.now()).await {
+    let now = state.now();
+    let queued = match wanted(meta, is_fit, created) {
+        None => return,
+        Some(Wanted::Activity) => queue::enqueue(&state.pool, owner, sha256, now).await,
+        Some(Wanted::Other) => queue::enqueue_other(&state.pool, owner, sha256, now).await,
+    };
+    match queued {
         Ok(true) => state.garmin.wake(),
         Ok(false) => {}
         Err(e) => tracing::warn!(error = format!("{e:#}"), "garmin: queueing a file failed"),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn meta(source: &str, data_type: Option<i64>, sub_type: Option<i64>) -> Meta {
+        Meta {
+            source: source.into(),
+            data_type,
+            sub_type,
+            file_index: None,
+            file_number: None,
+            watch_timestamp: None,
+        }
+    }
+
+    #[test]
+    fn what_is_wanted() {
+        let w = |m: Meta, fit, created| wanted(&m, fit, created);
+        // Activities keep today's rule, whatever the source.
+        assert_eq!(
+            w(meta("watch", Some(128), Some(4)), true, true),
+            Some(Wanted::Activity)
+        );
+        assert_eq!(
+            w(meta("import", Some(128), Some(4)), true, true),
+            Some(Wanted::Activity)
+        );
+        // Monitoring, sleep, metrics, ...: from the watch or USB only.
+        for sub in [
+            Some(32),
+            Some(41),
+            Some(44),
+            Some(49),
+            Some(58),
+            Some(68),
+            None,
+        ] {
+            assert_eq!(
+                w(meta("watch", Some(128), sub), true, true),
+                Some(Wanted::Other),
+                "{sub:?}"
+            );
+            assert_eq!(
+                w(meta("usb", Some(128), sub), true, true),
+                Some(Wanted::Other),
+                "{sub:?}"
+            );
+            assert_eq!(
+                w(meta("import", Some(128), sub), true, true),
+                None,
+                "{sub:?}"
+            );
+            assert_eq!(
+                w(meta("connect", Some(128), sub), true, true),
+                None,
+                "{sub:?}"
+            );
+        }
+        // Not FIT, not new, not a FIT data type.
+        assert_eq!(w(meta("watch", Some(128), Some(32)), false, true), None);
+        assert_eq!(w(meta("watch", Some(128), Some(32)), true, false), None);
+        assert_eq!(w(meta("watch", Some(8), Some(32)), true, true), None);
+        assert_eq!(w(meta("watch", None, None), true, true), None);
     }
 }

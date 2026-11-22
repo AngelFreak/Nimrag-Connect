@@ -3,6 +3,11 @@ import type { GarminState } from "./GarminState";
 
 export type GarminStatus = { state: GarminState, 
 /**
+ * The owner's choice: false sends activities only, true sends every file the watch
+ * produces (health, sleep and all-day data too). False while Forward is off.
+ */
+send_all: boolean, 
+/**
  * Files waiting for a try (including those waiting out a back-off).
  */
 pending: number, 
