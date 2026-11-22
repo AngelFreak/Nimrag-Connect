@@ -28,6 +28,8 @@ const LEGEND: { level: StressLevel; label: string }[] = [
   { level: 'medium', label: 'Medium' },
   { level: 'high', label: 'High' },
 ];
+/** Shown only on days with such bars: the watch measured no stress because you were moving. */
+const ACTIVE_LEGEND: { level: StressLevel; label: string } = { level: 'activity', label: 'Too active to measure' };
 
 interface Bin {
   level: StressLevel;
@@ -151,7 +153,7 @@ export function EnergyDayChart({ energy, stress, timezone }: Props) {
         ) : null}
         {anyStress ? <span>Stress:</span> : null}
         {anyStress
-          ? LEGEND.map((l) => (
+          ? [...LEGEND, ...(stress.series.some((s) => s.level === 'activity') ? [ACTIVE_LEGEND] : [])].map((l) => (
               <span key={l.level}>
                 <i className="day-chart__swatch" aria-hidden="true" style={{ background: LEVEL_COLOR[l.level] }} />
                 {l.label}
