@@ -43,11 +43,65 @@ pub struct Report {
     pub scanned: u64,
     pub fit_new: u64,
     pub fit_present: u64,
-    /// Lower-case extension (or "(none)") -> archive-relative paths.
+    /// Lower-case extension (or "(none)") -> archive-relative paths. With
+    /// [`Options::keep_paths`] off only the extension counts are kept (the paths stay empty).
     pub non_fit: BTreeMap<String, Vec<String>>,
+    /// Not FIT, not stored: how many (the sum of `non_fit`, paths kept or not).
+    pub skipped: u64,
     /// Entries with absolute or escaping names; imported, name kept as metadata only.
     pub unsafe_names: Vec<String>,
+    /// Error texts, at most [`Options::max_errors`] of them.
     pub errors: Vec<String>,
+    /// Entries (and archives) that failed, counted past the cap on `errors`.
+    pub failed: u64,
+    /// FIT files by kind (see [`kind_name`]); only with [`Options::kinds`].
+    pub kinds: BTreeMap<&'static str, u64>,
+}
+
+/// What a run keeps and how it names things.
+#[derive(Debug, Clone)]
+pub struct Options {
+    pub limits: Limits,
+    /// The user the imported files belong to (`None`: unassigned).
+    pub owner: Option<i64>,
+    /// In front of every archive-relative path in the upload origin (the uploaded file's name), so
+    /// re-importing the same upload folds into the same event.
+    pub prefix: String,
+    /// Keep the path of every skipped entry (the command line lists them).
+    pub keep_paths: bool,
+    /// Keep at most this many error texts.
+    pub max_errors: usize,
+    /// Count the FIT files by kind (one query each).
+    pub kinds: bool,
+    /// Error texts say what went wrong without server paths (for a browser), and the cause of an
+    /// ingest failure goes to the log only.
+    pub plain_errors: bool,
+}
+
+impl Options {
+    /// What `import-export` does: everything kept, texts as they come.
+    pub fn cli(limits: Limits, owner: Option<i64>) -> Self {
+        Self {
+            limits,
+            owner,
+            prefix: String::new(),
+            keep_paths: true,
+            max_errors: usize::MAX,
+            kinds: false,
+            plain_errors: false,
+        }
+    }
+}
+
+/// The FIT file type (the `type` of its `file_id`) as a short word for the import summary.
+pub fn kind_name(file_type: Option<i64>) -> &'static str {
+    match file_type {
+        Some(4) => "activity",
+        Some(15 | 28 | 32) => "monitoring",
+        Some(49) => "sleep",
+        Some(44) => "metrics",
+        _ => "other",
+    }
 }
 
 enum Item {
@@ -72,8 +126,15 @@ pub async fn run(
     limits: Limits,
     owner: Option<i64>,
 ) -> Result<Report> {
+    run_with(state, input, Options::cli(limits, owner)).await
+}
+
+/// [`run`] with every choice spelled out. `input` is an archive, a directory, or one file (a zip is
+/// told from a plain file by its first bytes, never by its name).
+pub async fn run_with(state: &AppState, input: &Path, opts: Options) -> Result<Report> {
     let (tx, mut rx) = mpsc::channel::<Item>(8);
     let (root, input) = (state.data_dir.as_ref().clone(), input.to_path_buf());
+    let (limits, prefix) = (opts.limits.clone(), opts.prefix.clone());
     let walker = tokio::task::spawn_blocking(move || {
         let mut w = Walker {
             root,
@@ -83,23 +144,34 @@ pub async fn run(
             entries: 0,
             stop: false,
         };
-        w.start(&input);
+        w.start(&input, &prefix);
     });
 
     let mut r = Report::default();
+    let owner = opts.owner;
+    let fail = |r: &mut Report, text: String| {
+        r.failed += 1;
+        if r.errors.len() < opts.max_errors {
+            r.errors.push(text);
+        }
+    };
     while let Some(item) = rx.recv().await {
         match item {
             Item::Other(ext, path) => {
                 r.scanned += 1;
-                r.non_fit.entry(ext).or_default().push(path);
+                r.skipped += 1;
+                let paths = r.non_fit.entry(ext).or_default();
+                if opts.keep_paths {
+                    paths.push(path);
+                }
             }
             Item::Container => r.scanned += 1,
             Item::UnsafeName(n) => r.unsafe_names.push(n),
             Item::EntryError(e) => {
                 r.scanned += 1;
-                r.errors.push(e);
+                fail(&mut r, e);
             }
-            Item::Error(e) => r.errors.push(e),
+            Item::Error(e) => fail(&mut r, e),
             Item::Fit(path, blob) => {
                 r.scanned += 1;
                 let meta = Meta {
@@ -111,9 +183,28 @@ pub async fn run(
                     watch_timestamp: None,
                 };
                 match ingest::ingest(state, &blob, None, owner, meta, Some(path.clone())).await {
-                    Ok(true) => r.fit_new += 1,
-                    Ok(false) => r.fit_present += 1,
-                    Err(e) => r.errors.push(format!("{path}: ingest failed: {e:#}")),
+                    Ok(created) => {
+                        if created {
+                            r.fit_new += 1;
+                        } else {
+                            r.fit_present += 1;
+                        }
+                        if opts.kinds {
+                            let file_type: Option<Option<i64>> = sqlx::query_scalar(
+                                "SELECT file_type FROM sources WHERE sha256 = ?",
+                            )
+                            .bind(&blob.sha256)
+                            .fetch_optional(&state.pool)
+                            .await
+                            .unwrap_or(None);
+                            *r.kinds.entry(kind_name(file_type.flatten())).or_default() += 1;
+                        }
+                    }
+                    Err(e) if opts.plain_errors => {
+                        tracing::error!(error = format!("{e:#}"), "import: ingest failed");
+                        fail(&mut r, format!("{path}: could not be stored"));
+                    }
+                    Err(e) => fail(&mut r, format!("{path}: ingest failed: {e:#}")),
                 }
             }
         }
@@ -176,14 +267,31 @@ impl Walker {
         self.stop = true;
     }
 
-    fn start(&mut self, input: &Path) {
+    /// `prefix` goes in front of every path (for a single file it is the file's own name).
+    fn start(&mut self, input: &Path, prefix: &str) {
         if input.is_dir() {
-            self.walk_dir(input, "", 0);
-        } else {
-            match File::open(input) {
-                Ok(f) => self.walk_zip(f, "", 0),
-                Err(e) => self.container_error(&input.display().to_string(), e),
-            }
+            self.walk_dir(input, prefix, 0);
+            return;
+        }
+        let mut f = match File::open(input) {
+            Ok(f) => f,
+            Err(e) => return self.container_error(&input.display().to_string(), e),
+        };
+        // A zip is told by its first bytes; anything else is one file to classify (a plain .fit).
+        let mut magic = Vec::with_capacity(4);
+        let sniffed = (|| {
+            (&mut f).take(4).read_to_end(&mut magic)?;
+            f.rewind()?;
+            f.metadata()
+        })();
+        let md = match sniffed {
+            Ok(md) => md,
+            Err(e) => return self.container_error(&input.display().to_string(), e),
+        };
+        if magic.starts_with(b"PK") || prefix.is_empty() {
+            self.walk_zip(f, prefix, 0);
+        } else if self.count_entry() {
+            self.classify(f, prefix, md.len(), 0);
         }
     }
 

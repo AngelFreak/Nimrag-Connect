@@ -137,6 +137,13 @@ export const DownloadIcon = (p: IconProps) => (
     <path d="M4 15v4a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-4" />
   </Svg>
 );
+/** An arrow going into a panel: bring a file in. */
+export const ImportIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M3 12h11M10 8l4 4-4 4" />
+    <path d="M14 5h5a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1h-5" />
+  </Svg>
+);
 export const InfoIcon = (p: IconProps) => (
   <Svg {...p}>
     <circle cx="12" cy="12" r="9" />

@@ -28,6 +28,7 @@ import { TrainingStatusPage } from './pages/TrainingStatusPage';
 import { WatchPage } from './pages/WatchPage';
 import { WorkoutPage } from './pages/WorkoutPage';
 import { WorkoutListPage } from './pages/workouts/WorkoutListPage';
+import { GarminImportPage } from './pages/profile/GarminImportPage';
 import { GarminPage } from './pages/profile/GarminPage';
 import { GoalsPage } from './pages/profile/GoalsPage';
 import { PasswordPage } from './pages/profile/PasswordPage';
@@ -86,6 +87,7 @@ export function App() {
               <Route path="timezone" element={<TimezonePage />} />
               <Route path="goals" element={<GoalsPage />} />
               <Route path="garmin" element={<GarminPage />} />
+              <Route path="import-garmin" element={<GarminImportPage />} />
             </Route>
           </Route>
         </Route>

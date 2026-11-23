@@ -703,6 +703,27 @@ non-root user with `/data` as a volume.
 Testing note: `derive::DERIVE_OVERRIDE` is a test-only seam. Tests that set it
 must live in `tests/derive_shared.rs` and hold its lock.
 
+## Import from Garmin in the web app
+
+`POST /api/import/garmin?name=<file name>` (session cookie of a user with data, `X-Nimrag: 1`; an admin
+gets 403) takes the raw bytes of a file the user exported from Garmin: one activity's original from
+Garmin Connect (a zip holding a `.fit`), the whole account export (one big zip, FIT originals in nested
+zips) or a plain `.fit`. The body is streamed to `<data>/files/.incoming/` (hashed on the way, never held
+in memory; more than `--max-import-bytes` / `$NIMRAG_MAX_IMPORT_BYTES`, default 8 GiB, gets 413) and read
+from there by the walker `import-export` uses, so the same rules apply: nested zips at any depth within
+the limits, FIT told by its header bytes, every FIT through `ingest` with `source = import` and the
+signed-in user as owner, `origin` = the uploaded name plus the path inside. Re-importing is idempotent;
+the watch's rank rules decide the rest (a Garmin Connect JSON activity is hidden by the FIT of the same
+activity, whichever came first). The answer (`GarminImportResponse`) holds the counts: `fit_found`,
+`new`, `already_present`, `skipped` (not FIT), `failed`, up to 20 short `errors` and the FIT files by
+`kinds`.
+
+The request is synchronous and answers when the last file is in (minutes for a multi-gigabyte export).
+The work is a detached task on blocking threads, so other requests are not held up and a client that
+gives up leaves a finished import. At most two imports run at once (a third gets 429). The reverse proxy
+must not cut a long wait for the response; Caddy has no such timeout by default. A background job with a
+status endpoint would be the next step if a proxy in front does.
+
 ## Importing a Garmin data export
 
 ```

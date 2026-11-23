@@ -24,6 +24,7 @@ export type { EnrolRequest } from "./EnrolRequest";
 export type { GarminBackfillMode } from "./GarminBackfillMode";
 export type { GarminBackfillRequest } from "./GarminBackfillRequest";
 export type { GarminBackfillResponse } from "./GarminBackfillResponse";
+export type { GarminImportResponse } from "./GarminImportResponse";
 export type { GarminImportTokens } from "./GarminImportTokens";
 export type { GarminLoginRequest } from "./GarminLoginRequest";
 export type { GarminLoginResponse } from "./GarminLoginResponse";

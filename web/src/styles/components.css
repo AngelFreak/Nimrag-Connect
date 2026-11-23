@@ -1257,6 +1257,114 @@
   color: var(--link);
 }
 
+/* Import from Garmin: the drop target and the list of files being sent. */
+.dropzone {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 24px 16px;
+  min-height: 132px;
+  text-align: center;
+  border: 2px dashed var(--line-strong);
+  border-radius: var(--radius-card);
+  background: var(--card);
+  color: var(--link);
+  cursor: pointer;
+}
+.dropzone:hover,
+.dropzone--over {
+  border-color: var(--accent);
+  background: var(--raised);
+}
+.dropzone:focus-within {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.dropzone__title {
+  font-size: var(--fs-md);
+  font-weight: 600;
+  color: var(--text);
+}
+.dropzone__hint {
+  font-size: var(--fs-base);
+  color: var(--text-2);
+}
+.import-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.import-item {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+.import-item + .import-item {
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+.import-item__head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+}
+.import-item__name {
+  font-weight: 600;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.import-item__size {
+  flex: none;
+  color: var(--text-2);
+  font-size: var(--fs-sm);
+}
+.import-item__line {
+  font-size: var(--fs-base);
+  line-height: 1.5;
+  color: var(--text-2);
+  overflow-wrap: anywhere;
+}
+.import-item__result {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.import-item__headline {
+  font-size: var(--fs-base);
+  font-weight: 600;
+  color: var(--energy);
+}
+.import-item__headline--warn {
+  color: var(--warn);
+}
+.import-item__errors summary {
+  min-height: var(--touch);
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  color: var(--link);
+}
+.import-item__errors ul {
+  margin: 0 0 6px;
+  padding-left: 18px;
+  font-size: var(--fs-sm);
+  color: var(--text-2);
+  overflow-wrap: anywhere;
+}
+.import-item__actions {
+  display: flex;
+  gap: 10px;
+}
+
 .stat-link {
   display: block;
   color: inherit;

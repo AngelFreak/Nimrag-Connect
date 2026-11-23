@@ -105,16 +105,87 @@ export async function apiFetch<T = unknown>(path: string, options: RequestOption
   if (res.ok) return data as T;
 
   if (res.status === 401) {
-    if (options.redirectOn401 !== false) {
-      // The session is gone: do not leave the last signed-in user's data readable offline.
-      await clearOfflineApiCache();
-      // In the Android app the app itself signs in again (fingerprint or password); the web app
-      // shows no login page there. A browser, or an app without the call, gets the login page.
-      if (!notifySessionExpired()) onUnauthorized();
-    }
+    if (options.redirectOn401 !== false) await handleSessionLost();
     throw new UnauthorizedError(errorMessage(data, 'Not logged in'), data);
   }
   throw new ApiError(res.status, errorMessage(data, res.statusText || `HTTP ${res.status}`), data);
+}
+
+/** The server said 401 on a session-protected call: forget what was cached and ask for a new login. */
+async function handleSessionLost(): Promise<void> {
+  // The session is gone: do not leave the last signed-in user's data readable offline.
+  await clearOfflineApiCache();
+  // In the Android app the app itself signs in again (fingerprint or password); the web app
+  // shows no login page there. A browser, or an app without the call, gets the login page.
+  if (!notifySessionExpired()) onUnauthorized();
+}
+
+export interface UploadOptions {
+  /** Called as bytes go out; `total` is the file's size. */
+  onProgress?: (loaded: number, total: number) => void;
+  /** Called once every byte is sent and the server is working on the answer. */
+  onSent?: () => void;
+  signal?: AbortSignal;
+}
+
+/**
+ * POST one file as the raw request body and read the JSON answer. `fetch` cannot report upload
+ * progress, so this uses XMLHttpRequest. Same rules as `apiFetch`: same-origin cookies, the CSRF
+ * header, typed errors, and a 401 sends the person to the login page. An abort rejects with an
+ * `AbortError` (a `DOMException`).
+ */
+export function uploadFile<T = unknown>(path: string, file: Blob, options: UploadOptions = {}): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const { signal, onProgress, onSent } = options;
+    if (signal?.aborted) {
+      reject(new DOMException('Aborted', 'AbortError'));
+      return;
+    }
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', path);
+    xhr.withCredentials = true;
+    xhr.setRequestHeader('Accept', 'application/json');
+    xhr.setRequestHeader('X-Nimrag', '1');
+    xhr.setRequestHeader('Content-Type', 'application/octet-stream');
+    const onAbort = () => xhr.abort();
+    signal?.addEventListener('abort', onAbort);
+    const done = () => signal?.removeEventListener('abort', onAbort);
+
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable) onProgress?.(e.loaded, e.total);
+    };
+    xhr.upload.onload = () => onSent?.();
+    xhr.onerror = () => {
+      done();
+      reject(new NetworkError());
+    };
+    xhr.onabort = () => {
+      done();
+      reject(new DOMException('Aborted', 'AbortError'));
+    };
+    xhr.onload = () => {
+      done();
+      const text = xhr.responseText;
+      let data: unknown;
+      if ((xhr.getResponseHeader('content-type') ?? '').includes('json')) {
+        try {
+          data = text ? JSON.parse(text) : undefined;
+        } catch {
+          data = text;
+        }
+      } else {
+        data = text || undefined;
+      }
+      if (xhr.status >= 200 && xhr.status < 300) {
+        resolve(data as T);
+      } else if (xhr.status === 401) {
+        void handleSessionLost().then(() => reject(new UnauthorizedError(errorMessage(data, 'Not logged in'), data)));
+      } else {
+        reject(new ApiError(xhr.status, errorMessage(data, xhr.statusText || `HTTP ${xhr.status}`), data));
+      }
+    };
+    xhr.send(file);
+  });
 }
 
 export const api = {

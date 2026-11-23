@@ -11,7 +11,7 @@ usage:
   nimrag-server serve [--data-dir DIR] [--listen ADDR] [--log-json] [--insecure-cookies]
                       [--trusted-proxy CIDR[,CIDR...]] [--tiles-dir DIR] [--no-gps-assist]
                       [--backup-dir DIR [--backup-every 24h] [--backup-keep 7]]
-                      [--weather on|off] [--weather-url URL]
+                      [--weather on|off] [--weather-url URL] [--max-import-bytes N]
   nimrag-server user set-password [--username NAME] [--data-dir DIR]
                                                    read the new password from stdin (default user: the only admin)
   nimrag-server user reset-2fa --username NAME [--data-dir DIR]
@@ -48,6 +48,8 @@ usage:
   /tiles/<name>.pmtiles (map tiles for the web app); without it /tiles/* is a 404.
 --no-gps-assist (or NIMRAG_GPS_ASSIST=off) switches off GET /api/device/gps-assist, the only place this server
   contacts Garmin (satellite data for the watch's GPS, fetched on the phone's behalf); on otherwise.
+--max-import-bytes (or $NIMRAG_MAX_IMPORT_BYTES) is the largest Garmin export the web app's Import from Garmin page takes
+  (default 8 GiB; larger gets 413). The upload is kept on disk next to the files while it is read.
 --backup-dir (or $NIMRAG_BACKUP_DIR) makes serve back up by itself: every --backup-every ($NIMRAG_BACKUP_EVERY,
   default 24h; 30m, 6h, 1d) a folder nimrag-backup-<UTC time> with a database snapshot and the files, of which
   the newest --backup-keep ($NIMRAG_BACKUP_KEEP, default 7) stay. Without --backup-dir nothing is backed up.
@@ -71,6 +73,7 @@ struct Opts {
     backup_dir: Option<PathBuf>,
     backup_every: Duration,
     backup_keep: usize,
+    max_import: usize,
     from: Option<PathBuf>,
     keep: Option<usize>,
     out: Option<PathBuf>,
@@ -133,6 +136,10 @@ fn parse_opts(args: &[String]) -> Result<Opts> {
             Some(v) => number(&v).context("NIMRAG_BACKUP_KEEP")?,
             None => 7,
         },
+        max_import: match env_text("NIMRAG_MAX_IMPORT_BYTES") {
+            Some(v) => number(&v).context("NIMRAG_MAX_IMPORT_BYTES")?,
+            None => api::MAX_IMPORT_BYTES,
+        },
         from: None,
         keep: None,
         out: None,
@@ -174,6 +181,7 @@ fn parse_opts(args: &[String]) -> Result<Opts> {
                     backup::parse_interval(&value("--backup-every")?).context("--backup-every")?;
             }
             "--backup-keep" => o.backup_keep = number(&value("--backup-keep")?)?,
+            "--max-import-bytes" => o.max_import = number(&value("--max-import-bytes")?)?,
             "--keep" => o.keep = Some(number(&value("--keep")?)?),
             "--from" => o.from = Some(value("--from")?.into()),
             "--out" => o.out = Some(value("--out")?.into()),
@@ -468,6 +476,7 @@ async fn serve(o: Opts) -> Result<()> {
         tracing::warn!(swept, "removed leftovers of interrupted uploads");
     }
     let state = api::AppState::new(pool, o.data_dir, api::MAX_BODY_BYTES)
+        .with_max_import(o.max_import)
         .with_insecure_cookies(o.insecure_cookies)
         .with_trusted_proxies(o.trusted_proxies.clone())
         .with_tiles_dir(o.tiles_dir.clone())

@@ -19,6 +19,8 @@ use std::sync::Arc;
 
 /// Default upload size limit.
 pub const MAX_BODY_BYTES: usize = 64 * 1024 * 1024;
+/// Default size limit of `POST /api/import/garmin` (a whole Garmin account export is several GB).
+pub const MAX_IMPORT_BYTES: usize = 8 * 1024 * 1024 * 1024;
 /// Largest JSON body on the owner API (everything but the device upload).
 pub const MAX_JSON_BYTES: usize = 64 * 1024;
 /// The login bodies carry a password and a code.
@@ -29,6 +31,10 @@ pub struct AppState {
     pub pool: SqlitePool,
     pub data_dir: Arc<PathBuf>,
     pub max_body: usize,
+    /// Size limit of the Garmin import upload (`--max-import-bytes`).
+    pub max_import: usize,
+    /// Permits for `POST /api/import/garmin` (see `web_api::garmin_import::MAX_IMPORTS`).
+    pub(crate) import_gate: Arc<tokio::sync::Semaphore>,
     /// Serialises sidecar read-modify-write.
     pub(crate) ledger_lock: Arc<tokio::sync::Mutex<()>>,
     /// Session cookies without `Secure` (plain-http LAN use; `--insecure-cookies`).
@@ -62,6 +68,10 @@ impl AppState {
             pool,
             data_dir: Arc::new(data_dir),
             max_body,
+            max_import: MAX_IMPORT_BYTES,
+            import_gate: Arc::new(tokio::sync::Semaphore::new(
+                crate::web_api::garmin_import::MAX_IMPORTS,
+            )),
             ledger_lock: Default::default(),
             insecure_cookies: false,
             limiter: Default::default(),
@@ -88,6 +98,12 @@ impl AppState {
     /// Believe `X-Forwarded-For` from these peers when naming the login client.
     pub fn with_trusted_proxies(mut self, nets: Vec<crate::auth::Cidr>) -> Self {
         self.trusted_proxies = Arc::new(nets);
+        self
+    }
+
+    /// Largest body `POST /api/import/garmin` takes (larger gets 413).
+    pub fn with_max_import(mut self, bytes: usize) -> Self {
+        self.max_import = bytes;
         self
     }
 
@@ -135,7 +151,7 @@ fn system_now() -> i64 {
 }
 
 pub fn router(state: AppState) -> Router {
-    let max_body = state.max_body;
+    let (max_body, max_import) = (state.max_body, state.max_import);
     let mut app = Router::new();
     if state.tiles_dir.is_some() {
         // Signed-in users only; without the option `/tiles/*` is a 404 (the web fallback).
@@ -151,6 +167,11 @@ pub fn router(state: AppState) -> Router {
             post(upload).layer(DefaultBodyLimit::max(max_body)),
         )
         .route("/api/files/{sha256}", get(file_info))
+        // The other large body: a Garmin export the signed-in user picked in the web app.
+        .route(
+            "/api/import/garmin",
+            post(crate::web_api::garmin_import::import).layer(DefaultBodyLimit::max(max_import)),
+        )
         .merge(crate::web_api::router())
         .merge(crate::weather::routes())
         .fallback(crate::web::handler) // the web app (SPA); /api/* misses stay 404

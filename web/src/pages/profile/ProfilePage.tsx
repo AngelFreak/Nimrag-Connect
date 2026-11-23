@@ -7,6 +7,7 @@ import {
   DownloadIcon,
   FilesIcon,
   GlobeIcon,
+  ImportIcon,
   InfoIcon,
   KeyIcon,
   LogoutIcon,
@@ -91,6 +92,7 @@ function UserRows() {
             download={EXPORT_URL}
             downloadName={exportFileName(me.data?.username, todayIn(s?.timezone))}
           />
+          <SettingsRow icon={<ImportIcon />} tone="sleep" title="Import from Garmin" value="Files you exported from Garmin" to="/profile/import-garmin" />
         </SettingsGroup>
       </div>
       <div data-pane="preferences">

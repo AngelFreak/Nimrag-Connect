@@ -17,6 +17,7 @@ pub mod body;
 pub mod daily;
 pub mod days;
 pub mod export;
+pub mod garmin_import;
 pub mod hrv;
 pub mod metrics;
 pub mod prefs;
@@ -318,6 +319,7 @@ pub fn export_types(dir: &Path) -> anyhow::Result<()> {
         system::DevicesResponse,
         system::StorageResponse,
         system::AboutResponse,
+        garmin_import::GarminImportResponse,
         garmin::GarminStatus,
         garmin::GarminLoginRequest,
         garmin::GarminLoginResponse,
