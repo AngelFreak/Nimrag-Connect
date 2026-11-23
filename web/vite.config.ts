@@ -37,6 +37,10 @@ export default defineConfig({
         navigateFallback: '/index.html',
         navigateFallbackDenylist: [/^\/api\//, /^\/tiles\//],
         cleanupOutdatedCaches: true,
+        // Take over the page that registered the worker. Without this the worker only controls the
+        // next page load, and the Android app keeps one page open for days (and reloads it with no
+        // worker after a server update), so nothing reached the offline API cache.
+        clientsClaim: true,
         runtimeCaching: [
           {
             // Offline viewing: network first, fall back to the last good response.

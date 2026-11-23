@@ -42,3 +42,20 @@ export function listenForFreshData(
     win.document.removeEventListener('visibilitychange', onVisibility);
   };
 }
+
+/**
+ * Fills the offline cache once the service worker takes over the open page: what the page loaded
+ * before that went straight to the network and was not stored, so the active queries fetch again,
+ * this time through the worker. Returns the function that removes the listener.
+ */
+export function refetchWhenWorkerTakesOver(
+  client: QueryClient,
+  container: ServiceWorkerContainer | undefined = navigator.serviceWorker,
+): () => void {
+  if (!container) return () => undefined;
+  const onControllerChange = () => {
+    void client.refetchQueries({ type: 'active' });
+  };
+  container.addEventListener('controllerchange', onControllerChange);
+  return () => container.removeEventListener('controllerchange', onControllerChange);
+}

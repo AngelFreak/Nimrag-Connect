@@ -18,7 +18,7 @@ import './styles/settings.css';
 
 import { App } from './App';
 import { queryClient } from './api/queryClient';
-import { listenForFreshData } from './dataRefresh';
+import { listenForFreshData, refetchWhenWorkerTakesOver } from './dataRefresh';
 
 const root = document.getElementById('root');
 if (!root) throw new Error('missing #root');
@@ -41,6 +41,7 @@ listenForFreshData(queryClient);
 // worker only on navigation, and the Android app keeps one page open for days, so also check when
 // the page comes back to the foreground and every hour; a new worker reloads the page (autoUpdate).
 if (import.meta.env.PROD) {
+  refetchWhenWorkerTakesOver(queryClient);
   registerSW({
     immediate: true,
     onRegisteredSW(_url, registration) {

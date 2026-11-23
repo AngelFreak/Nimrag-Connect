@@ -1,6 +1,6 @@
 import { QueryClient, QueryObserver } from '@tanstack/react-query';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { DATA_REFRESH_DEBOUNCE_MS, listenForFreshData } from './dataRefresh';
+import { DATA_REFRESH_DEBOUNCE_MS, listenForFreshData, refetchWhenWorkerTakesOver } from './dataRefresh';
 import { NATIVE_DATA_EVENT } from './native';
 
 function setVisibility(state: 'visible' | 'hidden') {
@@ -122,5 +122,28 @@ describe('listenForFreshData with a real query client', () => {
     stop();
     unsubscribe();
     client.clear();
+  });
+});
+
+describe('refetchWhenWorkerTakesOver', () => {
+  it('refetches the active queries when the service worker takes over the page', () => {
+    const client = new QueryClient();
+    const refetch = vi.spyOn(client, 'refetchQueries').mockResolvedValue();
+    const container = new EventTarget() as ServiceWorkerContainer;
+    const stop = refetchWhenWorkerTakesOver(client, container);
+
+    expect(refetch).not.toHaveBeenCalled();
+    container.dispatchEvent(new Event('controllerchange'));
+    expect(refetch).toHaveBeenCalledWith({ type: 'active' });
+
+    stop();
+    container.dispatchEvent(new Event('controllerchange'));
+    expect(refetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('does nothing without service workers', () => {
+    const client = new QueryClient();
+    const stop = refetchWhenWorkerTakesOver(client, undefined);
+    expect(() => stop()).not.toThrow();
   });
 });
