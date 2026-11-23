@@ -190,7 +190,10 @@ mod with_profile {
 
     #[tokio::test]
     async fn every_wellness_table_gets_a_row() {
-        need_profile!();
+        // Includes SpO2 and max-MET rows, which Nimrag's own map lacks.
+        if !nimrag_core::fit::profile::garmin_profile() {
+            return;
+        }
         let e = common::env().await;
         let f = FitBuilder::new()
             .message(

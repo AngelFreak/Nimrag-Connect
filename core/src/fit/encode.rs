@@ -9,9 +9,9 @@
 //!   the field numbers, base types, scale/offset and enum values all come from
 //!   `core::fit::profile` lookups by name, so no profile table lives in this
 //!   file (docs/LICENSING.md, IMPLEMENTATION_PLAN.md "Profile-dependent code").
-//!   Without a generated profile (`NIMRAG_FIT_PROFILE=none`, the committed
-//!   configuration) every builder call answers [`EncodeError::Unavailable`]:
-//!   encoding never produces wrong bytes.
+//!   Without a profile (the committed empty table), or with only Nimrag's own
+//!   partial map when it lacks a name the writer asks for, every builder call
+//!   answers [`EncodeError::Unavailable`]: encoding never produces wrong bytes.
 //!
 //! The base types (size, invalid value, little-endian bytes), the file
 //! layout (14-byte header with CRC, definition then data records, trailing CRC)
@@ -63,8 +63,9 @@ const MAX_FIELDS: usize = 255;
 /// Why encoding failed. Every variant leaves no partial output.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum EncodeError {
-    /// No FIT profile was compiled in (`NIMRAG_FIT_PROFILE=none` or no generated
-    /// table): message and field numbers are unknown, so nothing is written.
+    /// This build cannot write the file: no FIT profile was compiled in
+    /// (`NIMRAG_FIT_PROFILE=empty`), or only Nimrag's own partial map, which
+    /// lacks a message, field or enum value the writer needs. Nothing is written.
     Unavailable,
     UnknownMessage(String),
     UnknownField {
@@ -504,6 +505,18 @@ pub fn records_to_file(definitions: &[u8], records: &[Vec<u8>]) -> Result<Vec<u8
 
 // ---- typed messages by profile name --------------------------------------------------
 
+/// A name the compiled-in table lacks. With a Garmin profile that is a specific
+/// error (the writer asks for something the profile should have). With only
+/// Nimrag's own partial map (`cfg(fit_map)`) it means this build cannot write
+/// that message: [`EncodeError::Unavailable`], the same answer as no profile.
+fn miss(e: EncodeError) -> EncodeError {
+    if cfg!(fit_map) {
+        EncodeError::Unavailable
+    } else {
+        e
+    }
+}
+
 /// Builds one message from names. Everything it needs is looked up in the
 /// profile; the first lookup fails with [`EncodeError::Unavailable`] when there
 /// is none.
@@ -521,7 +534,7 @@ impl MessageBuilder {
             return Err(EncodeError::Unavailable);
         }
         let global = profile::message_number(message)
-            .ok_or_else(|| EncodeError::UnknownMessage(message.to_owned()))?;
+            .ok_or_else(|| miss(EncodeError::UnknownMessage(message.to_owned())))?;
         Ok(Self {
             name: message.to_owned(),
             global,
@@ -535,9 +548,11 @@ impl MessageBuilder {
     }
 
     fn lookup(&self, field: &str) -> Result<(u8, &'static FieldInfo), EncodeError> {
-        profile::field_by_name(self.global, field).ok_or_else(|| EncodeError::UnknownField {
-            message: self.name.clone(),
-            field: field.to_owned(),
+        profile::field_by_name(self.global, field).ok_or_else(|| {
+            miss(EncodeError::UnknownField {
+                message: self.name.clone(),
+                field: field.to_owned(),
+            })
         })
     }
 
@@ -668,12 +683,13 @@ impl MessageBuilder {
     /// (`"intensity"`, `"warmup"`). The field's profile type names the table.
     pub fn enum_name(&mut self, field: &str, value: &str) -> Result<&mut Self, EncodeError> {
         let (num, info) = self.lookup(field)?;
-        let raw =
-            profile::enum_value(info.type_name, value).ok_or_else(|| EncodeError::UnknownEnum {
+        let raw = profile::enum_value(info.type_name, value).ok_or_else(|| {
+            miss(EncodeError::UnknownEnum {
                 message: self.name.clone(),
                 field: field.to_owned(),
                 value: value.to_owned(),
-            })?;
+            })
+        })?;
         match int_bytes(info.base_type, i128::from(raw)) {
             Some(b) => self.store(num, info.base_type, b, field)?,
             None => return Err(self.range(field)),
@@ -695,17 +711,20 @@ impl MessageBuilder {
             .subfields
             .iter()
             .find(|s| s.name == subfield)
-            .ok_or_else(|| EncodeError::UnknownSubfield {
-                message: self.name.clone(),
-                field: field.to_owned(),
-                subfield: subfield.to_owned(),
+            .ok_or_else(|| {
+                miss(EncodeError::UnknownSubfield {
+                    message: self.name.clone(),
+                    field: field.to_owned(),
+                    subfield: subfield.to_owned(),
+                })
             })?;
-        let raw =
-            profile::enum_value(sub.type_name, value).ok_or_else(|| EncodeError::UnknownEnum {
+        let raw = profile::enum_value(sub.type_name, value).ok_or_else(|| {
+            miss(EncodeError::UnknownEnum {
                 message: self.name.clone(),
                 field: field.to_owned(),
                 value: value.to_owned(),
-            })?;
+            })
+        })?;
         match int_bytes(info.base_type, i128::from(raw)) {
             Some(b) => self.store(num, info.base_type, b, field)?,
             None => return Err(self.range(field)),
@@ -751,10 +770,12 @@ impl MessageBuilder {
             .subfields
             .iter()
             .find(|s| s.name == subfield)
-            .ok_or_else(|| EncodeError::UnknownSubfield {
-                message: self.name.clone(),
-                field: field.to_owned(),
-                subfield: subfield.to_owned(),
+            .ok_or_else(|| {
+                miss(EncodeError::UnknownSubfield {
+                    message: self.name.clone(),
+                    field: field.to_owned(),
+                    subfield: subfield.to_owned(),
+                })
             })?;
         let raw = (value + sub.offset.unwrap_or(0.0)) * sub.scale.unwrap_or(1.0);
         self.store_scaled(num, info.base_type, raw, field)?;
@@ -1088,7 +1109,7 @@ mod tests {
 
     /// The committed configuration has no profile: encoding must say so and
     /// never return bytes. (This test runs when `NIMRAG_FIT_PROFILE=none`.)
-    #[cfg(not(fit_profile))]
+    #[cfg(not(any(fit_profile, fit_map)))]
     #[test]
     fn without_a_profile_encoding_is_unavailable() {
         assert!(!profile::available());
@@ -1103,6 +1124,39 @@ mod tests {
         assert!(EncodeError::Unavailable
             .to_string()
             .contains("no FIT profile"));
+    }
+
+    /// With only Nimrag's own partial map a name it lacks means "this build cannot
+    /// write that": `Unavailable`, never a specific error and never bytes.
+    #[cfg(fit_map)]
+    #[test]
+    fn with_the_partial_map_missing_names_are_unavailable() {
+        assert!(profile::available());
+        // file_id is in the map ...
+        let mut id = MessageBuilder::new("file_id").unwrap();
+        id.uint("serial_number", 1).unwrap();
+        // ... but not its `workout` file type, nor a field it does not have
+        assert_eq!(
+            id.enum_name("type", "workout").unwrap_err(),
+            EncodeError::Unavailable
+        );
+        assert_eq!(
+            id.uint("no_such_field", 1).unwrap_err(),
+            EncodeError::Unavailable
+        );
+        assert_eq!(
+            id.sub_enum_name("product", "garmin_product", "connect")
+                .unwrap_err(),
+            EncodeError::Unavailable
+        );
+        // messages the map lacks
+        for m in ["workout", "workout_step", "weather_conditions", "memo_glob"] {
+            assert_eq!(
+                MessageBuilder::new(m).unwrap_err(),
+                EncodeError::Unavailable,
+                "{m}"
+            );
+        }
     }
 
     #[cfg(fit_profile)]

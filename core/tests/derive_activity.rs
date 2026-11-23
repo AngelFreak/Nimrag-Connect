@@ -1,10 +1,12 @@
 //! Activity parser tests: synthetic FIT through decode -> derive (needs the
-//! generated profile; without it `derive` must refuse), plus private replay.
+//! generated Garmin profile; with the empty table `derive` must refuse), plus private replay.
 #[cfg(fit_profile)]
 use nimrag_core::crc;
 use nimrag_core::derive::derive;
+// Unused with Nimrag's own map only: the tests that build files need Garmin's profile or none.
+#[cfg_attr(fit_map, allow(unused_imports))]
 use nimrag_core::derive::test_support::{FitBuilder, Fv};
-#[cfg(not(fit_profile))]
+#[cfg(not(any(fit_profile, fit_map)))]
 use nimrag_core::derive::DeriveError;
 #[cfg(fit_profile)]
 use nimrag_core::derive::{Derived, FIT_EPOCH_UNIX};
@@ -49,7 +51,7 @@ fn raw_file(msgs: &[(u16, Vec<RawField>)]) -> Vec<u8> {
     v
 }
 
-#[cfg(not(fit_profile))]
+#[cfg(not(any(fit_profile, fit_map)))]
 #[test]
 fn without_profile_derive_refuses() {
     let bytes = FitBuilder::new().message(0, &[(3, Fv::U32(1))]).build();

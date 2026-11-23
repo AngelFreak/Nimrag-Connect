@@ -69,7 +69,6 @@ use axum::{extract::State, http::StatusCode, routing::post, Json, Router};
 use base64::Engine;
 use nimrag_core::client::WeatherCell;
 use nimrag_core::fit::encode::EncodeError;
-use nimrag_core::fit::profile;
 use nimrag_core::fit::weather::{self as fit, Condition, Forecast, Point};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -542,7 +541,7 @@ async fn device_weather(
     }
     let cell = round_to_cell(req.lat, req.lon)
         .ok_or_else(|| ApiError::bad_request("lat must be -90..90 and lon -180..180"))?;
-    if !profile::available() {
+    if !fit::available() {
         return Err(ApiError::new(StatusCode::SERVICE_UNAVAILABLE, UNAVAILABLE));
     }
     let (forecast, cached, fetched_at) = state

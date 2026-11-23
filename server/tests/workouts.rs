@@ -1,6 +1,6 @@
 //! Workouts (stage 4a): the owner's JSON API, the send-to-watch queue, and the phone's endpoints.
 //! Encoding needs the FIT profile, which is not in every build: the tests branch on
-//! `profile::available()` and check the clear "unavailable" answer where it is missing.
+//! `workout::available()` and check the clear "unavailable" answer where it is missing.
 
 mod common;
 
@@ -10,7 +10,7 @@ use axum::{
 };
 use common::*;
 use http_body_util::BodyExt;
-use nimrag_core::fit::profile;
+use nimrag_core::fit::workout as fit_workout;
 use nimrag_server::users::Role;
 use serde_json::{json, Value};
 use tower::ServiceExt;
@@ -131,7 +131,7 @@ async fn create_read_update_list_and_delete() {
     assert!(w["duration_s"].is_null());
     assert_eq!(list["limits"]["max_steps"], 100);
     assert_eq!(list["limits"]["repeat_min"], 2);
-    assert_eq!(list["watch_send"]["available"], profile::available());
+    assert_eq!(list["watch_send"]["available"], fit_workout::available());
 
     let mut edited = interval_session();
     edited["name"] = json!("  5 x 400 m  ");
@@ -369,7 +369,7 @@ async fn send_to_watch_queues_the_workout_or_says_the_profile_is_missing() {
     let uri = format!("/api/workouts/{id}/send");
 
     let (s, j) = e.send(&c, Method::POST, &uri, json!(null)).await;
-    if profile::available() {
+    if fit_workout::available() {
         assert_eq!(s, StatusCode::OK, "{j}");
         assert_eq!(j["send"]["state"], "queued");
         assert!(j["send"]["requested_at"].is_string());
@@ -446,7 +446,7 @@ async fn the_phone_fetches_the_queue_and_the_fit_file_and_reports_back() {
     );
 
     let (s, h, bytes) = device(&e, Method::GET, &fit_uri, Some(&token), None).await;
-    if profile::available() {
+    if fit_workout::available() {
         assert_eq!(s, StatusCode::OK);
         assert_eq!(h[header::CONTENT_TYPE], "application/octet-stream");
         assert_eq!(h["x-nimrag-revision"], "1");

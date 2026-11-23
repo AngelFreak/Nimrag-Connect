@@ -2,12 +2,19 @@
 //! scale/offset/units, subfields, components and enum value names.
 //!
 //! This file is the API only and contains no profile data. The table
-//! (`MESSAGES`, `ENUMS`, `VERSION`) is generated locally by
-//! `tools/fit-profile/extract.py` (Garmin Connect APK) or `from_sdk.py`
-//! (Garmin's Python FIT SDK) into the git-ignored
-//! `src/fit/generated/profile_data.rs`; `build.rs` selects it (or the committed
-//! empty table) and sets `cfg(fit_profile)`. Without it every lookup returns
-//! `None` and [`available`] is false.
+//! (`MESSAGES`, `ENUMS`, `VERSION`) is one of three, selected by `build.rs`:
+//! - Garmin's profile, generated locally by `tools/fit-profile/extract.py`
+//!   (Garmin Connect APK) or `from_sdk.py` (Garmin's Python FIT SDK) into the
+//!   git-ignored `src/fit/generated/profile_data.rs` (`cfg(fit_profile)`; never
+//!   published);
+//! - Nimrag's own clean-room map, `profile_nimrag.rs` (`cfg(fit_map)`), which
+//!   covers only what Nimrag reads and is the fallback when there is no Garmin
+//!   profile;
+//! - the committed empty table (`NIMRAG_FIT_PROFILE=empty`): every lookup
+//!   returns `None` and [`available`] is false.
+//!
+//! With the Nimrag map [`available`] is true but most messages are missing, so
+//! code that needs a specific message (the FIT writers) checks for it itself.
 //!
 //! Extraction notes (overlay): the app's profile does not record array-ness or a
 //! profile version, so `array` is false and `profile_version()` is None unless a
@@ -172,9 +179,24 @@ const DATA: Tables = Tables {
 };
 const ALL: [Tables; 1] = [DATA];
 
-/// True when a generated profile table was compiled in (`cfg(fit_profile)`).
+/// True when a table with content was compiled in: Garmin's generated profile
+/// (`cfg(fit_profile)`) or Nimrag's own map (`cfg(fit_map)`). The map is partial:
+/// a true answer does not mean any particular message is known (see
+/// [`has_message`]).
 pub fn available() -> bool {
+    cfg!(fit_profile) || cfg!(fit_map)
+}
+
+/// True only when Garmin's generated profile (`cfg(fit_profile)`) is compiled in:
+/// the licence guard of the Android builds asks this, not [`available`], because
+/// Nimrag's own map is allowed in a published build and Garmin's profile is not.
+pub fn garmin_profile() -> bool {
     cfg!(fit_profile)
+}
+
+/// True when the compiled-in table knows this message name.
+pub fn has_message(name: &str) -> bool {
+    message_number(name).is_some()
 }
 
 fn message_in(t: &[Tables], global: u16) -> impl Iterator<Item = &'static MessageInfo> + '_ {
@@ -325,6 +347,42 @@ mod tests {
         assert_eq!(enum_name("mesg_num", 20), Some("record"));
     }
 
+    /// The lookups binary-search: the committed map must be sorted.
+    #[cfg(fit_map)]
+    #[test]
+    fn the_nimrag_map_is_sorted_and_consistent() {
+        assert!(DATA.messages.windows(2).all(|w| w[0].global < w[1].global));
+        for m in DATA.messages {
+            assert!(
+                m.fields.windows(2).all(|w| w[0].num < w[1].num),
+                "{}",
+                m.name
+            );
+            for f in m.fields {
+                for c in f.info.components {
+                    assert!(c.bits > 0 && c.bits <= 64, "{}.{}", m.name, f.info.name);
+                    // a component expands into a field the message has
+                    assert!(
+                        m.fields
+                            .binary_search_by_key(&c.field_num, |x| x.num)
+                            .is_ok(),
+                        "{}.{}",
+                        m.name,
+                        f.info.name
+                    );
+                }
+            }
+        }
+        assert!(DATA.enums.windows(2).all(|w| w[0].0 < w[1].0));
+        for (name, vals) in DATA.enums {
+            assert!(vals.windows(2).all(|w| w[0].0 < w[1].0), "{name}");
+        }
+        assert_eq!(DATA.version, None);
+        // Nimrag's map holds no Garmin data and no writer-only messages.
+        assert!(message_number("workout").is_none());
+        assert!(enum_value("sleep_level", "deep") == Some(3));
+    }
+
     #[test]
     fn unknown_lookups_return_none() {
         assert_eq!(message_name(0xFFFE), None);
@@ -425,7 +483,7 @@ mod tests {
 
     #[test]
     fn availability_matches_build_config() {
-        assert_eq!(available(), cfg!(fit_profile));
+        assert_eq!(available(), cfg!(fit_profile) || cfg!(fit_map));
         if !available() {
             assert!(message_name(20).is_none());
             assert!(message_number("record").is_none());

@@ -306,8 +306,8 @@ async fn main() -> Result<()> {
 
 fn warn_if_no_profile() {
     if !nimrag_core::fit::profile::available() {
-        eprintln!("WARNING: no generated FIT profile compiled in; derived tables (activities, wellness) will NOT be filled. See tools/fit-profile/README.md.");
-        tracing::warn!("FIT profile unavailable: derived tables will not be filled");
+        eprintln!("WARNING: no FIT field map or profile compiled in; derived tables (activities, wellness) will NOT be filled. See tools/fit-profile/README.md.");
+        tracing::warn!("FIT field map unavailable: derived tables will not be filled");
     }
 }
 

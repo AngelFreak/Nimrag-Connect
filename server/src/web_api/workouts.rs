@@ -39,7 +39,7 @@ use axum::{
 };
 use nimrag_core::client::GARMIN_EPOCH_UNIX_S;
 use nimrag_core::fit::encode::EncodeError;
-use nimrag_core::fit::{profile, workout as fit};
+use nimrag_core::fit::workout as fit;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
@@ -426,7 +426,7 @@ fn unavailable() -> ApiError {
 
 /// The FIT file for a stored workout.
 fn encode(state: &AppState, body: &WorkoutBody) -> Res<Vec<u8>> {
-    if !profile::available() {
+    if !fit::available() {
         return Err(unavailable());
     }
     let w = check(body)?;
@@ -439,7 +439,7 @@ fn encode(state: &AppState, body: &WorkoutBody) -> Res<Vec<u8>> {
 }
 
 fn watch_send() -> WatchSend {
-    let available = profile::available();
+    let available = fit::available();
     WatchSend {
         available,
         reason: (!available).then(|| UNAVAILABLE.to_owned()),

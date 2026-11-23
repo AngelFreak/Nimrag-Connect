@@ -473,7 +473,8 @@ async fn zip_layout_headers_times_and_quoting() {
 
 #[tokio::test]
 async fn activity_tables_come_out_joined_by_the_file_column() {
-    if !profile::available() {
+    // Needs every activity table (strength sets among them), which Nimrag's own map lacks.
+    if !profile::garmin_profile() {
         return;
     }
     let t = two_users().await;

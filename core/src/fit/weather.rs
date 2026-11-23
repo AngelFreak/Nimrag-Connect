@@ -163,7 +163,15 @@ const WEEKDAYS: [&str; 7] = [
     "saturday",
 ];
 
-/// Encode a forecast. `Err(Unavailable)` without a profile.
+/// True when the compiled-in profile knows the message a forecast is written in
+/// (always with Garmin's profile; never with Nimrag's own partial map or
+/// without a profile).
+pub fn available() -> bool {
+    profile::has_message("weather_conditions")
+}
+
+/// Encode a forecast. `Err(Unavailable)` when the profile cannot write weather
+/// (see [`available`]).
 pub fn encode(forecast: &Forecast) -> Result<WeatherFit, EncodeError> {
     let (definitions, records) = build(forecast)?.into_parts();
     Ok(WeatherFit {
@@ -174,7 +182,7 @@ pub fn encode(forecast: &Forecast) -> Result<WeatherFit, EncodeError> {
 
 /// The records of a forecast, kept apart by kind of record.
 fn build(forecast: &Forecast) -> Result<RecordSet, EncodeError> {
-    if !profile::available() {
+    if !available() {
         return Err(EncodeError::Unavailable);
     }
     let mut set = RecordSet::new();
@@ -421,9 +429,20 @@ mod tests {
     }
 
     /// The committed configuration has no profile: nothing is written.
-    #[cfg(not(fit_profile))]
+    #[cfg(not(any(fit_profile, fit_map)))]
     #[test]
     fn without_a_profile_the_weather_is_unavailable_never_wrong_bytes() {
+        assert_eq!(encode(&sample()).unwrap_err(), EncodeError::Unavailable);
+        let mut f = sample();
+        f.current.time_unix_s = 0;
+        assert_eq!(encode(&f).unwrap_err(), EncodeError::Unavailable);
+    }
+
+    /// Nimrag's own partial map has no `weather_conditions`: Unavailable, no bytes.
+    #[cfg(fit_map)]
+    #[test]
+    fn with_the_partial_map_the_weather_is_unavailable_never_wrong_bytes() {
+        assert!(!available());
         assert_eq!(encode(&sample()).unwrap_err(), EncodeError::Unavailable);
         let mut f = sample();
         f.current.time_unix_s = 0;

@@ -1,17 +1,20 @@
 //! Wellness parsers over synthetic FIT files. Name/scale dependent tests need the
-//! locally generated profile (`cfg(fit_profile)`); without it `derive` refuses.
+//! locally generated Garmin profile (`cfg(fit_profile)`); without any table (`NIMRAG_FIT_PROFILE=empty`) `derive` refuses.
+// Unused with Nimrag's own map only: the tests that use them need Garmin's profile or none.
+#[cfg_attr(fit_map, allow(unused_imports))]
 use nimrag_core::derive::test_support::{FitBuilder, Fv};
 #[allow(unused_imports)]
 use nimrag_core::derive::{derive, DeriveError, Derived, FIT_EPOCH_UNIX};
 use nimrag_core::fit::decode;
 
+#[cfg_attr(fit_map, allow(dead_code))]
 fn run(b: FitBuilder) -> Result<Derived, DeriveError> {
     let d = decode(&b.build());
     assert_eq!(d.files.len(), 1, "{:?}", d.error);
     derive(&d.files[0])
 }
 
-#[cfg(not(fit_profile))]
+#[cfg(not(any(fit_profile, fit_map)))]
 #[test]
 fn without_profile_derive_is_unavailable() {
     let b = FitBuilder::new().message(55, &[(253, Fv::U32(1_000_000_000)), (27, Fv::U8(60))]);

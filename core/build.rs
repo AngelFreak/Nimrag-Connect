@@ -1,7 +1,17 @@
-//! Selects the FIT profile table: a locally generated, git-ignored file
-//! (`src/fit/generated/profile_data.rs`, or the path in `NIMRAG_FIT_PROFILE`) if
-//! present, else the committed empty table. Sets `cfg(fit_profile)` only for the
-//! former. See tools/fit-profile/README.md.
+//! Selects the FIT table that `core::fit::profile` compiles in.
+//!
+//! `NIMRAG_FIT_PROFILE`:
+//! - unset or empty: the locally generated, git-ignored Garmin profile
+//!   (`src/fit/generated/profile_data.rs`) if present, else Nimrag's own map;
+//! - `none`: no Garmin profile, i.e. Nimrag's own committed map
+//!   (`src/fit/profile_nimrag.rs`);
+//! - `empty`: the committed empty table (every lookup answers None);
+//! - anything else: the path of a generated Garmin profile file.
+//!
+//! `cfg(fit_profile)` (and the marker below) are set only for a Garmin profile,
+//! which must never reach a published artifact. `cfg(fit_map)` is set when
+//! Nimrag's own map is selected: it is clean-room data and may be published.
+//! See tools/fit-profile/README.md and docs/LICENSING.md.
 use std::env;
 use std::fs;
 use std::io::Write;
@@ -17,24 +27,29 @@ const FIT_PROFILE_MARKER: &str = "NIMRAG-FIT-PROFILE-PRESENT-MARKER-7f3a9c";
 
 fn main() {
     println!("cargo::rustc-check-cfg=cfg(fit_profile)");
+    println!("cargo::rustc-check-cfg=cfg(fit_map)");
     println!("cargo::rerun-if-env-changed=NIMRAG_FIT_PROFILE");
     println!("cargo::rerun-if-env-changed={ALLOW_ANDROID_ENV}");
     println!("cargo::rerun-if-changed=build.rs");
     println!("cargo::rerun-if-changed=src/fit/profile_empty.rs");
+    println!("cargo::rerun-if-changed=src/fit/profile_nimrag.rs");
 
     let manifest = PathBuf::from(env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR"));
     let default = manifest.join("src/fit/generated/profile_data.rs");
     println!("cargo::rerun-if-changed={}", default.display());
 
-    let chosen = match env::var_os("NIMRAG_FIT_PROFILE") {
-        // `none` forces the committed empty profile even when a generated one exists.
-        Some(p) if p == "none" => None,
+    // `Some(path)`: a Garmin profile file. `None`: no Garmin profile.
+    let (chosen, empty) = match env::var_os("NIMRAG_FIT_PROFILE") {
+        // `none` forces Nimrag's own map even when a generated profile exists.
+        Some(p) if p == "none" => (None, false),
+        // `empty` forces the committed empty table.
+        Some(p) if p == "empty" => (None, true),
         Some(p) if !p.is_empty() => {
             let p = PathBuf::from(p);
             println!("cargo::rerun-if-changed={}", p.display());
-            Some(p)
+            (Some(p), false)
         }
-        _ => default.is_file().then_some(default),
+        _ => (default.is_file().then_some(default), false),
     };
 
     // Licence guard: a generated profile (Garmin data) must never reach an
@@ -63,7 +78,11 @@ fn main() {
             println!("cargo::rustc-cfg=fit_profile");
             p
         }
-        None => manifest.join("src/fit/profile_empty.rs"),
+        None if empty => manifest.join("src/fit/profile_empty.rs"),
+        None => {
+            println!("cargo::rustc-cfg=fit_map");
+            manifest.join("src/fit/profile_nimrag.rs")
+        }
     };
     fs::copy(&source, &out)
         .unwrap_or_else(|e| panic!("copy {} -> {}: {e}", source.display(), out.display()));

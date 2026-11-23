@@ -166,7 +166,8 @@ async fn ingest_fills_activity_tables_or_reports_no_profile() {
 
 #[tokio::test]
 async fn strength_set_invalid_weight_is_null() {
-    if !profile::available() {
+    // Strength sets are not in Nimrag's own map (no strength file was observed).
+    if !profile::garmin_profile() {
         return;
     }
     let e = env().await;
@@ -277,7 +278,8 @@ fn everything_file() -> Vec<u8> {
 
 #[tokio::test]
 async fn every_activity_table_receives_a_row() {
-    if !profile::available() {
+    // Includes strength sets and exercise titles, which Nimrag's own map lacks.
+    if !profile::garmin_profile() {
         return;
     }
     let e = env().await;

@@ -2,7 +2,7 @@
 //! Every test talks to a local fake Open-Meteo (an axum server on 127.0.0.1:0 that serves a
 //! real answer saved in `fixtures/open-meteo-forecast.json`); nothing reaches the real service.
 //! Writing the FIT bytes needs the FIT profile, which is not in every build: the tests that
-//! need it branch on `profile::available()` and the others check the clear 503 instead.
+//! need it branch on `weather::available()` and the others check the clear 503 instead.
 
 mod common;
 
@@ -18,7 +18,9 @@ use base64::Engine;
 use common::*;
 use http_body_util::BodyExt;
 use nimrag_core::client::WeatherCell;
-use nimrag_core::fit::{decode, encode::records_to_file, interpret::interpret, profile};
+use nimrag_core::fit::{
+    decode, encode::records_to_file, interpret::interpret, weather as fit_weather,
+};
 use nimrag_server::users::Role;
 use nimrag_server::weather::{Weather, WeatherConfig, WeatherError, CACHE_TTL_S};
 use nimrag_server::{api, db, tokens};
@@ -244,7 +246,7 @@ async fn the_kill_switch_answers_503_and_never_contacts_open_meteo() {
 
 #[tokio::test]
 async fn a_server_without_the_fit_profile_says_so_and_fetches_nothing() {
-    if profile::available() {
+    if fit_weather::available() {
         return; // the profile build answers for real, see the tests below
     }
     let r = rig().await;
@@ -258,7 +260,7 @@ async fn a_server_without_the_fit_profile_says_so_and_fetches_nothing() {
 
 #[tokio::test]
 async fn the_answer_is_fit_definitions_and_records_for_the_watch() {
-    if !profile::available() {
+    if !fit_weather::available() {
         return;
     }
     let r = rig().await;
@@ -315,7 +317,7 @@ async fn the_answer_is_fit_definitions_and_records_for_the_watch() {
 
 #[tokio::test]
 async fn the_requested_hours_set_the_number_of_hourly_records() {
-    if !profile::available() {
+    if !fit_weather::available() {
         return;
     }
     let r = rig().await;
@@ -333,7 +335,7 @@ async fn the_requested_hours_set_the_number_of_hourly_records() {
 
 #[tokio::test]
 async fn the_server_rounds_the_position_again_before_it_asks_open_meteo() {
-    if !profile::available() {
+    if !fit_weather::available() {
         return;
     }
     let r = rig().await;
@@ -354,7 +356,7 @@ async fn the_server_rounds_the_position_again_before_it_asks_open_meteo() {
 
 #[tokio::test]
 async fn a_failing_open_meteo_is_a_502_without_a_position_in_the_text() {
-    if !profile::available() {
+    if !fit_weather::available() {
         return;
     }
     for mode in [Mode::Status(500), Mode::Status(429), Mode::Garbage] {
@@ -369,7 +371,7 @@ async fn a_failing_open_meteo_is_a_502_without_a_position_in_the_text() {
 
 #[tokio::test]
 async fn a_slow_open_meteo_is_cut_off_at_the_timeout() {
-    if !profile::available() {
+    if !fit_weather::available() {
         return;
     }
     let r = rig_with(|c| c.timeout = Duration::from_millis(200)).await;
@@ -523,7 +525,7 @@ async fn the_cache_keeps_to_its_size() {
 
 #[tokio::test]
 async fn the_clock_the_tests_pin_is_the_clock_the_endpoint_uses() {
-    if !profile::available() {
+    if !fit_weather::available() {
         return;
     }
     let r = rig().await;

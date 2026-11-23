@@ -7,11 +7,17 @@ generator and the lookup API (`core/src/fit/profile.rs`) are committed.
 `extract.py` reads the jadx output of the owner's own Garmin Connect 5.31
 (versionCode 11761) APK under `private/re/` and writes
 `core/src/fit/generated/profile_data.rs`. `core/build.rs` compiles that file in
-(or the file named by env `NIMRAG_FIT_PROFILE`) and sets `cfg(fit_profile)`;
-without it the committed `core/src/fit/profile_empty.rs` is used, every lookup
-returns `None` and `profile::available()` is false. Tests asserting real names
-run only under `cfg(fit_profile)`. After regenerating, run `cargo test` (build.rs
-reruns on file change).
+(or the file named by env `NIMRAG_FIT_PROFILE`) and sets `cfg(fit_profile)`.
+`NIMRAG_FIT_PROFILE` values: unset, the generated file if present, else Nimrag's
+own clean-room map; `none`, Nimrag's own map even when a generated file exists
+(`core/src/fit/profile_nimrag.rs`, committed, sets `cfg(fit_map)`; names and
+scales only what Nimrag reads, see `docs/LICENSING.md`); `empty`, the committed
+empty table `core/src/fit/profile_empty.rs` (every lookup returns `None`,
+`profile::available()` is false); a path, that generated Garmin profile.
+`cfg(fit_profile)` and the profile marker mean Garmin's profile only. Tests
+asserting Garmin names run only under `cfg(fit_profile)`, tests of the map under
+`cfg(fit_map)`, tests of "no profile" under `not(any(fit_profile, fit_map))`.
+After regenerating, run `cargo test` (build.rs reruns on file change).
 
 Second source (used for the server on runcho since 2026-11-20): `from_sdk.py`
 reads Garmin's Python FIT SDK (`garmin_fit_sdk/profile.py` from the

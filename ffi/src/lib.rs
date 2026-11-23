@@ -31,11 +31,12 @@ pub fn ffi_version() -> String {
     env!("CARGO_PKG_VERSION").to_string()
 }
 
-/// True if a generated FIT profile was compiled in. Must be false in every
-/// Android build; exported so a test can prove it on the real library.
+/// True if Garmin's generated FIT profile was compiled in (Nimrag's own field map
+/// does not count: it is clean-room data and may be published). Must be false in
+/// every public Android build; exported so a test can prove it on the real library.
 #[uniffi::export]
 pub fn fit_profile_compiled_in() -> bool {
-    nimrag_core::fit::profile::available()
+    nimrag_core::fit::profile::garmin_profile()
 }
 
 /// Recognise a Garmin device from its advertisement (device catalogue,

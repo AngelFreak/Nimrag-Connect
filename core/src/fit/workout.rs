@@ -304,10 +304,27 @@ fn cut(text: &str, max: usize) -> &str {
     &text[..end]
 }
 
+/// The messages [`encode`] writes. A profile that lacks one cannot write workouts.
+const MESSAGES: [&str; 5] = [
+    "file_id",
+    "file_creator",
+    "workout",
+    "workout_step",
+    "memo_glob",
+];
+
+/// True when the compiled-in profile knows every message a workout file needs
+/// (always with Garmin's profile; never with Nimrag's own partial map, which
+/// has none of the workout messages; never without a profile).
+pub fn available() -> bool {
+    MESSAGES.iter().all(|m| profile::has_message(m))
+}
+
 /// The FIT file of `workout`, created at `created_garmin_s` (seconds since the
-/// FIT epoch, 1989-12-31T00:00Z). `Unavailable` when no profile is compiled in.
+/// FIT epoch, 1989-12-31T00:00Z). `Unavailable` when the profile cannot write
+/// workouts (see [`available`]); then nothing is written.
 pub fn encode(workout: &Workout, created_garmin_s: u32) -> Result<Vec<u8>, EncodeError> {
-    if !profile::available() {
+    if !available() {
         return Err(EncodeError::Unavailable);
     }
     workout.validate()?;
@@ -401,15 +418,11 @@ fn note_memo(note: &str, step_index: u16) -> Result<RawMessage, EncodeError> {
     let text = cut(note, NOTE_MAX_BYTES);
     let mut data = text.as_bytes().to_vec();
     data.push(0);
-    let (notes_field, _) = profile::field_by_name(
-        profile::message_number("workout_step")
-            .ok_or_else(|| EncodeError::UnknownMessage("workout_step".into()))?,
-        "notes",
-    )
-    .ok_or_else(|| EncodeError::UnknownField {
-        message: "workout_step".into(),
-        field: "notes".into(),
-    })?;
+    // The messages are checked by `encode` (`available`) before anything is written; a
+    // partial map that lacks them still answers Unavailable here.
+    let (notes_field, _) = profile::message_number("workout_step")
+        .and_then(|g| profile::field_by_name(g, "notes"))
+        .ok_or(EncodeError::Unavailable)?;
     let mut m = MessageBuilder::new("memo_glob")?;
     m.uint("part_index", 0)?;
     m.enum_name("mesg_num", "workout_step")?;
@@ -640,7 +653,7 @@ mod tests {
     }
 
     /// The committed configuration has no profile: nothing is written.
-    #[cfg(not(fit_profile))]
+    #[cfg(not(any(fit_profile, fit_map)))]
     #[test]
     fn without_a_profile_the_workout_is_unavailable_never_wrong_bytes() {
         assert_eq!(
@@ -651,6 +664,23 @@ mod tests {
         let mut w = sample();
         w.nodes.clear();
         assert_eq!(encode(&w, 1).unwrap_err(), EncodeError::Unavailable);
+    }
+
+    /// Nimrag's own partial map has none of the workout messages: the same answer
+    /// as without a profile, decided before anything is written.
+    #[cfg(fit_map)]
+    #[test]
+    fn with_the_partial_map_the_workout_is_unavailable_never_wrong_bytes() {
+        assert!(!available());
+        assert_eq!(
+            encode(&sample(), 977_000_000).unwrap_err(),
+            EncodeError::Unavailable
+        );
+        let mut w = sample();
+        w.nodes.clear();
+        assert_eq!(encode(&w, 1).unwrap_err(), EncodeError::Unavailable);
+        // the step-note memo path alone also answers Unavailable
+        assert_eq!(note_memo("n", 0).unwrap_err(), EncodeError::Unavailable);
     }
 
     #[cfg(fit_profile)]
