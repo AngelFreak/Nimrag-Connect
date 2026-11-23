@@ -49,6 +49,32 @@ object WebSourcePolicy {
         return remoteFor(auth)
     }
 
+    /**
+     * The one exception to "never while a page is open": the server's page is showing, but files
+     * wait on the phone and the last upload failed (or uploads wait for an allowed network). The
+     * server cannot show what the phone has, and its page may only show errors, so the phone's own
+     * copy takes over at once.
+     */
+    fun switchToLocalNow(
+        onLocal: Boolean,
+        localReady: Boolean,
+        forceRemote: Boolean,
+        pendingUploads: Int,
+        uploadsStuck: Boolean,
+    ): Boolean = localReady && !onLocal && !forceRemote && pendingUploads > 0 && uploadsStuck
+
+    /**
+     * On returning to the app: the phone's copy is showing, but every file reached the server and
+     * the last upload worked, so the server (which has the whole history) is the better choice again.
+     */
+    fun backToServerOnResume(
+        onLocal: Boolean,
+        remoteConfigured: Boolean,
+        online: Boolean,
+        pendingUploads: Int,
+        uploadsStuck: Boolean,
+    ): Boolean = onLocal && remoteConfigured && online && pendingUploads == 0 && !uploadsStuck
+
     /** The server's web app, or the account screen that has to come first. */
     fun remoteFor(auth: AuthPhase): WebSource = when (auth) {
         AuthPhase.SignedIn -> WebSource.Remote

@@ -76,4 +76,28 @@ class WebSourcePolicyTest {
         assertEquals(WebSource.Local, choose(mode = WebMode.Local))
         assertEquals(WebSource.Remote, choose(mode = WebMode.Remote, online = false))
     }
+
+    @Test
+    fun aStuckUploadSwitchesAnOpenServerPageToThePhone() {
+        fun now(onLocal: Boolean = false, localReady: Boolean = true, force: Boolean = false, pending: Int = 2, stuck: Boolean = true) =
+            WebSourcePolicy.switchToLocalNow(onLocal, localReady, force, pending, stuck)
+        assertEquals(true, now())
+        assertEquals(false, now(onLocal = true))
+        assertEquals(false, now(localReady = false))
+        assertEquals(false, now(force = true))
+        assertEquals(false, now(pending = 0))
+        assertEquals(false, now(stuck = false))
+    }
+
+    @Test
+    fun theServerComesBackOnResumeOnceEverythingIsUploaded() {
+        fun back(onLocal: Boolean = true, remote: Boolean = true, online: Boolean = true, pending: Int = 0, stuck: Boolean = false) =
+            WebSourcePolicy.backToServerOnResume(onLocal, remote, online, pending, stuck)
+        assertEquals(true, back())
+        assertEquals(false, back(onLocal = false))
+        assertEquals(false, back(remote = false))
+        assertEquals(false, back(online = false))
+        assertEquals(false, back(pending = 1))
+        assertEquals(false, back(stuck = true))
+    }
 }

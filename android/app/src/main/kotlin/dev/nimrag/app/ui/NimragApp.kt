@@ -31,6 +31,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -126,15 +127,18 @@ internal fun NimragShell(
     val context = LocalContext.current
 
     // The phone's own copy of the data (personal flavor): used when the server is not the better
-    // choice (see WebSourcePolicy). Decided when the web view is created, never while a page is open.
+    // choice (see WebSourcePolicy). Decided when the web view is created; it changes while a page is
+    // open only when uploads get stuck (switchToLocalNow) or on resume (backToServerOnResume).
     val localWeb = remember(state.localWebPort) { if (state.localWebPort != null) controller.localWeb() else null }
     var remoteFailed by remember { mutableStateOf(false) }
     var forceRemote by remember { mutableStateOf(false) }
+    // Bumped to make the source be chosen again (see backToServerOnResume).
+    var sourceCheck by remember { mutableIntStateOf(0) }
 
     // The account decides whether the server's web app may be shown at all: without a live session
     // the answer is the native sign-in or unlock screen, never the web app's own login page.
     val account by controller.account.state.collectAsStateWithLifecycle()
-    val source = remember(localWeb, rawServerUrl, remoteFailed, forceRemote, account.phase) {
+    val source = remember(localWeb, rawServerUrl, remoteFailed, forceRemote, account.phase, sourceCheck) {
         if (forceRemote) {
             WebSourcePolicy.remoteFor(account.phase)
         } else {
@@ -178,6 +182,14 @@ internal fun NimragShell(
     LaunchedEffect(webState.unreachable, localWeb) {
         if (webState.unreachable && localWeb != null && !onLocal && !forceRemote) remoteFailed = true
     }
+    // Files wait on the phone and uploads fail: the server's page cannot show them (and the
+    // service worker keeps that page loading, so `unreachable` never comes). Switch now.
+    val uploadsStuck = state.uploads.lastError != null || state.uploads.waitingForNetwork
+    LaunchedEffect(uploadsStuck, state.uploads.pending > 0, onLocal) {
+        if (WebSourcePolicy.switchToLocalNow(onLocal, localWeb != null, forceRemote, state.uploads.pending, uploadsStuck)) {
+            remoteFailed = true
+        }
+    }
 
     // Permissions and Bluetooth can change while we are away (system settings, quick tiles).
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
@@ -187,6 +199,12 @@ internal fun NimragShell(
         // Is the session still good? (Throttled in the account; the first check runs at start.)
         controller.account.checkSession()
         webState.onResume()
+        // Everything reached the server again: it has the whole history, so it shows again.
+        if (WebSourcePolicy.backToServerOnResume(onLocal, remoteTarget != null, isOnline(context), state.uploads.pending, uploadsStuck)) {
+            remoteFailed = false
+            forceRemote = false
+            sourceCheck++
+        }
     }
     LifecycleEventEffect(Lifecycle.Event.ON_PAUSE) { webState.onPause() }
 
