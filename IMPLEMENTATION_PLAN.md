@@ -584,6 +584,14 @@ Final report: what works, what was verified and how, what is still unknown.
 - **0.7.0** (2026-11-21): phone features (notifications, music, find my phone, make the watch ring), all off by default; "Download my data" saves to Downloads in the app. Checked on the Samsung (no watch): the Phone features page, defaults and notification-access card.
 - **Open**: SpO2 has no readings (the watch never recorded any in the last month; Pulse Ox is off on the watch); training status, load, recovery and VO2 max change only when the watch writes its metrics file (after an activity), which is expected.
 
+## Stage 5a: Nimrag's own FIT field map (owner, 2026-11-23: "build Nimrag 1:1 and have it compatible")
+**Goal**: the public server image and the public app (with the phone's own copy, today the personal flavor) work exactly as the profile builds do, without Garmin's FIT profile, so both can be published.
+**Scope**: only what Nimrag reads or writes: about 26 messages and 100 fields in `core/src/derive/` (activity, battery, hrv, metrics, monitoring, sleep), the enum names those derivers and the web use (sport, sub_sport, exercise_category, event, sleep level …), and the messages the server writes for the watch (weather, workouts). Not a general FIT profile: `nimrag-decode` and anything else may show unknown fields by number.
+**Clean room**: an analyst derives the map from the owner's own watch files (raw decode with `NIMRAG_FIT_PROFILE=none`: global message number, field number, base type, raw values) and ground truth that is not Garmin's profile (Garmin Connect's own values in `private/garmin-connect/`, what the watch shows, physical sense). The analyst never reads `core/src/fit/generated/`, `private/fitsdk/`, `private/fit-overlay.json`, `private/re/`, `tools/fit-profile/` output, Gadgetbridge's or any other published FIT tables. Field names follow the names already in Nimrag's public code (allowed by docs/LICENSING.md for interoperability). Spec with evidence stays in `private/fitmap/`; the committed table holds numbers, our names, types, scale/offset and the enum values we use.
+**1:1 check (integrator)**: copy the live data, reparse it once with the generated profile and once with the Nimrag map, diff every derived table. The analyst only hears which outputs differ, never the expected values, and settles each one from ground truth.
+**Then**: `build.rs` selects generated profile > Nimrag map; the public app gets the local server; the server image and APKs are published after the owner confirms.
+**Status**: started 2026-11-23.
+
 # Appendix: contracts and reviewer notes
 
 ### Reviewer notes for stage 1d (parsers), recorded 2026-11-19
