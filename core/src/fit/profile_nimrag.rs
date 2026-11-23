@@ -34,6 +34,12 @@ pub(super) static MESSAGES: &[MessageInfo] = &[
             fe(11, "total_calories", BaseType::Uint16, "uint16", None, None, Some("kcal"), false, &[], &[]),
             fe(16, "avg_heart_rate", BaseType::Uint8, "uint8", None, None, Some("bpm"), false, &[], &[]),
             fe(17, "max_heart_rate", BaseType::Uint8, "uint8", None, None, Some("bpm"), false, &[], &[]),
+            // half the Connect cadence, truncated (one foot per cycle); the 1:1 diff says the plain name does not
+            // resolve for running and swimming, so those sports read it as a subfield
+            fe(18, "avg_cadence", BaseType::Uint8, "uint8", None, None, Some("rpm"), false, &[], &[
+                sub("avg_running_cadence", BaseType::Uint8, "uint8", None, None, Some("rpm"), &[(5, 1)], &[]),
+                sub("avg_swim_cadence", BaseType::Uint8, "uint8", None, None, Some("rpm"), &[(5, 5)], &[]),
+            ]),
             fe(22, "total_ascent", BaseType::Uint16, "uint16", None, None, Some("m"), false, &[], &[]),
             fe(23, "total_descent", BaseType::Uint16, "uint16", None, None, Some("m"), false, &[], &[]),
             fe(24, "total_training_effect", BaseType::Uint8, "uint8", Some(10.0), None, None, false, &[], &[]),
@@ -56,6 +62,10 @@ pub(super) static MESSAGES: &[MessageInfo] = &[
             fe(11, "total_calories", BaseType::Uint16, "uint16", None, None, Some("kcal"), false, &[], &[]),
             fe(15, "avg_heart_rate", BaseType::Uint8, "uint8", None, None, Some("bpm"), false, &[], &[]),
             fe(16, "max_heart_rate", BaseType::Uint8, "uint8", None, None, Some("bpm"), false, &[], &[]),
+            fe(17, "avg_cadence", BaseType::Uint8, "uint8", None, None, Some("rpm"), false, &[], &[
+                sub("avg_running_cadence", BaseType::Uint8, "uint8", None, None, Some("rpm"), &[(25, 1)], &[]),
+                sub("avg_swim_cadence", BaseType::Uint8, "uint8", None, None, Some("rpm"), &[(25, 5)], &[]),
+            ]),
             fe(21, "total_ascent", BaseType::Uint16, "uint16", None, None, Some("m"), false, &[], &[]),
             fe(22, "total_descent", BaseType::Uint16, "uint16", None, None, Some("m"), false, &[], &[]),
             fe(25, "sport", BaseType::Enum, "sport", None, None, None, false, &[], &[]),
@@ -72,7 +82,10 @@ pub(super) static MESSAGES: &[MessageInfo] = &[
             fe(0, "position_lat", BaseType::Sint32, "sint32", None, None, Some("semicircles"), false, &[], &[]),
             fe(1, "position_long", BaseType::Sint32, "sint32", None, None, Some("semicircles"), false, &[], &[]),
             fe(3, "heart_rate", BaseType::Uint8, "uint8", None, None, Some("bpm"), false, &[], &[]),
+            fe(4, "cadence", BaseType::Uint8, "uint8", None, None, Some("rpm"), false, &[], &[]),
             fe(5, "distance", BaseType::Uint32, "uint32", Some(100.0), None, Some("m"), false, &[], &[]),
+            // no ground truth (Connect exports no temperature); plausible range on outdoor files
+            fe(13, "temperature", BaseType::Sint8, "sint8", None, None, Some("C"), false, &[], &[]),
             fe(73, "enhanced_speed", BaseType::Uint32, "uint32", Some(1000.0), None, Some("m/s"), false, &[], &[]),
             fe(78, "enhanced_altitude", BaseType::Uint32, "uint32", Some(5.0), Some(500.0), Some("m"), false, &[], &[]),
             fe(253, "timestamp", BaseType::Uint32, "date_time", None, None, Some("s"), false, &[], &[]),
@@ -155,11 +168,14 @@ pub(super) static MESSAGES: &[MessageInfo] = &[
             fe(4, "training_effect", BaseType::Uint8, "uint8", Some(10.0), None, None, false, &[], &[]),
             // valid in activity files only (MET x 3.5 matches Connect's VO2 max), invalid in the history file
             fe(7, "maximal_met", BaseType::Sint32, "sint32", Some(65536.0), None, Some("MET"), false, &[], &[]),
-            fe(9, "recovery_time_physical_activity", BaseType::Uint16, "uint16", None, None, Some("min"), false, &[], &[]),
+            // total recovery time remaining, minutes (falls 59.9 per hour); not the field Nimrag reads
+            fe(9, "recovery_time", BaseType::Uint16, "uint16", None, None, Some("min"), false, &[], &[]),
             fe(11, "sport", BaseType::Enum, "sport", None, None, None, false, &[], &[]),
+            // ambiguous: uint16 and 0 in all 24 activity-file messages; also fields 15 and 16
+            fe(14, "recovery_time_physical_activity", BaseType::Uint16, "uint16", None, None, Some("min"), false, &[], &[]),
             fe(20, "anaerobic_training_effect", BaseType::Uint8, "uint8", Some(10.0), None, None, false, &[], &[]),
-            // ambiguous: also fields 3, 37
-            fe(39, "training_load_peak", BaseType::Sint32, "sint32", Some(65536.0), None, None, false, &[], &[]),
+            // ambiguous: also field 3 (identical everywhere); field 39 = the Connect total load, differs on 9 of 22 files
+            fe(26, "training_load_peak", BaseType::Sint32, "sint32", Some(65536.0), None, None, false, &[], &[]),
             fe(253, "timestamp", BaseType::Uint32, "date_time", None, None, Some("s"), false, &[], &[]),
         ],
     },
@@ -180,6 +196,22 @@ pub(super) static MESSAGES: &[MessageInfo] = &[
             fe(1, "reference_index", BaseType::Uint16, "uint16", None, None, None, false, &[], &[]),
             arr(fe(2, "time_in_hr_zone", BaseType::Uint32, "uint32", Some(1000.0), None, Some("s"), false, &[], &[])),
             fe(253, "timestamp", BaseType::Uint32, "date_time", None, None, Some("s"), false, &[], &[]),
+        ],
+    },
+    MessageInfo {
+        global: 225,
+        name: "set",
+        fields: &[
+            fe(0, "duration", BaseType::Uint32, "uint32", Some(1000.0), None, Some("s"), false, &[], &[]),
+            fe(3, "repetitions", BaseType::Uint16, "uint16", None, None, None, false, &[], &[]),
+            fe(4, "weight", BaseType::Uint16, "uint16", Some(16.0), None, Some("kg"), false, &[], &[]),
+            fe(5, "set_type", BaseType::Enum, "set_type", None, None, None, false, &[], &[]),
+            fe(6, "start_time", BaseType::Uint32, "date_time", None, None, Some("s"), false, &[], &[]),
+            arr(fe(7, "category", BaseType::Uint16, "exercise_category", None, None, None, false, &[], &[])),
+            arr(fe(8, "category_subtype", BaseType::Uint16, "uint16", None, None, None, false, &[], &[])),
+            // ambiguous: always invalid in the corpus; fields 9, 12, 13 are the same size
+            fe(11, "wkt_step_index", BaseType::Uint16, "uint16", None, None, None, false, &[], &[]),
+            fe(254, "timestamp", BaseType::Uint32, "date_time", None, None, Some("s"), false, &[], &[]),
         ],
     },
     MessageInfo {
@@ -310,10 +342,15 @@ pub(super) static ENUMS: &[(&str, &[(u64, &str)])] = &[
     ("body_battery_status", &[(1, "measured")]),
     ("event", &[(74, "sleep")]),
     ("event_type", &[(0, "start"), (1, "stop")]),
+    // ambiguous: 7, 23, 27 and 28 are the watch's guess and Connect's (edited) names disagree on some
+    // sets; the majority name is used. The codes follow the alphabetical order of the names (21 < 23 = row)
+    ("exercise_category", &[(0, "bench_press"), (7, "curl"), (8, "deadlift"), (14, "lateral_raise"), (21, "pull_up"), (23, "row"), (27, "sit_up"), (28, "squat"), (30, "triceps_extension"), (65534, "unknown")]),
     ("hrv_status", &[(3, "unbalanced")]),
+    ("set_type", &[(0, "rest"), (1, "active")]),
     ("sleep_level", &[(1, "awake"), (2, "light"), (3, "deep"), (4, "rem")]),
-    ("sport", &[(0, "generic"), (1, "running"), (2, "cycling")]),
-    ("sub_sport", &[(0, "generic")]),
+    // ambiguous: 27 and 41 are named after Connect's activity types (horseback_riding, kayaking)
+    ("sport", &[(0, "generic"), (1, "running"), (2, "cycling"), (5, "swimming"), (10, "training"), (17, "hiking"), (27, "horseback_riding"), (41, "kayaking")]),
+    ("sub_sport", &[(0, "generic"), (17, "lap_swimming"), (20, "strength_training")]),
     ("training_status", &[(5, "recovery")]),
 ];
 pub(super) static VERSION: Option<u32> = None;
