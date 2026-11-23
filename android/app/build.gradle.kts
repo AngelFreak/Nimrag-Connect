@@ -28,18 +28,22 @@ android {
         compose = true
         buildConfig = true
     }
-    // `public` is the published build (no FIT profile, no local server); `personal` is the
-    // owner's own build with both, never published. See core/build.gradle.kts.
+    // Both flavors have the local server (the phone's own copy of the web app). `public` is the
+    // published build, with Nimrag's own FIT field map and no Garmin profile; `personal` is the
+    // owner's own build with Garmin's FIT profile too, never published. FIT_PROFILE says which
+    // library the build must have (MainActivity checks it). See core/build.gradle.kts.
     flavorDimensions += "distribution"
     productFlavors {
         create("public") {
             dimension = "distribution"
-            buildConfigField("boolean", "LOCAL_SERVER", "false")
+            buildConfigField("boolean", "LOCAL_SERVER", "true")
+            buildConfigField("boolean", "FIT_PROFILE", "false")
         }
         create("personal") {
             dimension = "distribution"
             versionNameSuffix = "-personal"
             buildConfigField("boolean", "LOCAL_SERVER", "true")
+            buildConfigField("boolean", "FIT_PROFILE", "true")
         }
     }
     testOptions {

@@ -82,7 +82,7 @@ class Hub(val app: Application) {
     )
 
     /**
-     * The server inside the app (personal flavor; a no-op in public): the same watch files, shown
+     * The server inside the app (both flavors): the same watch files, shown
      * by the web view when the real server is not the better choice. [AppState.localWebPort]
      * is set once it runs.
      */

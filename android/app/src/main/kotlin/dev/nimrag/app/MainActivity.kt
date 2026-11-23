@@ -30,10 +30,11 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // Licence rule: the FIT profile (Garmin data) must never be in the public build. The
-        // personal flavor (never published) is the only one that has it, and must have it.
-        check(fitProfileCompiledIn() == BuildConfig.LOCAL_SERVER) {
-            if (BuildConfig.LOCAL_SERVER) "personal build without the FIT profile" else "FIT profile compiled into the public Android library"
+        // Licence rule: Garmin's FIT profile must never be in the public build. The personal
+        // flavor (never published) is the only one that has it, and must have it. (Nimrag's own
+        // field map, which both flavors have, does not count: see fitProfileCompiledIn.)
+        check(fitProfileCompiledIn() == BuildConfig.FIT_PROFILE) {
+            if (BuildConfig.FIT_PROFILE) "personal build without the FIT profile" else "FIT profile compiled into the public Android library"
         }
         // Dark only: light system bar icons on transparent bars, like the web interface.
         enableEdgeToEdge(

@@ -25,7 +25,8 @@ and fails on a mismatch.
 ```
 
 Two flavors (dimension `distribution`): `public` is the build that is published, `personal` is the
-owner's own build (see "Personal flavor" below). Task names carry the flavor, for example
+owner's own build (see "Personal flavor" below). Both have the phone's own copy of the web app
+(the local server); the only difference is Garmin's FIT profile, which only `personal` has. Task names carry the flavor, for example
 `:app:testPublicDebugUnitTest`.
 
 Pinning: Gradle wrapper with `distributionSha256Sum`, every Gradle dependency in
@@ -37,7 +38,10 @@ limited to arm64-v8a and x86_64. The Rust library is built with
 
 This section is about the `public` flavor. The `personal` flavor is the one deliberate exception.
 
-The locally generated FIT profile is Garmin data and is never redistributed.
+The locally generated FIT profile is Garmin data and is never redistributed. The `public`
+library still has the local server (cargo feature `local-server`, web app from `web/dist`
+embedded: run `npm run build` in `web/` first); it derives with Nimrag's own clean-room field map
+(`NIMRAG_FIT_PROFILE=none`, `core/src/fit/profile_nimrag.rs`), which may be published.
 Every cargo call from Gradle (`buildSrc/src/main/kotlin/CargoTasks.kt`) sets
 `NIMRAG_FIT_PROFILE=none`, then reads cargo's build-script output and fails the
 build if core's `cfg(fit_profile)` is on. `core/build.rs` and `ffi/build.rs` also
@@ -45,13 +49,14 @@ refuse any Android target with a profile (or without the variable). Finally the
 tasks grep both finished `.so` files: a marker string that core emits only when a
 profile is compiled in, the test-fixtures `ScriptedWatch`, and build-machine paths
 must all be absent. The app also checks `fitProfileCompiledIn()` at start (it must be false in
-`public`, true in `personal`). The `public` FFI does not expose FIT parsing.
+`public`, true in `personal`; it is true only for Garmin's profile, never for Nimrag's own map).
+The FFI does not expose FIT parsing.
 
 ## Personal flavor (never published)
 
-The owner's own build: the FIT profile is compiled in and the server runs inside the app
-(cargo feature `local-server` of `nimrag-ffi`: `nimrag_server::embedded`, with the web app embedded
-by rust-embed). Every stored watch file is ingested into that local server too, so Today, Activities,
+The owner's own build: Garmin's FIT profile is compiled in. (The server inside the app is in both
+flavors: cargo feature `local-server` of `nimrag-ffi`, `nimrag_server::embedded`, with the web app
+embedded by rust-embed; the public build uses Nimrag's own field map there.) Every stored watch file is ingested into that local server too, so Today, Activities,
 Health and Strength can show the newest data from the phone itself, also offline. See
 IMPLEMENTATION_PLAN.md, stage 3o.
 
@@ -384,7 +389,7 @@ signs out. Inside the app the web page never shows its own login page: a `401` c
 `NimragApp.sessionExpired()` (see `web/src/native.ts`) and the app takes over. Offline at launch the
 app keeps showing the cached pages. Sign out (Watch tab, Settings, "Account and server") revokes the
 phone's token on the server (when it can reach it), then clears the cookie, the web view's storage
-and cache, the token and the secret. The phone's own copy (personal flavor) needs no account.
+and cache, the token and the secret. The phone's own copy (the local server, both flavors) needs no account.
 
 Failure messages are fixed sentences: a wrong username, password or code is one answer, `429`
 shows the wait from `Retry-After`, and the server's own text is never shown.

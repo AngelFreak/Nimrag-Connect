@@ -65,7 +65,7 @@ class EngineDb(context: Context) : SQLiteOpenHelper(context, "nimrag.db", null, 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
         // 1 -> 2: the `copied` table (Alongside, stage 2g; the mode is gone, see [createCopied]).
         if (oldVersion < 2) createCopied(db)
-        // 2 -> 3: when a file went into the local server (personal flavor); NULL = not yet.
+        // 2 -> 3: when a file went into the local server; NULL = not yet.
         if (oldVersion < 3) db.execSQL("ALTER TABLE files ADD COLUMN local_at INTEGER")
     }
 
@@ -189,7 +189,7 @@ class EngineDb(context: Context) : SQLiteOpenHelper(context, "nimrag.db", null, 
         lastError = c.getColumnIndexOrThrow("last_error").let { if (c.isNull(it)) null else c.getString(it) },
     )
 
-    // ---- local server (personal flavor) ----
+    // ---- local server ----
 
     /** The oldest stored file the local server has not ingested yet. */
     fun nextLocalPending(): FileRow? = readableDatabase.rawQuery(

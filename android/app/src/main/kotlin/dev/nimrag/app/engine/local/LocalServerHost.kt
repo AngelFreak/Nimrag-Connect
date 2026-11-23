@@ -1,10 +1,10 @@
 package dev.nimrag.app.engine.local
 
 /**
- * The server inside the app (personal flavor only). Every stored watch file is also fed to it,
- * so the web interface can show the newest data from the phone itself, with no network.
- * The `public` flavor has a no-op implementation ([LocalServerFactory] lives in each flavor's
- * source set): its library has no server and no FIT profile.
+ * The server inside the app (both flavors; the library is built with ffi feature `local-server`).
+ * Every stored watch file is also fed to it, so the web interface can show the newest data from
+ * the phone itself, with no network. The public flavor derives with Nimrag's own FIT field map,
+ * the personal one with Garmin's profile.
  */
 interface LocalServerHost {
     /** Starts the server in the background and ingests the files it has not seen. Idempotent. */
@@ -13,7 +13,7 @@ interface LocalServerHost {
     /** A watch file is durable in the store: ingest it (off the caller's thread). */
     fun onFileStored()
 
-    /** How to reach the server once it runs; null before that, after a failure, and in `public`. */
+    /** How to reach the server once it runs; null before that and after a failure. */
     val web: LocalWeb?
 }
 

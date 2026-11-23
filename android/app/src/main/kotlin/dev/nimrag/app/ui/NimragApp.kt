@@ -126,7 +126,7 @@ internal fun NimragShell(
     val inspection = LocalInspectionMode.current
     val context = LocalContext.current
 
-    // The phone's own copy of the data (personal flavor): used when the server is not the better
+    // The phone's own copy of the data (the local server): used when the server is not the better
     // choice (see WebSourcePolicy). Decided when the web view is created; it changes while a page is
     // open only when uploads get stuck (switchToLocalNow) or on resume (backToServerOnResume).
     val localWeb = remember(state.localWebPort) { if (state.localWebPort != null) controller.localWeb() else null }

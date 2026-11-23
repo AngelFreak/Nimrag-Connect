@@ -6,17 +6,19 @@ val workspace = rootProject.layout.projectDirectory.dir("..")
 
 /**
  * Two flavors (dimension `distribution`):
- *  - `public`: the build that goes to GitHub releases. No FIT profile (Garmin's licence forbids
- *    shipping it in AGPL software), no local server. Verified after every build.
- *  - `personal`: the owner's own build, never published. The generated FIT profile and the
- *    in-process server (cargo feature `local-server`, with the web app embedded) are compiled in,
- *    so the phone derives and shows the newest data without the server. Needs
- *    -Pnimrag.fitProfile=/path/to/profile_data.rs (or NIMRAG_FIT_PROFILE_FILE) and web/dist.
+ * Both flavors compile in the in-process server (cargo feature `local-server`, with the web app
+ * from web/dist embedded), so the phone derives and shows the newest data without the server.
+ *  - `public`: the build that goes to GitHub releases. No Garmin FIT profile (its licence forbids
+ *    shipping it in AGPL software): the cargo build forces NIMRAG_FIT_PROFILE=none, which compiles
+ *    in Nimrag's own clean-room field map instead. Verified after every build.
+ *  - `personal`: the owner's own build, never published. The same, plus the generated Garmin FIT
+ *    profile (more names and the workout/weather writers). Needs
+ *    -Pnimrag.fitProfile=/path/to/profile_data.rs (or NIMRAG_FIT_PROFILE_FILE).
  */
 val fitProfileFile: Provider<String> = providers.gradleProperty("nimrag.fitProfile")
     .orElse(providers.environmentVariable("NIMRAG_FIT_PROFILE_FILE"))
 
-fun rustInputs(withServer: Boolean) = files(
+fun rustInputs() = files(
     workspace.file("Cargo.toml"),
     workspace.file("Cargo.lock"),
     workspace.file("rust-toolchain.toml"),
@@ -26,15 +28,13 @@ fun rustInputs(withServer: Boolean) = files(
     },
     workspace.dir("ffi").asFileTree.matching { include("Cargo.toml", "build.rs", "src/**") },
 ).also {
-    if (withServer) {
-        it.from(
-            workspace.dir("server").asFileTree.matching {
-                include("Cargo.toml", "build.rs", "src/**", "migrations/**", ".sqlx/**")
-            },
-            // Embedded into the library by rust-embed at compile time (`npm run build` first).
-            workspace.dir("web/dist").asFileTree,
-        )
-    }
+    it.from(
+        workspace.dir("server").asFileTree.matching {
+            include("Cargo.toml", "build.rs", "src/**", "migrations/**", ".sqlx/**")
+        },
+        // Embedded into the library by rust-embed at compile time (`npm run build` first).
+        workspace.dir("web/dist").asFileTree,
+    )
 }
 
 fun cap(s: String) = s.replaceFirstChar { it.uppercase() }
@@ -42,36 +42,36 @@ fun cap(s: String) = s.replaceFirstChar { it.uppercase() }
 fun registerCargoNdk(flavor: String, personal: Boolean) = tasks.register<CargoNdkTask>("cargoNdk${cap(flavor)}") {
     group = "rust"
     description = if (personal) {
-        "Builds libnimrag_ffi.so (arm64-v8a, x86_64) WITH the FIT profile and the local server: personal flavor, never published"
+        "Builds libnimrag_ffi.so (arm64-v8a, x86_64) WITH Garmin's FIT profile and the local server: personal flavor, never published"
     } else {
-        "Builds libnimrag_ffi.so for arm64-v8a and x86_64 with NIMRAG_FIT_PROFILE=none"
+        "Builds libnimrag_ffi.so (arm64-v8a, x86_64) with the local server and NIMRAG_FIT_PROFILE=none (Nimrag's own field map, no Garmin profile)"
     }
     workspaceDir = workspace
-    rustSources.from(rustInputs(withServer = personal))
+    rustSources.from(rustInputs())
     jniLibsDir = layout.buildDirectory.dir("generated/jniLibs-$flavor")
     cargoTargetDir = layout.buildDirectory.dir("cargo-ndk-$flavor")
     ndkVersion = libs.versions.ndk
     cargoNdkVersion = libs.versions.cargo.ndk
     androidHome = providers.environmentVariable("ANDROID_HOME")
     androidNdkHome = providers.environmentVariable("ANDROID_NDK_HOME")
+    ffiFeatures = listOf("local-server")
+    doFirst {
+        if (!workspace.file("web/dist/index.html").asFile.isFile) {
+            throw GradleException("web/dist is missing: run `npm run build` in web/ first (the build embeds the web app)")
+        }
+    }
     if (personal) {
         personalBuild = true
         personalFitProfile = fitProfileFile
-        ffiFeatures = listOf("local-server")
-        doFirst {
-            if (!workspace.file("web/dist/index.html").asFile.isFile) {
-                throw GradleException("web/dist is missing: run `npm run build` in web/ first (the personal build embeds the web app)")
-            }
-        }
     }
 }
 
-fun registerUniffi(flavor: String, from: TaskProvider<CargoNdkTask>, personal: Boolean) =
+fun registerUniffi(flavor: String, from: TaskProvider<CargoNdkTask>) =
     tasks.register<UniffiKotlinTask>("uniffiKotlin${cap(flavor)}") {
         group = "rust"
         description = "Generates the Kotlin bindings of the $flavor flavor from its x86_64 library"
         workspaceDir = workspace
-        rustSources.from(rustInputs(withServer = personal))
+        rustSources.from(rustInputs())
         library = from.flatMap { t -> t.jniLibsDir.file("x86_64/libnimrag_ffi.so") }
         bindgenTargetDir = layout.buildDirectory.dir("cargo-bindgen")
         outputDir = layout.buildDirectory.dir("generated/uniffi-$flavor")
@@ -79,8 +79,8 @@ fun registerUniffi(flavor: String, from: TaskProvider<CargoNdkTask>, personal: B
 
 val cargoNdkPublic = registerCargoNdk("public", personal = false)
 val cargoNdkPersonal = registerCargoNdk("personal", personal = true)
-val uniffiPublic = registerUniffi("public", cargoNdkPublic, personal = false)
-val uniffiPersonal = registerUniffi("personal", cargoNdkPersonal, personal = true)
+val uniffiPublic = registerUniffi("public", cargoNdkPublic)
+val uniffiPersonal = registerUniffi("personal", cargoNdkPersonal)
 
 android {
     namespace = "dev.nimrag.core"

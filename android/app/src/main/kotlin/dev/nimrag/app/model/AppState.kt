@@ -27,11 +27,11 @@ data class AppState(
      * Watch screen explains how to keep it out of the way.
      */
     val garminConnect: GarminConnect = GarminConnect.Absent,
-    /** Port of the server inside the app on 127.0.0.1 once it runs (personal flavor), else null. */
+    /** Port of the server inside the app on 127.0.0.1 once it runs, else null. */
     val localWebPort: Int? = null,
     /**
      * Counts the times new watch data reached a server the web page may show: an upload pass that
-     * took at least one file, or (personal flavor) the phone's own server taking files. The web
+     * took at least one file, or the phone's own server taking files. The web
      * view tells the page on every change (`nimrag:data`), so it fetches again.
      */
     val dataVersion: Int = 0,
@@ -337,7 +337,7 @@ interface WatchController {
     /** "Found it" in the app: stop the phone ringing. */
     fun stopFindPhone() {}
 
-    /** How to reach the server inside the app (personal flavor), once [AppState.localWebPort] is set. */
+    /** How to reach the server inside the app, once [AppState.localWebPort] is set. */
     fun localWeb(): LocalWeb? = null
 
     /** Which web source the owner chose (debug override of the automatic rule). */

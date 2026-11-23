@@ -14,7 +14,7 @@ import uniffi.nimrag_ffi.LocalFileMeta
 import uniffi.nimrag_ffi.LocalServer
 
 /**
- * `personal` flavor: the real server (nimrag-server's `embedded` module, through the FFI) in
+ * Both flavors: the real server (nimrag-server's `embedded` module, through the FFI) in
  * this process. One worker thread does everything blocking: start, then ingest every stored file
  * that has no `local_at` yet (so files stored while the server was not running, and the whole
  * backlog after an update, are caught up), then wait for the next one.

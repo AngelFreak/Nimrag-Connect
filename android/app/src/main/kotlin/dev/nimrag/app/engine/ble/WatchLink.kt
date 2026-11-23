@@ -1078,7 +1078,7 @@ class WatchLink(private val hub: Hub, private val scanner: BleScanner) {
         }
         if (stored) {
             hub.uploader.wake()
-            hub.local.onFileStored() // the phone's own copy of the data (personal flavor), off this thread
+            hub.local.onFileStored() // the phone's own copy of the data, off this thread
         }
         feed(if (stored) Input.FileStored(event.transferId) else Input.FileStoreFailed(event.transferId))
     }

@@ -8,7 +8,7 @@ enum class WebSource {
     /** The real server's web app (needs a live session). */
     Remote,
 
-    /** The phone's own copy (the local server, personal flavor): signed in by the app itself, no account screens. */
+    /** The phone's own copy (the local server): signed in by the app itself, no account screens. */
     Local,
 
     /** The native sign-in screen: server address, username, password, code. */

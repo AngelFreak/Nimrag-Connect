@@ -14,16 +14,17 @@ app. `core` stays std-only; this crate is the only place `uniffi` appears.
   compile here.
 - `ffi_version()`, `fit_profile_compiled_in()` (true only for Garmin's generated profile; Nimrag's own field map does not count).
 - FIT parsing is not exposed.
-- Feature `local-server` (personal Android flavor only): `LocalServer.start(dataDir, port, secret)`,
+- Feature `local-server` (both Android flavors): `LocalServer.start(dataDir, port, secret)`,
   `ingestFile(bytes, meta)`, `summary()`, `stop()`: the nimrag server inside the app
-  (`nimrag_server::embedded`). Off by default; the public library has none of it.
+  (`nimrag_server::embedded`). Off by default (host builds and tests); the Gradle Android tasks
+  turn it on for the public and the personal library.
 
 ## Licence rule: no Garmin FIT profile on Android
 
 The locally generated FIT profile is Garmin data and is never redistributed.
 `NIMRAG_FIT_PROFILE=none` selects Nimrag's own clean-room field map instead
 (`core/src/fit/profile_nimrag.rs`, `cfg(fit_map)`), which may be published and is what
-the public library contains. `build.rs` panics for any `android` target unless `NIMRAG_FIT_PROFILE=none` (core's does the same for any Garmin profile), except when
+the public library contains (together with the local server). `build.rs` panics for any `android` target unless `NIMRAG_FIT_PROFILE=none` (core's does the same for any Garmin profile), except when
 `NIMRAG_ALLOW_ANDROID_FIT_PROFILE=personal-apk-never-published` is set (the owner's personal flavor, never published); the
 Gradle tasks in `android/buildSrc` set it for every cargo call and then read
 cargo's build-script output to prove core's `cfg(fit_profile)` is off.

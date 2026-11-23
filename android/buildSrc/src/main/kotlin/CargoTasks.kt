@@ -79,8 +79,9 @@ private fun indexOf(haystack: ByteArray, needle: ByteArray, ignoreCase: Boolean)
 fun verifyAndroidLibrary(so: File, workspace: File, personal: Boolean = false) {
     val bytes = so.readBytes()
     fun has(text: String, ignoreCase: Boolean = false) = indexOf(bytes, text.toByteArray(Charsets.ISO_8859_1), ignoreCase)
-    // Public: the profile must be absent. Personal: it must be present (else the build is not
-    // what it says and the local web app would show nothing).
+    // Public: Garmin's profile must be absent (Nimrag's own field map is what it has). Personal:
+    // the profile must be present (else the build is not what it says and the local web app
+    // would show less than the owner expects).
     if (!personal && has(FIT_PROFILE_MARKER)) {
         throw GradleException("$so contains the FIT profile marker (Garmin data)")
     }
@@ -123,7 +124,7 @@ abstract class CargoTask : DefaultTask() {
     @get:Internal
     abstract val personalFitProfile: Property<String>
 
-    /** Cargo features for `-p nimrag-ffi` (the personal flavor adds `local-server`). */
+    /** Cargo features for `-p nimrag-ffi` (both Android flavors add `local-server`). */
     @get:Input
     abstract val ffiFeatures: ListProperty<String>
 
