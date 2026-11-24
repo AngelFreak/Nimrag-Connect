@@ -113,9 +113,7 @@ export function activityDetail(a: ActivityListItem): string | null {
   return parts.length > 0 ? parts.join(' · ') : null;
 }
 
-export function activityTitle(a: ActivityListItem): string {
-  return a.sport_name && a.kind === 'other' ? a.sport_name : kindLabel(a.kind);
-}
+export { activityTitle } from '../activities/format';
 
 /** "19 Nov, 07:42" in the owner's time zone. */
 export function fmtDateTime(iso: Maybe<string>, timeZone: string): string | null {

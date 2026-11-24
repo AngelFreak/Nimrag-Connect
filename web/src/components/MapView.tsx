@@ -197,7 +197,21 @@ export function MapView({ track, tilesUrl = DEFAULT_TILES_URL, label = 'Route ma
         attributionControl: { compact: true },
       });
       map.addControl(new maplibre.NavigationControl({ showCompass: false }), 'top-right');
+      let ready = false;
+      const fit = () => {
+        if (!ready || !track || track.length < 2) return;
+        const lons = track.map((p) => p[0]);
+        const lats = track.map((p) => p[1]);
+        map.fitBounds(
+          [
+            [Math.min(...lons), Math.min(...lats)],
+            [Math.max(...lons), Math.max(...lats)],
+          ],
+          { padding: 32, animate: false },
+        );
+      };
       map.on('load', () => {
+        ready = true;
         if (!track || track.length < 2) return;
         map.addSource('track', { type: 'geojson', data: { type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: track } } });
         const colors = ROUTE[theme];
@@ -208,17 +222,20 @@ export function MapView({ track, tilesUrl = DEFAULT_TILES_URL, label = 'Route ma
         map.addLayer({ id: 'track-line', type: 'line', source: 'track', layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': colors.line, 'line-width': theme === 'light' ? 4 : 3 } });
         map.addSource('start', { type: 'geojson', data: { type: 'Feature', properties: {}, geometry: { type: 'Point', coordinates: track[0] as [number, number] } } });
         map.addLayer({ id: 'start-dot', type: 'circle', source: 'start', paint: { 'circle-color': colors.start, 'circle-radius': 5, ...(theme === 'light' ? { 'circle-stroke-color': '#ffffff', 'circle-stroke-width': 2 } : {}) } });
-        const lons = track.map((p) => p[0]);
-        const lats = track.map((p) => p[1]);
-        map.fitBounds(
-          [
-            [Math.min(...lons), Math.min(...lats)],
-            [Math.max(...lons), Math.max(...lats)],
-          ],
-          { padding: 32, animate: false },
-        );
+        fit();
       });
+      // MapLibre follows window resizes only; the page often settles after the map is made (fonts,
+      // side column), which left the route fitted to a stale size and running off the edge.
+      const observer =
+        typeof ResizeObserver === 'function'
+          ? new ResizeObserver(() => {
+              map.resize();
+              fit();
+            })
+          : undefined;
+      observer?.observe(container.current);
       remove = () => {
+        observer?.disconnect();
         map.remove();
         maplibre.removeProtocol('pmtiles');
       };

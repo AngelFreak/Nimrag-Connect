@@ -41,6 +41,10 @@ export default defineConfig({
         // next page load, and the Android app keeps one page open for days (and reloads it with no
         // worker after a server update), so nothing reached the offline API cache.
         clientsClaim: true,
+        // Activate a new worker as soon as it is installed. Otherwise it waits for a SKIP_WAITING
+        // message that only a page open while it installs sends; a page loaded after that never
+        // does, so a browser tab kept the old build until every Nimrag tab was closed.
+        skipWaiting: true,
         runtimeCaching: [
           {
             // Offline viewing: network first, fall back to the last good response.
