@@ -49,3 +49,10 @@ Check at 360 px with `window.NimragApp = {native: true}` injected (dark), at 412
     not contradict the factor list: when Duration is watch-rated Good or better, don't open with
     "Short night" — fall through to the next rule (and say "a bit shorter than your need" in the
     sentence instead).
+13. Readiness factor rows at 360 px: short names on one line (Sleep, Recovery, HRV, Training load,
+    Sleep history, Stress history), the value + hint on a second muted line, the rating at the right
+    in normal weight; rows not wrapping to three lines. Rating words per factor in that factor's own
+    language, so they match the other pages: Sleep and Sleep history Poor/Fair/Good/Excellent (as on
+    the sleep page); Recovery High need/Moderate need/Low need/Recovered; HRV Low/Unbalanced/
+    Balanced; Training load Very high/High/Optimal/Low; Stress history High/Medium/Low. The colour
+    still follows the five rungs.
