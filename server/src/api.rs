@@ -186,6 +186,11 @@ pub fn router(state: AppState) -> Router {
             "/api/import/garmin",
             post(crate::web_api::garmin_import::import).layer(DefaultBodyLimit::max(max_import)),
         )
+        // The same for a Nimrag export (the zip of "Download my data").
+        .route(
+            "/api/import/nimrag",
+            post(crate::web_api::nimrag_import::import).layer(DefaultBodyLimit::max(max_import)),
+        )
         .merge(crate::web_api::router())
         .merge(crate::weather::routes())
         .merge(crate::edits::routes())

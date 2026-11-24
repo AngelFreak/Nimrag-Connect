@@ -749,11 +749,18 @@ async fn the_command_line_export_is_the_same_zip_and_runs_beside_a_server() {
         cli.keys().collect::<Vec<_>>(),
         http.keys().collect::<Vec<_>>()
     );
+    // The README and the manifest say when they were made; the rest is the same bytes.
     for (k, v) in &http {
-        if k != "README.txt" {
+        if k != "README.txt" && k != "nimrag/manifest.json" {
             assert_eq!(&cli[k], v, "{k}");
         }
     }
+    let manifest = |z: &BTreeMap<String, Vec<u8>>| {
+        let mut m: serde_json::Value = serde_json::from_slice(&z["nimrag/manifest.json"]).unwrap();
+        m.as_object_mut().unwrap().remove("created_at");
+        m
+    };
+    assert_eq!(manifest(&cli), manifest(&http));
     assert!(!out_dir.path().join("mine.zip.part").exists());
 
     // The admin, an unknown user and a database nobody migrated: refused, nothing left behind.

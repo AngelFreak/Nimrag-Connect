@@ -68,6 +68,7 @@ export const USER_ROUTES: RouteCase[] = [
   user('Timezone', () => '/profile/timezone'),
   user('Goals', () => '/profile/goals'),
   user('Send to Garmin', () => '/profile/garmin'),
+  user('Restore from a Nimrag export', () => '/profile/restore'),
   { ...user('Component gallery', () => '/__gallery'), demo: true },
   user('Old settings address', () => '/settings'),
   user('Page not found', () => '/does-not-exist'),

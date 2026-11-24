@@ -101,3 +101,25 @@ of theirs is deleted.
 - The Garmin import refuses a Nimrag export with the message above.
 - The export's `nimrag/*.json` holds only that user's rows (another user's workout is absent).
 - Web: the restore page uploads and shows the summary; the profile row links to it.
+
+## Changes while building
+
+- **Restored files are not forwarded.** `ingest::ingest` queues a new watch activity for Garmin
+  Connect when the user has Forward on. A restore puts old files back and must not upload them
+  again, so `ingest` is now a thin wrapper of `ingest::ingest_with(.., forward)` and the restore
+  calls it with `forward = false`. Everything else is `ingest` as specified.
+- **Older exports.** A zip with no manifest is "not a Nimrag export" (422), except one that has
+  `README.txt` and `csv/files.csv` (an export from before this change): that gets "This export was
+  made by an older Nimrag: download a new export", as the "Not in this step" list says.
+- **Export fix.** The export named a Garmin Connect JSON original without `.json` (it read only 12
+  bytes to tell it from FIT, the envelope magic is longer). The names now follow the README
+  (`originals/<sha>.json`). `files.json` always carries the exact name used.
+- **Manifest.** `app_version` is the server's `CARGO_PKG_VERSION`, `schema_version` the highest
+  applied migration. `created_at` is the time of the export, so the command-line export and the
+  download differ in that one field.
+- **Limits and errors.** Each JSON part is read up to 64 MiB. A listed file absent from the zip, or
+  with a source that is not a plain word, counts as `refused`. A workout over the 200-per-user
+  limit is left out with an error text. A missing or unreadable JSON part is 422 "This export is
+  damaged: <part>". The 422 texts are the full sentences in `server/src/restore.rs`.
+- **Upload queue.** The web restore page shares the Garmin import's upload queue
+  (`useUploadQueue` in `web/src/pages/profile/garminImport.ts`).

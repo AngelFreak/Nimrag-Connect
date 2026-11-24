@@ -25,6 +25,20 @@ pub async fn ingest(
     meta: Meta,
     origin: Option<String>,
 ) -> Result<bool> {
+    ingest_with(state, blob, device, owner, meta, origin, true).await
+}
+
+/// [`ingest`] with a choice on Forward: `forward == false` stores the file without queueing it
+/// for Garmin Connect (a restore puts old files back; it must not upload them again).
+pub async fn ingest_with(
+    state: &AppState,
+    blob: &store::Received,
+    device: Option<(i64, String)>,
+    owner: Option<i64>,
+    meta: Meta,
+    origin: Option<String>,
+    forward: bool,
+) -> Result<bool> {
     let store::Received { tmp, sha256, size } = blob;
     {
         let (dir, tmp, sha) = (state.data_dir.clone(), tmp.clone(), sha256.clone());
@@ -157,6 +171,8 @@ pub async fn ingest(
     drop(_guard);
     let created = event.created && !repeat;
     let is_fit = derive::looks_like_fit(&head);
-    crate::garmin::on_stored(state, sha256, owner, &event.meta, is_fit, created).await;
+    if forward {
+        crate::garmin::on_stored(state, sha256, owner, &event.meta, is_fit, created).await;
+    }
     Ok(created)
 }

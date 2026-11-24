@@ -649,7 +649,14 @@ csv/<kind>.csv            one per kind of data the user has; kinds with no rows 
 csv/files.csv             every original: name in the zip, sha256, size, arrival, source
 originals/<sha256>.fit    the user's original files, byte for byte (.fit by content, .json for an
                           imported Garmin Connect record, no extension for anything else)
+nimrag/manifest.json      format "nimrag-export", version 1, counts
+nimrag/files.json         every original with its exact ledger details (source, data_type, ...)
+nimrag/settings.json, workouts.json, body_measurements.json, strength_set_edits.json
+                          the person's own entries, exact (Unix seconds)
 ```
+
+`nimrag/` is what `POST /api/import/nimrag?name=<file>` ("Restore from a Nimrag export") reads
+back into the signed-in user (`src/restore.rs`, design in `docs/design/export-restore.md`).
 
 CSV kinds: `activities`, `activity_sessions`, `activity_laps`, `activity_records` (with
 positions), `activity_time_in_zone`, `strength_sets`, `exercise_titles`, `strength_set_edits`,

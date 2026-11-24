@@ -1,7 +1,8 @@
-import { useState, type ChangeEvent, type DragEvent } from 'react';
+import { useState, type ChangeEvent, type DragEvent, type ReactNode } from 'react';
 import { Button, Card, CardHeader, ImportIcon, ProgressBar } from '../../components';
 import { fmtBytes } from '../today/format';
 import { SubPage } from './common';
+import type { GarminImportResponse } from '../../api/generated';
 import { isImportable, summarizeResult, useImportQueue, type ImportItem } from './garminImport';
 
 function Explanation() {
@@ -23,9 +24,7 @@ function Explanation() {
   );
 }
 
-function Result({ item }: { item: ImportItem }) {
-  const r = item.result;
-  if (!r) return null;
+function Result({ r }: { r: GarminImportResponse }) {
   const s = summarizeResult(r);
   return (
     <div className="import-item__result">
@@ -53,11 +52,24 @@ function Result({ item }: { item: ImportItem }) {
   );
 }
 
-function Item({ item, onCancel, onRetry }: { item: ImportItem; onCancel: () => void; onRetry: () => void }) {
+/** One file of an upload queue: its progress, then `result` (what the page makes of the server's answer), or why it failed. */
+export function QueueItem<R>({
+  item,
+  accepts,
+  result,
+  onCancel,
+  onRetry,
+}: {
+  item: ImportItem<R>;
+  accepts: (name: string) => boolean;
+  result: (r: R) => ReactNode;
+  onCancel: () => void;
+  onRetry: () => void;
+}) {
   const { file, status } = item;
   const pct = file.size > 0 ? Math.min(100, Math.floor((item.loaded / file.size) * 100)) : 100;
   // A file of the wrong kind never reached the server, so trying it again would change nothing.
-  const canRetry = status === 'cancelled' || (status === 'failed' && isImportable(file.name));
+  const canRetry = status === 'cancelled' || (status === 'failed' && accepts(file.name));
   return (
     <li className="import-item" data-status={status}>
       <div className="import-item__head">
@@ -79,7 +91,7 @@ function Item({ item, onCancel, onRetry }: { item: ImportItem; onCancel: () => v
           </p>
         </>
       ) : null}
-      {status === 'done' ? <Result item={item} /> : null}
+      {status === 'done' && item.result ? result(item.result) : null}
       {status === 'failed' ? (
         <p className="status-msg status-msg--error" role="alert">
           {item.error}
@@ -148,7 +160,7 @@ export function GarminImportPage() {
           <CardHeader title="Files" aside={finished ? <Button onClick={queue.clearFinished}>Clear finished</Button> : undefined} />
           <ul className="import-list">
             {queue.items.map((item) => (
-              <Item key={item.id} item={item} onCancel={() => queue.cancel(item.id)} onRetry={() => queue.retry(item.id)} />
+              <QueueItem key={item.id} item={item} accepts={isImportable} result={(r) => <Result r={r} />} onCancel={() => queue.cancel(item.id)} onRetry={() => queue.retry(item.id)} />
             ))}
           </ul>
         </Card>

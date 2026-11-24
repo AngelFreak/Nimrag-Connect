@@ -30,6 +30,7 @@ import { WorkoutPage } from './pages/WorkoutPage';
 import { WorkoutListPage } from './pages/workouts/WorkoutListPage';
 import { GarminImportPage } from './pages/profile/GarminImportPage';
 import { GarminPage } from './pages/profile/GarminPage';
+import { NimragRestorePage } from './pages/profile/NimragRestorePage';
 import { GoalsPage } from './pages/profile/GoalsPage';
 import { PasswordPage } from './pages/profile/PasswordPage';
 import { PhonesPage } from './pages/profile/PhonesPage';
@@ -88,6 +89,7 @@ export function App() {
               <Route path="goals" element={<GoalsPage />} />
               <Route path="garmin" element={<GarminPage />} />
               <Route path="import-garmin" element={<GarminImportPage />} />
+              <Route path="restore" element={<NimragRestorePage />} />
             </Route>
           </Route>
         </Route>
