@@ -378,8 +378,9 @@ mod tests {
             assert!(vals.windows(2).all(|w| w[0].0 < w[1].0), "{name}");
         }
         assert_eq!(DATA.version, None);
-        // Nimrag's map holds no Garmin data and no writer-only messages.
-        assert!(message_number("workout").is_none());
+        // Nimrag's map holds no Garmin data; the weather message comes from output comparison (O).
+        assert_eq!(message_number("weather_conditions"), Some(128));
+        assert!(field_by_name(128, "dew_point").is_none());
         assert!(enum_value("sleep_level", "deep") == Some(3));
     }
 

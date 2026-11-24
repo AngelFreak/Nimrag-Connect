@@ -438,15 +438,18 @@ mod tests {
         assert_eq!(encode(&f).unwrap_err(), EncodeError::Unavailable);
     }
 
-    /// Nimrag's own partial map has no `weather_conditions`: Unavailable, no bytes.
+    /// Nimrag's own map has `weather_conditions` (settled by output comparison, not
+    /// observed in Garmin's files) without the three optional extras.
     #[cfg(fit_map)]
     #[test]
-    fn with_the_partial_map_the_weather_is_unavailable_never_wrong_bytes() {
-        assert!(!available());
-        assert_eq!(encode(&sample()).unwrap_err(), EncodeError::Unavailable);
+    fn with_the_partial_map_the_weather_is_written_without_the_optional_extras() {
+        assert!(available());
+        let w = encode(&sample()).unwrap();
+        assert!(!w.definitions.is_empty());
+        assert_eq!(w.records.len(), 1 + MAX_HOURLY + MAX_DAILY);
         let mut f = sample();
         f.current.time_unix_s = 0;
-        assert_eq!(encode(&f).unwrap_err(), EncodeError::Unavailable);
+        assert!(matches!(encode(&f).unwrap_err(), EncodeError::Invalid(_)));
     }
 
     #[cfg(fit_profile)]

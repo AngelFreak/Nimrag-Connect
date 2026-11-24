@@ -191,10 +191,12 @@ fn stress_respiration_and_heart_rate_scales() {
 }
 
 #[test]
-fn the_writers_report_unavailable_never_wrong_bytes() {
-    assert!(!workout::available());
-    assert!(!weather::available());
-    assert!(!profile::has_message("workout"));
-    assert!(!profile::has_message("workout_step"));
-    assert!(!profile::has_message("weather_conditions"));
+fn the_writers_are_available_with_the_map() {
+    // workout messages were observed in Garmin's own workout files; weather was settled by output comparison (O)
+    assert!(workout::available());
+    assert!(profile::has_message("workout"));
+    assert!(profile::has_message("workout_step"));
+    assert!(profile::has_message("memo_glob"));
+    assert!(weather::available());
+    assert!(profile::has_message("weather_conditions"));
 }

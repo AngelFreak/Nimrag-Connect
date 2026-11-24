@@ -666,21 +666,24 @@ mod tests {
         assert_eq!(encode(&w, 1).unwrap_err(), EncodeError::Unavailable);
     }
 
-    /// Nimrag's own partial map has none of the workout messages: the same answer
-    /// as without a profile, decided before anything is written.
+    /// Nimrag's own map has every name the writer uses: the workout messages were
+    /// observed in Garmin's workout files, the rest (weight unit, custom targets,
+    /// open and heart-rate durations, `rest`, speed and cadence targets, walking)
+    /// was settled by output comparison (O).
     #[cfg(fit_map)]
     #[test]
-    fn with_the_partial_map_the_workout_is_unavailable_never_wrong_bytes() {
-        assert!(!available());
-        assert_eq!(
-            encode(&sample(), 977_000_000).unwrap_err(),
-            EncodeError::Unavailable
-        );
+    fn with_the_partial_map_the_workout_is_written() {
+        assert!(available());
+        let file = encode(&sample(), 977_000_000).unwrap();
+        assert_eq!(&file[8..12], b".FIT");
         let mut w = sample();
         w.nodes.clear();
-        assert_eq!(encode(&w, 1).unwrap_err(), EncodeError::Unavailable);
-        // the step-note memo path alone also answers Unavailable
-        assert_eq!(note_memo("n", 0).unwrap_err(), EncodeError::Unavailable);
+        assert!(matches!(
+            encode(&w, 1).unwrap_err(),
+            EncodeError::Invalid(_)
+        ));
+        // the step-note memo is in the map
+        assert!(note_memo("n", 0).is_ok());
     }
 
     #[cfg(fit_profile)]

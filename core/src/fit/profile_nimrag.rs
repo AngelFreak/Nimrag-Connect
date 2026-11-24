@@ -15,7 +15,8 @@ pub(super) static MESSAGES: &[MessageInfo] = &[
         fields: &[
             fe(0, "type", BaseType::Enum, "file", None, None, None, false, &[], &[]),
             fe(1, "manufacturer", BaseType::Uint16, "manufacturer", None, None, None, false, &[], &[]),
-            fe(2, "product", BaseType::Uint16, "uint16", None, None, None, false, &[], &[]),
+            // Garmin's workout files carry product 65534 ("connect") with manufacturer 1
+            fe(2, "product", BaseType::Uint16, "uint16", None, None, None, false, &[], &[sub("garmin_product", BaseType::Uint16, "garmin_product", None, None, None, &[(1, 1)], &[])]),
             fe(3, "serial_number", BaseType::Uint32z, "uint32z", None, None, None, false, &[], &[]),
             fe(4, "time_created", BaseType::Uint32, "date_time", None, None, Some("s"), false, &[], &[]),
             fe(5, "number", BaseType::Uint16, "uint16", None, None, None, false, &[], &[]),
@@ -101,6 +102,46 @@ pub(super) static MESSAGES: &[MessageInfo] = &[
         ],
     },
     MessageInfo {
+        global: 26,
+        name: "workout",
+        fields: &[
+            fe(4, "sport", BaseType::Enum, "sport", None, None, None, false, &[], &[]),
+            fe(5, "capabilities", BaseType::Uint32z, "uint32z", None, None, None, false, &[], &[]),
+            fe(6, "num_valid_steps", BaseType::Uint16, "uint16", None, None, None, false, &[], &[]),
+            fe(8, "wkt_name", BaseType::String, "string", None, None, None, false, &[], &[]),
+            fe(11, "sub_sport", BaseType::Enum, "sub_sport", None, None, None, false, &[], &[]),
+            fe(17, "wkt_description", BaseType::String, "string", None, None, None, false, &[], &[]),
+            fe(254, "message_index", BaseType::Uint16, "uint16", None, None, None, false, &[], &[]),
+        ],
+    },
+    MessageInfo {
+        global: 27,
+        name: "workout_step",
+        fields: &[
+            fe(1, "duration_type", BaseType::Enum, "wkt_step_duration", None, None, None, false, &[], &[]),
+            // time in milliseconds, distance in centimetres, repeat: the index of the first step of the block
+            fe(2, "duration_value", BaseType::Uint32, "uint32", None, None, None, false, &[], &[
+                sub("duration_time", BaseType::Uint32, "uint32", Some(1000.0), None, Some("s"), &[(1, 0)], &[]),
+                sub("duration_distance", BaseType::Uint32, "uint32", Some(100.0), None, Some("m"), &[(1, 1)], &[]),
+            ]),
+            fe(3, "target_type", BaseType::Enum, "wkt_step_target", None, None, None, false, &[], &[]),
+            // heart-rate zone number with target heart_rate; the pass count of a repeat step
+            fe(4, "target_value", BaseType::Uint32, "uint32", None, None, None, false, &[], &[]),
+            // O: fields 5 and 6 and their speed subfields (scale 1000, m/s) were not in the six workout files
+            fe(5, "custom_target_value_low", BaseType::Uint32, "uint32", None, None, None, false, &[], &[
+                sub("custom_target_speed_low", BaseType::Uint32, "uint32", Some(1000.0), None, Some("m/s"), &[(3, 0)], &[]),
+            ]),
+            fe(6, "custom_target_value_high", BaseType::Uint32, "uint32", None, None, None, false, &[], &[
+                sub("custom_target_speed_high", BaseType::Uint32, "uint32", Some(1000.0), None, Some("m/s"), &[(3, 0)], &[]),
+            ]),
+            fe(7, "intensity", BaseType::Enum, "intensity", None, None, None, false, &[], &[]),
+            fe(8, "notes", BaseType::String, "string", None, None, None, false, &[], &[]),
+            // O: number 13, uint16 and the value kilogram = 1 (Garmin's own files leave it out)
+            fe(13, "weight_display_unit", BaseType::Uint16, "weight_display_unit", None, None, None, false, &[], &[]),
+            fe(254, "message_index", BaseType::Uint16, "uint16", None, None, None, false, &[], &[]),
+        ],
+    },
+    MessageInfo {
         global: 34,
         name: "activity",
         fields: &[
@@ -160,6 +201,31 @@ pub(super) static MESSAGES: &[MessageInfo] = &[
         ],
     },
     MessageInfo {
+        global: 128,
+        // O: the whole message (number, fields, enum values) was settled by output comparison with the
+        // reference build, not observed in Garmin files. dew_point, uv_index and atmospheric_pressure are
+        // absent on purpose: the reference writes the other 15 fields only.
+        name: "weather_conditions",
+        fields: &[
+            fe(0, "weather_report", BaseType::Enum, "weather_report", None, None, None, false, &[], &[]),
+            fe(1, "temperature", BaseType::Sint8, "sint8", None, None, Some("C"), false, &[], &[]),
+            fe(2, "condition", BaseType::Enum, "weather_status", None, None, None, false, &[], &[]),
+            fe(3, "wind_direction", BaseType::Uint16, "uint16", None, None, Some("degrees"), false, &[], &[]),
+            fe(4, "wind_speed", BaseType::Uint16, "uint16", Some(1000.0), None, Some("m/s"), false, &[], &[]),
+            fe(5, "precipitation_probability", BaseType::Uint8, "uint8", None, None, Some("%"), false, &[], &[]),
+            fe(6, "temperature_feels_like", BaseType::Sint8, "sint8", None, None, Some("C"), false, &[], &[]),
+            fe(7, "relative_humidity", BaseType::Uint8, "uint8", None, None, Some("%"), false, &[], &[]),
+            fe(8, "location", BaseType::String, "string", None, None, None, false, &[], &[]),
+            fe(9, "observed_at_time", BaseType::Uint32, "date_time", None, None, Some("s"), false, &[], &[]),
+            fe(10, "observed_location_lat", BaseType::Sint32, "sint32", None, None, Some("semicircles"), false, &[], &[]),
+            fe(11, "observed_location_long", BaseType::Sint32, "sint32", None, None, Some("semicircles"), false, &[], &[]),
+            fe(12, "day_of_week", BaseType::Enum, "day_of_week", None, None, None, false, &[], &[]),
+            fe(13, "high_temperature", BaseType::Sint8, "sint8", None, None, Some("C"), false, &[], &[]),
+            fe(14, "low_temperature", BaseType::Sint8, "sint8", None, None, Some("C"), false, &[], &[]),
+            fe(253, "timestamp", BaseType::Uint32, "date_time", None, None, Some("s"), false, &[], &[]),
+        ],
+    },
+    MessageInfo {
         global: 140,
         name: "firstbeat_results",
         fields: &[
@@ -177,6 +243,17 @@ pub(super) static MESSAGES: &[MessageInfo] = &[
             // ambiguous: also field 3 (identical everywhere); field 39 = the Connect total load, differs on 9 of 22 files
             fe(26, "training_load_peak", BaseType::Sint32, "sint32", Some(65536.0), None, None, false, &[], &[]),
             fe(253, "timestamp", BaseType::Uint32, "date_time", None, None, Some("s"), false, &[], &[]),
+        ],
+    },
+    MessageInfo {
+        global: 145,
+        name: "memo_glob",
+        fields: &[
+            fe(1, "mesg_num", BaseType::Uint16, "mesg_num", None, None, None, false, &[], &[]),
+            fe(2, "parent_index", BaseType::Uint16, "uint16", None, None, None, false, &[], &[]),
+            fe(3, "field_num", BaseType::Uint8, "uint8", None, None, None, false, &[], &[]),
+            arr(fe(4, "data", BaseType::Uint8z, "uint8z", None, None, None, false, &[], &[])),
+            fe(250, "part_index", BaseType::Uint32, "uint32", None, None, None, false, &[], &[]),
         ],
     },
     MessageInfo {
@@ -232,6 +309,16 @@ pub(super) static MESSAGES: &[MessageInfo] = &[
             fe(3, "fitness_level_trend", BaseType::Enum, "fitness_level_trend", None, None, None, false, &[], &[]),
             // load_level_trend: left out. The 1:1 diff showed the reference never fills it.
             fe(253, "timestamp", BaseType::Uint32, "date_time", None, None, Some("s"), false, &[], &[]),
+        ],
+    },
+    MessageInfo {
+        global: 264,
+        name: "exercise_title",
+        fields: &[
+            fe(0, "exercise_category", BaseType::Uint16, "exercise_category", None, None, None, false, &[], &[]),
+            fe(1, "exercise_name", BaseType::Uint16, "uint16", None, None, None, false, &[], &[]),
+            fe(2, "wkt_step_name", BaseType::String, "string", None, None, None, false, &[], &[]),
+            fe(254, "message_index", BaseType::Uint16, "uint16", None, None, None, false, &[], &[]),
         ],
     },
     MessageInfo {
@@ -340,17 +427,35 @@ pub(super) static MESSAGES: &[MessageInfo] = &[
 pub(super) static ENUMS: &[(&str, &[(u64, &str)])] = &[
     ("activity_type", &[(0, "generic"), (1, "running"), (6, "walking"), (8, "sedentary")]),
     ("body_battery_status", &[(1, "measured")]),
+    // O: sunday 0, tuesday 2, wednesday 3, friday 5, saturday 6; P: monday 1 and thursday 4 (the oracle files never use them; contiguous with the rest)
+    ("day_of_week", &[(0, "sunday"), (1, "monday"), (2, "tuesday"), (3, "wednesday"), (4, "thursday"), (5, "friday"), (6, "saturday")]),
     ("event", &[(74, "sleep")]),
     ("event_type", &[(0, "start"), (1, "stop")]),
     // ambiguous: 7, 23, 27 and 28 are the watch's guess and Connect's (edited) names disagree on some
     // sets; the majority name is used. The codes follow the alphabetical order of the names (21 < 23 = row)
-    ("exercise_category", &[(0, "bench_press"), (7, "curl"), (8, "deadlift"), (14, "lateral_raise"), (21, "pull_up"), (23, "row"), (27, "sit_up"), (28, "squat"), (30, "triceps_extension"), (65534, "unknown")]),
+    ("exercise_category", &[(0, "bench_press"), (7, "curl"), (8, "deadlift"), (14, "lateral_raise"), (21, "pull_up"), (23, "row"), (27, "sit_up"), (28, "squat"), (30, "triceps_extension"), (32, "run"), (65534, "unknown")]),
+    ("file", &[(5, "workout")]),
+    ("garmin_product", &[(65534, "connect")]),
     ("hrv_status", &[(3, "unbalanced")]),
+    // O: rest = 1 (not in Garmin's files)
+    ("intensity", &[(0, "active"), (1, "rest"), (2, "warmup"), (3, "cooldown"), (4, "recovery")]),
+    ("manufacturer", &[(1, "garmin")]),
+    ("mesg_num", &[(26, "workout"), (27, "workout_step")]),
     ("set_type", &[(0, "rest"), (1, "active")]),
     ("sleep_level", &[(1, "awake"), (2, "light"), (3, "deep"), (4, "rem")]),
     // ambiguous: 27 and 41 are named after Connect's activity types (horseback_riding, kayaking)
-    ("sport", &[(0, "generic"), (1, "running"), (2, "cycling"), (5, "swimming"), (10, "training"), (17, "hiking"), (27, "horseback_riding"), (41, "kayaking")]),
+    // O: walking = 11
+    ("sport", &[(0, "generic"), (1, "running"), (2, "cycling"), (5, "swimming"), (10, "training"), (11, "walking"), (17, "hiking"), (27, "horseback_riding"), (41, "kayaking")]),
     ("sub_sport", &[(0, "generic"), (17, "lap_swimming"), (20, "strength_training")]),
     ("training_status", &[(5, "recovery")]),
+    // O: open = 5, hr_less_than = 2, hr_greater_than = 3 (not in Garmin's files)
+    // O: all three values
+    ("weather_report", &[(0, "current"), (1, "hourly_forecast"), (2, "daily_forecast")]),
+    // O: every value (not observed in Garmin files)
+    ("weather_status", &[(0, "clear"), (1, "partly_cloudy"), (2, "mostly_cloudy"), (3, "rain"), (4, "snow"), (5, "windy"), (6, "thunderstorms"), (7, "wintry_mix"), (8, "fog"), (11, "hazy"), (12, "hail"), (13, "scattered_showers"), (14, "scattered_thunderstorms"), (15, "unknown_precipitation"), (16, "light_rain"), (17, "heavy_rain"), (18, "light_snow"), (19, "heavy_snow"), (20, "light_rain_snow"), (21, "heavy_rain_snow"), (22, "cloudy")]),
+    ("weight_display_unit", &[(1, "kilogram")]),
+    ("wkt_step_duration", &[(0, "time"), (1, "distance"), (2, "hr_less_than"), (3, "hr_greater_than"), (5, "open"), (6, "repeat_until_steps_cmplt")]),
+    // O: speed = 0, cadence = 3 (not in Garmin's files)
+    ("wkt_step_target", &[(0, "speed"), (1, "heart_rate"), (2, "open"), (3, "cadence")]),
 ];
 pub(super) static VERSION: Option<u32> = None;

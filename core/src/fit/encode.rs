@@ -1135,28 +1135,24 @@ mod tests {
         // file_id is in the map ...
         let mut id = MessageBuilder::new("file_id").unwrap();
         id.uint("serial_number", 1).unwrap();
-        // ... but not its `workout` file type, nor a field it does not have
-        assert_eq!(
-            id.enum_name("type", "workout").unwrap_err(),
-            EncodeError::Unavailable
-        );
+        // ... with the `workout` file type and the connect product (observed in Garmin's
+        // workout files), but not a field it does not have
+        id.enum_name("type", "workout").unwrap();
+        id.sub_enum_name("product", "garmin_product", "connect")
+            .unwrap();
         assert_eq!(
             id.uint("no_such_field", 1).unwrap_err(),
             EncodeError::Unavailable
         );
         assert_eq!(
-            id.sub_enum_name("product", "garmin_product", "connect")
-                .unwrap_err(),
+            id.enum_name("type", "no_such_file_type").unwrap_err(),
             EncodeError::Unavailable
         );
-        // messages the map lacks
-        for m in ["workout", "workout_step", "weather_conditions", "memo_glob"] {
-            assert_eq!(
-                MessageBuilder::new(m).unwrap_err(),
-                EncodeError::Unavailable,
-                "{m}"
-            );
-        }
+        // a message the map lacks
+        assert_eq!(
+            MessageBuilder::new("no_such_message").unwrap_err(),
+            EncodeError::Unavailable
+        );
     }
 
     #[cfg(fit_profile)]
