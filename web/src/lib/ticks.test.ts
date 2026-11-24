@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { extremeTicks, fmtPaceTick, formatTicks, niceTicks, tickCountFor, unitTicks, zeroBasedScale } from './ticks';
+import { extremeTicks, fmtDurationTick, fmtPaceTick, formatTicks, niceTicks, tickCountFor, unitTicks, zeroBasedScale } from './ticks';
 
 describe('niceTicks', () => {
   it('gives round values inside the range', () => {
@@ -66,6 +66,15 @@ describe('unit ticks and labels', () => {
   it('shows one decimal only when the ticks need it', () => {
     expect(formatTicks([70, 75, 80], 'decimal')).toEqual(['70', '75', '80']);
     expect(formatTicks([70.5, 71, 71.5], 'decimal')).toEqual(['70.5', '71.0', '71.5']);
+  });
+});
+
+describe('duration ticks', () => {
+  it('writes finish times under an hour as m:ss and longer ones as h:mm:ss', () => {
+    expect(fmtDurationTick(22.5)).toBe('22:30');
+    expect(fmtDurationTick(91)).toBe('1:31:00');
+    expect(fmtDurationTick(215.25)).toBe('3:35:15');
+    expect(formatTicks([180, 210, 240], 'duration')).toEqual(['3:00:00', '3:30:00', '4:00:00']);
   });
 });
 

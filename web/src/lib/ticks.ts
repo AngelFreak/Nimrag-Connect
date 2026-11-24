@@ -9,6 +9,8 @@ export type AxisUnit =
   | 'decimal'
   /** Decimal minutes per km, written m:ss. */
   | 'pace'
+  /** Decimal minutes of a finish time, written m:ss, or h:mm:ss from an hour up. */
+  | 'duration'
   /** Hours, written 6h (6.5h between). */
   | 'hours'
   /** Minutes, written as hours (6h, 6.5h). */
@@ -81,6 +83,7 @@ const UNIT_STEPS: Partial<Record<AxisUnit, TickOptions>> = {
   int: { integer: true },
   decimal: { mantissas: [1, 2, 5] },
   pace: { steps: [0.25, 0.5, 1, 2, 5, 10, 20] },
+  duration: { steps: [0.25, 0.5, 1, 2, 5, 10, 15, 30, 60] },
   hours: { steps: [0.5, 1, 2, 3, 4, 6, 12, 24] },
   minutes: { steps: [30, 60, 120, 180, 240, 360, 720, 1440] },
 };
@@ -106,11 +109,22 @@ export function fmtPaceTick(minutes: number): string {
   return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`;
 }
 
+/** A finish time in decimal minutes, written m:ss, or h:mm:ss from an hour up (91 → 1:31:00). */
+export function fmtDurationTick(minutes: number): string {
+  const total = Math.round(minutes * 60);
+  if (total < 3600) return fmtPaceTick(minutes);
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  return `${h}:${String(m).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
+}
+
 /** The axis label of every tick, written the same way (same number of decimals). */
 export function formatTicks(ticks: number[], unit: AxisUnit = 'int'): string[] {
   switch (unit) {
     case 'pace':
       return ticks.map(fmtPaceTick);
+    case 'duration':
+      return ticks.map(fmtDurationTick);
     case 'hours':
     case 'minutes': {
       const hours = unit === 'minutes' ? ticks.map((t) => t / 60) : ticks;
@@ -165,6 +179,7 @@ export function roundTick(v: number, unit: AxisUnit = 'int'): number {
     case 'minutes':
       return Math.round(v);
     case 'pace':
+    case 'duration':
       return Math.round(v * 60) / 60;
     default:
       return Math.round(v * 10) / 10;

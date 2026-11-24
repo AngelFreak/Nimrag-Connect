@@ -121,7 +121,7 @@ function HistoryCard({ data }: { data: RacePredictionsResponse }) {
             x={chart.x}
             series={[{ label: distanceName(distance), color: 'energy', data: chart.y, points: true }]}
             height={desktop ? 200 : 140}
-            yUnit="pace"
+            yUnit="duration"
             yReverse
             xLabels={chart.xLabels}
           />
