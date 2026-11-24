@@ -271,7 +271,7 @@ describe('In focus carousel', () => {
     expect(within(region).getByText('Score 81, good')).toBeInTheDocument();
     expect(within(region).getByRole('img', { name: /^Sleep stages: deep 1h 40m/ })).toBeInTheDocument();
     expect(within(region).getByText('62 ms')).toBeInTheDocument();
-    expect(within(region).getByText('Within your range')).toBeInTheDocument();
+    expect(within(region).getByText(/Within your range/)).toBeInTheDocument();
   });
 });
 
@@ -513,7 +513,7 @@ describe('Home on a desktop', () => {
     expect(await screen.findByText('No runs this week.')).toBeInTheDocument();
     expect(screen.getByText('No activities in the last 7 days.')).toBeInTheDocument();
     expect(screen.getByText('Not provided by this watch yet.')).toBeInTheDocument();
-    expect(screen.getByText('The watch has no data for this day.')).toBeInTheDocument();
+    expect(screen.getByText('Shows after your watch syncs a day of data.')).toBeInTheDocument();
     expect(await screen.findByText(/No activities yet/)).toBeInTheDocument();
   });
 

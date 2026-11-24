@@ -82,7 +82,9 @@ export interface Factor {
   rating: Rating;
   /** True when the rating comes from the watch's own sub-score. */
   fromWatch: boolean;
-  /** The target band in one line (and, when the watch rated it, a note saying so). */
+  /** The watch's own 0 to 100 sub-score when it rated this row. */
+  watchScore: number | null;
+  /** What the expanded row says: Nimrag's rule for its own rating; for a watch rating, how the watch scored it and then the target band. */
   target: string;
   /** Which side of the target band the value is on; `in` when inside or not a band. */
   side: 'low' | 'high' | 'in';
@@ -100,7 +102,18 @@ function pct(n: number): string {
   return `${fmtFixed(n, 1)} %`;
 }
 
-const WATCH_NOTE = ' Rated from your watch.';
+/** The lowest score of each rating on the 0 to 100 scale (the bands of `ratingOfScore`). */
+const BAND_FROM: Record<Rating, number> = { poor: 0, fair: 60, good: 80, excellent: 90 };
+
+/**
+ * The line of a row the watch rated: its score, what the next level up needs, then the target band
+ * for context. Nimrag's own rules ("within 4 points...") are not shown, because they did not rate it.
+ */
+export function watchLine(score: number, context: string): string {
+  const rating = ratingOfScore(score) as Rating;
+  const goal: Rating = rating === 'excellent' ? 'excellent' : (ORDER[ORDER.indexOf(rating) + 1] as Rating);
+  return `Your watch scored this ${fmtFixed(score, 0)} of 100; ${RATING_WORD[goal]} is ${BAND_FROM[goal]} or more. ${context}`;
+}
 
 /** The six rows. A row with neither a value nor a watch score is left out. */
 export function sleepFactors(night: SleepNight): Factor[] {
@@ -119,7 +132,8 @@ export function sleepFactors(night: SleepNight): Factor[] {
       value: `${fmtSeconds(night.duration_s) ?? fmtHours(min)} of ${fmtHours(need)}`,
       rating: w ?? rateDuration(min, need),
       fromWatch: w !== null,
-      target: `Aim for your need of ${fmtHours(need)}. Within 30 min is Good, within 90 min is Fair.${w ? WATCH_NOTE : ''}`,
+      watchScore: w === null ? null : sc.duration,
+      target: w === null ? `Aim for your need of ${fmtHours(need)}. Within 30 min is Good, within 90 min is Fair.` : watchLine(sc.duration as number, `Your need is ${fmtHours(need)}.`),
       side: min < need ? 'low' : min > need + 120 ? 'high' : 'in',
     });
   }
@@ -133,7 +147,8 @@ export function sleepFactors(night: SleepNight): Factor[] {
       value: `${fmtFixed(night.avg_stress, 0)} average`,
       rating: w ?? rateStress(night.avg_stress),
       fromWatch: w !== null,
-      target: `Average stress while asleep: 15 or lower is Excellent, up to 20 Good, up to 30 Fair.${w ? WATCH_NOTE : ''}`,
+      watchScore: w === null ? null : sc.recovery,
+      target: w === null ? 'Average stress while asleep: 15 or lower is Excellent, up to 20 Good, up to 30 Fair.' : watchLine(sc.recovery as number, 'It looks at how calm you were while asleep, so lower stress scores higher.'),
       side: 'in',
     });
   }
@@ -156,7 +171,8 @@ export function sleepFactors(night: SleepNight): Factor[] {
       value: share === null ? 'No stage data' : `${fmtSeconds(r.secs)} · ${pct(share)}`,
       rating: w ?? rateShare(share ?? 0, lo, hi),
       fromWatch: w !== null,
-      target: `Target ${lo} to ${hi} % of your time asleep. Within 4 points is Good, within 8 Fair.${w ? WATCH_NOTE : ''}`,
+      watchScore: w === null ? null : r.score,
+      target: w === null ? `Target ${lo} to ${hi} % of your time asleep. Within 4 points is Good, within 8 Fair.` : watchLine(r.score as number, `Target ${lo} to ${hi} % of your time asleep.`),
       side: share === null ? 'in' : share < lo ? 'low' : share > hi ? 'high' : 'in',
     });
   }
@@ -174,10 +190,11 @@ export function sleepFactors(night: SleepNight): Factor[] {
       out.push({
         key: 'awake',
         name: 'Awake and restless',
-        value: parts.join(' · ') || 'No data',
+        value: parts.join(' · ') || 'Not recorded',
         rating: w ?? rateAwake(awakeMin, long),
         fromWatch: w !== null,
-        target: `Under 20 min awake and at most one wake-up over 5 min is Excellent. Under 30 min is Good, under 45 Fair.${w ? WATCH_NOTE : ''}`,
+        watchScore: w === null ? null : sc.quality,
+        target: w === null ? 'Under 20 min awake and at most one wake-up over 5 min is Excellent. Under 30 min is Good, under 45 Fair.' : watchLine(sc.quality as number, 'Fewer and shorter wake-ups score higher.'),
         side: 'in',
       });
     }
@@ -233,6 +250,13 @@ export function headlineFor(night: SleepNight, factors: Factor[] = sleepFactors(
   const needMin = night.sleep_need_min;
   const diff = night.duration_s / 60 - needMin;
   const need = fmtHours(needMin);
+  // The watch rated the time asleep Good or better: do not open with "Short night" over a Good row.
+  const duration = factors.find((f) => f.key === 'duration');
+  const watchOkShort = diff < -60 && duration !== undefined && duration.fromWatch && ORDER.indexOf(duration.rating) >= ORDER.indexOf('good');
+  if (watchOkShort) {
+    const rest = headlineFor({ ...night, duration_s: needMin * 60 }, factors);
+    return { ...rest, sentence: `${rest.sentence} Time asleep was a bit shorter than your ${need} need.` };
+  }
   if (diff < -60) {
     const gap = fmtHours(-diff);
     return diff < -180

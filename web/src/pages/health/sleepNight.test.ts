@@ -151,7 +151,19 @@ describe('the factor list', () => {
     const n = night({ scores: { ...NONE, duration: 95, deep: 79, light: 60, rem: 59, recovery: 85, quality: 40 } });
     const rated = Object.fromEntries(sleepFactors(n).map((f) => [f.key, f.rating]));
     expect(rated).toEqual({ duration: 'excellent', stress: 'good', deep: 'fair', light: 'fair', rem: 'poor', awake: 'poor' });
-    expect(sleepFactors(n).every((f) => f.fromWatch && f.target.includes('from your watch'))).toBe(true);
+    expect(sleepFactors(n).every((f) => f.fromWatch && f.target.startsWith('Your watch scored this'))).toBe(true);
+  });
+
+  it('explains a watch rating with its score and the next level, then the target band', () => {
+    const n = night({ scores: { ...NONE, duration: 72, deep: 95 } });
+    expect(factor(n, 'duration')!.target).toBe('Your watch scored this 72 of 100; Good is 80 or more. Your need is 8 h.');
+    expect(factor(n, 'deep')!.target).toBe('Your watch scored this 95 of 100; Excellent is 90 or more. Target 16 to 33 % of your time asleep.');
+    expect(factor(n, 'duration')!.watchScore).toBe(72);
+  });
+
+  it('does not show our own rule text on a watch-rated row', () => {
+    const n = night({ scores: { ...NONE, duration: 72, recovery: 70, deep: 70, light: 70, rem: 70, quality: 70 } });
+    for (const f of sleepFactors(n)) expect(f.target).not.toMatch(/Within \d+ (points|min)|Rated from/);
   });
 
   it('keeps a watch sub-score row even without stage times', () => {
@@ -169,7 +181,7 @@ describe('the factor list', () => {
 });
 
 describe('the weakest factor', () => {
-  const f = (key: Factor['key'], rating: Factor['rating']): Factor => ({ key, name: key, value: '', rating, fromWatch: false, target: '', side: 'in' });
+  const f = (key: Factor['key'], rating: Factor['rating']): Factor => ({ key, name: key, value: '', rating, fromWatch: false, watchScore: null, target: '', side: 'in' });
   it('is the lowest rating', () => {
     expect(weakestFactor([f('duration', 'good'), f('deep', 'fair'), f('rem', 'poor')])?.key).toBe('rem');
   });
@@ -192,6 +204,13 @@ describe('the headline, by rule', () => {
     expect(r.rule).toBe('short_night');
     expect(r.title).toBe('Short night');
     expect(r.sentence).toContain('1 h 1 min less than your 8 h need');
+  });
+  it('1: a watch-rated Good duration never opens with "Short night"', () => {
+    const r = h(night({ duration_s: 6 * 3600, scores: { ...NONE, duration: 82 } }));
+    expect(r.rule).not.toBe('short_night');
+    expect(r.sentence).toContain('a bit shorter than your 8 h need');
+    // a watch-rated Fair duration still does
+    expect(h(night({ duration_s: 6 * 3600, scores: { ...NONE, duration: 70 } })).rule).toBe('short_night');
   });
   it('1: exactly 1 h short is not yet a short night', () => {
     expect(h(night({ duration_s: 7 * 3600 })).rule).not.toBe('short_night');

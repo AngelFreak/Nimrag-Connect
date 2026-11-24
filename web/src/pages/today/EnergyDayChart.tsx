@@ -3,15 +3,15 @@ import type { StressBlock } from '../../api/generated/StressBlock';
 import type { StressLevel } from '../../api/generated/StressLevel';
 import { PlotFrame, PlotXLabels, plotTicks, Unavailable } from '../../components';
 import { fmtInt } from '../../lib/format';
-import { tickCountFor, unitTicks } from '../../lib/ticks';
 import { fmtTime } from './format';
 
 const W = 320;
-const ENERGY_H = 96;
-// Room between the two scales so the "0" of energy and the "100" of stress never touch (at 130% text too).
-const STRESS_TOP = 126;
-const STRESS_H = 44;
-const H = STRESS_TOP + STRESS_H;
+const ENERGY_H = 112;
+// Stress is a thin band of level colours directly under the energy plot, on the same time axis.
+// It has no scale of its own: the colour is the level.
+const BAND_TOP = ENERGY_H + 6;
+const BAND_H = 10;
+const H = BAND_TOP + BAND_H;
 const BINS = 72;
 
 const LEVEL_COLOR: Record<StressLevel, string> = {
@@ -32,27 +32,23 @@ const LEGEND: { level: StressLevel; label: string }[] = [
 const ACTIVE_LEGEND: { level: StressLevel; label: string } = { level: 'activity', label: 'Too active to measure' };
 
 interface Bin {
-  level: StressLevel;
-  value: number | null;
+  /** The level most samples of the column have; `null` for a column without any sample. */
+  level: StressLevel | null;
 }
 
 /** Groups the stress samples into at most BINS columns along the same time axis as the energy line. */
 function binStress(stress: StressBlock, t0: number, t1: number): Bin[] {
   const span = Math.max(1, t1 - t0);
-  const groups: { levels: Map<StressLevel, number>; sum: number; n: number }[] = Array.from({ length: BINS }, () => ({ levels: new Map(), sum: 0, n: 0 }));
+  const groups: { levels: Map<StressLevel, number> }[] = Array.from({ length: BINS }, () => ({ levels: new Map() }));
   for (const s of stress.series) {
     const t = Date.parse(s.time);
     if (Number.isNaN(t) || t < t0 || t > t1) continue;
     const g = groups[Math.min(BINS - 1, Math.floor(((t - t0) / span) * BINS))];
     if (!g) continue;
     g.levels.set(s.level, (g.levels.get(s.level) ?? 0) + 1);
-    if (s.stress !== null) {
-      g.sum += s.stress;
-      g.n += 1;
-    }
   }
   return groups.map((g) => {
-    let level: StressLevel = 'rest';
+    let level: StressLevel | null = null;
     let best = 0;
     for (const [l, c] of g.levels) {
       if (c > best) {
@@ -60,8 +56,20 @@ function binStress(stress: StressBlock, t0: number, t1: number): Bin[] {
         level = l;
       }
     }
-    return { level, value: g.n > 0 ? g.sum / g.n : null };
+    return { level };
   });
+}
+
+/** Neighbouring columns of the same level as one run (`from` inclusive, `to` exclusive); columns without a reading are gaps. */
+function bandRuns(bins: Bin[]): { from: number; to: number; level: StressLevel }[] {
+  const runs: { from: number; to: number; level: StressLevel }[] = [];
+  bins.forEach((b, i) => {
+    if (b.level === null) return;
+    const last = runs[runs.length - 1];
+    if (last && last.to === i && last.level === b.level) last.to = i + 1;
+    else runs.push({ from: i, to: i + 1, level: b.level });
+  });
+  return runs;
 }
 
 interface Props {
@@ -90,11 +98,8 @@ export function EnergyDayChart({ energy, stress, timezone }: Props) {
   const span = Math.max(1, t1 - t0);
   const x = (t: number) => ((t - t0) / span) * W;
   const y = (v: number) => ENERGY_H - (Math.min(100, Math.max(0, v)) / 100) * (ENERGY_H - 4) - 2;
-  // Both 0 to 100: energy over the line, stress over the bars under it.
-  const ticks = [
-    ...plotTicks(unitTicks(0, 100, tickCountFor(ENERGY_H, 16)), 'int', (v) => y(v) / H),
-    ...plotTicks(unitTicks(0, 100, tickCountFor(STRESS_H, 16)), 'int', (v) => (STRESS_TOP + STRESS_H - (v / 100) * STRESS_H) / H),
-  ];
+  // Only energy has a value axis (0 to 100).
+  const ticks = plotTicks([0, 50, 100], 'int', (v) => y(v) / H);
 
   const line = points.map((p) => `${x(p.t).toFixed(1)},${y(p.v).toFixed(1)}`).join(' ');
   const area = `0,${ENERGY_H} ${line} ${W},${ENERGY_H}`;
@@ -131,27 +136,15 @@ export function EnergyDayChart({ energy, stress, timezone }: Props) {
 
   return (
     <div className="day-chart">
-      <PlotFrame ticks={ticks} viewW={W} viewH={H} label="Energy through the day with stress below, both from 0 to 100" xAxis={xAxis}>
+      <PlotFrame ticks={ticks} viewW={W} viewH={H} label="Energy through the day from 0 to 100, with the stress level of each stretch in a band below" xAxis={xAxis}>
         <polygon points={area} style={{ fill: 'var(--energy-fill)' }} />
         <polyline points={line} fill="none" strokeWidth={2.5} strokeLinejoin="round" vectorEffect="non-scaling-stroke" style={{ stroke: 'var(--energy)' }} />
         {anyStress
-          ? bins.map((b, i) => {
-              if (b.level === 'activity') return <rect key={i} x={i * slot} y={STRESS_TOP} width={slot + 0.3} height={STRESS_H} style={{ fill: LEVEL_COLOR.activity }} />;
-              if (b.value === null && b.level !== 'rest') return null;
-              const h = b.level === 'rest' && b.value === null ? 6 : Math.max(4, ((b.value ?? 0) / 100) * STRESS_H);
-              return <rect key={i} x={i * slot} y={STRESS_TOP + STRESS_H - h} width={slot + 0.3} height={h} style={{ fill: LEVEL_COLOR[b.level] }} />;
-            })
+          ? bandRuns(bins).map((r) => <rect key={r.from} x={r.from * slot} y={BAND_TOP} width={(r.to - r.from) * slot + 0.3} height={BAND_H} style={{ fill: LEVEL_COLOR[r.level] }} />)
           : null}
         {wakeX !== null ? <line x1={wakeX} x2={wakeX} y1={0} y2={H} strokeWidth={2} strokeDasharray="4 3" vectorEffect="non-scaling-stroke" style={{ stroke: 'var(--text)' }} /> : null}
       </PlotFrame>
       <div className="day-chart__legend">
-        {wakeX !== null && wakeText ? (
-          <span>
-            <i className="day-chart__wake" aria-hidden="true" />
-            Woke {wakeText}
-          </span>
-        ) : null}
-        {anyStress ? <span>Stress:</span> : null}
         {anyStress
           ? [...LEGEND, ...(stress.series.some((s) => s.level === 'activity') ? [ACTIVE_LEGEND] : [])].map((l) => (
               <span key={l.level}>

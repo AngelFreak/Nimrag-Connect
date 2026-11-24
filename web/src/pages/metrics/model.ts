@@ -109,7 +109,7 @@ export function rangeSummary(def: MetricDef, d: MetricRange): string {
   const period = fmtPeriod(d.from, d.to);
   const n = bucketsWithData(d);
   const total = d.series[0]?.points.length ?? 0;
-  if (n === 0) return `No ${def.title.toLowerCase()} readings ${period}.`;
+  if (n === 0) return `Shows after your watch syncs ${def.title.toLowerCase()} (${period}).`;
   const unit = d.bucket === 'day' ? 'day' : 'week';
   const figures = tileStats(def.key, d)
     .map((s) => {

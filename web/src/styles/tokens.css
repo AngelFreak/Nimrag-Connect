@@ -22,6 +22,7 @@
   --track: #dbdbdb;
   --band: #dce9f7;
   --hover: #f4f4f4;
+  --pressed: #e8eaec;
   --skel-a: #e9e9e9;
   --skel-b: #f4f4f4;
   --scrim: rgb(0 0 0 / 0.45);
@@ -74,7 +75,7 @@
   --stress-rest: #3b6ea5;
   --stress-low: #f3b14a;
   --stress-medium: #f08a00;
-  --stress-high: #b8470a;
+  --stress-high: #b3123f;
   --stress-activity: #d4dade;
 
   /* Training status timeline (recovery blue, strained magenta, maintaining yellow, productive green,
@@ -154,6 +155,7 @@
   --track: #243037;
   --band: #1d3144;
   --hover: #1b2429;
+  --pressed: #243038;
   --skel-a: #1b252a;
   --skel-b: #232f35;
   --scrim: rgb(5 8 10 / 0.72);
@@ -201,7 +203,7 @@
   --stress-rest: #2f5c8a;
   --stress-low: #ffd49a;
   --stress-medium: #ff9f45;
-  --stress-high: #e5601b;
+  --stress-high: #f0486f;
   --stress-activity: #1f292e;
 
   --good: #6fcf5f;

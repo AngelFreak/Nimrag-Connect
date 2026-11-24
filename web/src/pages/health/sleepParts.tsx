@@ -125,9 +125,9 @@ export function StagesWithOverlay({ night, overlays }: { night: SleepNight; over
       {night.stages_available && spans.length > 0 ? (
         <StageTimeline spans={spans} totalMinutes={totalMinutes} label="Sleep stages through the night" ticks={sleepTicks(night)} line={line} />
       ) : (
-        <p className="stat__sub">Stages were not recorded for this night.</p>
+        <p className="stat__sub">Shows after your watch records sleep stages for a night.</p>
       )}
-      <ChartSummary>{stageSummary(night)}</ChartSummary>
+      {night.stages_available && spans.length > 0 ? <ChartSummary>{stageSummary(night)}</ChartSummary> : null}
       {night.stages_available && spans.length > 0 && available.length > 0 ? (
         <div role="group" aria-label="Draw over the stages" className="overlay-chips">
           {available.map((o) => (

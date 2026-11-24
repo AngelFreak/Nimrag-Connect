@@ -58,7 +58,7 @@ export function YesterdayCard({ today }: { today: Today }) {
       <CardHeader title="Yesterday" id="yesterday-title" aside={fmtShortDay(y.date)} />
       <DataList
         hideMissing
-        empty="The watch has no data for this day."
+        empty="Shows after your watch syncs a day of data."
         items={[
           { label: 'Energy in / out', value: flows },
           { label: 'Steps', value: fmtInt(y.steps) },
@@ -81,7 +81,7 @@ export function Last7DaysCard({ today }: { today: Today }) {
       <CardHeader title="Last 7 days" id="last7-title" aside={`${fmtShortDay(w.from)} to ${fmtShortDay(w.to)}`} />
       <DataList
         hideMissing
-        empty="No data for these days."
+        empty="Shows after your watch syncs a few days."
         items={[
           { label: 'Activities', value: w.activity_count === 0 ? 'None' : join(String(w.activity_count), kinds) },
           { label: 'Steps per day', value: fmtInt(w.avg_steps) },

@@ -752,10 +752,14 @@
 /* ------------------------------------------------------------------ polish: summary, route, effect, pointer line */
 
 /* Phone: the top of the page. A row of the sport's key figures in large type under the sport and the time. */
-.acts-hero {
+.card.acts-hero {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
+  align-items: flex-start;
   gap: 16px;
+}
+.acts-hero > :first-child {
+  flex: none;
 }
 .acts-hero__who {
   display: flex;
@@ -778,25 +782,18 @@
   color: var(--text-2);
 }
 .acts-hero__stats {
+  flex: 1;
+  min-width: 0;
   margin: 0;
+  /* Two equal columns with a clear gap, so a long figure ("5:59 /km") never runs into its neighbour. */
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
-  gap: 14px 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px 20px;
 }
 .acts-hero__stat {
-  grid-column: span 2;
   min-width: 0;
   display: flex;
   flex-direction: column;
-}
-/* Five figures: three, then two wider ones. Four: two and two. */
-.acts-hero__stats[data-count='5'] .acts-hero__stat:nth-child(n + 4),
-.acts-hero__stats[data-count='4'] .acts-hero__stat,
-.acts-hero__stats[data-count='2'] .acts-hero__stat {
-  grid-column: span 3;
-}
-.acts-hero__stats[data-count='1'] .acts-hero__stat {
-  grid-column: span 6;
 }
 .acts-hero__stat dd {
   order: -1;

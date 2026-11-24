@@ -95,13 +95,14 @@ describe('factor list', () => {
     expect(screen.getByText(/Target 16 to 33 %/)).not.toBeVisible();
   });
 
-  it('says "from your watch" when the watch rated the factor', async () => {
+  it('explains the watch score when the watch rated the factor', async () => {
     const user = userEvent.setup();
     render(<FactorsList factors={sleepFactors(night({ scores: { ...NONE, duration: 75 } }))} />);
     const row = screen.getByRole('button', { name: /Duration/ });
     expect(row).toHaveTextContent('Fair');
     await user.click(row);
-    expect(screen.getByText(/from your watch/)).toBeVisible();
+    expect(screen.getByText(/Your watch scored this 75 of 100; Good is 80 or more/)).toBeVisible();
+    expect(screen.queryByText(/Within 30 min/)).toBeNull();
   });
 
   it('leaves out the stress row when there is no stress value', () => {
@@ -196,6 +197,6 @@ describe('overlay chips on the stage chart', () => {
     expect(screen.queryByRole('group', { name: 'Draw over the stages' })).not.toBeInTheDocument();
     rerender(<StagesWithOverlay night={night({ stages_available: false, stages: [] })} overlays={OVERLAYS} />);
     expect(screen.queryByRole('group', { name: 'Draw over the stages' })).not.toBeInTheDocument();
-    expect(screen.getByText('Stages were not recorded for this night.')).toBeInTheDocument();
+    expect(screen.getByText('Shows after your watch records sleep stages for a night.')).toBeInTheDocument();
   });
 });

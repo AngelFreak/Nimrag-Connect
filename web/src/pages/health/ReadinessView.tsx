@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from 'react';
 import { useMe } from '../../account/queries';
 import type { ReadinessHistory } from '../../api/generated/ReadinessHistory';
+import type { ReadinessFactorKey } from '../../api/generated/ReadinessFactorKey';
 import type { ReadinessLevel } from '../../api/generated/ReadinessLevel';
 import type { ReadinessRating } from '../../api/generated/ReadinessRating';
 import type { ReadinessResponse } from '../../api/generated/ReadinessResponse';
@@ -22,6 +23,7 @@ import {
   RATING_COLOR,
   RATING_NAME,
   factorSub,
+  factorWord,
   historyChart,
   historyWindow,
   type HistoryKey,
@@ -36,13 +38,13 @@ function Dot({ color }: { color: string }) {
   return <span className="rate-dot" aria-hidden="true" style={{ background: color }} />;
 }
 
-/** A rating as a coloured dot and its word: the word carries the meaning. */
-export function RatingWord({ rating }: { rating: ReadinessRating | null }) {
+/** A rating as a coloured dot and its word: the word carries the meaning. A factor says it in its own words. */
+export function RatingWord({ rating, factor }: { rating: ReadinessRating | null; factor?: ReadinessFactorKey }) {
   if (rating === null) return <span className="rate rate--none">Not available</span>;
   return (
     <span className="rate">
       <Dot color={RATING_COLOR[rating]} />
-      {RATING_NAME[rating]}
+      {factor ? factorWord(factor, rating) : RATING_NAME[rating]}
     </span>
   );
 }
@@ -115,7 +117,7 @@ function Factors({ data }: { data: ReadinessResponse }) {
           to={FACTOR_META[f.key].to}
           name={FACTOR_META[f.key].name}
           sub={factorSub(f)}
-          rating={<RatingWord rating={f.rating} />}
+          rating={<RatingWord rating={f.rating} factor={f.key} />}
         />
       ))}
     </FactorList>

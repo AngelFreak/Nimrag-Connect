@@ -133,8 +133,8 @@ describe('helpers', () => {
   });
 
   it('says what a factor row shows under its name', () => {
-    expect(factorSub(FULL.factors[2]!)).toBe('60 ms · Balanced range 50–70 ms');
-    expect(factorSub(FULL.factors[0]!)).toBe('85 · Sleep score of the night');
+    expect(factorSub(FULL.factors[2]!)).toBe('60 ms · Balanced 50–70 ms');
+    expect(factorSub(FULL.factors[0]!)).toBe('85 · Last night');
     expect(factorSub(NONE.factors[0]!)).toBe('Not available yet');
   });
 
@@ -179,12 +179,12 @@ describe('the readiness page', () => {
     const list = screen.getByRole('list', { name: 'What the estimate is made from' });
     const rows = within(list).getAllByRole('listitem');
     expect(rows).toHaveLength(6);
-    expect(within(rows[0]!).getByText('Last night’s sleep')).toBeInTheDocument();
+    expect(within(rows[0]!).getByText('Sleep')).toBeInTheDocument();
     expect(within(rows[0]!).getByText('Good')).toBeInTheDocument();
-    expect(within(rows[1]!).getByText('Very good')).toBeInTheDocument();
-    expect(within(rows[1]!).getByText('0 h · On the watch’s recovery timer')).toBeInTheDocument();
-    expect(within(rows[4]!).getByText('73.9 · Average sleep score')).toBeInTheDocument();
-    expect(within(rows[4]!).getByText('Moderate')).toBeInTheDocument();
+    expect(within(rows[1]!).getByText('Recovered')).toBeInTheDocument();
+    expect(within(rows[1]!).getByText('0 h · Time left')).toBeInTheDocument();
+    expect(within(rows[4]!).getByText('73.9 · 7-night average')).toBeInTheDocument();
+    expect(within(rows[4]!).getByText('Fair')).toBeInTheDocument();
     expect(within(rows[2]!).getByRole('link')).toHaveAttribute('href', '/hrv');
     expect(screen.getByText('6 of 6 factors available', { exact: false })).toBeInTheDocument();
   });

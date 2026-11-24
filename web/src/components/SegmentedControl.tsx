@@ -3,6 +3,8 @@ import { useEffect, useRef, type CSSProperties } from 'react';
 export interface Option<V extends string> {
   value: V;
   label: string;
+  /** A shorter word drawn instead of `label` where space is tight ("HR"); the full label stays the accessible name. */
+  short?: string;
 }
 
 /**
@@ -55,7 +57,14 @@ export function SegmentedControl<V extends string>({ label, options, value, onCh
     <div ref={ref} role="group" aria-label={label} className={cls} style={{ '--cols': options.length } as CSSProperties}>
       {options.map((o) => (
         <button key={o.value} type="button" aria-pressed={o.value === value} onClick={() => onChange(o.value)}>
-          {o.label}
+          {o.short ? (
+            <>
+              <span aria-hidden="true">{o.short}</span>
+              <span className="sr-only">{o.label}</span>
+            </>
+          ) : (
+            o.label
+          )}
         </button>
       ))}
     </div>

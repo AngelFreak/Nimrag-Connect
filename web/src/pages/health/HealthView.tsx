@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { Card, CardHeader, PageHeader, SampleDataChip, SegmentedControl, SeriesChart, TopBar, Unavailable } from '../../components';
 import type { TrendSeries } from '../../api/generated/TrendSeries';
 import type { TrendsResponse } from '../../api/generated/TrendsResponse';
-import { fmtFixed, fmtInt, withUnit } from '../../lib/format';
+import { fmtFixed, fmtInt } from '../../lib/format';
 import { useIsDesktop, usePageTitle } from '../../lib/hooks';
 import type { AxisUnit } from '../../lib/ticks';
 import {
@@ -25,7 +25,7 @@ import {
   type RangeKey,
 } from './model';
 import { StatsSection } from './desktop';
-import { CardSkeleton, ChartSummary, HubLink, LoadError } from './parts';
+import { ChartCardSkeleton, ChartSummary, HubLink, LoadError, TilePairSkeleton } from './parts';
 import { useTrends } from './queries';
 
 interface TrendChartProps {
@@ -103,11 +103,14 @@ function ChartCard({
     <Card className="card-stretch">
       <CardHeader title={<CardLink to={to}>{title}</CardLink>} aside={aside ?? <Unavailable />} />
       {children}
-      {/* SeriesChart already gives screen readers the summary; the visible line is hidden from them. */}
-      <ChartSummary hidden={hasData}>
-        {note ? `${note} ` : ''}
-        {summary}
-      </ChartSummary>
+      {/* The header already says the numbers, and SeriesChart gives screen readers the full sentence, so it is
+          shown only when there is no chart to read it from (the empty state). */}
+      {hasData ? null : (
+        <ChartSummary>
+          {note ? `${note} ` : ''}
+          {summary}
+        </ChartSummary>
+      )}
     </Card>
   );
 }
@@ -133,9 +136,11 @@ export function HealthView({ initialRange = '4w' }: { initialRange?: RangeKey })
   );
   const body = q.isPending ? (
     <>
-      <CardSkeleton lines={4} height={20} />
-      <CardSkeleton lines={3} height={20} />
-      <CardSkeleton lines={3} height={20} />
+      <ChartCardSkeleton chart={desktop ? 150 : 90} />
+      <ChartCardSkeleton chart={desktop ? 150 : 80} />
+      <TilePairSkeleton />
+      <ChartCardSkeleton chart={desktop ? 130 : 70} />
+      <ChartCardSkeleton chart={desktop ? 130 : 70} />
     </>
   ) : q.isError && !q.data ? (
     <LoadError what="health trends" error={q.error} onRetry={() => void q.refetch()} />
@@ -210,8 +215,8 @@ function Trends({ trends: t, range, fetching }: { trends: TrendsResponse; range:
           <h2 className="card__title card__title--muted">
             <CardLink to={to('breathing')}>Breathing rate</CardLink>
           </h2>
-          <span className="stat__value" style={{ fontSize: 22 }}>
-            {withUnit(fmtFixed(breathing.average, 1), '/min') ?? <Unavailable />}
+          <span className="stat__value">
+            {fmtFixed(breathing.average, 1) === null ? <Unavailable /> : <>{fmtFixed(breathing.average, 1)}<span className="stat__unit">/min</span></>}
           </span>
           <span className="stat__sub">{t.breathing.awake_avg_brpm === null ? 'Asleep' : `Asleep · awake ${fmtFixed(t.breathing.awake_avg_brpm, 1)}`}</span>
           <TrendChart trends={t} series={breathing} name="Breathing rate" summary={breathingSummary(breathing)} range={range} color="link" height={36} width={2} compact unit="decimal" />
@@ -220,7 +225,7 @@ function Trends({ trends: t, range, fetching }: { trends: TrendsResponse; range:
           <h2 className="card__title card__title--muted">
             <CardLink to={to('spo2')}>Blood oxygen</CardLink>
           </h2>
-          <span className="stat__value" style={{ fontSize: 22 }}>
+          <span className="stat__value">
             {spo2.average === null ? <Unavailable /> : `${fmtInt(spo2.average)}%`}
           </span>
           <span className="stat__sub">{t.spo2.low_percent === null ? 'Overnight avg' : `Overnight avg · low ${fmtInt(t.spo2.low_percent)}%`}</span>

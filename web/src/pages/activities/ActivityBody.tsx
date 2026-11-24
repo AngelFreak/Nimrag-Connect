@@ -5,13 +5,13 @@ import type { AxisUnit } from '../../lib/ticks';
 import { RecordBadge } from '../records/RecordBadge';
 import { fmtClock } from '../../lib/format';
 import { ReadoutAside, type ReadoutField } from './ChartReadout';
-import { DISTANCE_KINDS, activityTitle, fmtDistance, fmtMinutes, whenLabel } from './format';
+import { DISTANCE_KINDS, fmtDistance, fmtMinutes } from './format';
 import { RouteExplorer } from './RouteExplorer';
 import { SportDisc } from './SportDisc';
 import { StatGroups } from './DetailParts';
 import { TrainingEffect, hasTrainingEffect } from './TrainingEffect';
 import { elevationSummary, hrSummary, minutesAxis, paceMinutes, paceSummary, speedKmh, speedSummary, spread, timeLabels } from './series';
-import { isPaced, shownHeadline, statGroupsFor, subSportText } from './summary';
+import { isPaced, shownHeadline, statGroupsFor } from './summary';
 import './activities.css';
 
 /** Zones 1 to 5 in minutes; a zone the file does not list is unavailable, not 0. */
@@ -25,16 +25,10 @@ export function zoneEntries(a: Pick<ActivityDetail, 'hr_zones'>): ZoneEntry[] {
 /** The top of the page: the sport, the name and time, and the key figures of the sport in large type. */
 function Hero({ a }: { a: ActivityDetail }) {
   const cells = shownHeadline(a);
-  const meta = [whenLabel(a), subSportText(a)].filter(Boolean).join(' · ');
   return (
     <section className="card acts-hero" aria-label="Summary">
-      <div className="acts-hero__who">
-        <SportDisc kind={a.kind} size={44} tone="soft" />
-        <div className="acts-hero__names">
-          <p className="acts-hero__name">{activityTitle(a)}</p>
-          <p className="acts-hero__meta">{meta}</p>
-        </div>
-      </div>
+      {/* The page header above already says the name and the time; this card is the icon and the figures. */}
+      <SportDisc kind={a.kind} size={44} tone="soft" />
       {cells.length ? (
         <dl className="acts-hero__stats" data-count={cells.length}>
           {cells.map((c) => (

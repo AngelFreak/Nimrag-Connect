@@ -164,7 +164,7 @@ describe('trends', () => {
     const values = Array.from({ length: 28 }, (_, i) => (i < 3 ? 40 : 61));
     const t = trends({ ...series(values), average: 61 }, 55, 70);
     expect(hrvSummary(t)).toBe('HRV averaged 61 ms, within your range on 25 of 28 nights.');
-    expect(hrvAside(t)).toBe('Avg 61 ms · range 55 to 70');
+    expect(hrvAside(t)).toBe('Avg 61 ms · range 55–70');
   });
   it('says so when the watch has no personal range yet', () => {
     const t = trends(series([60, 62]), null, null);
@@ -173,10 +173,10 @@ describe('trends', () => {
   });
   it('is unavailable without readings', () => {
     const t = trends(series([null, null]), 55, 70);
-    expect(hrvSummary(t)).toBe('No overnight HRV readings in this range.');
+    expect(hrvSummary(t)).toBe('Shows after your watch syncs overnight HRV.');
     expect(hrvAside(t)).toBeNull();
-    expect(rhrSummary(series([]))).toBe('No resting heart rate readings in this range.');
-    expect(durationSummary(series([]))).toBe('No sleep duration readings in this range.');
+    expect(rhrSummary(series([]))).toBe('Shows after your watch syncs resting heart rate.');
+    expect(durationSummary(series([]))).toBe('Shows after your watch syncs a night of sleep.');
   });
   it('keeps real gaps in time: x is days since the start, ends are empty anchors', () => {
     const xy = trendXY(series([60, null, 62], '2026-10-23'), '2026-10-23', '2026-11-19');

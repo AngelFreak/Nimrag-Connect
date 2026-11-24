@@ -128,7 +128,19 @@ export function StepsWeekVisual({ today }: { today: Today }) {
   );
 }
 
-/** The training status of each of the last 28 days, one block per day. */
+/** Runs of equal status in a list of days: [kind, length]. A day without a status is `none`. */
+export function statusRuns(days: { status: { kind: string } | null }[]): { kind: string; length: number }[] {
+  const runs: { kind: string; length: number }[] = [];
+  for (const d of days) {
+    const kind = d.status?.kind ?? 'none';
+    const last = runs[runs.length - 1];
+    if (last && last.kind === kind) last.length += 1;
+    else runs.push({ kind, length: 1 });
+  }
+  return runs;
+}
+
+/** The training status of the last 28 days: a run of the same status is one block, so it reads as periods. */
 export function StatusStripVisual({ today }: { today: Today }) {
   const from = addDays(today.date, -27);
   const q = useTrainingStatus(from, today.date);
@@ -138,8 +150,14 @@ export function StatusStripVisual({ today }: { today: Today }) {
   return (
     <Box kind="training_status">
       <div className="gv__strip">
-        {days.map((d) => (
-          <span key={d.date} className="gv__block" data-kind={d.status?.kind ?? 'none'} style={{ background: d.status ? STATUS_COLOR[d.status.kind] : 'var(--track)' }} />
+        {statusRuns(days).map((r, i) => (
+          <span
+            key={i}
+            className="gv__block"
+            data-kind={r.kind}
+            data-days={r.length}
+            style={{ flexGrow: r.length, background: r.kind === 'none' ? 'var(--track)' : STATUS_COLOR[r.kind as keyof typeof STATUS_COLOR] }}
+          />
         ))}
       </div>
     </Box>
