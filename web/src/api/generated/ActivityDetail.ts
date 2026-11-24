@@ -7,7 +7,11 @@ export type ActivityDetail = { sample: boolean, end: string | null, elapsed_s: n
 /**
  * maximal MET x 3.5 from this activity's file; derived, not Garmin's published value.
  */
-vo2max_derived: number | null, has_track: boolean, has_strength: boolean, hr_below_zone1_s: number | null, hr_zones: Array<ZoneTime>, laps: Array<Lap>, series: ActivitySeries | null, id: string, 
+vo2max_derived: number | null, has_track: boolean, has_strength: boolean, hr_below_zone1_s: number | null, hr_zones: Array<ZoneTime>, laps: Array<Lap>, series: ActivitySeries | null, 
+/**
+ * The personal records this activity holds now, as `kind` values of `/api/records`.
+ */
+records: Array<string>, id: string, 
 /**
  * run, walk, hike, cycle, swim, strength, training or other.
  */

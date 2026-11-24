@@ -36,6 +36,7 @@ import {
 } from './series';
 import { kindNoun } from './DetailParts';
 import { Tabs } from './Tabs';
+import { RecordBadge } from '../records/RecordBadge';
 import './activities.css';
 
 const MAP_HEIGHT = 390;
@@ -372,6 +373,7 @@ export function ActivityDetailDesktop({ a }: { a: ActivityDetail }) {
         meta={subSportText(a)}
         sample={a.sample}
         headline={headlineFor(a)}
+        badge={a.records.length > 0 ? <RecordBadge kinds={a.records} /> : null}
       />
       {showMap ? <RouteMap a={a} /> : null}
       <Charts a={a} />

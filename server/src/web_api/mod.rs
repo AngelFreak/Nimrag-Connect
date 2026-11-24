@@ -23,6 +23,7 @@ pub mod hrv;
 pub mod metrics;
 pub mod nimrag_import;
 pub mod prefs;
+pub mod records;
 pub mod sleep;
 pub mod strength;
 pub mod system;
@@ -55,6 +56,7 @@ pub fn router() -> Router<AppState> {
         .merge(days::routes())
         .merge(hrv::routes())
         .merge(activities::routes())
+        .merge(records::routes())
         .merge(strength::routes())
         .merge(sleep::routes())
         .merge(trends::routes())
@@ -291,6 +293,7 @@ pub fn export_types(dir: &Path) -> anyhow::Result<()> {
         activities::ActivityList,
         activities::ActivityDetail,
         activities::TrackResponse,
+        records::RecordsResponse,
         strength::StrengthResponse,
         strength::StrengthPatch,
         sleep::SleepNightResponse,

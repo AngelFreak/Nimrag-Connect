@@ -51,11 +51,13 @@ interface DetailHeaderProps {
   meta?: string | null;
   sample: boolean;
   headline: readonly Headline[];
+  /** Under the title: the personal-record badge. */
+  badge?: ReactNode;
   /** An earlier session to step to (only where the API names one). */
   prev?: { to: string; label: string } | null;
 }
 
-export function DetailHeader({ backTo, section, noun, when, kind, title, meta, sample, headline, prev }: DetailHeaderProps) {
+export function DetailHeader({ backTo, section, noun, when, kind, title, meta, sample, headline, badge, prev }: DetailHeaderProps) {
   const cells = headline.filter((h): h is Headline & { value: string } => h.value !== null && h.value !== '');
   return (
     <header className="adt-head">
@@ -81,6 +83,7 @@ export function DetailHeader({ backTo, section, noun, when, kind, title, meta, s
             <SampleDataChip sample={sample} />
           </div>
           {meta ? <p className="adt-head__meta">{meta}</p> : null}
+          {badge ? <div className="adt-head__badge">{badge}</div> : null}
         </div>
       </div>
       {cells.length ? (

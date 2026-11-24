@@ -19,6 +19,8 @@ pub const ENTITY_TABLES: &[&str] = &[
     "exercise_titles",
     "activity_time_in_zone",
     "activity_metrics",
+    "activity_efforts",
+    "activity_efforts_done",
 ];
 
 async fn next_idx(tx: &mut Transaction<'_, Sqlite>, table: &str, sha256: &str) -> Result<i64> {

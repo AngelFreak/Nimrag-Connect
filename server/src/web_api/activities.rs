@@ -287,6 +287,8 @@ pub struct ActivityDetail {
     pub hr_zones: Vec<ZoneTime>,
     pub laps: Vec<Lap>,
     pub series: Option<ActivitySeries>,
+    /// The personal records this activity holds now, as `kind` values of `/api/records`.
+    pub records: Vec<String>,
 }
 
 pub fn valid_id(id: &str) -> bool {
@@ -492,6 +494,7 @@ async fn detail(
         hr_zones,
         laps,
         series,
+        records: super::records::held_by(&ctx, &id).await?,
         summary,
     }))
 }

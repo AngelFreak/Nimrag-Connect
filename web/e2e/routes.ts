@@ -26,6 +26,7 @@ export const USER_ROUTES: RouteCase[] = [
   user('Activities', () => '/activities'),
   user('Activities, strength filter', () => '/activities?type=strength'),
   user('Strength list', () => '/strength'),
+  user('Personal records', () => '/records'),
   user('Activity detail, run with a map', (f) => `/activities/${f.runId}`),
   user('Activity detail, walk with a map', (f) => `/activities/${f.walkId}`),
   user('Activity detail, strength without a map', (f) => `/activities/${f.strengthId}`),

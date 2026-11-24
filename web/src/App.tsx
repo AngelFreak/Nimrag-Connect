@@ -19,6 +19,7 @@ import { LoginPage } from './pages/LoginPage';
 import { MetricPage } from './pages/MetricPage';
 import { MovementPage } from './pages/MovementPage';
 import { NotFoundPage } from './pages/NotFoundPage';
+import { RecordsPage } from './pages/records/RecordsPage';
 import { SetupPage } from './pages/SetupPage';
 import { SleepPage } from './pages/SleepPage';
 import { StrengthPage } from './pages/StrengthPage';
@@ -113,6 +114,7 @@ export function App() {
         <Route element={<AppShell />}>
           <Route path="activities/:id" element={<ActivityDetailPage />} />
           <Route path="activities/:id/strength" element={<StrengthPage />} />
+          <Route path="records" element={<RecordsPage />} />
           <Route path="sleep/:date?" element={<SleepPage />} />
           <Route path="day/:date?" element={<DayPage />} />
           <Route path="movement/:date?" element={<MovementPage />} />

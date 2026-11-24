@@ -5,6 +5,7 @@ import { LinkButton } from '../../components';
 import { fmtFixed } from '../../lib/format';
 import { useIsDesktop } from '../../lib/hooks';
 import type { AxisUnit } from '../../lib/ticks';
+import { RecordBadge } from '../records/RecordBadge';
 import { useTrack } from './api';
 import {
   DISTANCE_KINDS,
@@ -186,6 +187,7 @@ export function ActivityBody({ a }: { a: ActivityDetail }) {
 
   return (
     <div className="page" data-activity-id={a.id}>
+      <RecordBadge kinds={a.records} />
       {a.has_strength || a.kind === 'strength' ? (
         <Card as="div" padding="default">
           <LinkButton to={`/activities/${a.id}/strength`} variant="primary" size="lg">
