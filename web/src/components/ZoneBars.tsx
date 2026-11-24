@@ -5,6 +5,8 @@ export interface ZoneEntry {
   zone: 1 | 2 | 3 | 4 | 5;
   /** Minutes in the zone; null when the activity has no heart-rate data. */
   minutes: number | null | undefined;
+  /** The time as shown ("34:12"); "N min" when left out. */
+  text?: string | null;
 }
 
 export interface BarListItem {
@@ -53,7 +55,7 @@ export function ZoneBars({ zones }: { zones: ZoneEntry[] }) {
             <div className="progress" style={{ '--h': '10px' } as CSSProperties} aria-hidden="true">
               <div className="progress__fill" style={{ width: `${pct}%`, background: `var(--zone-${z.zone})` }} />
             </div>
-            <span className="zones__value">{missing ? <Unavailable /> : `${z.minutes} min`}</span>
+            <span className="zones__value">{missing ? <Unavailable /> : (z.text ?? `${z.minutes} min`)}</span>
           </li>
         );
       })}

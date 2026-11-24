@@ -27,6 +27,7 @@ import { isPaced, shownHeadline, statGroupsFor, subSportText } from './summary';
 import { Tabs } from './Tabs';
 import { TrainingEffect, hasTrainingEffect } from './TrainingEffect';
 import { RecordBadge } from '../records/RecordBadge';
+import { cadenceUnit, stepsCadence } from './cadence';
 import './activities.css';
 
 const MAP_HEIGHT = 390;
@@ -80,7 +81,7 @@ function Charts({ a }: { a: ActivityDetail }) {
     <div className="adt-charts">
       <div className="adt-charts__bar">
         <h2 className="sr-only">Charts</h2>
-        {fields.length ? <ChartReadout store={store} series={s} fields={fields} /> : null}
+        {fields.length ? <ChartReadout store={store} series={s} fields={fields} cadenceUnit={cadenceUnit(a.kind)} /> : null}
         {km !== null ? (
           <SegmentedControl<Axis>
             label="Chart x axis"
@@ -140,12 +141,12 @@ function Charts({ a }: { a: ActivityDetail }) {
           color="warn"
           title="Cadence"
           label="Cadence over the activity"
-          summary={cadenceSummary(cad, elapsed)}
+          summary={cadenceSummary(cad, elapsed, stepsCadence(a.kind) ? 'steps a minute' : 'revolutions a minute')}
           x={x}
           data={cad}
           xLabels={labelsFor(cad)}
           cursor={cursor}
-          {...(avgCad !== null ? { refLine: { value: avgCad, label: `Avg: ${Math.round(avgCad)} /min` } } : {})}
+          {...(avgCad !== null ? { refLine: { value: avgCad, label: `Avg: ${Math.round(avgCad)} ${cadenceUnit(a.kind)}` } } : {})}
         />
       ) : null}
     </div>

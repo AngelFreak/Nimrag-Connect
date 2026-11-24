@@ -149,10 +149,10 @@ export function distanceLabels(totalKm: number): { value: number; text: string }
   return out.length < 2 ? [] : out;
 }
 
-export function cadenceSummary(values: readonly (number | null)[], elapsed: readonly number[]): string {
+export function cadenceSummary(values: readonly (number | null)[], elapsed: readonly number[], perMinute = 'revolutions a minute'): string {
   const s = spread(values);
   if (!s) return 'No cadence samples were recorded.';
-  return `Cadence over ${durationText(elapsed)}: lowest ${fmtInt(s.min)}, average ${fmtInt(s.avg)}, highest ${fmtInt(s.max)} per minute.`;
+  return `Cadence over ${durationText(elapsed)}: lowest ${fmtInt(s.min)}, average ${fmtInt(s.avg)}, highest ${fmtInt(s.max)} ${perMinute}.`;
 }
 
 // ---- the value under the pointer ---------------------------------------------------------------
@@ -169,7 +169,7 @@ export interface SampleText {
 }
 
 /** The sample at `index`, or `null` when there is none. */
-export function sampleAt(series: ActivitySeries | null, index: number | null): SampleText | null {
+export function sampleAt(series: ActivitySeries | null, index: number | null, cadenceUnit = 'rpm'): SampleText | null {
   if (!series || index === null || index < 0 || index >= series.elapsed_s.length) return null;
   const num = (list: readonly (number | null)[]): number | null => {
     const v = list[index];
@@ -188,6 +188,6 @@ export function sampleAt(series: ActivitySeries | null, index: number | null): S
     speed: speed === null ? null : `${(speed * 3.6).toFixed(1)} km/h`,
     hr: hr === null ? null : `${fmtInt(hr)} bpm`,
     elevation: alt === null ? null : `${fmtInt(alt)} m`,
-    cadence: cad === null ? null : `${fmtInt(cad)} /min`,
+    cadence: cad === null ? null : `${fmtInt(cad)} ${cadenceUnit}`,
   };
 }

@@ -4,6 +4,7 @@ import type { ActivityDetail } from '../../api/generated';
 import { fmtClock, fmtInt, isMissing, type Maybe } from '../../lib/format';
 import type { Headline, StatGroup } from './DetailParts';
 import { fmtBpm, fmtDistance, fmtKcal, fmtKg, fmtMeters, fmtPace, fmtSpeed } from './format';
+import { cadenceUnit } from './cadence';
 import { spread } from './series';
 
 const PACED = new Set(['run', 'walk', 'hike']);
@@ -98,8 +99,8 @@ export function statGroupsFor(a: ActivityDetail): StatGroup[] {
     {
       title: paced ? 'Running dynamics' : 'Cadence',
       items: [
-        { label: 'Avg cadence', value: a.avg_cadence === null ? null : `${fmtInt(a.avg_cadence)} /min` },
-        { label: 'Max cadence', value: cad ? `${fmtInt(cad.max)} /min` : null },
+        { label: 'Avg cadence', value: a.avg_cadence === null ? null : `${fmtInt(a.avg_cadence)} ${cadenceUnit(a.kind)}` },
+        { label: 'Max cadence', value: cad ? `${fmtInt(cad.max)} ${cadenceUnit(a.kind)}` : null },
       ],
     },
     {

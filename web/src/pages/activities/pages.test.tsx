@@ -257,7 +257,7 @@ describe('ActivityDetailPage', () => {
     expect(screen.getByText('46.2 ml/kg/min')).toBeInTheDocument();
     expect(screen.getByText(/not Garmin's published value/)).toBeInTheDocument();
     const zones = screen.getByRole('list', { name: 'Time in heart rate zones' });
-    expect(within(zones).getByText('18 min')).toBeInTheDocument();
+    expect(within(zones).getByText('18:00')).toBeInTheDocument();
     expect(within(zones).getAllByText('unavailable')).toHaveLength(3);
     expect(screen.getByRole('table', { name: 'Laps' })).toBeInTheDocument();
     // The API sends [lat, lon]; the map gets [lon, lat].
@@ -663,7 +663,7 @@ describe('on a wide screen', () => {
       await user.keyboard('{ArrowRight}');
       expect(within(tabs).getByRole('tab', { name: 'Time in Zones' })).toHaveAttribute('aria-selected', 'true');
       const zones = screen.getByRole('list', { name: 'Time in heart rate zones' });
-      expect(within(zones).getByText('18 min')).toBeInTheDocument();
+      expect(within(zones).getByText('18:00')).toBeInTheDocument();
       expect(within(zones).getAllByText('unavailable')).toHaveLength(3);
       await user.keyboard('{Home}');
       expect(within(tabs).getByRole('tab', { name: 'Stats' })).toHaveAttribute('aria-selected', 'true');

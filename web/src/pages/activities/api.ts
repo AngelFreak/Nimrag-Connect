@@ -2,6 +2,7 @@
 
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../api/client';
+import { withShownCadence } from './cadence';
 import type { ActivityDetail, ActivityList, StrengthPatch, StrengthResponse, TrackResponse } from '../../api/generated';
 
 export const PAGE_SIZE = 30;
@@ -28,6 +29,8 @@ export function useActivity(id: string | undefined) {
   return useQuery({
     queryKey: ['activities', 'detail', id],
     queryFn: ({ signal }) => api.get<ActivityDetail>(`/api/activities/${id}`, { signal }),
+    // Cadence in the unit it is shown in (steps a minute on foot); the cache keeps the server's figures.
+    select: withShownCadence,
     enabled: !!id,
   });
 }

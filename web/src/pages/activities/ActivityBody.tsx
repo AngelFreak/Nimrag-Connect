@@ -18,7 +18,9 @@ import './activities.css';
 export function zoneEntries(a: Pick<ActivityDetail, 'hr_zones'>): ZoneEntry[] {
   return ([1, 2, 3, 4, 5] as const).map((zone) => {
     const z = a.hr_zones.find((x) => x.zone === zone);
-    return { zone, minutes: z?.duration_s === null || z?.duration_s === undefined ? null : Math.round(z.duration_s / 60) };
+    const s = z?.duration_s;
+    // The exact time (m:ss, as the watch counts it); the bar is drawn from the same seconds.
+    return s === null || s === undefined ? { zone, minutes: null } : { zone, minutes: s / 60, text: fmtClock(s) };
   });
 }
 

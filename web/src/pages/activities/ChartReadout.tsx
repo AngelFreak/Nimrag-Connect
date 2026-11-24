@@ -18,9 +18,9 @@ const FIELD_LABEL: Record<ReadoutField, string> = {
  * The values of every chart at the point the pointer is on, in one line above the charts (wide
  * screen). The line keeps its height when the pointer is away, so nothing moves.
  */
-export function ChartReadout({ store, series, fields }: { store: CursorStore; series: ActivitySeries | null; fields: readonly ReadoutField[] }) {
+export function ChartReadout({ store, series, fields, cadenceUnit }: { store: CursorStore; series: ActivitySeries | null; fields: readonly ReadoutField[]; cadenceUnit?: string }) {
   const index = useCursorIndex(store);
-  const at = sampleAt(series, index);
+  const at = sampleAt(series, index, cadenceUnit);
   // The readout repeats what the charts and their summaries say; it is an aid for the pointer.
   return (
     <p className="chart-readout" aria-hidden="true">

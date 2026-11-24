@@ -4,6 +4,7 @@ import { colorRuns } from '../../lib/colorRuns';
 import { zoneLimits, zoneOf } from './lapZones';
 import { defaultRouteChoice, metricValues, quantile, rampColor, routeChoices, routeColors, routeLegend, routeScale } from './routeColor';
 import { sampleAt } from './series';
+import { cadenceUnit, withShownCadence } from './cadence';
 import { headlineFor, statGroupsFor } from './summary';
 import { teFill, teRows, teWord } from './trainingEffect';
 
@@ -177,9 +178,30 @@ describe('heart rate zones of laps', () => {
 describe('the value under the pointer', () => {
   it('writes every value as shown, a gap as null', () => {
     const series = { elapsed_s: [0, 750], heart_rate_bpm: [100, 148], speed_mps: [0.1, 3.2], altitude_m: [null, 42], distance_m: [0, 2410], cadence: [null, 85] };
-    expect(sampleAt(series, 1)).toMatchObject({ time: '12:30', distance: '2.41 km', pace: '5:13 /km', hr: '148 bpm', elevation: '42 m', cadence: '85 /min' });
+    expect(sampleAt(series, 1, 'spm')).toMatchObject({ time: '12:30', distance: '2.41 km', pace: '5:13 /km', hr: '148 bpm', elevation: '42 m', cadence: '85 spm' });
+    expect(sampleAt(series, 1)?.cadence).toBe('85 rpm');
     expect(sampleAt(series, 0)).toMatchObject({ pace: null, elevation: null });
     expect(sampleAt(series, null)).toBeNull();
     expect(sampleAt(series, 5)).toBeNull();
+  });
+});
+
+describe('cadence as runners read it', () => {
+  it('doubles strides to steps a minute on foot, once, and leaves a ride as stored', () => {
+    const run = act({ avg_cadence: 86 });
+    const shown = withShownCadence({ ...run, series: run.series ? { ...run.series, cadence: run.series.cadence.map(() => 85) } : null });
+    expect(shown.avg_cadence).toBe(172);
+    if (shown.series) expect(shown.series.cadence.every((c) => c === 170)).toBe(true);
+    expect(cadenceUnit('run')).toBe('spm');
+    expect(cadenceUnit('walk')).toBe('spm');
+    expect(cadenceUnit('cycle')).toBe('rpm');
+    const ride = act({ kind: 'cycle', avg_cadence: 88 });
+    expect(withShownCadence(ride)).toBe(ride);
+  });
+
+  it('shows the doubled figure in the stats with its unit', () => {
+    const groups = statGroupsFor(withShownCadence(act({ avg_cadence: 86 })));
+    const items = groups.flatMap((g) => g.items);
+    expect(items.find((i) => i.label === 'Avg cadence')?.value).toBe('172 spm');
   });
 });

@@ -139,6 +139,7 @@ describe('series helpers', () => {
   it('zones: a zone the file lacks is unavailable, not 0', () => {
     const z = zoneEntries({ hr_zones: [{ zone: 2, duration_s: 540 }, { zone: 3, duration_s: null }] });
     expect(z.find((e) => e.zone === 2)?.minutes).toBe(9);
+    expect(z.find((e) => e.zone === 2)?.text).toBe('9:00');
     expect(z.find((e) => e.zone === 3)?.minutes).toBeNull();
     expect(z.find((e) => e.zone === 5)?.minutes).toBeNull();
   });
