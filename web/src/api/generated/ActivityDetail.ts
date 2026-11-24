@@ -11,7 +11,11 @@ vo2max_derived: number | null, has_track: boolean, has_strength: boolean, hr_bel
 /**
  * Strength only (edits applied): total reps over the working sets that have a rep count.
  */
-reps: number | null, id: string, 
+reps: number | null, 
+/**
+ * The personal records this activity holds now, as `kind` values of `/api/records`.
+ */
+records: Array<string>, id: string, 
 /**
  * run, walk, hike, cycle, swim, strength, training or other.
  */

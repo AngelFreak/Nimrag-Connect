@@ -531,6 +531,10 @@
   font-size: var(--fs-xs);
   color: var(--text-2);
 }
+.adt-head__badge {
+  margin-top: 8px;
+  display: flex;
+}
 .adt-head__stats {
   margin: 8px 0 0;
   display: grid;

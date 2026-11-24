@@ -47,6 +47,7 @@ export type { NewUser } from "./NewUser";
 export type { NewUserResponse } from "./NewUserResponse";
 export type { NimragImportResponse } from "./NimragImportResponse";
 export type { NodeDto } from "./NodeDto";
+export type { RecordsResponse } from "./RecordsResponse";
 export type { SendInfo } from "./SendInfo";
 export type { SendState } from "./SendState";
 export type { SettingsPatch } from "./SettingsPatch";

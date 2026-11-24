@@ -251,6 +251,7 @@ duplicates and appends cards missing from `order`).
 | `GET /api/activities?type=&before=&limit=` | newest first, `type` is all, run, walk, hike, cycle, swim, strength, training, other; `next_before` is the cursor |
 | `GET /api/activities/{id}` | detail with laps, HR zones and a thinned columnar series; `id` is the file sha256 |
 | `GET /api/activities/{id}/track` | GPS points (at most 1500) with bounds |
+| `GET /api/records` | personal records per sport group (fastest 400 m to marathon, longest, most ascent, longest time, most steps in a day and a Mon-Sun week), each with the activity it came from and the previous best; best efforts are cached per file in `activity_efforts` and computed on first request. `GET /api/activities/{id}` lists the record kinds that activity holds in `records` |
 | `GET /api/activities/{id}/strength`, `PATCH` | sets grouped by exercise; PATCH `{sets:[{idx, reps?, weight_kg?, exercise?, reset?}]}` stores edits in `strength_set_overrides`, keyed by the activity, so they survive `reparse` and new files of the same activity |
 | `GET /api/sleep/{date}`, `GET /api/sleep?nights=7\|14\|30` | a night with stages and vitals; a list of nights |
 | `GET /api/trends?range=7d\|4w\|3m\|1y` | HRV with baseline, resting HR, breathing, SpO2, sleep score and duration |

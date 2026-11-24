@@ -26,6 +26,7 @@ import {
 import { isPaced, shownHeadline, statGroupsFor, subSportText } from './summary';
 import { Tabs } from './Tabs';
 import { TrainingEffect, hasTrainingEffect } from './TrainingEffect';
+import { RecordBadge } from '../records/RecordBadge';
 import './activities.css';
 
 const MAP_HEIGHT = 390;
@@ -264,6 +265,7 @@ export function ActivityDetailDesktop({ a }: { a: ActivityDetail }) {
         meta={subSportText(a)}
         sample={a.sample}
         headline={shownHeadline(a)}
+        badge={a.records.length > 0 ? <RecordBadge kinds={a.records} /> : null}
       />
       {showMap ? <RouteExplorer a={a} height={MAP_HEIGHT} variant="bare" /> : null}
       <Charts a={a} />

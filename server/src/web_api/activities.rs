@@ -289,6 +289,8 @@ pub struct ActivityDetail {
     pub series: Option<ActivitySeries>,
     /// Strength only (edits applied): total reps over the working sets that have a rep count.
     pub reps: Option<f64>,
+    /// The personal records this activity holds now, as `kind` values of `/api/records`.
+    pub records: Vec<String>,
 }
 
 pub fn valid_id(id: &str) -> bool {
@@ -503,6 +505,7 @@ async fn detail(
         laps,
         series,
         reps,
+        records: super::records::held_by(&ctx, &id).await?,
         summary,
     }))
 }

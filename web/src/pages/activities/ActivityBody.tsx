@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import type { ActivityDetail } from '../../api/generated';
 import { Card, CardHeader, LinkButton, SeriesChart, StatTile, Table, Unavailable, ZoneBars, useCursorStore, type CursorStore, type ZoneEntry } from '../../components';
 import type { AxisUnit } from '../../lib/ticks';
+import { RecordBadge } from '../records/RecordBadge';
 import { fmtClock } from '../../lib/format';
 import { ReadoutAside, type ReadoutField } from './ChartReadout';
 import { DISTANCE_KINDS, activityTitle, fmtDistance, fmtMinutes, whenLabel } from './format';
@@ -118,6 +119,7 @@ export function ActivityBody({ a }: { a: ActivityDetail }) {
 
   return (
     <div className="page" data-activity-id={a.id}>
+      <RecordBadge kinds={a.records} />
       <Hero a={a} />
 
       {a.has_strength || a.kind === 'strength' ? (

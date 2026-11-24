@@ -72,6 +72,7 @@ function detail(over: Partial<ActivityDetail> = {}): ActivityDetail {
       { zone: 4, duration_s: 480 },
     ],
     laps: [{ index: 1, start: null, distance_m: 1000, duration_s: 365, avg_pace_s_per_km: 365, avg_hr_bpm: 140, max_hr_bpm: 150, ascent_m: 5 }],
+    records: [],
     series: { elapsed_s: [0, 60, 120], heart_rate_bpm: [100, 140, 150], speed_mps: [2.5, 3, 2.8], altitude_m: [10, 12, 11], distance_m: [0, 100, 200], cadence: [null, 80, 82] },
     reps: null,
     ...over,

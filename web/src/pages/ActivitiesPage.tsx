@@ -115,7 +115,7 @@ export function ActivitiesPage({ strength = false }: { strength?: boolean }) {
             <>
               <SampleDataChip sample={sample} />
               <nav className="acts-actions" aria-label="Activity actions">
-                {strength ? <Link to="/workouts">Workouts</Link> : null}
+                {strength ? <Link to="/workouts">Workouts</Link> : <Link to="/records">Records</Link>}
                 <Link to="/workouts/new">+ Workout</Link>
                 <Link to="/profile/import-garmin">Import</Link>
                 <a href="/api/export" download title="Download all your data as a zip">
@@ -152,7 +152,7 @@ export function ActivitiesPage({ strength = false }: { strength?: boolean }) {
         aside={
           <>
             <SampleDataChip sample={sample} />
-            {strength ? <LinkButton to="/workouts">Workouts</LinkButton> : null}
+            {strength ? <LinkButton to="/workouts">Workouts</LinkButton> : <LinkButton to="/records">Records</LinkButton>}
           </>
         }
       />
