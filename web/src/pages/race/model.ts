@@ -49,13 +49,13 @@ export function fmtPace(secondsPerKm: number): string {
   return `${fmtRaceTime(secondsPerKm)} /km`;
 }
 
-/** The change since 4 weeks ago: "−0:42 since 4 weeks" (faster), "+1:05 since 4 weeks", or "No change". */
+/** The change from 4 weeks ago: "−0:42 vs 4 weeks ago" (faster), "+1:05 vs 4 weeks ago", or "No change". */
 export function fmtChange(seconds: number | null): { text: string; tone: 'faster' | 'slower' | 'same' } | null {
   if (seconds === null) return null;
   const whole = Math.round(seconds);
-  if (whole === 0) return { text: 'No change since 4 weeks', tone: 'same' };
+  if (whole === 0) return { text: 'No change in 4 weeks', tone: 'same' };
   const sign = whole < 0 ? MINUS : '+';
-  return { text: `${sign}${fmtRaceTime(whole)} since 4 weeks`, tone: whole < 0 ? 'faster' : 'slower' };
+  return { text: `${sign}${fmtRaceTime(whole)} vs 4 weeks ago`, tone: whole < 0 ? 'faster' : 'slower' };
 }
 
 /** What the estimate is based on, in one sentence. */

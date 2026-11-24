@@ -80,10 +80,15 @@
   color: var(--text);
 }
 
-/* The chips wrap instead of scrolling: four short words fit two lines on a phone. */
+/* The four chips share one row on a phone (they stretch to fill it), and wrap only at a large text size. */
 .race-chart__controls .filter-chips {
   flex-wrap: wrap;
+  gap: 6px;
   margin: 0;
   padding: 0;
   overflow: visible;
+}
+.race-chart__controls .filter-chip {
+  flex: 1 1 auto;
+  padding: 0 10px;
 }

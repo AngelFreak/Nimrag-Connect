@@ -6,10 +6,11 @@ import './health.css';
 /**
  * One-line text summary of a chart. Charts from SeriesChart already carry the summary for screen
  * readers, so the visible copy is hidden from them (`hidden`) to avoid reading it twice.
+ * `quiet` keeps it for screen readers only, when the card's header and legend already show the numbers.
  */
-export function ChartSummary({ children, hidden }: { children: ReactNode; hidden?: boolean }) {
+export function ChartSummary({ children, hidden, quiet }: { children: ReactNode; hidden?: boolean; quiet?: boolean }) {
   return (
-    <p className="chart-summary" aria-hidden={hidden ? true : undefined}>
+    <p className={quiet ? 'sr-only' : 'chart-summary'} aria-hidden={hidden ? true : undefined}>
       {children}
     </p>
   );

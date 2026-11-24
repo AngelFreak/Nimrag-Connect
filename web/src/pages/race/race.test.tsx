@@ -68,10 +68,10 @@ describe('formatting', () => {
   });
 
   it('writes the change with a real minus sign and a tone', () => {
-    expect(fmtChange(-42)).toEqual({ text: '−0:42 since 4 weeks', tone: 'faster' });
-    expect(fmtChange(65)).toEqual({ text: '+1:05 since 4 weeks', tone: 'slower' });
-    expect(fmtChange(-3725)).toEqual({ text: '−1:02:05 since 4 weeks', tone: 'faster' });
-    expect(fmtChange(0)).toEqual({ text: 'No change since 4 weeks', tone: 'same' });
+    expect(fmtChange(-42)).toEqual({ text: '−0:42 vs 4 weeks ago', tone: 'faster' });
+    expect(fmtChange(65)).toEqual({ text: '+1:05 vs 4 weeks ago', tone: 'slower' });
+    expect(fmtChange(-3725)).toEqual({ text: '−1:02:05 vs 4 weeks ago', tone: 'faster' });
+    expect(fmtChange(0)).toEqual({ text: 'No change in 4 weeks', tone: 'same' });
     expect(fmtChange(null)).toBeNull();
   });
 
@@ -115,10 +115,10 @@ describe('the page', () => {
     expect(within(rows[0]!).getByRole('heading', { name: '5 km' })).toBeInTheDocument();
     expect(within(rows[0]!).getByText('24:57')).toBeInTheDocument();
     expect(within(rows[0]!).getByText('4:59 /km')).toBeInTheDocument();
-    expect(within(rows[0]!).getByText('−0:42 since 4 weeks')).toBeInTheDocument();
-    expect(within(rows[1]!).getByText('+1:05 since 4 weeks')).toBeInTheDocument();
+    expect(within(rows[0]!).getByText('−0:42 vs 4 weeks ago')).toBeInTheDocument();
+    expect(within(rows[1]!).getByText('+1:05 vs 4 weeks ago')).toBeInTheDocument();
     expect(within(rows[2]!).getByText('1:54:55')).toBeInTheDocument();
-    expect(within(rows[2]!).getByText('No change since 4 weeks')).toBeInTheDocument();
+    expect(within(rows[2]!).getByText('No change in 4 weeks')).toBeInTheDocument();
     expect(within(rows[3]!).getByText('Nothing to compare with 4 weeks ago')).toBeInTheDocument();
     expect(screen.getByText('Nimrag estimate — not Garmin’s Race Predictor')).toBeInTheDocument();
     expect(screen.getByText(/your VO2 max of 50\.4/)).toBeInTheDocument();

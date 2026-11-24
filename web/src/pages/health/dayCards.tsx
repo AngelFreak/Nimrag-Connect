@@ -42,7 +42,6 @@ export function HeartRateCard({ day }: { day: DayResponse }) {
       <SeriesChart
         label="Heart rate across the day"
         summary={hrSummary(day.heart_rate)}
-        summaryVisible
         x={hr?.x ?? []}
         xRange={[0, 24]}
         series={[{ label: 'Heart rate', color: 'heart', data: hr?.y ?? [] }]}
@@ -87,7 +86,7 @@ export function StressCard({ day, ranges = false }: { day: DayResponse; ranges?:
           { key: 'activity', label: ranges ? 'Activity' : <>Activity {fmtSeconds(st.activity_s) ?? <Unavailable />}</>, color: LEVEL_COLOR.activity, outlined: true },
         ]}
       />
-      <ChartSummary>{daySentence(st) ?? stressSummary(st)}</ChartSummary>
+      <ChartSummary quiet>{daySentence(st) ?? stressSummary(st)}</ChartSummary>
     </Panel>
   );
 }
@@ -101,7 +100,6 @@ export function EnergyCard({ day }: { day: DayResponse }) {
       <SeriesChart
         label="Energy across the day"
         summary={`${energySummary(day.energy)}${wake ? ` Woke at ${wake}.` : ''}`}
-        summaryVisible
         x={energy?.x ?? []}
         xRange={[0, 24]}
         series={[{ label: 'Energy', color: 'energy', data: energy?.y ?? [], area: true }]}
