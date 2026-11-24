@@ -8,6 +8,7 @@ import { fmtFixed, fmtInt } from '../lib/format';
 import { useIsDesktop, usePageTitle } from '../lib/hooks';
 import { ScoreHero, StatsColumns, StatsSection } from './health/desktop';
 import { ReadinessCard } from './health/ReadinessCard';
+import { RaceCard } from './race/RaceCard';
 import { StatusExplanation } from './health/StatusExplanation';
 import { PageError, PageSkeleton } from './body/common';
 import { fmtLocalStamp, localParts } from './body/time';
@@ -78,6 +79,7 @@ export function TrainingBody({ data }: { data: TrainingResponse }) {
         <StatusCard status={data.status} />
         <Vo2Card vo2={data.vo2max} />
       </div>
+      <RaceCard />
     </div>
   );
 }
@@ -270,6 +272,9 @@ function TrainingDesktop({ data }: { data: TrainingResponse }) {
             <ScoreHero text value={<ValueOrUnavailable value={view.headline} />} {...(view.note || since ? { label: view.note ?? since } : {})} />
             {view.note && since ? <p className="stats-note">{since}</p> : null}
             <StatusExplanation brief />
+          </StatsSection>
+          <StatsSection title="Race Predictor">
+            <RaceCard flat />
           </StatsSection>
           <StatsSection title="VO2 Max (derived)">
             <ScoreHero value={<ValueOrUnavailable value={vo2Value} />} {...(vo2Change ? { label: vo2Change } : {})} />

@@ -203,7 +203,7 @@ pub fn efforts_of_points(kind: &str, points: &[(i64, f64)]) -> Vec<(&'static str
 }
 
 /// Cached efforts of the user's runs and rides, computing (and storing) the ones missing.
-async fn load_efforts(
+pub(super) async fn load_efforts(
     ctx: &Ctx,
     acts: &[Act],
 ) -> Res<HashMap<String, BTreeMap<&'static str, f64>>> {
@@ -271,17 +271,17 @@ async fn load_efforts(
 // ---- candidates and picking ------------------------------------------------------------------
 
 /// One activity with the figures the records read.
-struct Act {
-    id: String,
-    kind: &'static str,
-    sport_name: Option<String>,
-    start: i64,
-    duration_s: Option<f64>,
-    distance_m: Option<f64>,
-    ascent_m: Option<f64>,
+pub(super) struct Act {
+    pub(super) id: String,
+    pub(super) kind: &'static str,
+    pub(super) sport_name: Option<String>,
+    pub(super) start: i64,
+    pub(super) duration_s: Option<f64>,
+    pub(super) distance_m: Option<f64>,
+    pub(super) ascent_m: Option<f64>,
 }
 
-async fn load_acts(ctx: &Ctx) -> Res<Vec<Act>> {
+pub(super) async fn load_acts(ctx: &Ctx) -> Res<Vec<Act>> {
     type Row = (
         String,
         i64,

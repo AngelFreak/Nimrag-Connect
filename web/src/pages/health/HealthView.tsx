@@ -127,6 +127,7 @@ export function HealthView({ initialRange = '4w' }: { initialRange?: RangeKey })
       <HubLink to="/day" title="Day" sub="Heart rate, stress and energy" />
       <HubLink to="/movement" title="Movement" sub="Steps and intensity minutes" />
       <HubLink to="/training" title="Training" sub="Recovery, load and VO2 max" />
+      <HubLink to="/training/race-predictor" title="Race predictor" sub="Nimrag estimate of your race times" />
       <HubLink to="/body" title="Body" sub="Weight and measurements" />
       <HubLink to="/calendar" title="Calendar" sub="Every day at a glance" />
     </div>
