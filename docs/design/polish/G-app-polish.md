@@ -31,3 +31,15 @@ components are used (check light theme and desktop don't regress).
 
 Check at 360 px with `window.NimragApp = {native: true}` injected (dark), at 412 px light, and at
 1440 px light. axe clean. No change to numbers or features.
+
+## Found while reviewing the first builds
+9. Activity page, phone: the summary card repeats the page title and date right under the page
+   header: drop the duplicate (keep the sport icon with the key figures). The hero figures need a
+   clear gap between columns at 360 px (a 2- or 3-column grid with equal columns, not inline runs).
+   The route colouring control should fit at 360 px without crowding ("HR" instead of "Heart rate"
+   in the control if needed, full word for screen readers).
+10. Stress colours: Medium and High are too close on dark; make them clearly distinct (High toward
+    a deep red-orange or magenta-ish hue that still reads as "more"), check both themes and the
+    legend.
+11. Training status 28-day strip on the Today card: thinner gaps and runs of the same status drawn as
+    one block, so it reads as periods rather than noise.
