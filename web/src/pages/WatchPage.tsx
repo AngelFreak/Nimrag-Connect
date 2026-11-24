@@ -120,19 +120,21 @@ export function WatchPage() {
             </Card>
           ) : null}
 
-          <SettingsGroup title="Sync">
-            <SettingsRow icon={<PhoneIcon />} tone="sleep" title="Phones" value={tokens.data ? phonesSummary(tokens.data.tokens) : tokens.isError ? 'Could not load' : undefined} to="/profile/phones" />
-          </SettingsGroup>
+          <div className="watch-page__side">
+            <SettingsGroup title="Sync">
+              <SettingsRow icon={<PhoneIcon />} tone="sleep" title="Phones" value={tokens.data ? phonesSummary(tokens.data.tokens) : tokens.isError ? 'Could not load' : undefined} to="/profile/phones" />
+            </SettingsGroup>
 
-          <SettingsGroup title="More">
-            <SettingsRow
-              icon={<DetailsIcon />}
-              tone="muted"
-              title="Details"
-              value={s ? (problems > 0 ? `${fmtInt(problems)} ${problems === 1 ? 'file' : 'files'} not fully read` : 'All files read') : undefined}
-              to="/devices/details"
-            />
-          </SettingsGroup>
+            <SettingsGroup title="More">
+              <SettingsRow
+                icon={<DetailsIcon />}
+                tone="muted"
+                title="Details"
+                value={s ? (problems > 0 ? `${fmtInt(problems)} ${problems === 1 ? 'file' : 'files'} not fully read` : 'All files read') : undefined}
+                to="/devices/details"
+              />
+            </SettingsGroup>
+          </div>
         </div>
       </div>
     </>

@@ -29,7 +29,7 @@ export function WatchDetailsPage() {
   const counters = s ? parseItems(s) : null;
 
   return (
-    <SubPage title="Details" backTo="/devices">
+    <SubPage title="Details" backTo="/devices" backLabel="Back to watch">
       <p className="subpage__lede">Original files are kept as the watch sent them, so the data can be read again later.</p>
       {storage.isPending ? (
         <Card padding="lg" aria-label="Loading the details">

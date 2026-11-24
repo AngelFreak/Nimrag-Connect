@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
+import { useIsDesktop } from '../lib/hooks';
 import { BackIcon, NextIcon } from './icons';
 
 /** Where a previous/next button goes: a route, a click handler, or nothing (end of range). */
@@ -71,6 +72,8 @@ function ArrowButton({ target, label, children }: { target: NavTarget; label: st
  */
 export function TopBar(props: TopBarProps) {
   const Heading = props.headingLevel === 2 ? 'h2' : 'h1';
+  const desktop = useIsDesktop();
+  if (desktop && props.variant !== 'pager') return <DesktopHeader {...props} />;
   if (props.variant === 'large') {
     return (
       <header className="topbar topbar--large">
@@ -122,6 +125,50 @@ export function TopBar(props: TopBarProps) {
       <ArrowButton target={props.next} label={props.nextLabel}>
         <NextIcon />
       </ArrowButton>
+    </header>
+  );
+}
+
+/**
+ * The `large` and `back` variants at desktop width: the page title of the other desktop pages
+ * (pattern A in docs/design/web-layout/SPEC.md), so a page that has no desktop layout of its own still
+ * matches them. The sidebar takes the place of the back button; a page below another one (Watch details,
+ * a workout) keeps a small link back to it.
+ */
+function DesktopHeader(props: LargeProps | BackProps) {
+  const Heading = props.headingLevel === 2 ? 'h2' : 'h1';
+  const back = props.variant === 'back' && props.backTo !== '/' ? props : null;
+  const arrows = props.variant === 'back' && (props.prev !== undefined || props.next !== undefined) ? props : null;
+  return (
+    <header className="page-header page-header--bare topbar-desk">
+      {back ? (
+        <Link to={back.backTo} className="topbar-desk__back">
+          <BackIcon size={16} />
+          {back.backLabel ?? 'Back'}
+        </Link>
+      ) : null}
+      <div className="page-header__row">
+        <div className="topbar-desk__text">
+          {props.variant === 'large' && props.subtitle ? <span className="topbar__eyebrow">{props.subtitle}</span> : null}
+          <Heading className="page-title">{props.title}</Heading>
+          {props.variant === 'back' && props.subtitle ? <span className="topbar-desk__sub">{props.subtitle}</span> : null}
+        </div>
+        {props.aside || arrows ? (
+          <div className="page-header__actions">
+            {props.aside}
+            {arrows?.prev !== undefined ? (
+              <ArrowButton target={arrows.prev} label={arrows.prevLabel ?? 'Previous'}>
+                <BackIcon />
+              </ArrowButton>
+            ) : null}
+            {arrows?.next !== undefined ? (
+              <ArrowButton target={arrows.next} label={arrows.nextLabel ?? 'Next'}>
+                <NextIcon />
+              </ArrowButton>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
     </header>
   );
 }

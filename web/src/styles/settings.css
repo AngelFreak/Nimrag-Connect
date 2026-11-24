@@ -322,6 +322,10 @@ label.srow:hover {
   .profile-layout .topbar--back {
     padding-left: 0;
   }
+  /* The section list beside it already leads back. */
+  .profile-layout .topbar-desk__back {
+    display: none;
+  }
 }
 
 /* ------------------------------------------------------------------ watch */
@@ -397,4 +401,66 @@ label.srow:hover {
   display: flex;
   flex-direction: column;
   gap: 20px;
+}
+
+/* Desktop: the Watch page uses the width like the other desktop pages. The status card spans the
+   top, its facts are a stat strip (value over label, a rule above), and the groups sit in two columns:
+   Server on the left, Sync and More on the right. Group titles take the section title of the stats
+   pages (Profile's groups too). */
+.watch-page__side {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  min-width: 0;
+}
+@media (min-width: 1024px) {
+  .watch-page {
+    max-width: none;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 40px 56px;
+    align-items: start;
+  }
+  .watch-page > :not(.sgroup):not(.watch-page__side) {
+    grid-column: 1 / -1;
+  }
+  .watch-card {
+    padding: 24px;
+    gap: 24px;
+    box-shadow: var(--card-shadow);
+  }
+  .watch-card__name {
+    font-size: var(--fs-title);
+    font-weight: var(--display-weight);
+  }
+  .watch-card__facts {
+    grid-template-columns: repeat(auto-fill, minmax(145px, 165px));
+    gap: 16px;
+  }
+  .watch-card__facts > div {
+    padding-top: 12px;
+    border-top: 1px solid var(--line-strong);
+  }
+  .watch-card__facts dd {
+    order: -1;
+    font-family: var(--font-display);
+    font-size: var(--fs-stat);
+    font-weight: var(--display-weight);
+    line-height: 1.25;
+  }
+  .watch-card__facts dt {
+    font-size: var(--fs-xs);
+  }
+  .sgroup {
+    gap: 4px;
+  }
+  .sgroup__title {
+    padding: 5px 0 11px;
+    font-family: var(--font-display);
+    font-size: var(--fs-title);
+    font-weight: var(--display-weight);
+    letter-spacing: normal;
+    text-transform: none;
+    color: var(--text);
+  }
 }

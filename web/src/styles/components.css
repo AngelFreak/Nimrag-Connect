@@ -2188,3 +2188,29 @@
   font-weight: var(--display-weight);
   text-align: right;
 }
+
+/* TopBar at desktop width (TopBar.tsx `DesktopHeader`): a PageHeader with a subtitle under the title and,
+   on a page below another, a small link back above it. */
+.topbar-desk__text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.topbar-desk__sub {
+  font-size: var(--fs-base);
+  color: var(--text-2);
+}
+.topbar-desk__back {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: -12px;
+  font-size: var(--fs-sm);
+  color: var(--link);
+  text-decoration: none;
+}
+.topbar-desk__back:hover {
+  text-decoration: underline;
+}

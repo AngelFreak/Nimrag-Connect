@@ -182,3 +182,12 @@ effect / load summary.
 
 Data, queries, routes, accessibility (skip link, focus on route change, aria-current), phone layout
 structure, native-app behaviour, tests' intent. Update tests for new markup rather than deleting them.
+
+## Pages without a desktop layout of their own
+
+Watch, Workouts, Profile and its sub-pages, and the rest use `TopBar`. At desktop width `TopBar`
+renders the pattern-A title instead (40/300, subtitle under it, actions right); the sidebar replaces the
+back button, and a page below another one (Watch details, a workout) gets a small "‹ Back to …" link
+above the title (hidden inside Profile, whose section list already leads back). Settings group titles
+take the section-title style (22/300). Watch spreads over the width: the status card on top with its
+facts as a stat strip, then Server | Sync and More in two columns.

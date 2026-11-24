@@ -7,11 +7,11 @@ import { usePageTitle } from '../../lib/hooks';
  * A page one level below the profile (or the watch): back button, title, then a narrow column. On a
  * phone it is a page of its own; from 1024 px it sits in the right-hand pane next to the section list.
  */
-export function SubPage({ title, backTo, subtitle, aside, children }: { title: string; backTo: string; subtitle?: string; aside?: ReactNode; children: ReactNode }) {
+export function SubPage({ title, backTo, backLabel, subtitle, aside, children }: { title: string; backTo: string; backLabel?: string; subtitle?: string; aside?: ReactNode; children: ReactNode }) {
   usePageTitle(title);
   return (
     <>
-      <TopBar variant="back" backTo={backTo} title={title} {...(subtitle ? { subtitle } : {})} {...(aside ? { aside } : {})} />
+      <TopBar variant="back" backTo={backTo} {...(backLabel ? { backLabel } : {})} title={title} {...(subtitle ? { subtitle } : {})} {...(aside ? { aside } : {})} />
       <div className="page">
         <div className="subpage">{children}</div>
       </div>

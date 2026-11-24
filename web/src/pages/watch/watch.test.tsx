@@ -180,7 +180,7 @@ describe('Watch details', () => {
     expect(screen.getByText('Read without trouble').nextElementSibling).toHaveTextContent('1,280');
     expect(screen.getByText(/Original files are kept as the watch sent them/)).toBeInTheDocument();
     expect(screen.getByRole('table', { name: 'Original files by source' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Back' })).toHaveAttribute('href', '/devices');
+    expect(screen.getByRole('link', { name: 'Back to watch' })).toHaveAttribute('href', '/devices');
   });
 
   it('shows no counter at all while every one is zero', async () => {
