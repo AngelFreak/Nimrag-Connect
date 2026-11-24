@@ -163,6 +163,11 @@
         <item quantity="one">%d waiting</item>
         <item quantity="other">%d waiting</item>
     </plurals>
+    <string name="history_value_edits_waiting">%1$s · %2$s</string>
+    <plurals name="edits_waiting">
+        <item quantity="one">%d change waiting</item>
+        <item quantity="other">%d changes waiting</item>
+    </plurals>
     <string name="history_value_uploaded">%1$s · all uploaded</string>
     <plurals name="files">
         <item quantity="one">%d file</item>
@@ -375,7 +380,13 @@
     <string name="failure_no_credentials">This phone is not set up any more. Sign in again.</string>
     <string name="server_unreachable_title">Server unreachable</string>
     <string name="server_unreachable_body">Nimrag could not reach your server, and there is no saved copy of this page on the phone yet. Check the connection (and the VPN, if the server is on your tailnet), then try again.</string>
-    <string name="local_copy_banner">This phone\'s copy (read-only)</string>
+    <string name="local_copy_banner">This phone\'s copy</string>
+    <plurals name="local_copy_banner_waiting">
+        <item quantity="one">This phone\'s copy · %d change waiting</item>
+        <item quantity="other">This phone\'s copy · %d changes waiting</item>
+    </plurals>
+    <string name="edit_notice_more">%1$s (and %2$d more)</string>
+    <string name="edit_notice_ok">OK</string>
     <string name="local_copy_try_server">Use server</string>
     <string name="server_unreachable_retry">Retry</string>
     <string name="server_unreachable_retrying">Trying again…</string>

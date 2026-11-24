@@ -39,6 +39,11 @@ data class AppState(
     val phoneAccess: PhoneAccess = PhoneAccess(),
     /** What the phone features are doing right now. */
     val phone: PhoneStatus = PhoneStatus(),
+    /**
+     * Changes made offline that the server refused, one short message each, not yet shown. The page
+     * shows the first and drops it on "OK" ([WatchController.dismissEditNotice]).
+     */
+    val editNotices: List<String> = emptyList(),
 )
 
 /**
@@ -223,6 +228,8 @@ data class SyncResult(
 data class UploadState(
     /** Stored on the phone, not yet accepted by the server. */
     val pending: Int = 0,
+    /** Changes made on the phone's copy (offline edits) that the server has not got yet. */
+    val pendingEdits: Int = 0,
     val uploadedTotal: Int = 0,
     val storedTotal: Int = 0,
     val lastUploadAtMs: Long? = null,
@@ -293,6 +300,12 @@ interface WatchController {
      * the last one is older than 5 minutes. Does nothing otherwise; never starts the service.
      */
     fun appOpened() {}
+
+    /** The app is on screen (true) or not (false); while it is, offline edits are noticed within seconds. */
+    fun appVisible(visible: Boolean) {}
+
+    /** The person read the first message in [AppState.editNotices]. */
+    fun dismissEditNotice() {}
 
     /** Ask the watch for a sync now (Input.StartSync); also refreshes the battery. */
     fun syncNow()

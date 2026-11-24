@@ -27,8 +27,9 @@ enum class WebSource {
  * The real server is the source of truth (history, edits, desktop parity), so it wins whenever
  * it is reachable and has everything. The phone's own copy (the local server) is used when it is
  * the better or the only choice: no network, the server failed to answer this session, or
- * uploads are still pending (the phone holds data the server does not have yet). The choice is
- * made when the web view is (re)created, never while a page is open.
+ * uploads are still pending (the phone holds data the server does not have yet). Changes made
+ * offline count as pending too (callers pass files plus changes): the server's page would not show
+ * them. The choice is made when the web view is (re)created, never while a page is open.
  *
  * Showing the server also needs an account: with no live session the answer is the native
  * sign-in screen (signed out) or unlock screen (locked), never the web app's own login page. The

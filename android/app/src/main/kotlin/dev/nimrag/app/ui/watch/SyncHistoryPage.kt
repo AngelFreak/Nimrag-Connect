@@ -242,6 +242,12 @@ internal fun UploadsCard(
                 Stat(uploads.storedTotal.toString(), stringResource(R.string.stat_stored))
             }
         }
+        if (uploads.pendingEdits > 0) {
+            Text(
+                pluralStringResource(R.plurals.edits_waiting, uploads.pendingEdits, uploads.pendingEdits),
+                style = MaterialTheme.typography.bodyMedium,
+            )
+        }
         val last = uploads.lastUploadAtMs
         if (last == null) {
             Text(

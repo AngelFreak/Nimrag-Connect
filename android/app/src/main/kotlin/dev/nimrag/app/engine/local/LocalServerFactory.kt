@@ -4,6 +4,10 @@ import android.app.Application
 import android.content.Context
 import android.os.SystemClock
 import android.util.Log
+import dev.nimrag.app.engine.logic.DroppedChange
+import dev.nimrag.app.engine.logic.EditOutbox
+import dev.nimrag.app.engine.logic.EditVerdict
+import dev.nimrag.app.engine.logic.OutboxEdit
 import dev.nimrag.app.engine.store.EngineDb
 import dev.nimrag.app.engine.store.EngineLog
 import dev.nimrag.app.engine.store.FileStore
@@ -12,6 +16,7 @@ import java.security.SecureRandom
 import java.util.concurrent.Executors
 import uniffi.nimrag_ffi.LocalFileMeta
 import uniffi.nimrag_ffi.LocalServer
+import uniffi.nimrag_ffi.EditVerdict as FfiEditVerdict
 
 /**
  * Both flavors: the real server (nimrag-server's `embedded` module, through the FFI) in
@@ -47,6 +52,9 @@ private class EmbeddedLocalServer(
     @Volatile override var web: LocalWeb? = null
         private set
 
+    @Volatile override var edits: EditOutbox? = null
+        private set
+
     private var started = false
 
     override fun start() {
@@ -77,6 +85,7 @@ private class EmbeddedLocalServer(
             if (port != wanted) prefs.edit().putInt(PORT, port).apply()
             server = srv
             web = LocalWeb(port, secret, srv.secretCookieName())
+            edits = FfiOutbox(srv)
             val ms = SystemClock.elapsedRealtime() - t0
             log.info("Local server up on 127.0.0.1 in $ms ms")
             Log.i(TAG, "local server started in $ms ms on port $port")
@@ -134,4 +143,25 @@ private class EmbeddedLocalServer(
         const val PORT = "port"
         const val TAG = "NimragLocal"
     }
+}
+
+/** The FFI's outbox calls as the engine's own types (see `docs/design/offline-edits.md`, "FFI"). */
+private class FfiOutbox(private val server: LocalServer) : EditOutbox {
+    override fun next(): OutboxEdit? = server.nextEdit()?.let {
+        OutboxEdit(opId = it.opId, method = it.method, path = it.path, body = it.body, madeAt = it.madeAt)
+    }
+
+    override fun done(opId: String, status: Int, responseBody: String): EditVerdict =
+        when (server.editDone(opId, status.coerceIn(0, 0xFFFF).toUShort(), responseBody)) {
+            FfiEditVerdict.APPLIED -> EditVerdict.Applied
+            FfiEditVerdict.DROPPED -> EditVerdict.Dropped
+            FfiEditVerdict.KEPT -> EditVerdict.Kept
+        }
+
+    override fun pending(): Int = server.pendingEdits().toInt()
+
+    override fun takeDropped(): List<DroppedChange> =
+        server.takeDroppedEdits().map { DroppedChange(method = it.method, path = it.path, reason = it.reason) }
+
+    override fun applyState(json: String): Boolean = server.applyState(json)
 }

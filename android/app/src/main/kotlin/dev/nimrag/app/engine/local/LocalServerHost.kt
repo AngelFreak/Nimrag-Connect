@@ -1,5 +1,7 @@
 package dev.nimrag.app.engine.local
 
+import dev.nimrag.app.engine.logic.EditOutbox
+
 /**
  * The server inside the app (both flavors; the library is built with ffi feature `local-server`).
  * Every stored watch file is also fed to it, so the web interface can show the newest data from
@@ -15,6 +17,12 @@ interface LocalServerHost {
 
     /** How to reach the server once it runs; null before that and after a failure. */
     val web: LocalWeb?
+
+    /**
+     * The changes made on the phone's copy that the real server has not got yet (offline edits),
+     * and the state pulled back from it. Null before the server runs and after a failure.
+     */
+    val edits: EditOutbox?
 }
 
 /**

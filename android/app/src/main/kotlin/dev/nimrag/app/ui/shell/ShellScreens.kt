@@ -21,12 +21,14 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import dev.nimrag.app.R
 import dev.nimrag.app.ui.components.CardTitle
 import dev.nimrag.app.ui.components.NimragButton
 import dev.nimrag.app.ui.components.SectionCard
+import dev.nimrag.app.ui.shell.logic.LocalCopyText
 
 /**
  * Laid over the web view when the server cannot be reached and the PWA has no cached copy of the
@@ -77,9 +79,12 @@ fun WebPreviewPlaceholder(modifier: Modifier = Modifier) {
     }
 }
 
-/** Above the web view while it shows the phone's own copy: says so, and offers the server. */
+/**
+ * Above the web view while it shows the phone's own copy: says so (and how many changes made on it
+ * wait for the server), and offers the server.
+ */
 @Composable
-fun LocalCopyBanner(onTryServer: () -> Unit, modifier: Modifier = Modifier) {
+fun LocalCopyBanner(pendingEdits: Int, onTryServer: () -> Unit, modifier: Modifier = Modifier) {
     Row(
         modifier
             .fillMaxWidth()
@@ -87,11 +92,40 @@ fun LocalCopyBanner(onTryServer: () -> Unit, modifier: Modifier = Modifier) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
+        val text = when (val shown = LocalCopyText.of(pendingEdits)) {
+            LocalCopyText.Plain -> stringResource(R.string.local_copy_banner)
+            is LocalCopyText.Waiting -> pluralStringResource(R.plurals.local_copy_banner_waiting, shown.count, shown.count)
+        }
         Text(
-            stringResource(R.string.local_copy_banner),
+            text,
+            modifier = Modifier.weight(1f),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         TextButton(onClick = onTryServer) { Text(stringResource(R.string.local_copy_try_server)) }
+    }
+}
+
+/**
+ * A change made offline that the server refused ("A change made offline could not be saved: …").
+ * Shown until the person says OK; [more] says how many messages follow it.
+ */
+@Composable
+fun EditNoticeBanner(message: String, more: Int, onDismiss: () -> Unit, modifier: Modifier = Modifier) {
+    Row(
+        modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Icon(Icons.Filled.Warning, contentDescription = null, tint = MaterialTheme.colorScheme.error)
+        Text(
+            if (more > 0) stringResource(R.string.edit_notice_more, message, more) else message,
+            modifier = Modifier.weight(1f),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.error,
+        )
+        TextButton(onClick = onDismiss) { Text(stringResource(R.string.edit_notice_ok)) }
     }
 }

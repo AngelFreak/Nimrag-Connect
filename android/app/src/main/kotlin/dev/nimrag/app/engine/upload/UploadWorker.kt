@@ -5,8 +5,15 @@ import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
 import dev.nimrag.app.engine.EngineSettings
+import dev.nimrag.app.engine.logic.DroppedEdits
+import dev.nimrag.app.engine.logic.EditBackoff
+import dev.nimrag.app.engine.logic.EditDrain
+import dev.nimrag.app.engine.logic.EditOutbox
+import dev.nimrag.app.engine.logic.EditPolicy
 import dev.nimrag.app.engine.logic.FileKind
 import dev.nimrag.app.engine.logic.NetworkChangeFilter
+import dev.nimrag.app.engine.logic.ServerReply
+import dev.nimrag.app.engine.logic.StatePull
 import dev.nimrag.app.engine.logic.UploadPolicy
 import dev.nimrag.app.engine.store.EngineDb
 import dev.nimrag.app.engine.store.EngineLog
@@ -15,9 +22,11 @@ import dev.nimrag.app.engine.store.FileStore
 import dev.nimrag.app.model.ServerTest
 import dev.nimrag.app.model.StoredFile
 import dev.nimrag.app.model.UploadState
+import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.FileInputStream
 import java.io.IOException
+import java.io.InputStream
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.concurrent.Semaphore
@@ -25,12 +34,18 @@ import java.util.concurrent.TimeUnit
 
 /**
  * Uploads stored files on its own thread, never on the BLE thread or the main thread.
- * Woken by a new file, a network change, [uploadNow], a settings change and at start.
+ * Woken by a new file, a new edit ([editsChanged]), a network change, [uploadNow], a settings
+ * change, the app coming back ([onAppResumed]) and at start.
  *
  * Rules (IMPLEMENTATION_PLAN.md stage 2d): the active network must be unmetered or a VPN
  * unless "allow mobile data" is on. 200/201 marks the file uploaded; 401/403 stops all
  * uploads and tells [onTokenRejected] (the account forgets the token and asks for a sign-in); 413 or another 4xx parks that file; IO errors, 5xx,
  * 408 and 429 back off 30 s doubling to 1 h per file. Files stay on the phone afterwards.
+ *
+ * After the files of each pass come the offline edits (docs/design/offline-edits.md): the changes
+ * made on the phone's copy go to `POST /api/device/edits`, oldest first, under the same network
+ * rule, the same 401/403 handling and the same back-off. Once the outbox is empty the server's
+ * state is pulled back onto the phone (at start, after a pass that sent something, on resume).
  */
 class UploadWorker(
     context: Context,
@@ -41,8 +56,12 @@ class UploadWorker(
     private val onState: (UploadState) -> Unit,
     /** An upload came back 401 or 403: the phone's token no longer works. */
     private val onTokenRejected: () -> Unit = {},
-    /** A pass over the due files finished and the server took at least one: new data is there to show. */
+    /** A pass finished and the server took a file, or the phone took the server's state: new data is there to show. */
     private val onUploaded: () -> Unit = {},
+    /** The phone's copy and its outbox of changes; null while the local server is not running. */
+    private val edits: () -> EditOutbox? = { null },
+    /** Changes the server refused, one line each for the person (shown once). */
+    private val onEditNotices: (List<String>) -> Unit = {},
     private val clock: () -> Long = System::currentTimeMillis,
 ) {
     private val connectivity = context.getSystemService(ConnectivityManager::class.java)
@@ -59,6 +78,19 @@ class UploadWorker(
 
     /** Files the server took in the current pass (worker thread only). */
     private var uploadedInPass = 0
+
+    /** The server's state went onto the phone in the current pass (worker thread only). */
+    private var stateTakenInPass = false
+
+    private val editBackoff = EditBackoff()
+
+    /** The server's state should be pulled when the outbox is empty: at start, after sending, on resume. */
+    @Volatile private var pullWanted = true
+
+    @Volatile private var lastPullAt = 0L
+
+    /** `snapshot` reads, then publishes: two threads doing it at once must not leave the older numbers last. */
+    private val publishLock = Any()
 
     fun start() {
         synchronized(startLock) {
@@ -97,10 +129,25 @@ class UploadWorker(
         signal.release()
     }
 
+    /** The number of waiting changes changed (see [EditWatcher]): show it, and send a new one. */
+    fun editsChanged(newEdit: Boolean) {
+        publish()
+        if (newEdit) wake()
+    }
+
+    /** The app came back to the screen: the server may have changed things; pull its state (not more than every 30 s). */
+    fun onAppResumed() {
+        if (EditPolicy.resumePullDue(lastPullAt, clock())) {
+            pullWanted = true
+            wake()
+        }
+    }
+
     /** "Upload now": ignore the backoff (the network rule still applies). */
     fun uploadNow() {
         Thread({
             runCatching { db.resetBackoff() }
+            editBackoff.succeeded()
             wake()
         }, "nimrag-upload-reset").start()
     }
@@ -116,13 +163,15 @@ class UploadWorker(
     fun snapshot(): UploadState {
         val counts = db.counts()
         val recent = db.recent(RECENT).map { it.toStoredFile() }
+        val editsWaiting = pendingEdits()
         return UploadState(
             pending = counts.pending,
+            pendingEdits = editsWaiting,
             uploadedTotal = counts.uploaded,
             storedTotal = counts.stored,
             lastUploadAtMs = db.lastUploadAt(),
             lastError = lastError,
-            waitingForNetwork = waitingForNetwork && counts.pending > 0,
+            waitingForNetwork = waitingForNetwork && (counts.pending > 0 || editsWaiting > 0),
             recent = recent,
         )
     }
@@ -158,6 +207,7 @@ class UploadWorker(
     private fun loop() {
         while (true) {
             uploadedInPass = 0
+            stateTakenInPass = false
             val waitMs = try {
                 runOnce()
             } catch (t: Throwable) {
@@ -165,13 +215,13 @@ class UploadWorker(
                 RETRY_AFTER_ERROR_MS
             }
             // Once per pass, not per file: a sync stores many files and the page needs one refresh.
-            if (uploadedInPass > 0) runCatching { onUploaded() }
+            if (uploadedInPass > 0 || stateTakenInPass) runCatching { onUploaded() }
             signal.tryAcquire(waitMs, TimeUnit.MILLISECONDS)
             signal.drainPermits()
         }
     }
 
-    /** One pass over the due files. Returns how long to sleep unless woken. */
+    /** One pass: the due files, then the offline edits. Returns how long to sleep unless woken. */
     private fun runOnce(): Long {
         val base = UploadPolicy.normalizeServerUrl(settings.serverUrl)
         val token = settings.token
@@ -185,14 +235,20 @@ class UploadWorker(
             publish()
             return IDLE_MS
         }
+        val filesWait = uploadFiles(base, token) ?: return IDLE_MS
+        val editsWait = syncEdits(base, token) ?: return IDLE_MS
+        publish()
+        return minOf(filesWait, editsWait)
+    }
+
+    /** The due files, oldest first. Returns how long until the next retry, or null when the token was refused. */
+    private fun uploadFiles(base: String, token: String): Long? {
+        val editsWaiting = pendingEdits()
         while (true) {
             val pending = db.counts().pending
             val allowed = UploadPolicy.networkAllows(currentNetwork(), settings.allowMobileData)
-            waitingForNetwork = pending > 0 && !allowed
-            if (!allowed || pending == 0) {
-                publish()
-                return IDLE_MS
-            }
+            waitingForNetwork = (pending > 0 || editsWaiting > 0) && !allowed
+            if (!allowed || pending == 0) return IDLE_MS
             val row = db.nextDue(clock()) ?: break
             val outcome = upload(base, token, row)
             applyOutcome(row, outcome)
@@ -200,12 +256,90 @@ class UploadWorker(
             if (outcome is UploadPolicy.Outcome.StopAll) {
                 authBlocked = true
                 onTokenRejected()
-                return IDLE_MS
+                return null
             }
         }
-        publish()
         val next = db.earliestRetryAt() ?: return IDLE_MS
         return (next - clock()).coerceIn(1_000L, IDLE_MS)
+    }
+
+    /**
+     * The offline edits: send the outbox, then pull the server's state once it is empty. Same
+     * network rule as the files. Returns how long until the next try, or null when the token was refused.
+     */
+    private fun syncEdits(base: String, token: String): Long? {
+        val outbox = edits() ?: return IDLE_MS
+        reportDropped(outbox) // refusals from an earlier run too
+        if (!UploadPolicy.networkAllows(currentNetwork(), settings.allowMobileData)) return IDLE_MS
+        val wait = editBackoff.waitMs(clock())
+        if (wait > 0) return wait.coerceIn(1_000L, IDLE_MS)
+
+        if (outbox.pending() > 0) {
+            val report = EditDrain(outbox).run { edit ->
+                exchange("$base/api/device/edits", "POST", token, EditPolicy.requestJson(edit))
+            }
+            reportDropped(outbox)
+            if (report.applied > 0) {
+                pullWanted = true
+                lastError = null
+                log.info("Sent ${report.applied} offline change(s) to the server")
+            }
+            when (val end = report.end) {
+                EditDrain.End.Empty -> editBackoff.succeeded()
+                is EditDrain.End.Kept -> {
+                    lastError = end.reason
+                    log.warn("Sending an offline change failed: ${end.reason}")
+                    return editBackoff.failed(clock()).coerceIn(1_000L, IDLE_MS)
+                }
+                is EditDrain.End.TokenRejected -> return rejectToken(end.status)
+            }
+        }
+        if (!pullWanted) return IDLE_MS
+        when (val pull = StatePull(outbox).run { exchange("$base/api/device/state", "GET", token, null) }) {
+            StatePull.Result.Applied -> {
+                pullWanted = false
+                lastPullAt = clock()
+                stateTakenInPass = true
+                editBackoff.succeeded()
+                log.info("Took the server's settings, workouts and entries onto the phone")
+            }
+            // Changes wait (a send failed, or one was made meanwhile): the pull follows once they are sent.
+            StatePull.Result.Skipped, StatePull.Result.Later -> Unit
+            is StatePull.Result.Failed -> {
+                log.warn("Could not pull the server's state: ${pull.reason}")
+                return editBackoff.failed(clock()).coerceIn(1_000L, IDLE_MS)
+            }
+            is StatePull.Result.TokenRejected -> return rejectToken(pull.status)
+        }
+        return IDLE_MS
+    }
+
+    private fun rejectToken(status: Int): Long? {
+        val reason = EditPolicy.keptReason(ServerReply(status))
+        lastError = reason
+        log.error("$reason. Uploads stop until this phone signs in again.")
+        authBlocked = true
+        onTokenRejected()
+        return null
+    }
+
+    /** The changes the server refused: one log line each and one message each for the person, once. */
+    private fun reportDropped(outbox: EditOutbox) {
+        val dropped = try {
+            outbox.takeDropped()
+        } catch (e: Exception) {
+            log.error("Could not read the refused changes: ${e.javaClass.simpleName}")
+            return
+        }
+        if (dropped.isEmpty()) return
+        dropped.forEach { log.warn(DroppedEdits.logLine(it)) }
+        onEditNotices(dropped.map(DroppedEdits::message))
+    }
+
+    private fun pendingEdits(): Int = try {
+        edits()?.pending() ?: 0
+    } catch (_: Exception) {
+        0
     }
 
     private fun upload(base: String, token: String, row: FileRow): UploadPolicy.Outcome {
@@ -260,10 +394,12 @@ class UploadWorker(
     }
 
     private fun publish() {
-        try {
-            onState(snapshot())
-        } catch (e: Exception) {
-            log.error("Could not read the upload state: ${e.javaClass.simpleName}")
+        synchronized(publishLock) {
+            try {
+                onState(snapshot())
+            } catch (e: Exception) {
+                log.error("Could not read the upload state: ${e.javaClass.simpleName}")
+            }
         }
     }
 
@@ -326,6 +462,54 @@ class UploadWorker(
         }
     }
 
+    /**
+     * One JSON exchange with the server for the offline edits. A change is only ever decided by a
+     * real answer of the server ([EditPolicy.accept]); an IO error is "no answer".
+     */
+    private fun exchange(url: String, method: String, token: String, json: String?): ServerReply {
+        val conn = URL(url).openConnection() as HttpURLConnection
+        try {
+            conn.requestMethod = method
+            conn.connectTimeout = TIMEOUT_MS
+            conn.readTimeout = TIMEOUT_MS
+            conn.instanceFollowRedirects = false
+            conn.useCaches = false
+            conn.setRequestProperty("Authorization", "Bearer $token")
+            conn.setRequestProperty("Accept", "application/json")
+            if (json != null) {
+                val bytes = json.toByteArray(Charsets.UTF_8)
+                conn.doOutput = true
+                conn.setRequestProperty("Content-Type", "application/json")
+                conn.setFixedLengthStreamingMode(bytes.size)
+                conn.outputStream.use { it.write(bytes) }
+            }
+            val code = conn.responseCode
+            val stream = if (code >= 400) conn.errorStream else conn.inputStream
+            val body = if (stream == null) "" else stream.use { readLimited(it) }
+                ?: return ServerReply.noAnswer("The server's answer was too large")
+            return EditPolicy.accept(code, conn.contentType, body)
+        } catch (e: IOException) {
+            return ServerReply.noAnswer(UploadPolicy.describeIo(e))
+        } catch (_: Exception) {
+            return ServerReply.noAnswer(UploadPolicy.describeIo(IllegalStateException()))
+        } finally {
+            conn.disconnect()
+        }
+    }
+
+    /** The whole text, or null when it is longer than [MAX_ANSWER_BYTES]. */
+    private fun readLimited(input: InputStream): String? {
+        val out = ByteArrayOutputStream()
+        val buffer = ByteArray(16 * 1024)
+        while (true) {
+            val n = input.read(buffer)
+            if (n < 0) break
+            out.write(buffer, 0, n)
+            if (out.size() > MAX_ANSWER_BYTES) return null
+        }
+        return out.toString(Charsets.UTF_8.name())
+    }
+
     private fun FileRow.toStoredFile() = StoredFile(
         sha256 = sha256,
         sizeBytes = size,
@@ -340,6 +524,7 @@ class UploadWorker(
         const val TIMEOUT_MS = 30_000
         const val IDLE_MS = 3_600_000L
         const val RETRY_AFTER_ERROR_MS = 60_000L
+        const val MAX_ANSWER_BYTES = 16 * 1024 * 1024
         const val GARMIN_EPOCH_UNIX_S = 631_065_600L
     }
 }

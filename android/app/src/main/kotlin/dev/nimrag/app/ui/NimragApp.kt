@@ -76,6 +76,7 @@ import dev.nimrag.app.ui.shell.logic.ShellChrome
 import dev.nimrag.app.ui.shell.logic.ShellNav
 import dev.nimrag.app.ui.shell.logic.WebSource
 import dev.nimrag.app.ui.shell.logic.WebSourcePolicy
+import dev.nimrag.app.ui.shell.EditNoticeBanner
 import dev.nimrag.app.ui.shell.LocalCopyBanner
 import dev.nimrag.app.ui.shell.isOnline
 import androidx.compose.ui.platform.LocalDensity
@@ -134,6 +135,8 @@ internal fun NimragShell(
     var forceRemote by remember { mutableStateOf(false) }
     // Bumped to make the source be chosen again (see backToServerOnResume).
     var sourceCheck by remember { mutableIntStateOf(0) }
+    // Files and offline changes the server has not got yet: both mean the phone holds data the server lacks.
+    val waitingForServer = state.uploads.pending + state.uploads.pendingEdits
 
     // The account decides whether the server's web app may be shown at all: without a live session
     // the answer is the native sign-in or unlock screen, never the web app's own login page.
@@ -148,7 +151,7 @@ internal fun NimragShell(
                 remoteConfigured = remoteTarget != null,
                 online = isOnline(context),
                 remoteFailed = remoteFailed,
-                pendingUploads = state.uploads.pending,
+                pendingUploads = waitingForServer,
                 auth = account.phase,
             )
         }
@@ -185,8 +188,8 @@ internal fun NimragShell(
     // Files wait on the phone and uploads fail: the server's page cannot show them (and the
     // service worker keeps that page loading, so `unreachable` never comes). Switch now.
     val uploadsStuck = state.uploads.lastError != null || state.uploads.waitingForNetwork
-    LaunchedEffect(uploadsStuck, state.uploads.pending > 0, onLocal) {
-        if (WebSourcePolicy.switchToLocalNow(onLocal, localWeb != null, forceRemote, state.uploads.pending, uploadsStuck)) {
+    LaunchedEffect(uploadsStuck, waitingForServer > 0, onLocal) {
+        if (WebSourcePolicy.switchToLocalNow(onLocal, localWeb != null, forceRemote, waitingForServer, uploadsStuck)) {
             remoteFailed = true
         }
     }
@@ -194,19 +197,23 @@ internal fun NimragShell(
     // Permissions and Bluetooth can change while we are away (system settings, quick tiles).
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
         controller.refreshPermissions()
+        controller.appVisible(true)
         // Newest data first: sync when the last sync is old enough (the link must be ready).
         controller.appOpened()
         // Is the session still good? (Throttled in the account; the first check runs at start.)
         controller.account.checkSession()
         webState.onResume()
         // Everything reached the server again: it has the whole history, so it shows again.
-        if (WebSourcePolicy.backToServerOnResume(onLocal, remoteTarget != null, isOnline(context), state.uploads.pending, uploadsStuck)) {
+        if (WebSourcePolicy.backToServerOnResume(onLocal, remoteTarget != null, isOnline(context), waitingForServer, uploadsStuck)) {
             remoteFailed = false
             forceRemote = false
             sourceCheck++
         }
     }
-    LifecycleEventEffect(Lifecycle.Event.ON_PAUSE) { webState.onPause() }
+    LifecycleEventEffect(Lifecycle.Event.ON_PAUSE) {
+        webState.onPause()
+        controller.appVisible(false)
+    }
 
     // The page learns about link and last-sync changes (and only changes).
     val bridgeStatus = BridgeStatus.of(state)
@@ -267,8 +274,15 @@ internal fun NimragShell(
                 .imePadding(),
         ) {
             if (demo) DemoBanner()
+            state.editNotices.firstOrNull()?.let { notice ->
+                EditNoticeBanner(
+                    message = notice,
+                    more = state.editNotices.size - 1,
+                    onDismiss = controller::dismissEditNotice,
+                )
+            }
             if (onLocal && remoteTarget != null && !nav.inWatch) {
-                LocalCopyBanner(onTryServer = {
+                LocalCopyBanner(pendingEdits = state.uploads.pendingEdits, onTryServer = {
                     remoteFailed = false
                     forceRemote = true
                 })

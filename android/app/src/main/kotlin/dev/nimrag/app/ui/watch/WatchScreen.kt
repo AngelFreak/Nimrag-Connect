@@ -138,16 +138,24 @@ internal fun WatchScreen(
                 }
                 item {
                     val files = state.uploads.storedTotal
+                    val edits = state.uploads.pendingEdits
+                    val filesValue = when {
+                        files == 0 -> stringResource(R.string.history_value_none)
+                        state.uploads.pending > 0 -> stringResource(
+                            R.string.history_value_waiting,
+                            pluralStringResource(R.plurals.files, files, files),
+                            pluralStringResource(R.plurals.files_waiting, state.uploads.pending, state.uploads.pending),
+                        )
+                        else -> stringResource(R.string.history_value_uploaded, pluralStringResource(R.plurals.files, files, files))
+                    }
+                    // Changes made offline on the phone's copy wait for the server like files do.
+                    val editsValue = pluralStringResource(R.plurals.edits_waiting, edits, edits)
                     SettingsRow(
                         title = stringResource(R.string.history_title),
                         value = when {
-                            files == 0 -> stringResource(R.string.history_value_none)
-                            state.uploads.pending > 0 -> stringResource(
-                                R.string.history_value_waiting,
-                                pluralStringResource(R.plurals.files, files, files),
-                                pluralStringResource(R.plurals.files_waiting, state.uploads.pending, state.uploads.pending),
-                            )
-                            else -> stringResource(R.string.history_value_uploaded, pluralStringResource(R.plurals.files, files, files))
+                            edits == 0 -> filesValue
+                            files == 0 -> editsValue
+                            else -> stringResource(R.string.history_value_edits_waiting, filesValue, editsValue)
                         },
                         icon = ListIcon,
                         trailing = RowTrailing.Chevron,

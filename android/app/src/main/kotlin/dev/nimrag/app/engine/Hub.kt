@@ -24,6 +24,7 @@ import dev.nimrag.app.engine.phone.WeatherBridge
 import dev.nimrag.app.engine.store.EngineDb
 import dev.nimrag.app.engine.store.EngineLog
 import dev.nimrag.app.engine.store.FileStore
+import dev.nimrag.app.engine.upload.EditWatcher
 import dev.nimrag.app.engine.upload.UploadWorker
 import dev.nimrag.app.engine.workouts.WorkoutSender
 import dev.nimrag.app.model.AppState
@@ -62,7 +63,12 @@ class Hub(val app: Application) {
         // A refused token (revoked on the server, or an old hand-entered one) means: sign in again.
         onTokenRejected = { account.tokenRejected() },
         onUploaded = ::newDataArrived,
+        edits = { local.edits },
+        onEditNotices = { notices -> update { it.copy(editNotices = it.editNotices + notices) } },
     )
+
+    /** Notices changes made on the phone's copy while the app is on screen and wakes [uploader] for them. */
+    val editWatcher = EditWatcher({ local.edits }) { _, newEdit -> uploader.editsChanged(newEdit) }
 
     /**
      * The account: first sign-in, unlock, sign out ([AccountManager]). A new token, a new server
@@ -88,6 +94,8 @@ class Hub(val app: Application) {
      */
     val local: LocalServerHost = LocalServerFactory.create(app, db, store, log, onData = ::newDataArrived) { port ->
         update { it.copy(localWebPort = port) }
+        // The outbox exists now: send what waits and pull the server's state (the first pass came too early).
+        if (port != null) uploader.wake()
     }
 
     /** The phone features (stage 2f): notifications, find my phone, music. Everything on [handler]. */

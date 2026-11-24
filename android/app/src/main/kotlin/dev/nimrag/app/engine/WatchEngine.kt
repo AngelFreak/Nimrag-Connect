@@ -177,6 +177,16 @@ class WatchEngine(private val hub: Hub) : WatchController {
 
     override fun appOpened() {
         hub.handler.post { link.onAppOpened() }
+        // The server may have changed things while the app was away: take its state (when nothing waits to be sent).
+        hub.uploader.onAppResumed()
+    }
+
+    override fun appVisible(visible: Boolean) {
+        hub.editWatcher.setForeground(visible)
+    }
+
+    override fun dismissEditNotice() {
+        hub.update { it.copy(editNotices = it.editNotices.drop(1)) }
     }
 
     override fun startScan() {
