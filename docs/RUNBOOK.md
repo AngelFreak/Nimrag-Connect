@@ -252,8 +252,15 @@ Each user can take all their own data out, at any time, in open formats.
 
 The zip holds `originals/` (the FIT files exactly as they came from the watch), `csv/` (one CSV
 file per kind of data: activities, sleep, heart rate, positions and so on, with a header row, times
-in ISO 8601 in the user's time zone plus a UTC epoch column) and a `README.txt`. See "Export" in
-[`server/README.md`](../server/README.md) for the exact layout.
+in ISO 8601 in the user's time zone plus a UTC epoch column), `nimrag/` (the same in exact JSON, for
+a restore) and a `README.txt`. See "Export" in [`server/README.md`](../server/README.md) for the exact layout.
+
+**Restore.** Profile, **Restore from a Nimrag export** (`POST /api/import/nimrag`) puts such a zip back
+into the signed-in user, on this server or another one: the originals again with their original
+details, then the person's own settings, workouts, body measurements and strength edits, merged with
+what is there (nothing is deleted, a second restore changes nothing, workouts come back as not sent
+to the watch, restored files are not sent to Garmin Connect). Exports made before this feature have no
+`nimrag/` part and are refused: download a new one. Design: [`docs/design/export-restore.md`](design/export-restore.md).
 
 The export is the user's data, not a server backup: it has no accounts, tokens or settings of other
 users. Use [Backups](#backups) for that.

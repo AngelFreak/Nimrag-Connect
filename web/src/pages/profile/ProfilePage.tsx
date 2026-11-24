@@ -139,6 +139,7 @@ function UserRows() {
             downloadName={exportFileName(me.data?.username, todayIn(s?.timezone))}
           />
           <SettingsRow icon={<ImportIcon />} tone="sleep" title="Import from Garmin" value="Files you exported from Garmin" to="/profile/import-garmin" />
+          <SettingsRow icon={<ImportIcon />} tone="steps" title="Restore from a Nimrag export" value="A zip you downloaded from Nimrag" to="/profile/restore" />
         </SettingsGroup>
       </div>
       <div data-pane="preferences">

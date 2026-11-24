@@ -44,7 +44,7 @@ const MAX_NAME_CHARS: usize = 200;
 #[derive(Debug, Deserialize)]
 pub struct ImportParams {
     /// The name the file had on the person's device.
-    name: Option<String>,
+    pub(super) name: Option<String>,
 }
 
 /// FIT files of one kind in an import.
@@ -77,7 +77,7 @@ pub struct GarminImportResponse {
 }
 
 /// Removes the uploaded file when dropped, on every path out of the import.
-struct Upload(PathBuf);
+pub(super) struct Upload(pub(super) PathBuf);
 impl Drop for Upload {
     fn drop(&mut self) {
         let _ = std::fs::remove_file(&self.0);
@@ -86,7 +86,7 @@ impl Drop for Upload {
 
 /// The file name as the person's device gave it, made safe to keep: no directory part, no control
 /// characters, a bounded length. `None` when nothing is left.
-fn clean_name(raw: &str) -> Option<String> {
+pub(super) fn clean_name(raw: &str) -> Option<String> {
     let last = raw.rsplit(['/', '\\']).next().unwrap_or_default();
     let name: String = last
         .chars()
@@ -98,7 +98,7 @@ fn clean_name(raw: &str) -> Option<String> {
 }
 
 /// A failure text for the browser: one line, bounded, without the server's directories.
-fn clean_error(text: &str, data_dir: &str) -> String {
+pub(super) fn clean_error(text: &str, data_dir: &str) -> String {
     let text = text.replace(data_dir, "(server)");
     text.chars()
         .map(|c| if c.is_control() { ' ' } else { c })
@@ -106,7 +106,7 @@ fn clean_error(text: &str, data_dir: &str) -> String {
         .collect()
 }
 
-fn too_large() -> ApiError {
+pub(super) fn too_large() -> ApiError {
     ApiError::new(StatusCode::PAYLOAD_TOO_LARGE, "file too large")
 }
 
@@ -167,6 +167,18 @@ pub async fn import(
             })?;
         let size = received.size;
         let upload = Upload(received.tmp);
+        // A Nimrag export would be stored half (its FIT files under the wrong source, without
+        // the Garmin Connect files and the person's own entries): send it to the restore.
+        let path = upload.0.clone();
+        if tokio::task::spawn_blocking(move || crate::restore::is_nimrag_export(&path))
+            .await
+            .map_err(|e| ApiError::from(anyhow::anyhow!("import task: {e}")))?
+        {
+            return Err(ApiError::new(
+                StatusCode::UNPROCESSABLE_ENTITY,
+                crate::restore::USE_RESTORE,
+            ));
+        }
         let report = import::run_with(&task_state, &upload.0, opts).await?;
         Ok::<_, ApiError>((report, size))
     })

@@ -5,7 +5,13 @@
 //! csv/activities.csv      one CSV per kind of data the user has (empty ones are left out)
 //! csv/files.csv           every original: its name in the archive, size, when it arrived
 //! originals/<sha256>.fit  the user's original files, byte for byte; the name is the stored name
+//! nimrag/manifest.json    format, version and counts (see `docs/design/export-restore.md`)
+//! nimrag/files.json       every original with its exact ledger metadata
+//! nimrag/settings.json, workouts.json, body_measurements.json, strength_set_edits.json
+//!                         what the person entered, exact (times are Unix seconds)
 //! ```
+//!
+//! The `nimrag/` part is what [`crate::restore`] reads back; the CSV files are for spreadsheets.
 //!
 //! Only rows of the given user (sample tables by `user_id`, per-file tables through
 //! `file_owners`) and only files that user owns. Nothing of the admin or of other users.
@@ -26,6 +32,7 @@ use anyhow::{Context, Result};
 use axum::body::{Body, Bytes};
 use chrono_tz::Tz;
 use futures_util::StreamExt;
+use serde::{Deserialize, Serialize};
 use sqlx::{Row, SqlitePool};
 use std::fs::File;
 use std::io::{self, Read, Write};
@@ -39,6 +46,12 @@ use zip::{CompressionMethod, ZipWriter};
 pub const IDLE_TIMEOUT: Duration = Duration::from_secs(120);
 /// Output is handed to the HTTP body in pieces of this size.
 const CHUNK: usize = 64 * 1024;
+/// Bytes read from a stored file to tell FIT from a Garmin Connect JSON.
+const SNIFF: usize = if crate::derive::SNIFF_LEN > crate::connect::SNIFF_LEN {
+    crate::derive::SNIFF_LEN
+} else {
+    crate::connect::SNIFF_LEN
+};
 /// Pieces waiting for a slow reader (`CHUNK` each) before the export pauses.
 const QUEUE: usize = 8;
 
@@ -56,6 +69,92 @@ pub struct Summary {
     pub originals: u64,
     /// Files the database lists but the store does not have (left out, listed in `files.csv`).
     pub originals_missing: u64,
+}
+
+// ---- the exact part (`nimrag/*.json`) -----------------------------------------------------------
+
+/// `format` of `nimrag/manifest.json`.
+pub const FORMAT: &str = "nimrag-export";
+/// The version of the exact part this build writes and reads.
+pub const FORMAT_VERSION: u32 = 1;
+/// Where the manifest lives; its presence tells a Nimrag export from any other zip.
+pub const MANIFEST_NAME: &str = "nimrag/manifest.json";
+
+#[derive(Debug, Default, Serialize, Deserialize)]
+pub struct Counts {
+    #[serde(default)]
+    pub files: u64,
+    #[serde(default)]
+    pub workouts: u64,
+    #[serde(default)]
+    pub body_measurements: u64,
+    #[serde(default)]
+    pub strength_set_edits: u64,
+    #[serde(default)]
+    pub settings: u64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Manifest {
+    pub format: String,
+    pub version: u32,
+    #[serde(default)]
+    pub created_at: String,
+    #[serde(default)]
+    pub app_version: String,
+    #[serde(default)]
+    pub schema_version: Option<i64>,
+    #[serde(default)]
+    pub timezone: String,
+    #[serde(default)]
+    pub counts: Counts,
+}
+
+/// One original with its ledger metadata exactly as stored. `name` is `None` when the store did
+/// not have the file.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct FileJson {
+    pub name: Option<String>,
+    pub sha256: String,
+    pub size: i64,
+    pub source: String,
+    pub data_type: Option<i64>,
+    pub sub_type: Option<i64>,
+    pub file_index: Option<i64>,
+    pub file_number: Option<i64>,
+    pub watch_timestamp: Option<i64>,
+    pub received_at: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct WorkoutJson {
+    pub name: String,
+    pub sport: String,
+    pub definition: serde_json::Value,
+    pub created_at: i64,
+    pub updated_at: i64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct BodyJson {
+    pub measured_at: i64,
+    pub weight_kg: Option<f64>,
+    pub body_fat_pct: Option<f64>,
+    pub waist_cm: Option<f64>,
+    pub created_at: i64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct StrengthEditJson {
+    pub activity_ident: String,
+    pub set_idx: i64,
+    pub fields: serde_json::Value,
+    pub updated_at: i64,
+}
+
+/// A stored JSON text as a value; a text that is not JSON (never written by the server) stays text.
+fn json_or_text(text: String) -> serde_json::Value {
+    serde_json::from_str(&text).unwrap_or(serde_json::Value::String(text))
 }
 
 // ---- the CSV tables ---------------------------------------------------------------------------
@@ -596,6 +695,7 @@ struct FileRow {
     sub_type: Option<i64>,
     file_number: Option<i64>,
     watch_timestamp: Option<i64>,
+    file_index: Option<i64>,
     /// Name in the archive; `None` while missing from the store.
     name: Option<String>,
 }
@@ -603,7 +703,7 @@ struct FileRow {
 async fn list_files(pool: &SqlitePool, uid: i64) -> Result<Vec<FileRow>> {
     let rows = sqlx::query(
         "SELECT f.sha256, f.size, f.received_at, f.source, f.data_type, f.sub_type,
-                f.file_number, f.watch_timestamp
+                f.file_number, f.watch_timestamp, f.file_index
          FROM file_owners o JOIN files f ON f.sha256 = o.sha256
          WHERE o.user_id = ? ORDER BY f.received_at, f.sha256",
     )
@@ -621,6 +721,7 @@ async fn list_files(pool: &SqlitePool, uid: i64) -> Result<Vec<FileRow>> {
             sub_type: r.get(5),
             file_number: r.get(6),
             watch_timestamp: r.get(7),
+            file_index: r.get(8),
             name: None,
         })
         .collect())
@@ -672,10 +773,8 @@ impl<W: Write> Exporter<'_, W> {
             Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(None),
             Err(e) => return Err(e).with_context(|| format!("reading {}", path.display())),
         };
-        let mut head = Vec::with_capacity(crate::derive::SNIFF_LEN);
-        (&mut f)
-            .take(crate::derive::SNIFF_LEN as u64)
-            .read_to_end(&mut head)?;
+        let mut head = Vec::with_capacity(SNIFF);
+        (&mut f).take(SNIFF as u64).read_to_end(&mut head)?;
         let ext = if crate::derive::looks_like_fit(&head) {
             ".fit"
         } else if crate::connect::looks_like_connect(&head) {
@@ -730,6 +829,152 @@ impl<W: Write> Exporter<'_, W> {
         Ok(())
     }
 
+    /// `nimrag/*.json`: the exact part a restore reads. The user's rows only, the same `WHERE`
+    /// clauses as the CSV tables, nothing secret.
+    fn nimrag_part(&mut self, uid: i64, files: &[FileRow], now: i64) -> Result<()> {
+        let (rt, pool) = (self.rt, self.pool);
+
+        // files.json is written element by element: a person may have many thousands of files.
+        self.zip.start_file("nimrag/files.json", self.opts)?;
+        {
+            let mut out = io::BufWriter::with_capacity(CHUNK, &mut self.zip);
+            out.write_all(b"[")?;
+            for (i, f) in files.iter().enumerate() {
+                if i > 0 {
+                    out.write_all(b",")?;
+                }
+                serde_json::to_writer(
+                    &mut out,
+                    &FileJson {
+                        name: f.name.clone(),
+                        sha256: f.sha256.clone(),
+                        size: f.size,
+                        source: f.source.clone(),
+                        data_type: f.data_type,
+                        sub_type: f.sub_type,
+                        file_index: f.file_index,
+                        file_number: f.file_number,
+                        watch_timestamp: f.watch_timestamp,
+                        received_at: f.received_at.clone(),
+                    },
+                )?;
+            }
+            out.write_all(b"]")?;
+            out.flush()?;
+        }
+
+        let settings: std::collections::BTreeMap<String, String> = rt
+            .block_on(
+                sqlx::query_as::<_, (String, String)>(
+                    "SELECT key, value FROM user_settings WHERE user_id = ? ORDER BY key",
+                )
+                .bind(uid)
+                .fetch_all(pool),
+            )?
+            .into_iter()
+            .collect();
+        self.zip.start_file("nimrag/settings.json", self.opts)?;
+        serde_json::to_writer(&mut self.zip, &settings)?;
+
+        let workouts: Vec<WorkoutJson> = rt
+            .block_on(
+                sqlx::query_as::<_, (String, String, String, i64, i64)>(
+                    "SELECT name, sport, definition, created_at, updated_at
+                     FROM workouts WHERE user_id = ? ORDER BY created_at, id",
+                )
+                .bind(uid)
+                .fetch_all(pool),
+            )?
+            .into_iter()
+            .map(
+                |(name, sport, definition, created_at, updated_at)| WorkoutJson {
+                    name,
+                    sport,
+                    definition: json_or_text(definition),
+                    created_at,
+                    updated_at,
+                },
+            )
+            .collect();
+        self.zip.start_file("nimrag/workouts.json", self.opts)?;
+        serde_json::to_writer(&mut self.zip, &workouts)?;
+
+        let body: Vec<BodyJson> = rt
+            .block_on(
+                sqlx::query_as::<_, (i64, Option<f64>, Option<f64>, Option<f64>, i64)>(
+                    "SELECT measured_at, weight_kg, body_fat_pct, waist_cm, created_at
+                     FROM body_measurements WHERE user_id = ? ORDER BY measured_at, id",
+                )
+                .bind(uid)
+                .fetch_all(pool),
+            )?
+            .into_iter()
+            .map(
+                |(measured_at, weight_kg, body_fat_pct, waist_cm, created_at)| BodyJson {
+                    measured_at,
+                    weight_kg,
+                    body_fat_pct,
+                    waist_cm,
+                    created_at,
+                },
+            )
+            .collect();
+        self.zip
+            .start_file("nimrag/body_measurements.json", self.opts)?;
+        serde_json::to_writer(&mut self.zip, &body)?;
+
+        let edits: Vec<StrengthEditJson> = rt
+            .block_on(
+                sqlx::query_as::<_, (String, i64, String, i64)>(
+                    "SELECT activity_ident, set_idx, fields, updated_at
+                     FROM strength_set_overrides WHERE user_id = ? ORDER BY activity_ident, set_idx",
+                )
+                .bind(uid)
+                .fetch_all(pool),
+            )?
+            .into_iter()
+            .map(
+                |(activity_ident, set_idx, fields, updated_at)| StrengthEditJson {
+                    activity_ident,
+                    set_idx,
+                    fields: json_or_text(fields),
+                    updated_at,
+                },
+            )
+            .collect();
+        self.zip
+            .start_file("nimrag/strength_set_edits.json", self.opts)?;
+        serde_json::to_writer(&mut self.zip, &edits)?;
+
+        let schema_version: Option<i64> = rt
+            .block_on(
+                sqlx::query_scalar("SELECT MAX(version) FROM _sqlx_migrations WHERE success = 1")
+                    .fetch_one(pool),
+            )
+            .ok()
+            .flatten();
+        let manifest = Manifest {
+            format: FORMAT.into(),
+            version: FORMAT_VERSION,
+            created_at: chrono::DateTime::from_timestamp(now, 0)
+                .unwrap_or_default()
+                .to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
+            app_version: env!("CARGO_PKG_VERSION").into(),
+            schema_version,
+            timezone: self.tz.name().into(),
+            counts: Counts {
+                files: files.len() as u64,
+                workouts: workouts.len() as u64,
+                body_measurements: body.len() as u64,
+                strength_set_edits: edits.len() as u64,
+                settings: settings.len() as u64,
+            },
+        };
+        self.zip.start_file(MANIFEST_NAME, self.opts)?;
+        serde_json::to_writer(&mut self.zip, &manifest)?;
+        Ok(())
+    }
+
     fn readme(&mut self, user: &ExportUser, now: i64) -> Result<()> {
         let text = format!(
             "Nimrag Connect export for {user}\n\
@@ -750,7 +995,18 @@ impl<W: Write> Exporter<'_, W> {
              - An empty cell means there is no value, never zero. Units are in the column names.\n\
              - The file column of the activity files is the name of the original (without the extension)\n\
              \x20 in originals/. Activities, sessions, laps, records and strength sets join on it.\n\
-             - activity_time_in_zone has the seconds in each heart rate zone as a JSON list.\n",
+             - activity_time_in_zone has the seconds in each heart rate zone as a JSON list.\n\
+             \n\
+             nimrag/      the same data again, exact, in JSON: the manifest, every original with the\n\
+             \x20            details Nimrag keeps about it, your settings, workouts, body measurements and\n\
+             \x20            strength set edits. Times there are Unix seconds (UTC). Nimrag reads this part\n\
+             \x20            to restore your data; the CSV files are for spreadsheets.\n\
+             \n\
+             Restoring: sign in to a Nimrag server, open Profile, then Restore from a Nimrag export,\n\
+             and pick this zip as it is (do not unzip it). Your originals are stored again and your\n\
+             own entries are added next to what is already there. Nothing is deleted, and restoring\n\
+             the same zip twice changes nothing the second time. Passwords, tokens and your Garmin\n\
+             account are never in this zip.\n",
             user = user.username,
             when = rfc3339(self.tz, now),
             tz = self.tz.name(),
@@ -812,6 +1068,7 @@ pub fn write_zip<W: Write>(
         }
     }
     x.files_csv(&files)?;
+    x.nimrag_part(user.id, &files, now)?;
     x.readme(user, now)?;
     let summary = x.summary;
     let out = x.zip.finish()?.into_inner();

@@ -18,6 +18,7 @@ pub mod import;
 pub mod ingest;
 pub mod ledger;
 pub mod outbox;
+pub mod restore;
 pub mod seed;
 pub mod settings;
 pub mod store;

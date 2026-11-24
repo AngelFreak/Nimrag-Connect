@@ -20,6 +20,7 @@ pub mod export;
 pub mod garmin_import;
 pub mod hrv;
 pub mod metrics;
+pub mod nimrag_import;
 pub mod prefs;
 pub mod sleep;
 pub mod strength;
@@ -320,6 +321,7 @@ pub fn export_types(dir: &Path) -> anyhow::Result<()> {
         system::StorageResponse,
         system::AboutResponse,
         garmin_import::GarminImportResponse,
+        crate::restore::NimragImportResponse,
         garmin::GarminStatus,
         garmin::GarminLoginRequest,
         garmin::GarminLoginResponse,

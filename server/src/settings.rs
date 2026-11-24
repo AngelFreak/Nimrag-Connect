@@ -105,6 +105,34 @@ impl HomeCards {
     }
 }
 
+/// Accepted range of `step_goal` (steps a day).
+pub const STEP_GOAL_RANGE: std::ops::RangeInclusive<u32> = 1..=200_000;
+/// Accepted range of `intensity_goal_min` (minutes a week).
+pub const INTENSITY_GOAL_RANGE: std::ops::RangeInclusive<u32> = 1..=10_080;
+
+/// A stored user setting checked the way `PATCH /api/settings` checks it, in the form it is
+/// stored in. `None` for a key that is not one of the four, or a value that would be refused.
+pub fn checked_user_setting(key: &str, value: &str) -> Option<String> {
+    match key {
+        "timezone" => value.parse::<Tz>().ok().map(|tz| tz.name().to_owned()),
+        "step_goal" => value
+            .parse::<u32>()
+            .ok()
+            .filter(|g| STEP_GOAL_RANGE.contains(g))
+            .map(|g| g.to_string()),
+        "intensity_goal_min" => value
+            .parse::<u32>()
+            .ok()
+            .filter(|g| INTENSITY_GOAL_RANGE.contains(g))
+            .map(|g| g.to_string()),
+        "home_cards" => serde_json::from_str::<HomeCards>(value)
+            .ok()
+            .and_then(|c| c.normalised().ok())
+            .and_then(|c| serde_json::to_string(&c).ok()),
+        _ => None,
+    }
+}
+
 pub async fn get(pool: &SqlitePool, key: &str) -> Result<Option<String>> {
     Ok(
         sqlx::query_scalar::<_, String>("SELECT value FROM settings WHERE key = ?")

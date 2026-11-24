@@ -43,6 +43,7 @@ export type { MovementResponse } from "./MovementResponse";
 export type { NewBodyEntry } from "./NewBodyEntry";
 export type { NewUser } from "./NewUser";
 export type { NewUserResponse } from "./NewUserResponse";
+export type { NimragImportResponse } from "./NimragImportResponse";
 export type { NodeDto } from "./NodeDto";
 export type { SendInfo } from "./SendInfo";
 export type { SendState } from "./SendState";

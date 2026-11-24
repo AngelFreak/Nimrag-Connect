@@ -73,11 +73,13 @@ async fn patch(
             })
         })
         .transpose()?;
-    if p.step_goal.is_some_and(|g| !(1..=200_000).contains(&g)) {
+    if p.step_goal
+        .is_some_and(|g| !settings::STEP_GOAL_RANGE.contains(&g))
+    {
         return Err(ApiError::bad_request("step_goal must be 1 to 200000"));
     }
     if p.intensity_goal_min
-        .is_some_and(|g| !(1..=10_080).contains(&g))
+        .is_some_and(|g| !settings::INTENSITY_GOAL_RANGE.contains(&g))
     {
         return Err(ApiError::bad_request(
             "intensity_goal_min must be 1 to 10080",
