@@ -24,7 +24,9 @@ pub mod metrics;
 pub mod nimrag_import;
 pub mod prefs;
 pub mod records;
+pub mod readiness;
 pub mod sleep;
+pub mod status_explain;
 pub mod strength;
 pub mod system;
 pub mod today;
@@ -62,6 +64,8 @@ pub fn router() -> Router<AppState> {
         .merge(trends::routes())
         .merge(metrics::routes())
         .merge(training::routes())
+        .merge(readiness::routes())
+        .merge(status_explain::routes())
         .merge(body::routes())
         .merge(workouts::routes())
         .merge(system::routes())
@@ -302,6 +306,9 @@ pub fn export_types(dir: &Path) -> anyhow::Result<()> {
         metrics::MetricRange,
         training::TrainingResponse,
         training::TrainingStatusRange,
+        readiness::ReadinessResponse,
+        readiness::ReadinessHistory,
+        status_explain::StatusExplain,
         hrv::HrvRange,
         sleep::SleepHistory,
         body::BodyResponse,

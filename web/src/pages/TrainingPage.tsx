@@ -7,6 +7,8 @@ import { fmtShortDay } from '../lib/dates';
 import { fmtFixed, fmtInt } from '../lib/format';
 import { useIsDesktop, usePageTitle } from '../lib/hooks';
 import { ScoreHero, StatsColumns, StatsSection } from './health/desktop';
+import { ReadinessCard } from './health/ReadinessCard';
+import { StatusExplanation } from './health/StatusExplanation';
 import { PageError, PageSkeleton } from './body/common';
 import { fmtLocalStamp, localParts } from './body/time';
 import {
@@ -68,6 +70,7 @@ export function TrainingBody({ data }: { data: TrainingResponse }) {
   }
   return (
     <div className="page">
+      <ReadinessCard />
       <RecoveryCard recovery={data.recovery} />
       <div className="grid-panels">
         <LoadCard load={data.load} />
@@ -198,6 +201,7 @@ function StatusCard({ status }: { status: TrainingResponse['status'] }) {
       </span>
       {view.note ? <span className="stat__sub">{view.note}</span> : null}
       {since ? <span className="stat__sub">{since}</span> : null}
+      <StatusExplanation brief />
     </Card>
   );
 }
@@ -253,6 +257,9 @@ function TrainingDesktop({ data }: { data: TrainingResponse }) {
     <StatsColumns
       side={
         <>
+          <StatsSection title="Readiness">
+            <ReadinessCard flat />
+          </StatsSection>
           <StatsSection title="Recovery Time">
             <ScoreHero text value={<ValueOrUnavailable value={done ? 'Recovered' : left} />} label={done ? 'Ready for a hard session' : readyAt ? `Fully recovered ${readyAt}` : 'Recovery time left'} />
             <div style={{ display: 'flex', justifyContent: 'center' }}>
@@ -262,6 +269,7 @@ function TrainingDesktop({ data }: { data: TrainingResponse }) {
           <StatsSection title="Training Status" aside={<Link to="/training/status">History</Link>}>
             <ScoreHero text value={<ValueOrUnavailable value={view.headline} />} {...(view.note || since ? { label: view.note ?? since } : {})} />
             {view.note && since ? <p className="stats-note">{since}</p> : null}
+            <StatusExplanation brief />
           </StatsSection>
           <StatsSection title="VO2 Max (derived)">
             <ScoreHero value={<ValueOrUnavailable value={vo2Value} />} {...(vo2Change ? { label: vo2Change } : {})} />

@@ -352,7 +352,7 @@ pub async fn vo2max(ctx: &Ctx) -> Res<Vo2Card> {
     })
 }
 
-async fn balance(ctx: &Ctx) -> Res<Option<LoadBalance>> {
+pub async fn balance(ctx: &Ctx) -> Res<Option<LoadBalance>> {
     type Row = (
         Option<f64>,
         Option<f64>,

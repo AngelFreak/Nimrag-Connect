@@ -43,6 +43,7 @@ export const USER_ROUTES: RouteCase[] = [
   user('Movement, today', () => '/movement'),
   user('Movement, one day', (f) => `/movement/${f.night}`),
   user('Training', () => '/training'),
+  user('Readiness', () => '/training/readiness'),
   user('Training status, current', () => '/training/status'),
   user('Training status, 4 weeks', () => '/training/status?range=4w'),
   user('Training status, 12 weeks', () => '/training/status?range=12w'),

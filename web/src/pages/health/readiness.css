@@ -1,0 +1,138 @@
+/* The Readiness page and its card on the Training page. Colours are the --rate-* tokens (worst to
+   best); a colour is always next to a word. */
+
+.rate-dot {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+.rate {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+  font-size: var(--fs-md);
+  font-weight: 600;
+}
+.rate--none {
+  color: var(--text-2);
+  font-weight: 400;
+}
+
+.ready-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  text-align: center;
+}
+.ready-hero .ring text {
+  font-weight: var(--display-weight);
+}
+.ready-hero__level {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 8px 0 0;
+  font-family: var(--font-display);
+  font-size: var(--fs-title);
+  font-weight: 600;
+}
+.ready-hero__level .rate-dot {
+  width: 14px;
+  height: 14px;
+}
+.ready-hero__tag {
+  margin: 0;
+  max-width: 28ch;
+  font-size: var(--fs-xs);
+  color: var(--text-2);
+}
+.ready-hero .headline {
+  margin-top: 8px;
+  max-width: 46ch;
+}
+
+/* The card at the top of the Training page. */
+.ready-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  color: inherit;
+  text-decoration: none;
+}
+.ready-card__text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.ready-card__title {
+  margin: 0;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--text-2);
+}
+.ready-card__level {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-display);
+  font-size: var(--fs-stat);
+  font-weight: var(--display-weight);
+  line-height: 1.2;
+}
+.ready-card__sub {
+  font-size: var(--fs-sm);
+  color: var(--text-2);
+}
+.ready-card__chevron {
+  flex: none;
+  color: var(--text-2);
+  font-size: 22px;
+}
+
+.ready-card--flat {
+  padding: 4px 0;
+}
+.ready-card--flat:hover .ready-card__level {
+  text-decoration: underline;
+}
+
+/* Training status explained. */
+.explain {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.explain__sentence {
+  margin: 0;
+  font-size: var(--fs-md);
+  line-height: 1.5;
+}
+.explain__more {
+  align-self: flex-start;
+}
+.explain__more button {
+  min-height: var(--touch);
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--link);
+  font: inherit;
+  font-size: var(--fs-base);
+  cursor: pointer;
+}
+.explain__more button::after {
+  content: ' ▾';
+}
+.explain__more button[aria-expanded='true']::after {
+  content: ' ▴';
+}
+.explain__meaning {
+  margin: 0;
+  font-size: var(--fs-base);
+  line-height: 1.5;
+}

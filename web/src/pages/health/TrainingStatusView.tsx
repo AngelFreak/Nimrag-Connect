@@ -9,6 +9,7 @@ import { CardSkeleton, LoadError } from './parts';
 import { PeriodNav, RangeBar, usePeriod, type PeriodOption } from './period';
 import { useTrainingStatus } from './queries';
 import { STATUS_COLOR, runDates, timelineSummary } from './ranges';
+import { StatusExplanation } from './StatusExplanation';
 
 // The Training status page: the status day by day as a coloured timeline, one row per run of equal
 // status, and (on "Current") today's status with the load figures. Names and kinds of the statuses
@@ -74,6 +75,12 @@ function Body({ data, current }: { data: TrainingStatusRange; current: boolean }
   return (
     <>
       {current ? <CurrentCard data={data} /> : null}
+      {current ? (
+        <Card padding="lg">
+          <CardHeader title="Why this status" tone="muted" />
+          <StatusExplanation />
+        </Card>
+      ) : null}
       <div className="grid-panels" style={{ alignItems: 'start' }}>
         <TimelineCard data={data} />
         <HistoryCard data={data} />
@@ -270,6 +277,11 @@ function HistoryDesktop({ data }: { data: TrainingStatusRange }) {
 function BodyDesktop({ data, current }: { data: TrainingStatusRange; current: boolean }) {
   const right = (
     <>
+      {current ? (
+        <StatsSection title="Why this status">
+          <StatusExplanation />
+        </StatsSection>
+      ) : null}
       <TimelineDesktop data={data} />
       <HistoryDesktop data={data} />
     </>
