@@ -43,6 +43,42 @@ pub struct LocalFileMeta {
     pub watch_timestamp: i64,
 }
 
+/// One change made on the local copy that the real server has not got yet, ready to send:
+/// `POST /api/device/edits` with these fields as the JSON body.
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct PendingEdit {
+    /// Unique per change; send the same one again when retrying.
+    pub op_id: String,
+    pub method: String,
+    /// Already in the server's terms (its ids, the activity with its start time).
+    pub path: String,
+    /// The request body as JSON text; empty for none. Send it as a JSON string, as it is.
+    pub body: String,
+    /// Unix seconds when the change was made.
+    pub made_at: i64,
+}
+
+/// What became of a change once the server answered (`LocalServer::edit_done`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
+pub enum EditVerdict {
+    /// Done: it is off the outbox. Ask for the next one.
+    Applied,
+    /// Refused for good: it is off the outbox and shows up in `take_dropped_edits`.
+    Dropped,
+    /// Not decided (no answer, server trouble, token refused): it stays. Back off, try later.
+    Kept,
+}
+
+/// A change the server could not apply.
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct DroppedEdit {
+    pub method: String,
+    /// The path as the phone made it.
+    pub path: String,
+    /// Why, in the server's words.
+    pub reason: String,
+}
+
 /// A running local server. Create it once per process.
 #[derive(uniffi::Object)]
 pub struct LocalServer {
@@ -92,6 +128,63 @@ impl LocalServer {
             watch_timestamp: (meta.watch_timestamp > 0).then_some(meta.watch_timestamp),
         };
         server.ingest_bytes(&bytes, meta).map_err(failed)
+    }
+
+    /// The oldest change waiting for the real server, or `None`. Does not remove it: report the
+    /// server's answer with `edit_done`. See `docs/design/offline-edits.md`.
+    pub fn next_edit(&self) -> Result<Option<PendingEdit>, LocalServerError> {
+        let next = self.running()?.next_edit().map_err(failed)?;
+        Ok(next.map(|e| PendingEdit {
+            op_id: e.op_id,
+            method: e.method,
+            path: e.path,
+            body: e.body,
+            made_at: e.made_at,
+        }))
+    }
+
+    /// Report the real server's answer to a change: its HTTP status (0: no answer) and body.
+    /// A 2xx is done (a create's new id is remembered for later changes of that row); a 4xx
+    /// other than 401, 403, 408 and 429 drops the change; everything else keeps it.
+    pub fn edit_done(
+        &self,
+        op_id: String,
+        status: u16,
+        response_body: String,
+    ) -> Result<EditVerdict, LocalServerError> {
+        let verdict = self
+            .running()?
+            .edit_done(&op_id, status, &response_body)
+            .map_err(failed)?;
+        Ok(match verdict {
+            embedded::EditVerdict::Applied => EditVerdict::Applied,
+            embedded::EditVerdict::Dropped => EditVerdict::Dropped,
+            embedded::EditVerdict::Kept => EditVerdict::Kept,
+        })
+    }
+
+    /// How many changes wait for the real server.
+    pub fn pending_edits(&self) -> Result<u32, LocalServerError> {
+        self.running()?.pending_edits().map_err(failed)
+    }
+
+    /// The changes the real server could not apply, once (they are forgotten as returned).
+    pub fn take_dropped_edits(&self) -> Result<Vec<DroppedEdit>, LocalServerError> {
+        let dropped = self.running()?.take_dropped_edits().map_err(failed)?;
+        Ok(dropped
+            .into_iter()
+            .map(|d| DroppedEdit {
+                method: d.method,
+                path: d.path,
+                reason: d.reason,
+            })
+            .collect())
+    }
+
+    /// Replace the copy's settings, workouts, body entries and strength edits with the body of
+    /// `GET /api/device/state`. Returns false, changing nothing, while changes are waiting.
+    pub fn apply_state(&self, json: String) -> Result<bool, LocalServerError> {
+        self.running()?.apply_state(&json).map_err(failed)
     }
 
     /// JSON counts (`files`, `derive` by status), for diagnostics.

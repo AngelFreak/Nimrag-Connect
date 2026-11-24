@@ -438,8 +438,8 @@ fn encode(state: &AppState, body: &WorkoutBody) -> Res<Vec<u8>> {
     })
 }
 
-fn watch_send() -> WatchSend {
-    let available = fit::available();
+fn watch_send(state: &AppState) -> WatchSend {
+    let available = state.defer_watch_send || fit::available();
     WatchSend {
         available,
         reason: (!available).then(|| UNAVAILABLE.to_owned()),
@@ -589,7 +589,7 @@ async fn list(user: DataUser, State(state): State<AppState>) -> Res<Json<Workout
     .fetch_all(&ctx.pool)
     .await?;
     Ok(Json(WorkoutList {
-        watch_send: watch_send(),
+        watch_send: watch_send(&state),
         limits: limits(),
         workouts: rows.iter().map(|r| r.summary(&ctx)).collect(),
     }))
@@ -698,7 +698,11 @@ async fn send(
 ) -> Res<Json<WorkoutDetail>> {
     let ctx = Ctx::new(&state, user.id).await?;
     let row = load(&state, user.id, id).await?;
-    encode(&state, &row.body()?)?;
+    if state.defer_watch_send {
+        check(&row.body()?)?;
+    } else {
+        encode(&state, &row.body()?)?;
+    }
     sqlx::query(
         "UPDATE workouts SET send_state = 'queued', send_requested_at = ?, send_finished_at = NULL,
                 send_error = NULL

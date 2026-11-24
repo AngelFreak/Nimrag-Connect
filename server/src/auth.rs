@@ -643,6 +643,11 @@ where
     type Rejection = ApiError;
 
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, ApiError> {
+        // A request the server dispatches itself for a phone's offline edit (`edits.rs`) carries
+        // its user; an extension cannot come from the wire.
+        if let Some(user) = parts.extensions.get::<AuthUser>() {
+            return Ok(user.clone());
+        }
         let state = AppState::from_ref(state);
         let user = match session_cookie(&parts.headers, state.insecure_cookies) {
             Some(id) => session_user(&state.pool, &id, state.now()).await?,
