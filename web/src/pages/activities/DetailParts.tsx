@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
-import { BackIcon, SampleDataChip, SeriesChart, ValueOrUnavailable, type RefLine } from '../../components';
+import { BackIcon, SampleDataChip, SeriesChart, ValueOrUnavailable, type CursorStore, type RefLine } from '../../components';
 import type { AxisUnit } from '../../lib/ticks';
 import { activityTitle } from './format';
 import { SportDisc } from './SportDisc';
@@ -34,6 +34,8 @@ export function DetailLayout({ main, side }: { main: ReactNode; side: ReactNode 
 }
 
 export interface Headline {
+  /** What the figure is, so the Stats do not repeat it ("distance", "pace"). */
+  id?: string;
   label: string;
   /** Pre-formatted; a missing value leaves the cell out. */
   value: string | null;
@@ -110,6 +112,8 @@ interface ChartBlockProps {
   refLine?: RefLine;
   yReverse?: boolean;
   height?: number;
+  /** The pointer line shared with the other charts of the stack. */
+  cursor?: { group: string; store: CursorStore };
 }
 
 const DOT: Record<ChartBlockProps['color'], string> = {
@@ -121,7 +125,7 @@ const DOT: Record<ChartBlockProps['color'], string> = {
 };
 
 /** One chart of the stack: a coloured dot and the title above, 120 px of chart, the average as a dashed line. */
-export function ChartBlock({ color, title, label, summary, x, data, xLabels, unit, refLine, yReverse, height = 120 }: ChartBlockProps) {
+export function ChartBlock({ color, title, label, summary, x, data, xLabels, unit, refLine, yReverse, height = 120, cursor }: ChartBlockProps) {
   return (
     <section className="adt-chart" aria-label={title}>
       <h3 className="adt-chart__title">
@@ -138,6 +142,7 @@ export function ChartBlock({ color, title, label, summary, x, data, xLabels, uni
         {...(unit ? { yUnit: unit } : {})}
         {...(refLine ? { refLine } : {})}
         {...(yReverse ? { yReverse } : {})}
+        {...(cursor ? { cursor } : {})}
       />
     </section>
   );
@@ -145,7 +150,7 @@ export function ChartBlock({ color, title, label, summary, x, data, xLabels, uni
 
 export interface StatGroup {
   title: string;
-  items: { label: string; value: string | null }[];
+  items: { id?: string; label: string; value: string | null }[];
 }
 
 /** Groups of figures in two columns: a title with a rule, then value over label; figures without a value are left out. */

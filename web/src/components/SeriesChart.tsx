@@ -3,6 +3,7 @@ import uPlot from 'uplot';
 import 'uplot/dist/uPlot.min.css';
 import { extremeTicks, formatTicks, roundTick, tickCountFor, unitTicks, type AxisUnit } from '../lib/ticks';
 import { useTheme } from '../lib/theme';
+import type { CursorStore } from './chartCursor';
 import { Unavailable } from './Unavailable';
 
 // uPlot draws on a canvas, so it needs real colour values rather than CSS variables. They are read
@@ -144,6 +145,11 @@ interface SeriesChartProps {
   refLine?: RefLine;
   /** Turn the value axis upside down: the lowest value on top (pace, where faster is lower). Area fills then reach the bottom. */
   yReverse?: boolean;
+  /**
+   * A pointer line shared with the other charts of the same `group` (they must have the same samples):
+   * hovering or tapping one draws the line on all of them and writes the nearest sample to `store`.
+   */
+  cursor?: { group: string; store: CursorStore };
 }
 
 function bandExtent(band: [number, number] | BandSeries): [number, number] {
@@ -250,12 +256,16 @@ function hasData(series: ChartSeries[]): boolean {
 }
 
 /** Line chart on uPlot with an accessible name and a text summary. */
-export function SeriesChart({ label, summary, x, series, height = 90, time = false, band, yRange, xRange, summaryVisible = false, axes = 'y', xLabels, yUnit = 'int', sparkline = false, refLine, yReverse = false }: SeriesChartProps) {
+export function SeriesChart({ label, summary, x, series, height = 90, time = false, band, yRange, xRange, summaryVisible = false, axes = 'y', xLabels, yUnit = 'int', sparkline = false, refLine, yReverse = false, cursor }: SeriesChartProps) {
   const host = useRef<HTMLDivElement>(null);
   const theme = useTheme();
   const available = hasData(series) && x.length > 0;
-  const key = useMemo(() => JSON.stringify([x, series, height, time, band, yRange, xRange, axes, xLabels, yUnit, sparkline, refLine, yReverse, theme]), [x, series, height, time, band, yRange, xRange, axes, xLabels, yUnit, sparkline, refLine, yReverse, theme]);
-
+  const cursorGroup = cursor?.group;
+  const cursorStore = cursor?.store;
+  const key = useMemo(
+    () => JSON.stringify([x, series, height, time, band, yRange, xRange, axes, xLabels, yUnit, sparkline, refLine, yReverse, theme, cursorGroup]),
+    [x, series, height, time, band, yRange, xRange, axes, xLabels, yUnit, sparkline, refLine, yReverse, theme, cursorGroup],
+  );
   useEffect(() => {
     const el = host.current;
     if (!el || !available) return;
@@ -298,7 +308,16 @@ export function SeriesChart({ label, summary, x, series, height = 90, time = fal
       // The right side keeps room for half of the last x label, which is centred on the plot's edge.
       padding: [padTop, (u: uPlot) => (lastLabel ? Math.max(6, Math.ceil(measure(u, lastLabel.text) / 2) + 2) : 6), padBottom, 0],
       legend: { show: false },
-      cursor: { show: false },
+      // Off unless the chart shares a pointer line. Then: a vertical line and a dot per series, no zoom by dragging.
+      cursor: cursorGroup
+        ? {
+            x: true,
+            y: false,
+            drag: { x: false, y: false, setScale: false },
+            points: { size: 8, width: 2, stroke: (u: uPlot, i: number) => (u.series[i]?.stroke as string | undefined) ?? palette.text, fill: palette.bg },
+            sync: { key: cursorGroup, scales: ['x', null] },
+          }
+        : { show: false },
       select: { show: false, left: 0, top: 0, width: 0, height: 0 },
       scales: {
         x: xRange ? { time, range: () => xRange } : { time },
@@ -366,6 +385,16 @@ export function SeriesChart({ label, summary, x, series, height = 90, time = fal
         }),
       ],
       hooks: {
+        ...(cursorGroup && cursorStore
+          ? {
+              setCursor: [
+                (u: uPlot) => {
+                  const on = typeof u.cursor.left === 'number' && u.cursor.left >= 0;
+                  cursorStore.set(on ? (u.cursor.idx ?? null) : null);
+                },
+              ],
+            }
+          : {}),
         ...(band ? { drawClear: [(u: uPlot) => drawBand(u, band, x, palette)] } : {}),
         ...(series.some((s) => s.markers) || refLine
           ? {

@@ -13,6 +13,7 @@ export * from './DataList';
 export * from './Table';
 export * from './States';
 export * from './SeriesChart';
+export * from './chartCursor';
 export * from './BarSeries';
 export * from './StackedBars';
 export * from './PlotFrame';

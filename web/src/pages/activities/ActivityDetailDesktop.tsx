@@ -1,24 +1,13 @@
 import { useMemo, useState } from 'react';
 import type { ActivityDetail } from '../../api/generated';
-import { LinkButton, MapView, SegmentedControl, Table, Unavailable, ZoneBars } from '../../components';
-import { fmtClock, fmtFixed } from '../../lib/format';
-import { zoneEntries, routeLabel } from './ActivityBody';
-import { useTrack } from './api';
-import { ChartBlock, DetailHeader, DetailLayout, SideCard, SideFacts, StatGroups, type Headline, type StatGroup } from './DetailParts';
-import {
-  activityTitle,
-  DISTANCE_KINDS,
-  fmtBpm,
-  fmtDistance,
-  fmtKcal,
-  fmtMeters,
-  fmtMinutes,
-  fmtOne,
-  fmtPace,
-  fmtSpeed,
-  fmtKg,
-  longWhen,
-} from './format';
+import { LinkButton, SegmentedControl, Table, Unavailable, ZoneBars, useCursorStore } from '../../components';
+import { fmtClock } from '../../lib/format';
+import { zoneEntries } from './ActivityBody';
+import { ChartReadout, type ReadoutField } from './ChartReadout';
+import { ChartBlock, DetailHeader, DetailLayout, SideCard, SideFacts, StatGroups, kindNoun } from './DetailParts';
+import { activityTitle, DISTANCE_KINDS, fmtDistance, fmtMeters, fmtMinutes, longWhen } from './format';
+import { zoneLimits, zoneOf } from './lapZones';
+import { RouteExplorer } from './RouteExplorer';
 import {
   cadenceSummary,
   clockFromMinutes,
@@ -34,46 +23,23 @@ import {
   spread,
   timeLabels,
 } from './series';
-import { kindNoun } from './DetailParts';
+import { isPaced, shownHeadline, statGroupsFor, subSportText } from './summary';
 import { Tabs } from './Tabs';
+import { TrainingEffect, hasTrainingEffect } from './TrainingEffect';
 import './activities.css';
 
 const MAP_HEIGHT = 390;
 
-/** "Treadmill" or "Trail": the watch's sub sport, when it says more than the sport does. */
-function subSportText(a: Pick<ActivityDetail, 'sub_sport_name'>): string | null {
-  const s = a.sub_sport_name?.replace(/_/g, ' ').trim();
-  if (!s || s === 'generic') return null;
-  return s.charAt(0).toUpperCase() + s.slice(1);
-}
-
-/** The route map without a card around it; an activity without GPS says so in one line. */
-function RouteMap({ a }: { a: ActivityDetail }) {
-  const track = useTrack(a.id, a.has_track);
-  // The API sends [lat, lon]; the map wants [lon, lat].
-  const points = useMemo(() => track.data?.points.map(([lat, lon]) => [lon, lat] as [number, number]), [track.data]);
-  if (!a.has_track) return <p className="adt-note">This activity has no GPS track.</p>;
-  if (track.isError)
-    return (
-      <p role="alert" className="adt-note">
-        The route could not be loaded.
-      </p>
-    );
-  return (
-    <div className="adt-map">
-      <MapView label={routeLabel(a.distance_m)} track={points} height={MAP_HEIGHT} />
-    </div>
-  );
-}
-
 type Axis = 'time' | 'distance';
 
-/** The chart stack, with a Time / Distance switch when the file has a distance for its samples. */
+/** The chart stack, with a Time / Distance switch when the file has a distance for its samples, and one pointer line over all of it. */
 function Charts({ a }: { a: ActivityDetail }) {
   const s = a.series;
-  const paced = a.kind === 'run' || a.kind === 'walk' || a.kind === 'hike';
+  const paced = isPaced(a.kind);
   const distanceKind = DISTANCE_KINDS.has(a.kind);
   const [axis, setAxis] = useState<Axis>('time');
+  const store = useCursorStore();
+  const cursor = { group: 'activity', store };
 
   const minutes = useMemo(() => (s ? minutesAxis(s.elapsed_s) : []), [s]);
   const km = useMemo(() => (s ? distanceAxis(s.distance_m) : null), [s]);
@@ -99,10 +65,21 @@ function Charts({ a }: { a: ActivityDetail }) {
   const avgSpeed = a.avg_speed_mps !== null ? a.avg_speed_mps * 3.6 : (speedSpread?.avg ?? null);
   const avgCad = a.avg_cadence ?? cadSpread?.avg ?? null;
 
+  // The charts drawn, in order: the readout lists the same.
+  const showAlt = distanceKind && hasAlt;
+  const showSpeed = !paced && distanceKind && speedSpread !== null;
+  const fields: ReadoutField[] = [
+    ...(showAlt ? (['elevation'] as const) : []),
+    ...(paced ? (['pace'] as const) : showSpeed ? (['speed'] as const) : []),
+    ...(hrSpread !== null ? (['hr'] as const) : []),
+    ...(cadSpread !== null ? (['cadence'] as const) : []),
+  ];
+
   return (
     <div className="adt-charts">
       <div className="adt-charts__bar">
         <h2 className="sr-only">Charts</h2>
+        {fields.length ? <ChartReadout store={store} series={s} fields={fields} /> : null}
         {km !== null ? (
           <SegmentedControl<Axis>
             label="Chart x axis"
@@ -115,8 +92,8 @@ function Charts({ a }: { a: ActivityDetail }) {
           />
         ) : null}
       </div>
-      {distanceKind && hasAlt ? (
-        <ChartBlock color="energy" title="Elevation" label="Elevation over the activity" summary={elevationSummary(alt, elapsed)} x={x} data={alt} xLabels={labelsFor(alt)} />
+      {showAlt ? (
+        <ChartBlock color="energy" title="Elevation" label="Elevation over the activity" summary={elevationSummary(alt, elapsed)} x={x} data={alt} xLabels={labelsFor(alt)} cursor={cursor} />
       ) : null}
       {paced ? (
         <ChartBlock
@@ -129,9 +106,10 @@ function Charts({ a }: { a: ActivityDetail }) {
           xLabels={labelsFor(pace)}
           unit="pace"
           yReverse
+          cursor={cursor}
           {...(avgPaceMin !== null ? { refLine: { value: avgPaceMin, label: `Avg: ${clockFromMinutes(avgPaceMin)} /km` } } : {})}
         />
-      ) : distanceKind && speedSpread !== null ? (
+      ) : showSpeed ? (
         <ChartBlock
           color="link"
           title="Speed"
@@ -141,6 +119,7 @@ function Charts({ a }: { a: ActivityDetail }) {
           data={speed}
           xLabels={labelsFor(speed)}
           unit="decimal"
+          cursor={cursor}
           {...(avgSpeed !== null ? { refLine: { value: avgSpeed, label: `Avg: ${avgSpeed.toFixed(1)} km/h` } } : {})}
         />
       ) : null}
@@ -152,6 +131,7 @@ function Charts({ a }: { a: ActivityDetail }) {
         x={x}
         data={hr}
         xLabels={labelsFor(hr)}
+        cursor={cursor}
         {...(hrSpread !== null && avgHr !== null ? { refLine: { value: avgHr, label: `Avg: ${Math.round(avgHr)} bpm` } } : {})}
       />
       {cadSpread !== null ? (
@@ -163,6 +143,7 @@ function Charts({ a }: { a: ActivityDetail }) {
           x={x}
           data={cad}
           xLabels={labelsFor(cad)}
+          cursor={cursor}
           {...(avgCad !== null ? { refLine: { value: avgCad, label: `Avg: ${Math.round(avgCad)} /min` } } : {})}
         />
       ) : null}
@@ -170,111 +151,9 @@ function Charts({ a }: { a: ActivityDetail }) {
   );
 }
 
-/** The five figures under the title, by sport. */
-export function headlineFor(a: ActivityDetail): Headline[] {
-  const time = fmtClock(a.duration_s);
-  const ascent = fmtMeters(a.ascent_m);
-  const avgHr = fmtBpm(a.avg_hr_bpm);
-  const base = { distance: fmtDistance(a.distance_m), kcal: fmtKcal(a.calories_kcal) };
-  switch (a.kind) {
-    case 'run':
-    case 'walk':
-    case 'hike':
-      return [
-        { label: 'Distance', value: base.distance },
-        { label: 'Time', value: time },
-        { label: 'Avg pace', value: fmtPace(a.avg_pace_s_per_km) },
-        { label: 'Total ascent', value: ascent },
-        { label: 'Avg HR', value: avgHr },
-      ];
-    case 'cycle':
-      return [
-        { label: 'Distance', value: base.distance },
-        { label: 'Time', value: time },
-        { label: 'Avg speed', value: fmtSpeed(a.avg_speed_mps) },
-        { label: 'Total ascent', value: ascent },
-        { label: 'Avg HR', value: avgHr },
-      ];
-    case 'swim':
-      return [
-        { label: 'Distance', value: fmtDistance(a.distance_m) },
-        { label: 'Time', value: time },
-        { label: 'Avg HR', value: avgHr },
-        { label: 'Max HR', value: fmtBpm(a.max_hr_bpm) },
-        { label: 'Calories', value: base.kcal },
-      ];
-    case 'strength':
-      return [
-        { label: 'Time', value: time },
-        { label: 'Sets', value: a.sets === null ? null : String(a.sets) },
-        { label: 'Volume', value: a.volume_kg === null ? null : fmtKg(Math.round(a.volume_kg)) },
-        { label: 'Avg HR', value: avgHr },
-        { label: 'Calories', value: base.kcal },
-      ];
-    default:
-      return [
-        { label: 'Time', value: time },
-        { label: 'Distance', value: base.distance },
-        { label: 'Avg HR', value: avgHr },
-        { label: 'Max HR', value: fmtBpm(a.max_hr_bpm) },
-        { label: 'Calories', value: base.kcal },
-      ];
-  }
-}
-
-/** The Stats tab: groups of figures the file has. */
-export function statGroupsFor(a: ActivityDetail): StatGroup[] {
-  const alt = a.series ? spread(a.series.altitude_m) : null;
-  const paced = a.kind === 'run' || a.kind === 'walk' || a.kind === 'hike';
-  const elapsedDiffers = a.elapsed_s !== null && a.duration_s !== null && Math.abs(a.elapsed_s - a.duration_s) >= 1;
-  return [
-    { title: 'Distance', items: [{ label: 'Distance', value: fmtDistance(a.distance_m) }] },
-    {
-      title: 'Timing',
-      items: [
-        { label: 'Time', value: fmtClock(a.duration_s) },
-        { label: 'Elapsed time', value: elapsedDiffers ? fmtClock(a.elapsed_s) : null },
-      ],
-    },
-    {
-      title: paced ? 'Pace' : 'Speed',
-      items: [
-        { label: 'Avg pace', value: paced ? fmtPace(a.avg_pace_s_per_km) : null },
-        { label: 'Avg speed', value: fmtSpeed(a.avg_speed_mps) },
-        { label: 'Max speed', value: fmtSpeed(a.max_speed_mps) },
-      ],
-    },
-    {
-      title: 'Heart rate',
-      items: [
-        { label: 'Avg HR', value: fmtBpm(a.avg_hr_bpm) },
-        { label: 'Max HR', value: fmtBpm(a.max_hr_bpm) },
-      ],
-    },
-    {
-      title: 'Elevation',
-      items: [
-        { label: 'Total ascent', value: fmtMeters(a.ascent_m) },
-        { label: 'Total descent', value: fmtMeters(a.descent_m) },
-        { label: 'Min elev', value: alt ? fmtMeters(alt.min) : null },
-        { label: 'Max elev', value: alt ? fmtMeters(alt.max) : null },
-      ],
-    },
-    { title: 'Cadence', items: [{ label: 'Avg cadence', value: a.avg_cadence === null ? null : `${Math.round(a.avg_cadence)} /min` }] },
-    {
-      title: 'Strength',
-      items: [
-        { label: 'Sets', value: a.sets === null ? null : String(a.sets) },
-        { label: 'Exercises', value: a.exercises === null ? null : String(a.exercises) },
-        { label: 'Volume', value: a.volume_kg === null ? null : fmtKg(Math.round(a.volume_kg)) },
-      ],
-    },
-    { title: 'Energy', items: [{ label: 'Calories', value: fmtKcal(a.calories_kcal) }] },
-  ];
-}
-
 function LapsTable({ a }: { a: ActivityDetail }) {
-  const paced = a.kind === 'run' || a.kind === 'walk' || a.kind === 'hike';
+  const paced = isPaced(a.kind);
+  const limits = useMemo(() => zoneLimits(a.series?.heart_rate_bpm ?? [], a.hr_zones, a.hr_below_zone1_s), [a.series, a.hr_zones, a.hr_below_zone1_s]);
   if (a.laps.length === 0) {
     return (
       <p>
@@ -294,7 +173,26 @@ function LapsTable({ a }: { a: ActivityDetail }) {
         { key: 't', header: 'Time', cell: (l) => fmtClock(l.duration_s) },
         ...(paced ? [{ key: 'p', header: 'Avg pace', cell: (l: ActivityDetail['laps'][number]) => (l.avg_pace_s_per_km === null ? null : fmtClock(l.avg_pace_s_per_km)) }] : []),
         { key: 'a', header: 'Ascent', cell: (l) => fmtMeters(l.ascent_m) },
-        { key: 'hr', header: 'Avg HR', cell: (l) => (l.avg_hr_bpm === null ? null : Math.round(l.avg_hr_bpm)), align: 'end' },
+        {
+          key: 'hr',
+          header: 'Avg HR',
+          align: 'end',
+          cell: (l) => {
+            if (l.avg_hr_bpm === null) return null;
+            const zone = limits ? zoneOf(l.avg_hr_bpm, limits) : null;
+            return (
+              <span className="lap-hr">
+                {zone !== null ? (
+                  <>
+                    <span className={`lap-hr__dot${zone === 0 ? ' lap-hr__dot--below' : ''}`} style={zone > 0 ? { background: `var(--zone-${zone})` } : undefined} aria-hidden="true" />
+                    <span className="sr-only">{zone === 0 ? 'Below zone 1: ' : `Zone ${zone}: `}</span>
+                  </>
+                ) : null}
+                {Math.round(l.avg_hr_bpm)}
+              </span>
+            );
+          },
+        },
       ]}
     />
   );
@@ -311,12 +209,6 @@ function ZonesPanel({ a }: { a: ActivityDetail }) {
 }
 
 function SideColumn({ a }: { a: ActivityDetail }) {
-  const effect = [
-    { label: 'Aerobic effect', value: fmtOne(a.aerobic_te) },
-    { label: 'Anaerobic effect', value: fmtOne(a.anaerobic_te) },
-    { label: 'Training load', value: fmtFixed(a.training_load, 0) },
-  ];
-  const hasEffect = effect.some((e) => e.value !== null && e.value !== '');
   return (
     <>
       {a.has_strength || a.kind === 'strength' ? (
@@ -326,9 +218,9 @@ function SideColumn({ a }: { a: ActivityDetail }) {
           </LinkButton>
         </SideCard>
       ) : null}
-      {hasEffect ? (
+      {hasTrainingEffect(a) ? (
         <SideCard title="Training effect">
-          <SideFacts items={effect} />
+          <TrainingEffect a={a} />
         </SideCard>
       ) : null}
       {a.vo2max_derived !== null ? (
@@ -371,9 +263,9 @@ export function ActivityDetailDesktop({ a }: { a: ActivityDetail }) {
         title={activityTitle(a)}
         meta={subSportText(a)}
         sample={a.sample}
-        headline={headlineFor(a)}
+        headline={shownHeadline(a)}
       />
-      {showMap ? <RouteMap a={a} /> : null}
+      {showMap ? <RouteExplorer a={a} height={MAP_HEIGHT} variant="bare" /> : null}
       <Charts a={a} />
       <Tabs
         label="Activity details"

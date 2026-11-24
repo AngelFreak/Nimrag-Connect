@@ -154,3 +154,40 @@ export function cadenceSummary(values: readonly (number | null)[], elapsed: read
   if (!s) return 'No cadence samples were recorded.';
   return `Cadence over ${durationText(elapsed)}: lowest ${fmtInt(s.min)}, average ${fmtInt(s.avg)}, highest ${fmtInt(s.max)} per minute.`;
 }
+
+// ---- the value under the pointer ---------------------------------------------------------------
+
+/** Every value of one sample of an activity, written as shown: "12:30", "5:12 /km", "148 bpm". A missing value is `null`. */
+export interface SampleText {
+  time: string | null;
+  distance: string | null;
+  pace: string | null;
+  speed: string | null;
+  hr: string | null;
+  elevation: string | null;
+  cadence: string | null;
+}
+
+/** The sample at `index`, or `null` when there is none. */
+export function sampleAt(series: ActivitySeries | null, index: number | null): SampleText | null {
+  if (!series || index === null || index < 0 || index >= series.elapsed_s.length) return null;
+  const num = (list: readonly (number | null)[]): number | null => {
+    const v = list[index];
+    return isMissing(v) ? null : v;
+  };
+  const speed = num(series.speed_mps);
+  const moving = speed !== null && speed >= MIN_MOVING_MPS;
+  const dist = num(series.distance_m);
+  const hr = num(series.heart_rate_bpm);
+  const alt = num(series.altitude_m);
+  const cad = num(series.cadence);
+  return {
+    time: fmtClock(series.elapsed_s[index] ?? null),
+    distance: dist === null ? null : `${(dist / 1000).toFixed(2)} km`,
+    pace: moving ? `${clockFromMinutes(1000 / speed / 60)} /km` : null,
+    speed: speed === null ? null : `${(speed * 3.6).toFixed(1)} km/h`,
+    hr: hr === null ? null : `${fmtInt(hr)} bpm`,
+    elevation: alt === null ? null : `${fmtInt(alt)} m`,
+    cadence: cad === null ? null : `${fmtInt(cad)} /min`,
+  };
+}

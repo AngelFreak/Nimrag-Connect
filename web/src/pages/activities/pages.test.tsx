@@ -73,6 +73,7 @@ function detail(over: Partial<ActivityDetail> = {}): ActivityDetail {
     ],
     laps: [{ index: 1, start: null, distance_m: 1000, duration_s: 365, avg_pace_s_per_km: 365, avg_hr_bpm: 140, max_hr_bpm: 150, ascent_m: 5 }],
     series: { elapsed_s: [0, 60, 120], heart_rate_bpm: [100, 140, 150], speed_mps: [2.5, 3, 2.8], altitude_m: [10, 12, 11], distance_m: [0, 100, 200], cadence: [null, 80, 82] },
+    reps: null,
     ...over,
   };
 }
@@ -601,8 +602,8 @@ describe('on a wide screen', () => {
         ['Distance', '6.40 km'],
         ['Time', '38:00'],
         ['Avg pace', '5:56 /km'],
-        ['Total ascent', '42 m'],
         ['Avg HR', '151 bpm'],
+        ['Ascent', '42 m'],
       ] as const) {
         expect(screen.getAllByText(label)[0]!.closest('div')).toHaveTextContent(value);
       }
@@ -646,11 +647,13 @@ describe('on a wide screen', () => {
       const tabs = await screen.findByRole('tablist', { name: 'Activity details' });
       expect(within(tabs).getAllByRole('tab').map((t) => t.textContent)).toEqual(['Stats', 'Laps', 'Time in Zones']);
       const panel = screen.getByRole('tabpanel');
-      for (const group of ['Distance', 'Timing', 'Pace', 'Heart rate', 'Elevation', 'Cadence', 'Energy']) {
+      // Distance, time, pace, average heart rate and ascent are in the headline, so the Stats leave them out.
+      for (const group of ['Pace', 'Heart rate', 'Elevation', 'Running dynamics', 'Energy']) {
         expect(within(panel).getByRole('heading', { level: 3, name: group })).toBeInTheDocument();
       }
-      expect(within(panel).getByText('Total descent').closest('div')).toHaveTextContent('40 m');
-      expect(within(panel).getByText('Min elev').closest('div')).toHaveTextContent('10 m');
+      expect(within(panel).getByText('Descent').closest('div')).toHaveTextContent('40 m');
+      expect(within(panel).getByText('Lowest point').closest('div')).toHaveTextContent('10 m');
+      expect(within(panel).queryByText('Avg HR')).not.toBeInTheDocument();
 
       await user.click(within(tabs).getByRole('tab', { name: 'Laps' }));
       expect(screen.getByRole('table', { name: 'Laps' })).toBeInTheDocument();
@@ -669,8 +672,9 @@ describe('on a wide screen', () => {
       fullDetail();
       renderAt(`/activities/${ID_RUN}`);
       const side = await screen.findByRole('complementary', { name: 'More about this activity' });
-      expect(within(side).getByText('Aerobic effect').closest('div')).toHaveTextContent('3.2');
-      expect(within(side).queryByText('Anaerobic effect')).not.toBeInTheDocument();
+      expect(within(side).getByText('Aerobic').closest('div')).toHaveTextContent('Improving');
+      expect(within(side).getByRole('meter', { name: 'Aerobic training effect' })).toHaveAttribute('aria-valuetext', '3.2 of 5, Improving');
+      expect(within(side).queryByText('Anaerobic')).not.toBeInTheDocument();
       expect(within(side).getByText('Training load').closest('div')).toHaveTextContent('76');
       expect(within(side).getByText('VO2 max (derived)').closest('div')).toHaveTextContent('46.2 ml/kg/min');
       expect(within(side).getByText(/not Garmin's published value/)).toBeInTheDocument();
@@ -681,7 +685,7 @@ describe('on a wide screen', () => {
       renderAt(`/activities/${ID_RUN}`);
       await screen.findByRole('heading', { level: 1, name: 'Run' });
       expect(screen.getByText('This activity has no GPS track.')).toBeInTheDocument();
-      for (const label of ['Total ascent', 'Avg HR', 'Aerobic effect', 'Training load', 'VO2 max (derived)', 'Avg cadence', 'Total descent', 'Calories']) {
+      for (const label of ['Ascent', 'Avg HR', 'Aerobic', 'Training load', 'VO2 max (derived)', 'Avg cadence', 'Descent', 'Energy']) {
         expect(screen.queryByText(label)).not.toBeInTheDocument();
       }
       // Distance, time and pace are there; the only "unavailable" left are the zones the file does not list (the tab is not open).

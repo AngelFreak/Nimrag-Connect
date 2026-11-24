@@ -226,7 +226,7 @@ pub fn group(sets: &[StrengthSet]) -> Vec<ExerciseGroup> {
     out
 }
 
-async fn ident_of(ctx: &Ctx, id: &str) -> Res<String> {
+pub async fn ident_of(ctx: &Ctx, id: &str) -> Res<String> {
     if !valid_id(id) {
         return Err(ApiError::not_found("no such activity"));
     }
