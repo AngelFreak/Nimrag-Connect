@@ -13,6 +13,7 @@ pub mod embedded;
 pub mod export;
 pub mod garmin;
 pub mod gps_assist;
+pub mod history;
 pub mod import;
 pub mod ingest;
 pub mod ledger;

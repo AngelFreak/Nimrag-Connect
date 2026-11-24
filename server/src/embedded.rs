@@ -19,6 +19,9 @@
 //!   `edits::Edit` (settings, body entries, strength sets, workouts) are run, and each one that
 //!   succeeds is written to the outbox (`outbox.rs`) for [`Embedded::next_edit`] to hand to the
 //!   app, which sends it to the real server when it can. Every other change gets 403.
+//! * History: [`Embedded::ingest_history`] puts in files the real server has and the phone
+//!   lacks (`docs/design/history-on-phone.md`), marked in `history_copies`;
+//!   [`Embedded::prune_history`] removes those again, never a file the phone's own watch gave.
 //! * Files are put in with [`Embedded::ingest_bytes`] (in process, same path as the HTTP
 //!   upload: store, sidecar, ledger, derive).
 //!
@@ -28,7 +31,7 @@ use crate::api::{self, ApiError, AppState};
 use crate::edits::{self, DeviceState};
 use crate::ledger::Meta;
 use crate::users::{self, Role};
-use crate::{auth, db, derive, ingest, outbox, store};
+use crate::{auth, db, derive, derived, ingest, outbox, store};
 use anyhow::{bail, Context, Result};
 use axum::{
     body::Body,
@@ -165,6 +168,89 @@ impl Embedded {
     /// Blocking; never call it from inside an async context.
     pub fn ingest_bytes(&self, bytes: &[u8], meta: Meta) -> Result<bool> {
         let received = store::receive_bytes(&self.state.data_dir, bytes)?;
+        let sha = received.sha256.clone();
+        let created = self.rt().block_on(ingest::ingest(
+            &self.state,
+            &received,
+            None,
+            Some(self.user_id),
+            meta,
+            None,
+        ))?;
+        // The watch delivering a file the server copy brought earlier makes it the phone's own:
+        // pruning the history must not remove it.
+        self.rt().block_on(async {
+            sqlx::query("DELETE FROM history_copies WHERE sha256 = ?")
+                .bind(&sha)
+                .execute(&self.state.pool)
+                .await
+        })?;
+        Ok(created)
+    }
+
+    /// Of `sha256s`, those this copy does not have (order kept).
+    /// Blocking; never call it from inside an async context.
+    pub fn missing_files(&self, sha256s: &[String]) -> Result<Vec<String>> {
+        self.rt().block_on(async {
+            let mut have = std::collections::HashSet::new();
+            // SQLite allows 32766 variables; stay far below.
+            for chunk in sha256s.chunks(500) {
+                let marks = vec!["?"; chunk.len()].join(", ");
+                let sql = format!("SELECT sha256 FROM files WHERE sha256 IN ({marks})");
+                let mut q = sqlx::query_scalar::<_, String>(sqlx::AssertSqlSafe(sql));
+                for sha in chunk {
+                    q = q.bind(sha);
+                }
+                have.extend(q.fetch_all(&self.state.pool).await?);
+            }
+            Ok(sha256s
+                .iter()
+                .filter(|s| !have.contains(*s))
+                .cloned()
+                .collect())
+        })
+    }
+
+    /// Store a file the real server has (`meta` as the server lists it) as a copy: owned by the
+    /// local user, derived like any other, and marked in `history_copies` with `last_ts` (the
+    /// server's last data timestamp) unless this copy already had the file. Fails, storing
+    /// nothing, when the bytes do not hash to `sha256`. Returns true if the file is new here.
+    /// Blocking; never call it from inside an async context.
+    pub fn ingest_history(
+        &self,
+        bytes: &[u8],
+        sha256: &str,
+        meta: Meta,
+        last_ts: Option<i64>,
+    ) -> Result<bool> {
+        let actual = crate::sha256_hex(bytes);
+        if actual != sha256 {
+            bail!("the bytes hash to {actual}, not {sha256}");
+        }
+        let had: bool = self.rt().block_on(async {
+            sqlx::query_scalar::<_, i64>("SELECT 1 FROM files WHERE sha256 = ?")
+                .bind(sha256)
+                .fetch_optional(&self.state.pool)
+                .await
+                .map(|r| r.is_some())
+        })?;
+        if !had {
+            // Marked before it is stored, so a crash in between leaves a mark with no file
+            // (harmless), never a copy that looks like the phone's own.
+            let now = self.state.now();
+            self.rt().block_on(async {
+                sqlx::query(
+                    "INSERT OR REPLACE INTO history_copies (sha256, last_ts, copied_at)
+                     VALUES (?, ?, ?)",
+                )
+                .bind(sha256)
+                .bind(last_ts)
+                .bind(now)
+                .execute(&self.state.pool)
+                .await
+            })?;
+        }
+        let received = store::receive_bytes(&self.state.data_dir, bytes)?;
         self.rt().block_on(ingest::ingest(
             &self.state,
             &received,
@@ -173,6 +259,91 @@ impl Embedded {
             meta,
             None,
         ))
+    }
+
+    /// Remove the copied server files whose last data timestamp is before `keep_since` (files
+    /// with no known one stay), or every copy when `keep_since` is `None`; then rebuild the
+    /// derived data of what is left. The phone's own files are never touched. Returns how many
+    /// files were removed.
+    /// Blocking; never call it from inside an async context.
+    pub fn prune_history(&self, keep_since: Option<i64>) -> Result<u32> {
+        self.rt().block_on(async {
+            let state = &self.state;
+            // Not while a file is being ingested: the sidecar and the rows must stay in step.
+            let _ledger = state.ledger_lock.lock().await;
+            let victims: Vec<String> = sqlx::query_scalar(
+                "SELECT sha256 FROM history_copies
+                 WHERE ?1 IS NULL OR (last_ts IS NOT NULL AND last_ts < ?1)",
+            )
+            .bind(keep_since)
+            .fetch_all(&state.pool)
+            .await?;
+            if victims.is_empty() {
+                return Ok(0);
+            }
+            // Read, then write: take the write lock at once, or a running write fails us with
+            // "database is locked".
+            let mut tx = state.pool.begin_with("BEGIN IMMEDIATE").await?;
+            sqlx::query("PRAGMA defer_foreign_keys = ON")
+                .execute(&mut *tx)
+                .await?;
+            // Every table that points at a file by its hash, found rather than listed, so a
+            // table added later is not forgotten here.
+            let tables: Vec<(String, String)> = sqlx::query_as(
+                "SELECT DISTINCT m.name, f.\"from\" FROM sqlite_master m, pragma_foreign_key_list(m.name) f
+                 WHERE m.type = 'table' AND f.\"table\" IN ('files', 'fit_files')
+                   AND f.\"to\" = 'sha256' AND m.name <> 'files'",
+            )
+            .fetch_all(&mut *tx)
+            .await?;
+            let mut removed = 0u32;
+            let mut gone = Vec::new();
+            for sha in &victims {
+                let had: Option<i64> = sqlx::query_scalar("SELECT 1 FROM files WHERE sha256 = ?")
+                    .bind(sha)
+                    .fetch_optional(&mut *tx)
+                    .await?;
+                if had.is_some() {
+                    derived::clear_file(&mut tx, sha).await?;
+                    for (table, col) in &tables {
+                        sqlx::query(sqlx::AssertSqlSafe(format!(
+                            "DELETE FROM \"{table}\" WHERE \"{col}\" = ?"
+                        )))
+                        .bind(sha)
+                        .execute(&mut *tx)
+                        .await?;
+                    }
+                    sqlx::query("DELETE FROM files WHERE sha256 = ?")
+                        .bind(sha)
+                        .execute(&mut *tx)
+                        .await?;
+                    removed += 1;
+                    gone.push(sha.clone());
+                }
+                sqlx::query("DELETE FROM history_copies WHERE sha256 = ?")
+                    .bind(sha)
+                    .execute(&mut *tx)
+                    .await?;
+            }
+            if removed > 0 {
+                // Rows that lost a rank contest to a removed file come back.
+                derive::reparse_partitions(&mut tx, &state.data_dir, &[self.user_id]).await?;
+            }
+            tx.commit().await?;
+            // The bytes and sidecars go after the commit: a failure here leaves stray files,
+            // never rows that point at nothing.
+            for sha in &gone {
+                for path in [
+                    store::path_for(&state.data_dir, sha),
+                    store::sidecar_path_for(&state.data_dir, sha),
+                ] {
+                    if let Err(e) = std::fs::remove_file(&path) {
+                        tracing::warn!(path = %path.display(), error = %e, "history: removing a pruned file failed");
+                    }
+                }
+            }
+            Ok(removed)
+        })
     }
 
     /// The oldest change made on this copy that the server has not got yet, with its path in

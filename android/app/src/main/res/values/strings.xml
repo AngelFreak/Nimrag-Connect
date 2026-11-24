@@ -23,6 +23,7 @@
     <string name="watch_title">Watch</string>
     <string name="group_sync">Sync</string>
     <string name="group_watch">Watch</string>
+    <string name="group_data_retention">Data retention</string>
     <string name="group_phone">This phone</string>
     <string name="help_link">Trouble connecting?</string>
 
@@ -121,6 +122,14 @@
     <string name="auto_sync_choice_15">Freshest data, a little more battery</string>
     <string name="auto_sync_hint">While the watch is connected, the phone asks it to sync this often, and when you open the app.</string>
     <string name="auto_sync_off_hint">The phone syncs only when you tap Sync now, open the app, or the watch asks.</string>
+    <string name="history_retention_title">Server history on this phone</string>
+    <string name="history_retention_hint">Copies history that only the server has (Garmin imports, other phones) so it shows offline too. Your watch\'s own data is always kept.</string>
+    <string name="history_retention_off">Off</string>
+    <string name="history_retention_3m">Last 3 months</string>
+    <string name="history_retention_12m">Last 12 months</string>
+    <string name="history_retention_all">Everything</string>
+    <string name="history_retention_off_note">Nothing is copied</string>
+    <string name="history_retention_all_note">All of the server\'s history</string>
     <string name="server_mobile_data">Upload on mobile data</string>
     <string name="mobile_data_off">Off · waits for Wi-Fi</string>
     <string name="mobile_data_on">On · uses mobile data too</string>

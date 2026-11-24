@@ -474,6 +474,54 @@ fn local_server_starts_ingests_and_stops() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+#[cfg(feature = "local-server")]
+#[test]
+fn local_server_copies_the_servers_history_and_prunes_it() {
+    use crate::local_server::HistoryFileMeta;
+    let dir = std::env::temp_dir().join(format!("nimrag-ffi-history-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    let server = LocalServer::start(
+        dir.display().to_string(),
+        0,
+        "0123456789abcdef0123456789abcdef".into(),
+    )
+    .unwrap();
+    let bytes = b"a file only the server has".to_vec();
+    let sha = nimrag_server::sha256_hex(&bytes);
+    let meta = |sha256: &str, last_ts| HistoryFileMeta {
+        sha256: sha256.into(),
+        source: "import".into(),
+        data_type: None,
+        sub_type: None,
+        file_index: None,
+        file_number: None,
+        watch_timestamp: None,
+        last_ts,
+    };
+    assert_eq!(
+        server.missing_files(vec![sha.clone()]).unwrap(),
+        [sha.clone()]
+    );
+    // A broken download is refused and stores nothing.
+    assert!(server
+        .ingest_history_file(bytes.clone(), meta(&"0".repeat(64), Some(10)))
+        .is_err());
+    assert_eq!(server.missing_files(vec![sha.clone()]).unwrap().len(), 1);
+    assert!(server
+        .ingest_history_file(bytes.clone(), meta(&sha, Some(10)))
+        .unwrap());
+    assert!(!server
+        .ingest_history_file(bytes, meta(&sha, Some(10)))
+        .unwrap());
+    assert!(server.missing_files(vec![sha]).unwrap().is_empty());
+    // Inside the window it stays; outside (or with the setting off) it goes.
+    assert_eq!(server.prune_history(Some(5)).unwrap(), 0);
+    assert_eq!(server.prune_history(Some(11)).unwrap(), 1);
+    assert!(server.summary().unwrap().contains("\"files\":0"));
+    server.stop();
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 /// One HTTP request to the local server as its web view makes it; returns the status.
 #[cfg(feature = "local-server")]
 fn local_request(port: u16, secret: &str, method: &str, path: &str, body: &str) -> u16 {

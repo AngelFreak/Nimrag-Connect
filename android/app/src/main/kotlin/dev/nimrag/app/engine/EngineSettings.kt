@@ -3,6 +3,7 @@ package dev.nimrag.app.engine
 import android.content.Context
 import dev.nimrag.app.engine.logic.CapabilityHex
 import dev.nimrag.app.engine.logic.RemovedSettings
+import dev.nimrag.app.model.HistoryRetention
 import dev.nimrag.app.model.PhoneFeatures
 import dev.nimrag.app.model.Settings
 import dev.nimrag.app.model.SyncResult
@@ -49,6 +50,21 @@ class EngineSettings(context: Context) {
     var allowMobileData: Boolean
         get() = prefs.getBoolean(ALLOW_MOBILE, false)
         set(value) = prefs.edit().putBoolean(ALLOW_MOBILE, value).apply()
+
+    /** "Server history on this phone" (Data retention): Off until the person picks a window. */
+    var historyRetention: HistoryRetention
+        get() = HistoryRetention.fromKey(prefs.getString(HISTORY_RETENTION, null))
+        set(value) = prefs.edit().putString(HISTORY_RETENTION, value.key).apply()
+
+    /** The choice the phone's copy of the server history matches (after copying or pruning for it). */
+    var historyApplied: HistoryRetention
+        get() = HistoryRetention.fromKey(prefs.getString(HISTORY_APPLIED, null))
+        set(value) = prefs.edit().putString(HISTORY_APPLIED, value.key).apply()
+
+    /** When the server's list was last walked to its end with nothing left to copy (unix ms); 0 = never. */
+    var historyCheckedAtMs: Long
+        get() = prefs.getLong(HISTORY_CHECKED, 0L)
+        set(value) = prefs.edit().putLong(HISTORY_CHECKED, value).apply()
 
     var autoSyncMinutes: Int
         get() = prefs.getInt(AUTO_SYNC, DEFAULT_AUTO_SYNC_MINUTES)
@@ -198,6 +214,7 @@ class EngineSettings(context: Context) {
         hasToken = token != null,
         allowMobileData = allowMobileData,
         autoSyncMinutes = autoSyncMinutes,
+        historyRetention = historyRetention,
         capabilitiesHex = capabilitiesHex,
         phone = phoneFeatures(),
     )
@@ -208,6 +225,9 @@ class EngineSettings(context: Context) {
         const val TOKEN = "token"
         const val ALLOW_MOBILE = "allow_mobile_data"
         const val AUTO_SYNC = "auto_sync_minutes"
+        const val HISTORY_RETENTION = "history_retention"
+        const val HISTORY_APPLIED = "history_applied"
+        const val HISTORY_CHECKED = "history_checked_at"
 
         /** Applies to everyone who never changed the interval (the preference is simply absent). */
         const val DEFAULT_AUTO_SYNC_MINUTES = 15

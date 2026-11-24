@@ -7,6 +7,8 @@ import android.util.Log
 import dev.nimrag.app.engine.logic.DroppedChange
 import dev.nimrag.app.engine.logic.EditOutbox
 import dev.nimrag.app.engine.logic.EditVerdict
+import dev.nimrag.app.engine.logic.HistoryCopy
+import dev.nimrag.app.engine.logic.HistoryFile
 import dev.nimrag.app.engine.logic.OutboxEdit
 import dev.nimrag.app.engine.store.EngineDb
 import dev.nimrag.app.engine.store.EngineLog
@@ -14,6 +16,7 @@ import dev.nimrag.app.engine.store.FileStore
 import java.io.File
 import java.security.SecureRandom
 import java.util.concurrent.Executors
+import uniffi.nimrag_ffi.HistoryFileMeta
 import uniffi.nimrag_ffi.LocalFileMeta
 import uniffi.nimrag_ffi.LocalServer
 import uniffi.nimrag_ffi.EditVerdict as FfiEditVerdict
@@ -55,6 +58,9 @@ private class EmbeddedLocalServer(
     @Volatile override var edits: EditOutbox? = null
         private set
 
+    @Volatile override var history: HistoryCopy? = null
+        private set
+
     private var started = false
 
     override fun start() {
@@ -86,6 +92,7 @@ private class EmbeddedLocalServer(
             server = srv
             web = LocalWeb(port, secret, srv.secretCookieName())
             edits = FfiOutbox(srv)
+            history = FfiHistory(srv)
             val ms = SystemClock.elapsedRealtime() - t0
             log.info("Local server up on 127.0.0.1 in $ms ms")
             Log.i(TAG, "local server started in $ms ms on port $port")
@@ -164,4 +171,25 @@ private class FfiOutbox(private val server: LocalServer) : EditOutbox {
         server.takeDroppedEdits().map { DroppedChange(method = it.method, path = it.path, reason = it.reason) }
 
     override fun applyState(json: String): Boolean = server.applyState(json)
+}
+
+/** The FFI's history calls as the engine's own types (see `docs/design/history-on-phone.md`). */
+private class FfiHistory(private val server: LocalServer) : HistoryCopy {
+    override fun missing(sha256s: List<String>): List<String> = server.missingFiles(sha256s)
+
+    override fun ingest(bytes: ByteArray, file: HistoryFile): Boolean = server.ingestHistoryFile(
+        bytes,
+        HistoryFileMeta(
+            sha256 = file.sha256,
+            source = file.source,
+            dataType = file.dataType,
+            subType = file.subType,
+            fileIndex = file.fileIndex,
+            fileNumber = file.fileNumber,
+            watchTimestamp = file.watchTimestamp,
+            lastTs = file.lastTs,
+        ),
+    )
+
+    override fun prune(keepSince: Long?): Int = server.pruneHistory(keepSince).toInt()
 }

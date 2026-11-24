@@ -12,6 +12,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import dev.nimrag.app.R
 import dev.nimrag.app.model.GarminConnect
+import dev.nimrag.app.model.HistoryRetention
 import dev.nimrag.app.ui.components.Footnote
 import dev.nimrag.app.ui.components.MessageCard
 import dev.nimrag.app.ui.components.NimragButton
@@ -44,6 +45,36 @@ internal fun AutoSyncPage(minutes: Int, onSelect: (Int) -> Unit, onBack: () -> U
                                 else -> null
                             },
                             trailing = RowTrailing.Radio(option == minutes),
+                            onClick = { onSelect(option) },
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------- data retention
+
+/** How much of the server's own history is copied onto the phone: a radio list, one footer line. */
+@Composable
+internal fun DataRetentionPage(choice: HistoryRetention, onSelect: (HistoryRetention) -> Unit, onBack: () -> Unit) {
+    SettingsPage(title = stringResource(R.string.history_retention_title), onBack = onBack) {
+        PageColumn {
+            SettingsGroup(
+                modifier = Modifier.selectableGroup(),
+                footer = stringResource(R.string.history_retention_hint),
+            ) {
+                HistoryRetention.entries.forEach { option ->
+                    item {
+                        SettingsRow(
+                            title = historyRetentionLabel(option),
+                            value = when (option) {
+                                HistoryRetention.Off -> stringResource(R.string.history_retention_off_note)
+                                HistoryRetention.Everything -> stringResource(R.string.history_retention_all_note)
+                                else -> null
+                            },
+                            trailing = RowTrailing.Radio(option == choice),
                             onClick = { onSelect(option) },
                         )
                     }

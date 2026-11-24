@@ -15,6 +15,7 @@ import dev.nimrag.app.engine.phone.PhoneBridge
 import dev.nimrag.app.model.AccountController
 import dev.nimrag.app.model.AppChoice
 import dev.nimrag.app.model.AppState
+import dev.nimrag.app.model.HistoryRetention
 import dev.nimrag.app.model.ServerTest
 import dev.nimrag.app.model.WatchController
 import dev.nimrag.app.model.WebMode
@@ -232,6 +233,12 @@ class WatchEngine(private val hub: Hub) : WatchController {
     }
 
     override suspend fun testServer(): ServerTest = withContext(Dispatchers.IO) { hub.uploader.testServer() }
+
+    override fun setHistoryRetention(choice: HistoryRetention) {
+        hub.settings.historyRetention = choice
+        publishSettings()
+        hub.uploader.onHistoryChoiceChanged()
+    }
 
     override fun setAutoSyncMinutes(minutes: Int) {
         hub.settings.autoSyncMinutes = minutes.coerceIn(0, MAX_AUTO_SYNC_MINUTES)

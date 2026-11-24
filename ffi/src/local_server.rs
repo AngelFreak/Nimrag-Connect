@@ -43,6 +43,23 @@ pub struct LocalFileMeta {
     pub watch_timestamp: i64,
 }
 
+/// A stored file of the real server, as `GET /api/device/files` lists it, for
+/// `LocalServer::ingest_history_file` (see `docs/design/history-on-phone.md`).
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct HistoryFileMeta {
+    /// The hash the bytes must have; anything else is refused.
+    pub sha256: String,
+    /// `watch`, `usb`, `import` or `connect`, as the server stores it.
+    pub source: String,
+    pub data_type: Option<i64>,
+    pub sub_type: Option<i64>,
+    pub file_index: Option<i64>,
+    pub file_number: Option<i64>,
+    pub watch_timestamp: Option<i64>,
+    /// The file's last data timestamp (unix seconds), `None` when the server does not know it.
+    pub last_ts: Option<i64>,
+}
+
 /// One change made on the local copy that the real server has not got yet, ready to send:
 /// `POST /api/device/edits` with these fields as the JSON body.
 #[derive(Debug, Clone, uniffi::Record)]
@@ -128,6 +145,41 @@ impl LocalServer {
             watch_timestamp: (meta.watch_timestamp > 0).then_some(meta.watch_timestamp),
         };
         server.ingest_bytes(&bytes, meta).map_err(failed)
+    }
+
+    /// Of these file hashes, the ones this copy does not have.
+    pub fn missing_files(&self, sha256s: Vec<String>) -> Result<Vec<String>, LocalServerError> {
+        self.running()?.missing_files(&sha256s).map_err(failed)
+    }
+
+    /// Stores a file the real server has, as a copy (marked, so `prune_history` can remove it
+    /// again) and derives from it. True if the file was new here; idempotent. Fails, storing
+    /// nothing, when the bytes do not hash to `meta.sha256`.
+    pub fn ingest_history_file(
+        &self,
+        bytes: Vec<u8>,
+        meta: HistoryFileMeta,
+    ) -> Result<bool, LocalServerError> {
+        let server = self.running()?;
+        let m = Meta {
+            source: meta.source,
+            data_type: meta.data_type,
+            sub_type: meta.sub_type,
+            file_index: meta.file_index,
+            file_number: meta.file_number,
+            watch_timestamp: meta.watch_timestamp,
+        };
+        server
+            .ingest_history(&bytes, &meta.sha256, m, meta.last_ts)
+            .map_err(failed)
+    }
+
+    /// Removes the copied server files whose last data timestamp is before `keep_since` (unix
+    /// seconds; files with no known one stay), or all copies when `None`, and rebuilds what is
+    /// derived from the rest. Files from the phone's own watch are never removed. Returns how
+    /// many files were removed.
+    pub fn prune_history(&self, keep_since: Option<i64>) -> Result<u32, LocalServerError> {
+        self.running()?.prune_history(keep_since).map_err(failed)
     }
 
     /// The oldest change waiting for the real server, or `None`. Does not remove it: report the

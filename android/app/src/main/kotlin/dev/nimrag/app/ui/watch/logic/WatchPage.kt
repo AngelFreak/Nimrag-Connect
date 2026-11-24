@@ -7,6 +7,7 @@ package dev.nimrag.app.ui.watch.logic
 enum class WatchPage(val parent: WatchPage?) {
     Main(null),
     AutoSync(Main),
+    DataRetention(Main),
     GarminConnect(Main),
     GarminHelp(Main),
     WatchDetails(Main),
