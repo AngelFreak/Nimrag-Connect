@@ -449,7 +449,8 @@ class UploadWorker(
             is HistoryCopier.Result.More -> {
                 historyBackoff.succeeded()
                 historyRecheck.onWorkLeft()
-                serverAnsweredInPass = true
+                // Not `serverAnsweredInPass`: passes follow each other at once while files are
+                // left, and a file whose upload keeps failing would be retried after every one.
                 stateTakenInPass = stateTakenInPass || result.copied > 0
                 if (result.copied > 0) log.info(HistoryLog.pass(result.copied, result.left))
                 return 0L

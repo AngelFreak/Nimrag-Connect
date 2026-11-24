@@ -215,12 +215,14 @@ class HistoryRecheck(checkedAtMs: Long = 0L) {
 
 /** The lines the worker writes to the log (shown in the Watch page's sync history). */
 object HistoryLog {
-    fun pass(copied: Int, left: Int) = "Copied $copied of the server's files to the phone ($left left)"
+    fun pass(copied: Int, left: Int) = "Copied ${files(copied)} of the server's history to the phone ($left left)"
 
-    fun done(total: Int) = "The server's history is on the phone ($total files copied)"
+    fun done(total: Int) = "The server's history is on the phone (${files(total)} copied)"
 
     fun pruned(removed: Int, choice: HistoryRetention) =
-        "Removed $removed of the server's files from the phone (${label(choice)})"
+        "Removed ${files(removed)} of the server's history from the phone (${label(choice)})"
+
+    private fun files(n: Int) = if (n == 1) "1 file" else "$n files"
 
     fun choice(choice: HistoryRetention) = "Server history on this phone: ${label(choice)}"
 

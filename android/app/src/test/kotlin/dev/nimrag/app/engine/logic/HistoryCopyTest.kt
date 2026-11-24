@@ -366,9 +366,10 @@ class HistoryCopyTest {
 
     @Test
     fun `the log lines say what was copied and what is left`() {
-        assertEquals("Copied 25 of the server's files to the phone (310 left)", HistoryLog.pass(25, 310))
+        assertEquals("Copied 25 files of the server's history to the phone (310 left)", HistoryLog.pass(25, 310))
         assertEquals("The server's history is on the phone (800 files copied)", HistoryLog.done(800))
-        assertEquals("Removed 12 of the server's files from the phone (last 3 months)", HistoryLog.pruned(12, HistoryRetention.Last3Months))
+        assertEquals("The server's history is on the phone (1 file copied)", HistoryLog.done(1))
+        assertEquals("Removed 12 files of the server's history from the phone (last 3 months)", HistoryLog.pruned(12, HistoryRetention.Last3Months))
         assertEquals("Server history on this phone: off", HistoryLog.choice(HistoryRetention.Off))
         assertEquals("Could not copy the server's history: Server error (HTTP 503), will retry", HistoryLog.failed("Server error (HTTP 503), will retry"))
     }
