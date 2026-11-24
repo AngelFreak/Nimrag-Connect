@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { Card, CardHeader, EmptyState, Legend, ListRow, SeriesChart, StressBars, Unavailable, type XLabel } from '../../components';
 import type { DayResponse } from '../../api/generated/DayResponse';
 import { fmtClock, fmtInt } from '../../lib/format';
+import { LEVEL_COLOR, LEVEL_NAME, LEVEL_RANGE, daySentence, levelSeconds, type MeasuredLevel } from '../../lib/stress';
 import { useIsDesktop } from '../../lib/hooks';
 import { energyAside, energySummary, fmtSeconds, hourSeries, hrAside, hrSummary, kindName, stressAside, stressBuckets, stressSummary } from './model';
 import { FactorList, FactorRow, StatsSection } from './desktop';
@@ -52,22 +53,41 @@ export function HeartRateCard({ day }: { day: DayResponse }) {
   );
 }
 
-export function StressCard({ day }: { day: DayResponse }) {
+/**
+ * The day's stress: bars coloured by level, the colour key, and a plain line about the day. The key
+ * shows each level's time; with `ranges` it shows the value range of each level instead (the metric
+ * page has the times in its own bar).
+ */
+export function StressCard({ day, ranges = false }: { day: DayResponse; ranges?: boolean }) {
   const st = day.stress;
   const buckets = stressBuckets(day.date, st.series);
+  const secs = levelSeconds(st);
+  const item = (level: MeasuredLevel) => ({
+    key: level,
+    label: ranges ? (
+      <>
+        {LEVEL_NAME[level]} {LEVEL_RANGE[level]}
+      </>
+    ) : (
+      <>
+        {LEVEL_NAME[level]} {fmtSeconds(secs[level]) ?? <Unavailable />}
+      </>
+    ),
+    color: LEVEL_COLOR[level],
+  });
   return (
     <Panel title="Stress" aside={stressAside(st) ?? <Unavailable />}>
       <StressBars buckets={buckets} label="Stress level across the day" xLabels={HOURS} />
       <Legend
         items={[
-          { key: 'rest', label: <>Rest {fmtSeconds(st.rest_s) ?? <Unavailable />}</>, color: 'var(--stress-rest)' },
-          { key: 'low', label: <>Low {fmtSeconds(st.low_s) ?? <Unavailable />}</>, color: 'var(--stress-low)' },
-          { key: 'medium', label: <>Medium {fmtSeconds(st.medium_s) ?? <Unavailable />}</>, color: 'var(--stress-medium)' },
-          ...(st.high_s ? [{ key: 'high', label: <>High {fmtSeconds(st.high_s)}</>, color: 'var(--heart)' }] : []),
-          { key: 'activity', label: <>Activity {fmtSeconds(st.activity_s) ?? <Unavailable />}</>, color: 'var(--stress-activity)', outlined: true },
+          item('rest'),
+          item('low'),
+          item('medium'),
+          ...(ranges || st.high_s ? [item('high')] : []),
+          { key: 'activity', label: ranges ? 'Activity' : <>Activity {fmtSeconds(st.activity_s) ?? <Unavailable />}</>, color: LEVEL_COLOR.activity, outlined: true },
         ]}
       />
-      <ChartSummary>{stressSummary(st)}</ChartSummary>
+      <ChartSummary>{daySentence(st) ?? stressSummary(st)}</ChartSummary>
     </Panel>
   );
 }

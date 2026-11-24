@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import type { HomeCard, HomeCards, Today } from '../../api/generated';
 import { ProgressBar, SeriesChart, StageBar, StatTile, type Tone } from '../../components';
 import { fmtShortDay } from '../../lib/dates';
+import { HeartRateVisual, IntensityVisual, LoadVisual, RecoveryVisual, StatusStripVisual, StepsWeekVisual, StressVisual, Vo2Visual } from './glanceVisuals';
 import { fmtFixed, fmtInt, isMissing, statusName } from '../../lib/format';
 import {
   baselineLabel,
@@ -114,11 +115,11 @@ function build(id: HomeCard, t: Today): Built {
     case 'heart_rate': {
       const lo = fmtInt(t.heart_rate.day.low_bpm);
       const hi = fmtInt(t.heart_rate.day.high_bpm);
-      return { value: unit(t.heart_rate.resting_hr_bpm, 'bpm'), tone: 'heart', sub: join('Resting', lo && hi ? `today ${lo} to ${hi}` : null) };
+      return { value: unit(t.heart_rate.resting_hr_bpm, 'bpm'), tone: 'heart', sub: join('Resting', lo && hi ? `today ${lo} to ${hi}` : null), extra: <HeartRateVisual today={t} /> };
     }
     case 'stress': {
       const word = stressLevelWord(t.stress.main_level);
-      return { value: fmtInt(t.stress.average), tone: 'warn', sub: join('Average', word ? `mostly ${word}` : null) };
+      return { value: fmtInt(t.stress.average), tone: 'warn', sub: join('Average', word ? `mostly ${word}` : null), extra: <StressVisual today={t} /> };
     }
     case 'sleep': {
       const s = t.sleep;
@@ -167,7 +168,7 @@ function build(id: HomeCard, t: Today): Built {
     case 'training_status': {
       const s = t.training_status;
       const since = s.since ? fmtShortDay(s.since.slice(0, 10)) : null;
-      return { value: statusName(s.label), sub: s.label ? join(since ? `Since ${since}${s.since_is_lower_bound ? ' or earlier' : ''}` : null) : null };
+      return { value: statusName(s.label), sub: s.label ? join(since ? `Since ${since}${s.since_is_lower_bound ? ' or earlier' : ''}` : null) : null, extra: s.label ? <StatusStripVisual today={t} /> : null };
     }
     case 'training_readiness': {
       const r = t.training_readiness;
@@ -178,13 +179,13 @@ function build(id: HomeCard, t: Today): Built {
       return {
         value: unit(m.total_min, 'min'),
         sub: `This week, goal ${fmtInt(m.goal_min)}`,
-        extra: <ProgressBar value={m.total_min} max={m.goal_min} color="var(--energy)" label={`Intensity minutes this week: ${fmtInt(m.total_min) ?? 'unavailable'} of ${fmtInt(m.goal_min)}`} />,
+        extra: <IntensityVisual today={t} />,
       };
     }
     case 'training_load': {
       const l = t.training_load;
       const range = !isMissing(l.target_min) && !isMissing(l.target_max) ? `${fmtInt(l.target_min)} to ${fmtInt(l.target_max)}` : null;
-      return { value: fmtInt(l.seven_day_load), sub: join(targetLabel(l.vs_target), range) };
+      return { value: fmtInt(l.seven_day_load), sub: join(targetLabel(l.vs_target), range), extra: <LoadVisual today={t} /> };
     }
     case 'steps': {
       const s = t.steps;
@@ -192,7 +193,12 @@ function build(id: HomeCard, t: Today): Built {
         value: fmtInt(s.steps),
         tone: 'steps',
         sub: `Goal ${fmtInt(s.goal)}`,
-        extra: <ProgressBar value={s.steps} max={s.goal} label={`${fmtInt(s.steps) ?? 'unavailable'} of ${fmtInt(s.goal)} steps`} />,
+        extra: (
+          <>
+            <ProgressBar value={s.steps} max={s.goal} label={`${fmtInt(s.steps) ?? 'unavailable'} of ${fmtInt(s.goal)} steps`} />
+            {isMissing(s.steps) ? null : <StepsWeekVisual today={t} />}
+          </>
+        ),
       };
     }
     case 'recovery_time': {
@@ -200,12 +206,12 @@ function build(id: HomeCard, t: Today): Built {
       // Nothing left: "0m, ready around <now>" reads like a countdown that is stuck.
       if (r.remaining_s === 0) return { value: 'Recovered', sub: null };
       const ready = fmtTime(r.ready_at, tz);
-      return { value: fmtSeconds(r.remaining_s), sub: ready ? `Ready around ${ready}` : null };
+      return { value: fmtSeconds(r.remaining_s), sub: ready ? `Ready around ${ready}` : null, extra: <RecoveryVisual today={t} /> };
     }
     case 'vo2_max': {
       const v = t.vo2max;
       const change = signed(v.change_3m, 1);
-      return { value: fmtFixed(v.value, 1), sub: join('ml/kg/min, derived', change ? `${change} in 3 months` : null) };
+      return { value: fmtFixed(v.value, 1), sub: join('ml/kg/min, derived', change ? `${change} in 3 months` : null), extra: <Vo2Visual today={t} /> };
     }
     case 'respiration': {
       const r = t.respiration;

@@ -54,3 +54,34 @@
 .metric-ring .ring {
   flex: none;
 }
+
+/* A small caption between two charts of one card (the average line under the stacked stress bars). */
+.chart-note {
+  margin: 12px 0 4px;
+  font-size: var(--fs-sm);
+  color: var(--text-2);
+}
+
+/* Time in stress levels: the stacked bar and, under it, each level with its time and share. */
+.stress-levels {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.stress-levels__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.stress-levels__list li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.stress-levels__name {
+  flex: 1;
+  color: var(--text-2);
+}

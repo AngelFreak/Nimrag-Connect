@@ -14,6 +14,7 @@ export * from './Table';
 export * from './States';
 export * from './SeriesChart';
 export * from './BarSeries';
+export * from './StackedBars';
 export * from './PlotFrame';
 export * from './MapView';
 export * from './Button';

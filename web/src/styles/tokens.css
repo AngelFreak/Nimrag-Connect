@@ -72,8 +72,9 @@
 
   /* Stress buckets */
   --stress-rest: #3b6ea5;
-  --stress-low: #6da0d6;
+  --stress-low: #f3b14a;
   --stress-medium: #f08a00;
+  --stress-high: #b8470a;
   --stress-activity: #d4dade;
 
   /* Training status timeline (recovery blue, strained magenta, maintaining yellow, productive green,
@@ -186,8 +187,9 @@
   --stage-awake: #ffb066;
 
   --stress-rest: #2f5c8a;
-  --stress-low: #5b8dbe;
-  --stress-medium: #ffb066;
+  --stress-low: #ffd49a;
+  --stress-medium: #ff9f45;
+  --stress-high: #e5601b;
   --stress-activity: #1f292e;
 
   --good: #6fcf5f;
