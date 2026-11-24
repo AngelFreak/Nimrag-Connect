@@ -27,7 +27,7 @@ import './healthStatus.css';
 // oxygen against the person's own usual range from the 28 nights before. A comparison with their
 // own habits, not a medical assessment, and the page says so.
 
-const NOTE = 'This compares last night with your own usual values from the 28 nights before. It is not a medical assessment. If you feel unwell, talk to a doctor, whatever the numbers say.';
+const NOTE = 'The charts show the last 4 weeks: the shaded band is your usual range on each night, and orange dots are nights outside it. This compares last night with your own usual values from the 28 nights before. It is not a medical assessment. If you feel unwell, talk to a doctor, whatever the numbers say.';
 
 export function HealthStatusView() {
   usePageTitle('Health status');
@@ -154,10 +154,6 @@ function HistoryPlot({ chart, failed, unit, height }: { chart: HistoryChart | nu
         yUnit={unit === '%' || unit === 'brpm' ? 'decimal' : 'int'}
         height={height}
       />
-      <p className="hstatus-sub">
-        Last 4 weeks{chart.hasBand ? '. The shaded band is your usual range on each night.' : '.'}
-        {chart.markers.some((x) => x !== null) ? ' Orange dots are nights outside it.' : ''}
-      </p>
     </div>
   );
 }

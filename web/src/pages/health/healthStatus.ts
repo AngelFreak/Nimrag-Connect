@@ -40,11 +40,16 @@ export const STATE_WORD: Record<HealthState, string> = {
   no_reading: 'No reading',
 };
 
-/** A figure with its unit, one decimal as the server gives it ("63.4 ms", "96.0%"). */
+/** The unit as the other pages write it: breaths a minute are "/min", as on the Sleep page. */
+export function unitText(unit: string): string {
+  return unit === 'brpm' ? '/min' : unit;
+}
+
+/** A figure with its unit, as the server gives it: whole when whole ("66 ms"), else one decimal ("63.4 ms", "95.2%"). */
 export function fmtMetric(value: number | null | undefined, unit: string): string | null {
-  const n = fmtFixed(value, 1);
-  if (n === null) return null;
-  return unit === '%' ? `${n}%` : `${n} ${unit}`;
+  if (value === null || value === undefined || !Number.isFinite(value)) return null;
+  const n = Number.isInteger(value) ? String(value) : (fmtFixed(value, 1) as string);
+  return unit === '%' ? `${n}%` : `${n} ${unitText(unit)}`;
 }
 
 /** "41.0 to 63.4 ms": the usual range, or `null` while calibrating. */
@@ -52,7 +57,7 @@ export function rangeText(m: Pick<HealthMetricStatus, 'low' | 'high' | 'unit'>):
   const lo = fmtFixed(m.low, 1);
   const hi = fmtFixed(m.high, 1);
   if (lo === null || hi === null) return null;
-  return m.unit === '%' ? `${lo}% to ${hi}%` : `${lo} to ${hi} ${m.unit}`;
+  return m.unit === '%' ? `${lo}% to ${hi}%` : `${lo} to ${hi} ${unitText(m.unit)}`;
 }
 
 /** The one line over the page: how many values are outside, in plain words. */
@@ -89,7 +94,9 @@ export function metricSentence(m: HealthMetricStatus): string {
     return `${name}: ${value}. Calibrating, ${m.nights_needed} more ${m.nights_needed === 1 ? 'night' : 'nights'} needed for a usual range.`;
   }
   const where = m.state === 'in_range' ? 'inside' : m.state === 'above' ? 'above' : 'below';
-  return `${name}: ${value}, ${where} your usual range of ${range}.`;
+  // Read aloud, "/min" says nothing: breaths a minute in words.
+  const spoken = (t: string) => t.replace(/ \/min$/, ' breaths a minute');
+  return `${name}: ${spoken(value)}, ${where} your usual range of ${spoken(range)}.`;
 }
 
 /**

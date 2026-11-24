@@ -93,12 +93,12 @@ function renderAt(path: string) {
 afterEach(() => vi.unstubAllGlobals());
 
 describe('Energy, one day', () => {
-  it('shows the numbers of the day: now, charged, drained, highest and lowest', async () => {
+  it('shows the numbers of today in four tiles: now, charged, drained and lowest (the header has the highest)', async () => {
     mockApi({ [`/api/days/${TODAY}`]: day() });
     renderAt('/metrics/energy?range=1d');
     await screen.findByRole('heading', { level: 1, name: 'Energy' });
     const tiles = await screen.findAllByText(/^(Now|Charged today|Drained today|Highest|Lowest)$/);
-    expect(tiles.map((t) => t.textContent)).toEqual(['Now', 'Charged today', 'Drained today', 'Highest', 'Lowest']);
+    expect(tiles.map((t) => t.textContent)).toEqual(['Now', 'Charged today', 'Drained today', 'Lowest']);
     const body = document.body.textContent ?? '';
     expect(body).toContain('+65');
     expect(body).toContain('−71');
@@ -122,7 +122,7 @@ describe('Energy, one day', () => {
     const sentence = await screen.findByText(/^Sleep recharged you by/);
     // Asleep until 06:00: rises of 15, 15, 15, 10, 7 and 3 hourly steps inside the night.
     expect(sentence).toHaveTextContent('Sleep recharged you by 65.');
-    expect(sentence).toHaveTextContent('Your run drained most, −60 of −71.');
+    expect(sentence).toHaveTextContent('Your run drained 60 of the 71 used.');
     expect(sentence).toHaveTextContent('It is at 24 now.');
   });
 

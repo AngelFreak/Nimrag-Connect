@@ -58,16 +58,16 @@ describe('the sentence under the timeline', () => {
   it('names the activities when they took at least half of the drain', () => {
     // Falls: 10, 30, 10 = 50. A run from hour 3 to 4 covers the 30 (arriving at hour 4).
     const s = daySentence(facts({ activities: [{ name: 'Run', start: 3 * H, end: 4 * H }] }));
-    expect(s).toContain('Your run drained most, −30 of −50.');
+    expect(s).toContain('Your run drained 30 of the 50 used.');
     const two = daySentence(facts({ activities: [{ name: 'Run', start: 3 * H, end: 4 * H }, { name: 'Strength', start: 4 * H, end: 5 * H }] }));
-    expect(two).toContain('Your activities drained most, −40 of −50.');
+    expect(two).toContain('Your activities drained 40 of the 50 used.');
   });
 
   it('otherwise blames stress when it was noticeable, and everyday movement when it was not', () => {
     const calm = daySentence(facts({ activities: [{ name: 'Walk', start: 2 * H, end: 2 * H + 1000 }], stressAverage: 30 }));
-    expect(calm).toContain('Everyday movement drained most, −50 of −50.');
+    expect(calm).toContain('Everyday movement drained 50.');
     const tense = daySentence(facts({ stressAverage: 40 }));
-    expect(tense).toContain('Stress and daily movement drained most, −50 of −50.');
+    expect(tense).toContain('Stress and daily movement drained 50.');
     expect(daySentence(facts({ stressAverage: null }))).toContain('Everyday movement');
   });
 

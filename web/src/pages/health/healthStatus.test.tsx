@@ -71,7 +71,7 @@ describe('the words of the page', () => {
   it('gives each value one sentence with its range and place', () => {
     expect(metricSentence(metric('hrv'))).toBe('Overnight HRV: 62.4 ms, inside your usual range of 57.4 to 67.4 ms.');
     expect(metricSentence(metric('spo2', { state: 'below' }))).toBe('Blood oxygen asleep: 95.6%, below your usual range of 90.6% to 100.6%.');
-    expect(metricSentence(metric('breathing', { state: 'above' }))).toContain('above your usual range of 9.5 to 19.5 brpm');
+    expect(metricSentence(metric('breathing', { state: 'above' }))).toContain('14.5 breaths a minute, above your usual range of 9.5 to 19.5 breaths a minute');
     expect(metricSentence(metric('hrv', { state: 'calibrating', low: null, high: null, nights_needed: 1 }))).toBe('Overnight HRV: 62.4 ms. Calibrating, 1 more night needed for a usual range.');
     expect(metricSentence(metric('hrv', { state: 'no_reading', value: null }))).toBe('Overnight HRV: not measured last night.');
   });
@@ -157,7 +157,7 @@ describe('Health status page', () => {
     expect(within(hrv).getByText('In range')).toBeInTheDocument();
     expect(within(hrv).getByRole('img', { name: /^Overnight HRV: 62.4 ms, inside your usual range of 57.4 to 67.4 ms\.$/ })).toBeInTheDocument();
     const hr = document.querySelector<HTMLElement>('[data-metric="resting_hr"]')!;
-    expect(within(hr).getByText('60.0 bpm')).toBeInTheDocument();
+    expect(within(hr).getByText('60 bpm')).toBeInTheDocument();
     expect(within(hr).getByText('Above')).toBeInTheDocument();
     expect(await within(hr).findByRole('img', { name: 'Last 4 weeks' })).toBeInTheDocument();
     expect(screen.getByText(/It is not a medical assessment/)).toBeInTheDocument();

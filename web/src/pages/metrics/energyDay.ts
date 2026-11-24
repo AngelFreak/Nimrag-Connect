@@ -1,7 +1,6 @@
 import type { MetricRange } from '../../api/generated/MetricRange';
 import type { TimedValue } from '../../api/generated/TimedValue';
 import { fmtInt } from '../../lib/format';
-import { signed } from '../today/format';
 import { bucketAxis, bucketStarts, values } from './model';
 
 // The Energy page's day: sums over the energy line, and the one sentence under the timeline. The
@@ -91,11 +90,10 @@ export function daySentence(f: DayFacts): string | null {
     if (f.activities.length > 0 && act * 2 >= sum) {
       const names = [...new Set(f.activities.map((a) => a.name.toLowerCase()))];
       const what = names.length === 1 ? `Your ${names[0]}` : 'Your activities';
-      parts.push(`${what} drained most, ${signed(-act)} of ${signed(-sum)}.`);
-    } else if (f.stressAverage !== null && f.stressAverage >= STRESS_NOTICEABLE) {
-      parts.push(`Stress and daily movement drained most, ${signed(-rest)} of ${signed(-sum)}.`);
+      parts.push(act === sum ? `${what} drained ${sum}.` : `${what} drained ${act} of the ${sum} used.`);
     } else {
-      parts.push(`Everyday movement drained most, ${signed(-rest)} of ${signed(-sum)}.`);
+      const who = f.stressAverage !== null && f.stressAverage >= STRESS_NOTICEABLE ? 'Stress and daily movement' : 'Everyday movement';
+      parts.push(rest === sum ? `${who} drained ${sum}.` : `${who} drained ${rest} of the ${sum} used.`);
     }
   } else {
     parts.push('Little drained your energy.');

@@ -185,7 +185,8 @@ function EnergyDay({ day, today }: { day: DayResponse; today: string }) {
         ...(isToday ? [tile('Now', fmtInt(e.now), 'energy')] : []),
         tile(isToday ? 'Charged today' : 'Charged', flow(e.charged, 1), 'energy'),
         tile(isToday ? 'Drained today' : 'Drained', flow(e.drained, -1), 'warn'),
-        tile('Highest', fmtInt(e.high), 'energy'),
+        // Four tiles, two rows: today "Now" takes the place of the highest (the header has both ends).
+        ...(isToday ? [] : [tile('Highest', fmtInt(e.high), 'energy')]),
         tile('Lowest', fmtInt(e.low), 'warn'),
       ]}
     >
