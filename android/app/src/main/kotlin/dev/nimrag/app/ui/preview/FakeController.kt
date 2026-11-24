@@ -3,6 +3,7 @@ package dev.nimrag.app.ui.preview
 import dev.nimrag.app.model.AccountController
 import dev.nimrag.app.model.AppChoice
 import dev.nimrag.app.model.FindWatchUi
+import dev.nimrag.app.model.HistoryRetention
 import dev.nimrag.app.model.AppState
 import dev.nimrag.app.model.FixedAccountController
 import dev.nimrag.app.model.LinkState
@@ -135,6 +136,10 @@ class FakeController(
             !s.hasToken -> ServerTest.Failed("HTTP 401: this phone is not signed in")
             else -> ServerTest.Ok
         }
+    }
+
+    override fun setHistoryRetention(choice: HistoryRetention) {
+        mutable.update { it.copy(settings = it.settings.copy(historyRetention = choice)) }
     }
 
     override fun setAutoSyncMinutes(minutes: Int) {

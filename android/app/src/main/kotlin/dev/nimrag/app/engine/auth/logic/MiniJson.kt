@@ -11,8 +11,9 @@ object MiniJson {
     const val MAX_DEPTH = 16
     const val MAX_LENGTH = 64 * 1024
 
-    fun parse(text: String): Any? {
-        require(text.length <= MAX_LENGTH) { "JSON too long" }
+    /** [maxLength] raises the limit for the one answer that is long on purpose (a list of files). */
+    fun parse(text: String, maxLength: Int = MAX_LENGTH): Any? {
+        require(text.length <= maxLength) { "JSON too long" }
         val reader = Reader(text)
         val value = reader.value(0)
         reader.skipSpace()

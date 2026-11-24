@@ -11,6 +11,17 @@ import dev.nimrag.app.engine.logic.EditDrain
 import dev.nimrag.app.engine.logic.EditOutbox
 import dev.nimrag.app.engine.logic.EditPolicy
 import dev.nimrag.app.engine.logic.FileKind
+import dev.nimrag.app.engine.logic.HistoryChange
+import dev.nimrag.app.engine.logic.HistoryChoice
+import dev.nimrag.app.engine.logic.HistoryCopier
+import dev.nimrag.app.engine.logic.HistoryCopy
+import dev.nimrag.app.engine.logic.HistoryDownload
+import dev.nimrag.app.engine.logic.HistoryFile
+import dev.nimrag.app.engine.logic.HistoryLog
+import dev.nimrag.app.engine.logic.HistoryPage
+import dev.nimrag.app.engine.logic.HistoryPolicy
+import dev.nimrag.app.engine.logic.HistoryRecheck
+import dev.nimrag.app.engine.logic.HistoryServer
 import dev.nimrag.app.engine.logic.NetworkChangeFilter
 import dev.nimrag.app.engine.logic.ServerReply
 import dev.nimrag.app.engine.logic.StatePull
@@ -46,6 +57,11 @@ import java.util.concurrent.TimeUnit
  * made on the phone's copy go to `POST /api/device/edits`, oldest first, under the same network
  * rule, the same 401/403 handling and the same back-off. Once the outbox is empty the server's
  * state is pulled back onto the phone (at start, after a pass that sent something, on resume).
+ *
+ * Last comes the history step (docs/design/history-on-phone.md), only when the person chose to
+ * keep the server's history on the phone: files the server has and the phone lacks are copied
+ * into the phone's copy of the server, 25 files or 10 MB per pass, newest first. They never go
+ * through [store], so they are never uploaded back.
  */
 class UploadWorker(
     context: Context,
@@ -62,6 +78,8 @@ class UploadWorker(
     private val edits: () -> EditOutbox? = { null },
     /** Changes the server refused, one line each for the person (shown once). */
     private val onEditNotices: (List<String>) -> Unit = {},
+    /** The phone's copy as server history is put into it; null while the local server is not running. */
+    private val history: () -> HistoryCopy? = { null },
     private val clock: () -> Long = System::currentTimeMillis,
 ) {
     private val connectivity = context.getSystemService(ConnectivityManager::class.java)
@@ -91,6 +109,41 @@ class UploadWorker(
     @Volatile private var pullWanted = true
 
     @Volatile private var lastPullAt = 0L
+
+    /** Its own back-off: a failing history step must never hold up the uploads or the edits. */
+    private val historyBackoff = EditBackoff()
+
+    private val historyRecheck = HistoryRecheck(settings.historyCheckedAtMs)
+
+    private val historyCopier = HistoryCopier(
+        copy = object : HistoryCopy {
+            private fun copy() = history() ?: throw IllegalStateException("The local server is not running")
+
+            override fun missing(sha256s: List<String>) = copy().missing(sha256s)
+
+            override fun ingest(bytes: ByteArray, file: HistoryFile) = copy().ingest(bytes, file)
+
+            override fun prune(keepSince: Long?) = copy().prune(keepSince)
+        },
+        server = object : HistoryServer {
+            override fun list(cursor: String?, limit: Int, since: Long?): HistoryPage {
+                val base = historyBase ?: return HistoryPage.Failed("No server address")
+                val token = historyToken ?: return HistoryPage.Failed("This phone is not signed in")
+                return HistoryPolicy.page(exchange(HistoryPolicy.listUrl(base, cursor, limit, since), "GET", token, null))
+            }
+
+            override fun download(sha256: String): HistoryDownload {
+                val base = historyBase ?: return HistoryDownload.Failed("No server address")
+                val token = historyToken ?: return HistoryDownload.Failed("This phone is not signed in")
+                return fetchBytes(HistoryPolicy.contentUrl(base, sha256), token)
+            }
+        },
+    )
+
+    /** The server and token the current history pass talks to (worker thread sets them, the copier reads them). */
+    @Volatile private var historyBase: String? = null
+
+    @Volatile private var historyToken: String? = null
 
     /** `snapshot` reads, then publishes: two threads doing it at once must not leave the older numbers last. */
     private val publishLock = Any()
@@ -136,6 +189,11 @@ class UploadWorker(
     fun editsChanged(newEdit: Boolean) {
         publish()
         if (newEdit) wake()
+    }
+
+    /** The choice "Server history on this phone" changed: widening copies at once, narrowing removes the copies outside. */
+    fun onHistoryChoiceChanged() {
+        wake()
     }
 
     /** The app came back to the screen: the server may have changed things; pull its state (not more than every 30 s). */
@@ -227,6 +285,8 @@ class UploadWorker(
 
     /** One pass: the due files, then the offline edits. Returns how long to sleep unless woken. */
     private fun runOnce(): Long {
+        // The person's choice first: removing copies needs no network and no sign-in.
+        applyHistoryChoice()
         val base = UploadPolicy.normalizeServerUrl(settings.serverUrl)
         val token = settings.token
         if (base == null || token == null) {
@@ -240,11 +300,14 @@ class UploadWorker(
             return IDLE_MS
         }
         val filesWait = uploadFiles(base, token) ?: return IDLE_MS
+        // New uploads reached the server: its history may have grown, so look again (at most every 6 hours).
+        if (uploadedInPass > 0) historyRecheck.onUploadsReached()
         val editsWait = syncEdits(base, token) ?: return IDLE_MS
+        val historyWait = syncHistory(base, token) ?: return IDLE_MS
         publish()
         // Files skipped for their retry delay while the server just answered: it is back, send them now.
         if (serverAnsweredInPass && db.retryWaitingNow(clock()) > 0) return 0L
-        return minOf(filesWait, editsWait)
+        return minOf(filesWait, editsWait, historyWait)
     }
 
     /** The due files, oldest first. Returns how long until the next retry, or null when the token was refused. */
@@ -320,6 +383,98 @@ class UploadWorker(
             is StatePull.Result.TokenRejected -> return rejectToken(pull.status)
         }
         return IDLE_MS
+    }
+
+    /**
+     * Matches the phone's copy to the person's choice: a narrower one removes the copied files
+     * outside it (then the derived data is rebuilt), a wider one starts looking at once. What the
+     * copy matches is remembered ([EngineSettings.historyApplied]), so a change made while the
+     * local server was not running is still carried out later.
+     */
+    private fun applyHistoryChoice() {
+        val wanted = settings.historyRetention
+        val applied = settings.historyApplied
+        when (HistoryChoice.change(applied, wanted)) {
+            HistoryChange.None -> return
+            HistoryChange.Widened -> {
+                historyRecheck.onWidened()
+                settings.historyCheckedAtMs = 0L
+                historyCopier.reset()
+                historyBackoff.succeeded()
+                log.info(HistoryLog.choice(wanted))
+            }
+            HistoryChange.Narrowed -> {
+                val copy = history() ?: return // retried when the local server runs
+                val removed = try {
+                    copy.prune(HistoryChoice.pruneSince(wanted, clock()))
+                } catch (e: Exception) {
+                    log.error("Could not remove the server's history from the phone: ${e.javaClass.simpleName}")
+                    return
+                }
+                historyCopier.reset()
+                log.info(HistoryLog.choice(wanted))
+                if (removed > 0) {
+                    log.info(HistoryLog.pruned(removed, wanted))
+                    stateTakenInPass = true // the data on the page changed
+                }
+            }
+        }
+        settings.historyApplied = wanted
+    }
+
+    /**
+     * The history step: copy a pass of the server's files the phone lacks. Same network rule,
+     * same 401/403 handling as the uploads, its own back-off. Returns how long until the next try
+     * (0 while files are left, so the next pass follows at once), or null when the token was refused.
+     */
+    private fun syncHistory(base: String, token: String): Long? {
+        val retention = settings.historyRetention
+        if (!retention.copies || retention != settings.historyApplied) return IDLE_MS
+        if (history() == null) return IDLE_MS
+        if (!UploadPolicy.networkAllows(currentNetwork(), settings.allowMobileData)) return IDLE_MS
+        val backoff = historyBackoff.waitMs(clock())
+        if (backoff > 0) return backoff.coerceIn(1_000L, IDLE_MS)
+        val wait = historyRecheck.waitMs(clock()) ?: return IDLE_MS
+        if (wait > 0) return wait.coerceIn(1_000L, IDLE_MS)
+
+        historyBase = base
+        historyToken = token
+        val result = try {
+            historyCopier.pass(retention, clock())
+        } finally {
+            historyBase = null
+            historyToken = null
+        }
+        when (result) {
+            is HistoryCopier.Result.More -> {
+                historyBackoff.succeeded()
+                historyRecheck.onWorkLeft()
+                serverAnsweredInPass = true
+                stateTakenInPass = stateTakenInPass || result.copied > 0
+                if (result.copied > 0) log.info(HistoryLog.pass(result.copied, result.left))
+                return 0L
+            }
+            is HistoryCopier.Result.Done -> {
+                historyBackoff.succeeded()
+                historyRecheck.onChecked(clock())
+                settings.historyCheckedAtMs = clock()
+                serverAnsweredInPass = true
+                stateTakenInPass = stateTakenInPass || result.copied > 0
+                if (result.copied > 0) log.info(HistoryLog.pass(result.copied, 0))
+                if (result.total > 0) log.info(HistoryLog.done(result.total))
+                return IDLE_MS
+            }
+            is HistoryCopier.Result.Failed -> {
+                stateTakenInPass = stateTakenInPass || result.copied > 0
+                if (result.copied > 0) log.info(HistoryLog.pass(result.copied, historyCopier.left()))
+                log.warn(HistoryLog.failed(result.reason))
+                return historyBackoff.failed(clock()).coerceIn(1_000L, IDLE_MS)
+            }
+            is HistoryCopier.Result.TokenRejected -> {
+                stateTakenInPass = stateTakenInPass || result.copied > 0
+                return rejectToken(result.status)
+            }
+        }
     }
 
     private fun rejectToken(status: Int): Long? {
@@ -503,6 +658,48 @@ class UploadWorker(
         } finally {
             conn.disconnect()
         }
+    }
+
+    /**
+     * One file of the server's history. A 200 is the bytes (the phone's copy checks their hash, so
+     * a broken download is never stored); 404 means the file went away meanwhile.
+     */
+    private fun fetchBytes(url: String, token: String): HistoryDownload {
+        val conn = URL(url).openConnection() as HttpURLConnection
+        try {
+            conn.requestMethod = "GET"
+            conn.connectTimeout = TIMEOUT_MS
+            conn.readTimeout = TIMEOUT_MS
+            conn.instanceFollowRedirects = false
+            conn.useCaches = false
+            conn.setRequestProperty("Authorization", "Bearer $token")
+            val code = conn.responseCode
+            if (code != 200) {
+                (if (code >= 400) conn.errorStream else conn.inputStream)?.use { it.readBytes() }
+                return HistoryPolicy.downloadFailure(code)
+            }
+            val bytes = conn.inputStream.use { readBytesLimited(it) }
+                ?: return HistoryDownload.Failed("A file of the server's history is too large")
+            return HistoryDownload.Bytes(bytes)
+        } catch (e: IOException) {
+            return HistoryDownload.Failed(UploadPolicy.describeIo(e))
+        } catch (_: Exception) {
+            return HistoryDownload.Failed(UploadPolicy.describeIo(IllegalStateException()))
+        } finally {
+            conn.disconnect()
+        }
+    }
+
+    private fun readBytesLimited(input: InputStream): ByteArray? {
+        val out = ByteArrayOutputStream()
+        val buffer = ByteArray(16 * 1024)
+        while (true) {
+            val n = input.read(buffer)
+            if (n < 0) break
+            out.write(buffer, 0, n)
+            if (out.size() > HistoryPolicy.MAX_FILE_BYTES) return null
+        }
+        return out.toByteArray()
     }
 
     /** The whole text, or null when it is longer than [MAX_ANSWER_BYTES]. */

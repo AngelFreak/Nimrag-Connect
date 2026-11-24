@@ -66,6 +66,7 @@ class Hub(val app: Application) {
         onTokenRejected = { account.tokenRejected() },
         onUploaded = ::newDataArrived,
         edits = { local.edits },
+        history = { local.history },
         onEditNotices = { notices -> update { it.copy(editNotices = it.editNotices + notices) } },
     )
 

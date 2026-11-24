@@ -115,6 +115,18 @@ internal fun WatchScreen(
                 }
             }
 
+            SettingsGroup(heading = stringResource(R.string.group_data_retention)) {
+                item {
+                    SettingsRow(
+                        title = stringResource(R.string.history_retention_title),
+                        value = historyRetentionLabel(settings.historyRetention),
+                        icon = ListIcon,
+                        trailing = RowTrailing.Chevron,
+                        onClick = { onOpen(WatchPage.DataRetention) },
+                    )
+                }
+            }
+
             SettingsGroup(heading = stringResource(R.string.group_watch)) {
                 if (paired != null) {
                     item {

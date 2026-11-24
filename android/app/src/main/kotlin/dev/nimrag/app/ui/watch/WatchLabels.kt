@@ -8,6 +8,7 @@ import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import dev.nimrag.app.R
+import dev.nimrag.app.model.HistoryRetention
 
 /** "Off", "Every 15 min", "Every hour", "Every 4 hours": the interval as a row value and as a choice. */
 @Composable
@@ -17,6 +18,17 @@ internal fun intervalLabel(minutes: Int): String = when {
     minutes % 60 == 0 -> pluralStringResource(R.plurals.interval_hours, minutes / 60, minutes / 60)
     else -> stringResource(R.string.interval_minutes, minutes)
 }
+
+/** "Off", "Last 3 months", "Last 12 months", "Everything": the history choice as a row value and as a choice. */
+@Composable
+internal fun historyRetentionLabel(choice: HistoryRetention): String = stringResource(
+    when (choice) {
+        HistoryRetention.Off -> R.string.history_retention_off
+        HistoryRetention.Last3Months -> R.string.history_retention_3m
+        HistoryRetention.Last12Months -> R.string.history_retention_12m
+        HistoryRetention.Everything -> R.string.history_retention_all
+    },
+)
 
 /** The app's version name ("0.5.1"); a fixed one in previews, where there is no package. */
 @Composable

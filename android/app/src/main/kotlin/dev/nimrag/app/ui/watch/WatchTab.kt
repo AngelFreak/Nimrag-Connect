@@ -48,6 +48,11 @@ fun WatchTab(
             onSelect = controller::setAutoSyncMinutes,
             onBack = back,
         )
+        WatchPage.DataRetention -> DataRetentionPage(
+            choice = state.settings.historyRetention,
+            onSelect = controller::setHistoryRetention,
+            onBack = back,
+        )
         WatchPage.GarminConnect -> GarminConnectPage(
             serverConfigured = state.settings.serverUrl.isNotBlank(),
             garminConnect = state.garminConnect,

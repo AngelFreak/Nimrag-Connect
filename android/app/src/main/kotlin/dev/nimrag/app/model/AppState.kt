@@ -261,6 +261,8 @@ data class Settings(
     val allowMobileData: Boolean = false,
     /** Minutes between automatic sync requests while connected; 0 = only when the watch asks. */
     val autoSyncMinutes: Int = 15,
+    /** How much of the server's own history is copied onto the phone (Data retention); Off by default. */
+    val historyRetention: HistoryRetention = HistoryRetention.Off,
     /** Our 5050 capability mask as hex (advanced; see IMPLEMENTATION_PLAN.md 2c). */
     val capabilitiesHex: String = "",
     /** The phone features (stage 2f); changing a switch reconnects the watch once. */
@@ -320,6 +322,9 @@ interface WatchController {
     suspend fun testServer(): ServerTest
 
     fun setAutoSyncMinutes(minutes: Int)
+
+    /** "Server history on this phone": widening copies at once, narrowing removes the copies outside the window. */
+    fun setHistoryRetention(choice: HistoryRetention) {}
 
     /** Validated hex; takes effect on the next connection. Returns false if invalid. */
     fun setCapabilitiesHex(hex: String): Boolean

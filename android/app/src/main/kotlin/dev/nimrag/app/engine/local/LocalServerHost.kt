@@ -1,6 +1,7 @@
 package dev.nimrag.app.engine.local
 
 import dev.nimrag.app.engine.logic.EditOutbox
+import dev.nimrag.app.engine.logic.HistoryCopy
 
 /**
  * The server inside the app (both flavors; the library is built with ffi feature `local-server`).
@@ -23,6 +24,9 @@ interface LocalServerHost {
      * and the state pulled back from it. Null before the server runs and after a failure.
      */
     val edits: EditOutbox?
+
+    /** The copy as the server's history is put into it (docs/design/history-on-phone.md). Null before the server runs. */
+    val history: HistoryCopy?
 }
 
 /**
