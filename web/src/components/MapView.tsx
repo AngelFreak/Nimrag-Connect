@@ -207,7 +207,8 @@ export function MapView({ track, tilesUrl = DEFAULT_TILES_URL, label = 'Route ma
             [Math.min(...lons), Math.min(...lats)],
             [Math.max(...lons), Math.max(...lats)],
           ],
-          { padding: 32, animate: false },
+          // Extra room at the bottom right for the attribution and at the right for the zoom buttons.
+          { padding: { top: 32, left: 32, right: 56, bottom: 48 }, animate: false },
         );
       };
       map.on('load', () => {
