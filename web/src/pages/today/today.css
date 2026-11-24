@@ -360,13 +360,13 @@
   column-gap: 56px;
   row-gap: 48px;
 }
+/* The sync line sits at the right of the In Focus title, not on a row of its own above the page. */
 .hstatus {
-  grid-column: 1 / -1;
   display: flex;
+  flex-wrap: wrap;
   justify-content: flex-end;
   align-items: center;
   gap: 12px;
-  margin-bottom: -32px;
   font-size: var(--fs-xs);
   color: var(--text-2);
 }

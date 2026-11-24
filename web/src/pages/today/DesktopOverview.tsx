@@ -167,14 +167,17 @@ function Last7Rows({ today }: { today: Today }) {
 
 // ---------------------------------------------------------------- left column
 
-function InFocus({ today, settings, activities }: { today: Today; settings: SettingsResponse | undefined; activities: ActivitiesState }) {
+function InFocus({ today, settings, activities, status }: { today: Today; settings: SettingsResponse | undefined; activities: ActivitiesState; status: ReactNode }) {
   const nightsQuery = useSleepNights(14, true);
   const cards = settings?.home_cards ?? DEFAULT_HOME_CARDS;
   return (
     <section className="hsection" aria-labelledby="focus-title">
-      <h2 className="section-title" id="focus-title">
-        In Focus
-      </h2>
+      <div className="hsection__head">
+        <h2 className="section-title" id="focus-title">
+          In Focus
+        </h2>
+        {status}
+      </div>
       <div className="hgrid hgrid--focus">
         <FocusCards today={today} hidden={cards.hidden} activities={activities} nights={nightsQuery.data?.nights} />
       </div>
@@ -388,13 +391,19 @@ export function DesktopOverview({ today, settings }: Props) {
         <HomeLoading />
       ) : t ? (
         <div className="hgrid-page">
-          <div className="hstatus">
-            <SampleDataChip sample={t.sample} />
-            <span>{syncLine(t.last_sync_at, t.last_data_at, t.timezone)}</span>
-          </div>
           <div className="hmain">
             <TimezoneNotice timezone={t.timezone} />
-            <InFocus today={t} settings={settings.data} activities={activities} />
+            <InFocus
+              today={t}
+              settings={settings.data}
+              activities={activities}
+              status={
+                <div className="hstatus">
+                  <SampleDataChip sample={t.sample} />
+                  <span>{syncLine(t.last_sync_at, t.last_data_at, t.timezone)}</span>
+                </div>
+              }
+            />
             <AtAGlance today={t} settings={settings.data} />
             {settings.isError ? <p className="today-note">Your saved card layout could not be loaded, so the default one is shown.</p> : null}
             <YesterdayRows today={t} stepGoal={settings.data?.step_goal ?? t.steps.goal} />
