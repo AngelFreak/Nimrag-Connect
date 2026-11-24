@@ -1365,11 +1365,12 @@ async fn body_measurements_crud() {
 
 // ---- settings and the home cards -------------------------------------------------------------------
 
-const DEFAULT_ORDER: [&str; 15] = [
+const DEFAULT_ORDER: [&str; 16] = [
     "energy",
+    "training_readiness",
+    "sleep",
     "heart_rate",
     "stress",
-    "sleep",
     "hrv",
     "training_status",
     "intensity_minutes",
@@ -1380,7 +1381,7 @@ const DEFAULT_ORDER: [&str; 15] = [
     "respiration",
     "spo2",
     "weight",
-    "training_readiness",
+    "health_status",
 ];
 
 #[tokio::test]
@@ -1564,23 +1565,10 @@ async fn settings_defaults_and_patch() {
     assert_eq!(s["home_cards"]["order"], json!(DEFAULT_ORDER));
     assert_eq!(
         s["home_cards"]["hidden"],
-        json!(["respiration", "spo2", "weight", "training_readiness"])
+        json!(["respiration", "spo2", "weight"])
     );
-    // The first nine are the visible, ordered ones from the brief.
-    assert_eq!(
-        &DEFAULT_ORDER[..9],
-        [
-            "energy",
-            "heart_rate",
-            "stress",
-            "sleep",
-            "hrv",
-            "training_status",
-            "intensity_minutes",
-            "training_load",
-            "steps"
-        ]
-    );
+    // The first three are the ones Today leads with: energy, readiness, sleep.
+    assert_eq!(&DEFAULT_ORDER[..3], ["energy", "training_readiness", "sleep"]);
 
     let (st, s) = e.send(&c, Method::PATCH, "/api/settings", json!({ "step_goal": 10000, "intensity_goal_min": 200, "timezone": "Europe/Copenhagen" })).await;
     assert_eq!(st, StatusCode::OK);
@@ -1684,7 +1672,7 @@ async fn home_cards_are_validated_and_normalised() {
     let (s, j) = e.send(&c, Method::PATCH, url, json!({ "home_cards": { "order": ["steps", "sleep"], "hidden": ["energy", "vo2_max"] } })).await;
     assert_eq!(s, StatusCode::OK, "{j}");
     let order = j["home_cards"]["order"].as_array().unwrap();
-    assert_eq!(order.len(), 15);
+    assert_eq!(order.len(), 16);
     assert_eq!(
         (&order[0], &order[1], &order[2]),
         (&json!("steps"), &json!("sleep"), &json!("energy"))

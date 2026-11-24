@@ -1,7 +1,10 @@
 import type { ReactNode } from 'react';
 import type { HomeCard, HomeCards, Today } from '../../api/generated';
-import { ProgressBar, SeriesChart, StageBar, StatTile, StatusWord } from '../../components';
+import { ProgressBar, SeriesChart, Skeleton, StageBar, StatTile, StatusWord } from '../../components';
 import { fmtShortDay } from '../../lib/dates';
+import { glanceWord, METRIC_SHORT, STATE_WORD } from '../health/healthStatus';
+import { useHealthStatus } from '../health/healthStatusQueries';
+import '../health/healthStatus.css';
 import { HeartRateVisual, IntensityVisual, LoadVisual, RecoveryVisual, StatusStripVisual, StepsWeekVisual, StressVisual, Vo2Visual } from './glanceVisuals';
 import { fmtFixed, fmtInt, isMissing, statusName } from '../../lib/format';
 import {
@@ -30,7 +33,8 @@ export const CARD_LABEL: Record<HomeCard, string> = {
   respiration: 'Breathing',
   spo2: 'Blood oxygen',
   weight: 'Body weight',
-  training_readiness: 'Training readiness',
+  training_readiness: 'Readiness',
+  health_status: 'Health status',
 };
 
 /** Detail page each card opens. */
@@ -50,16 +54,18 @@ export const CARD_LINK: Record<HomeCard, string> = {
   respiration: '/metrics/respiration',
   spo2: '/metrics/spo2',
   weight: '/body',
-  training_readiness: '/training',
+  training_readiness: '/training/readiness',
+  health_status: '/health/status',
 };
 
 /** The server's default layout (settings.rs), used by "Reset to default". */
 export const DEFAULT_HOME_CARDS: HomeCards = {
   order: [
     'energy',
+    'training_readiness',
+    'sleep',
     'heart_rate',
     'stress',
-    'sleep',
     'hrv',
     'training_status',
     'intensity_minutes',
@@ -70,16 +76,16 @@ export const DEFAULT_HOME_CARDS: HomeCards = {
     'respiration',
     'spo2',
     'weight',
-    'training_readiness',
+    'health_status',
   ],
-  hidden: ['respiration', 'spo2', 'weight', 'training_readiness'],
+  hidden: ['respiration', 'spo2', 'weight'],
 };
 
 /**
- * Cards whose metric the "In focus" carousel already shows (Energy, Sleep last night, Overnight
- * HRV); "At a glance" leaves them out so no metric appears twice.
+ * Cards whose metric the "In focus" carousel already shows (Energy, Readiness, Sleep last night,
+ * Overnight HRV); "At a glance" leaves them out so no metric appears twice.
  */
-export const IN_FOCUS_CARDS: readonly HomeCard[] = ['energy', 'sleep', 'hrv'];
+export const IN_FOCUS_CARDS: readonly HomeCard[] = ['energy', 'training_readiness', 'sleep', 'hrv'];
 
 /** The cards to show, in the owner's order, without the hidden ones. */
 export function visibleCards(cards: HomeCards): HomeCard[] {
@@ -189,10 +195,10 @@ function build(id: HomeCard, t: Today): Built {
         extra: s.label ? <StatusStripVisual today={t} /> : null,
       };
     }
-    case 'training_readiness': {
-      const r = t.training_readiness;
-      return { value: r ? fmtInt(r.score) : null, sub: r ? r.label : 'Not provided by this watch yet' };
-    }
+    case 'training_readiness':
+    case 'health_status':
+      // Readiness is a slide of "In focus" and Health status has its own tile (HealthStatusTile).
+      return { value: null };
     case 'intensity_minutes': {
       const m = t.intensity_minutes;
       return {
@@ -253,6 +259,7 @@ function build(id: HomeCard, t: Today): Built {
 
 /** One small card of the "At a glance" grid. The whole card is a link to its detail page. */
 export function GlanceCard({ id, today }: { id: HomeCard; today: Today }) {
+  if (id === 'health_status') return <HealthStatusTile />;
   const b = build(id, today);
   return (
     <StatTile href={CARD_LINK[id]} data-card={id} label={CARD_LABEL[id]} value={b.value} {...(b.word ? { word: true } : {})} {...(b.sub ? { sub: b.sub } : {})} tone={b.alert ? 'warn' : 'muted'}>
@@ -266,3 +273,34 @@ export function GlanceCard({ id, today }: { id: HomeCard; today: Today }) {
  * the two weekly activity cards that have no entry in the layout. "At a Glance" shows the rest.
  */
 export const DESKTOP_FOCUS_CARDS: readonly HomeCard[] = ['energy', 'steps', 'sleep', 'training_status'];
+
+/** Health status: how many of last night's overnight values are outside your usual range. */
+function HealthStatusTile() {
+  const q = useHealthStatus();
+  const r = q.data;
+  const word = r ? glanceWord(r) : null;
+  return (
+    <StatTile
+      href={CARD_LINK.health_status}
+      data-card="health_status"
+      label={CARD_LABEL.health_status}
+      value={q.isPending ? <Skeleton height={24} width="60%" /> : word ? <StatusWord type="health" value={word.state}>{word.text}</StatusWord> : null}
+      word
+      {...(r && r.has_night && r.compared > 0 ? { sub: `${r.compared} of ${r.metrics.length} values compared` } : {})}
+      tone={r && r.outside > 0 ? 'warn' : 'muted'}
+    >
+      {r && r.has_night ? (
+        <ul className="hs-list" aria-label="Last night against your usual range">
+          {r.metrics.map((m) => (
+            <li key={m.key}>
+              <span className="hs-list__name">{METRIC_SHORT[m.key]}</span>
+              <StatusWord type="health" value={m.state}>
+                {STATE_WORD[m.state]}
+              </StatusWord>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </StatTile>
+  );
+}

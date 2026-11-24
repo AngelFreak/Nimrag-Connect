@@ -4,4 +4,4 @@
  * Cards of the Today page's "At a glance" grid. The only definition of the id
  * set: the web app imports the generated type.
  */
-export type HomeCard = "energy" | "heart_rate" | "stress" | "sleep" | "hrv" | "training_status" | "intensity_minutes" | "training_load" | "steps" | "recovery_time" | "vo2_max" | "respiration" | "spo2" | "weight" | "training_readiness";
+export type HomeCard = "energy" | "heart_rate" | "stress" | "sleep" | "hrv" | "training_status" | "intensity_minutes" | "training_load" | "steps" | "recovery_time" | "vo2_max" | "respiration" | "spo2" | "weight" | "training_readiness" | "health_status";

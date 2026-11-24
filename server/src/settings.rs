@@ -39,15 +39,17 @@ pub enum HomeCard {
     Spo2,
     Weight,
     TrainingReadiness,
+    HealthStatus,
 }
 
 impl HomeCard {
     /// Every card, in the default order.
-    pub const ALL: [HomeCard; 15] = [
+    pub const ALL: [HomeCard; 16] = [
         HomeCard::Energy,
+        HomeCard::TrainingReadiness,
+        HomeCard::Sleep,
         HomeCard::HeartRate,
         HomeCard::Stress,
-        HomeCard::Sleep,
         HomeCard::Hrv,
         HomeCard::TrainingStatus,
         HomeCard::IntensityMinutes,
@@ -58,7 +60,7 @@ impl HomeCard {
         HomeCard::Respiration,
         HomeCard::Spo2,
         HomeCard::Weight,
-        HomeCard::TrainingReadiness,
+        HomeCard::HealthStatus,
     ];
 }
 
@@ -75,12 +77,7 @@ impl Default for HomeCards {
         Self {
             order: HomeCard::ALL.to_vec(),
             // No data on the Instinct 2 or not entered yet: off until the owner turns them on.
-            hidden: vec![
-                HomeCard::Respiration,
-                HomeCard::Spo2,
-                HomeCard::Weight,
-                HomeCard::TrainingReadiness,
-            ],
+            hidden: vec![HomeCard::Respiration, HomeCard::Spo2, HomeCard::Weight],
         }
     }
 }

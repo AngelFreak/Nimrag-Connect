@@ -1,0 +1,104 @@
+/* The Health status page and its card on Today. Colours come from lib/status.ts (type "health"); a
+   colour is always next to its word. */
+
+.hstatus-summary {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--fs-title);
+  font-weight: 600;
+}
+.hstatus-sub {
+  margin: 0;
+  font-size: var(--fs-sm);
+  line-height: 1.45;
+  color: var(--text-2);
+}
+.hstatus-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 16px;
+}
+.hstatus-value {
+  font-family: var(--font-display);
+  font-size: var(--fs-stat-lg);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.hstatus-range {
+  font-size: var(--fs-sm);
+  color: var(--text-2);
+  font-variant-numeric: tabular-nums;
+}
+.hstatus-calib {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.hstatus-chart {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* The usual range as a band, the night's value as a dot on it. */
+.usual {
+  position: relative;
+  height: 18px;
+}
+.usual::before {
+  content: '';
+  position: absolute;
+  inset: 7px 0;
+  border-radius: 2px;
+  background: var(--track);
+}
+.usual__band {
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  border-radius: 6px;
+  background: var(--band);
+  outline: 1px solid var(--line-strong);
+  outline-offset: -1px;
+}
+.usual__dot {
+  position: absolute;
+  top: 50%;
+  width: 14px;
+  height: 14px;
+  margin: -7px 0 0 -7px;
+  border-radius: 50%;
+  border: 2px solid var(--bg);
+  background: var(--status-productive);
+  box-sizing: border-box;
+}
+.usual__dot--above,
+.usual__dot--below {
+  background: var(--warn);
+}
+.usual__dot--calibrating,
+.usual__dot--no_reading {
+  background: var(--status-none);
+}
+
+/* The Today card: four rows, one per value. */
+.hs-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.hs-list li {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: var(--fs-sm);
+}
+.hs-list__name {
+  color: var(--text-2);
+}

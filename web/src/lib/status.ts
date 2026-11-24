@@ -45,7 +45,19 @@ const ENERGY_COLOR = {
   good: 'var(--rate-4)',
 };
 
-export type StatusType = 'training' | 'hrv' | 'sleep' | 'readiness' | 'stress' | 'energy';
+/**
+ * Overnight values against your own usual range (Health status). Outside the range is not "bad",
+ * only different, so both directions use the same amber; the word says which way.
+ */
+const HEALTH_COLOR = {
+  in_range: 'var(--status-productive)',
+  above: 'var(--warn)',
+  below: 'var(--warn)',
+  calibrating: 'var(--status-none)',
+  no_reading: 'var(--status-none)',
+};
+
+export type StatusType = 'training' | 'hrv' | 'sleep' | 'readiness' | 'stress' | 'energy' | 'health';
 
 const MAPS: Record<StatusType, Record<string, string>> = {
   training: STATUS_COLOR,
@@ -54,6 +66,7 @@ const MAPS: Record<StatusType, Record<string, string>> = {
   readiness: READINESS_COLOR,
   stress: STRESS_COLOR,
   energy: ENERGY_COLOR,
+  health: HEALTH_COLOR,
 };
 
 /** The dot colour of a status, or `null` for a key nothing knows (no dot is drawn then). Case is ignored. */

@@ -40,6 +40,7 @@ export const USER_ROUTES: RouteCase[] = [
   user('Day, today', () => '/day'),
   user('Day, one day', (f) => `/day/${f.night}`),
   user('Health', () => '/health'),
+  user('Health status', () => '/health/status'),
   user('Movement, today', () => '/movement'),
   user('Movement, one day', (f) => `/movement/${f.night}`),
   user('Training', () => '/training'),

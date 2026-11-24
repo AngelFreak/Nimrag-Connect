@@ -19,6 +19,7 @@ pub mod daily;
 pub mod days;
 pub mod export;
 pub mod garmin_import;
+pub mod health_status;
 pub mod hrv;
 pub mod metrics;
 pub mod nimrag_import;
@@ -58,6 +59,7 @@ pub fn router() -> Router<AppState> {
         .merge(today::routes())
         .merge(days::routes())
         .merge(hrv::routes())
+        .merge(health_status::routes())
         .merge(activities::routes())
         .merge(records::routes())
         .merge(strength::routes())
@@ -310,6 +312,8 @@ pub fn export_types(dir: &Path) -> anyhow::Result<()> {
         training::TrainingStatusRange,
         readiness::ReadinessResponse,
         readiness::ReadinessHistory,
+        health_status::HealthStatusResponse,
+        health_status::HealthStatusHistory,
         race_predictions::RacePredictionsResponse,
         race_predictions::RacePrediction,
         race_predictions::RaceHistoryPoint,

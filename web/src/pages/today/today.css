@@ -99,6 +99,29 @@
   font-size: var(--fs-sm);
   color: var(--text-2);
 }
+.focus__headline {
+  margin: 0;
+  font-size: var(--fs-md);
+  font-weight: 600;
+  line-height: 1.3;
+}
+.focus__sentence {
+  margin: 0;
+  font-size: var(--fs-sm);
+  line-height: 1.45;
+  color: var(--text-2);
+}
+.focus__asleep {
+  font-family: var(--font-display);
+  font-size: var(--fs-stat-sm);
+  font-weight: var(--display-weight);
+  line-height: 1.15;
+}
+.focus__link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+}
 
 .day-chart {
   display: flex;
@@ -116,6 +139,42 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
+}
+.day-chart__swatch--sleep {
+  background: var(--sleep);
+  opacity: 0.45;
+  border-radius: 2px;
+}
+/* The lane of activity blocks under the energy chart: the plot's own two columns, so a block sits under its time. */
+.day-lane {
+  padding-top: 0;
+}
+.day-lane__list {
+  position: relative;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.day-lane__item {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  transform: translateX(-50%);
+}
+.day-lane__block {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  border: 1px solid color-mix(in srgb, var(--link) 55%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--link) 18%, transparent);
+  color: var(--text);
+}
+.day-lane__block:hover {
+  background: color-mix(in srgb, var(--link) 30%, transparent);
 }
 .day-chart__swatch {
   width: 8px;
@@ -534,6 +593,11 @@
 }
 .hcard__caption--center {
   text-align: center;
+}
+/* A second line in a caption: the readiness headline under the level word. */
+.hcard__sub {
+  display: block;
+  margin-top: 2px;
 }
 .hcard__loading {
   display: flex;

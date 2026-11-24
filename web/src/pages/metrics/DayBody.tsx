@@ -1,19 +1,24 @@
 import type { ReactNode } from 'react';
 import type { DayResponse } from '../../api/generated/DayResponse';
 import type { MovementResponse } from '../../api/generated/MovementResponse';
-import { BarSeries, Legend, Ring, SampleDataChip, SeriesChart, StatStrip, StatTile, ValueOrUnavailable } from '../../components';
+import { BarSeries, Legend, Ring, SampleDataChip, SeriesChart, StatStrip, StatTile, Unavailable, ValueOrUnavailable } from '../../components';
 import { fmtDay, fmtMonthDay } from '../../lib/dates';
 import { fmtFixed, fmtInt, withUnit } from '../../lib/format';
 import { useIsDesktop } from '../../lib/hooks';
 import { fmtKcal, fmtKm } from '../body/movement';
-import { ActivitiesSection, EnergyCard, HOUR_LABELS, HeartRateCard, Panel, StressCard } from '../health/dayCards';
+import { useMe } from '../../account/queries';
+import { ActivitiesSection, HOUR_LABELS, HeartRateCard, Panel, StressCard } from '../health/dayCards';
 import { StatsColumns, StatsSection } from '../health/desktop';
-import { fmtSeconds, hourSeries, stepsPercent } from '../health/model';
+import { energyAside, fmtSeconds, hourSeries, kindName, stepsPercent } from '../health/model';
+import { EnergyDayChart } from '../today/EnergyDayChart';
+import { signed } from '../today/format';
+import '../today/today.css';
 import { CardSkeleton, LoadError } from '../health/parts';
 import { useDay } from '../health/queries';
 import { clock } from '../health/time';
 import { levelSeconds } from '../../lib/stress';
 import { weekLine } from './model';
+import { daySentence, energyPoints } from './energyDay';
 import { StressLevelsPanel } from './StressLevels';
 import type { MetricKey } from './period';
 import { useMovementDay } from './queries';
@@ -86,7 +91,7 @@ export function DayBody({ metric, date, today }: { metric: MetricKey; date: stri
       ) : metric === 'stress' ? (
         <StressDay day={day} />
       ) : metric === 'energy' ? (
-        <EnergyDay day={day} />
+        <EnergyDay day={day} today={today} />
       ) : metric === 'steps' ? (
         <StepsDay day={day} />
       ) : metric === 'intensity_minutes' ? (
@@ -141,16 +146,47 @@ function StressDay({ day }: { day: DayResponse }) {
   );
 }
 
-function EnergyDay({ day }: { day: DayResponse }) {
+function EnergyDay({ day, today }: { day: DayResponse; today: string }) {
   const e = day.energy;
+  const desktop = useIsDesktop();
+  const me = useMe();
+  const timezone = me.data?.timezone ?? 'UTC';
+  const isToday = day.date === today;
+  const points = energyPoints(e.series);
+  const sleep = day.sleep ? { start: day.sleep.start, end: day.sleep.end } : null;
+  const activities = day.activities.map((a) => ({
+    id: a.id,
+    kind: a.kind,
+    name: a.sport_name && a.kind === 'other' ? a.sport_name : kindName(a.kind),
+    start: a.start,
+    duration_s: a.duration_s,
+  }));
+  const sentence = daySentence({
+    points,
+    sleep: sleep ? { start: Date.parse(sleep.start), end: Date.parse(sleep.end) } : null,
+    activities: activities.flatMap((a) => {
+      const start = Date.parse(a.start);
+      return Number.isNaN(start) || a.duration_s === null ? [] : [{ name: a.name, start, end: start + a.duration_s * 1000 }];
+    }),
+    stressAverage: day.stress.average,
+    isToday,
+    now: e.now,
+  });
+  const flow = (v: number | null, sign: 1 | -1) => (v === null ? null : signed(sign * v));
   return (
     <Layout
-      chart={<EnergyCard day={day} />}
+      chart={
+        <Panel title="Energy" aside={energyAside(e) ?? <Unavailable />}>
+          <EnergyDayChart energy={e} stress={day.stress} timezone={timezone} sleep={sleep} activities={activities} tall={desktop} />
+          {sentence ? <p className="day-sentence">{sentence}</p> : null}
+        </Panel>
+      }
       tiles={[
+        ...(isToday ? [tile('Now', fmtInt(e.now), 'energy')] : []),
+        tile(isToday ? 'Charged today' : 'Charged', flow(e.charged, 1), 'energy'),
+        tile(isToday ? 'Drained today' : 'Drained', flow(e.drained, -1), 'warn'),
         tile('Highest', fmtInt(e.high), 'energy'),
         tile('Lowest', fmtInt(e.low), 'warn'),
-        tile('Charged', e.charged === null ? null : `+${fmtInt(e.charged)}`, 'energy'),
-        tile('Drained', e.drained === null ? null : `-${fmtInt(e.drained)}`, 'warn'),
       ]}
     >
       <ActivitiesSection day={day} />
