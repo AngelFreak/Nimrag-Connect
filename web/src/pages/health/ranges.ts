@@ -48,13 +48,13 @@ export function timelineSummary(t: Pick<TrainingStatusRange, 'from' | 'to' | 'ru
 // ---- HRV --------------------------------------------------------------------------------------------
 
 export const HRV_MARKER: Record<HrvStatusKind, ChartMarker> = {
-  balanced: { shape: 'dot', color: '#6fcf5f' },
-  unbalanced: { shape: 'square', color: '#ffb066' },
-  low: { shape: 'triangle', color: '#ff6b6b' },
-  poor: { shape: 'triangle', color: '#ff6b6b' },
+  balanced: { shape: 'dot', color: 'var(--hrv-balanced)' },
+  unbalanced: { shape: 'square', color: 'var(--hrv-unbalanced)' },
+  low: { shape: 'triangle', color: 'var(--hrv-low)' },
+  poor: { shape: 'triangle', color: 'var(--hrv-low)' },
 };
 /** A reading whose status is missing or not one of the four names. */
-const NO_STATUS_MARKER: ChartMarker = { shape: 'dot', color: '#9aa7ac' };
+const NO_STATUS_MARKER: ChartMarker = { shape: 'dot', color: 'var(--status-none)' };
 
 export type HrvMode = 'weekly' | 'overnight';
 

@@ -256,3 +256,201 @@
     gap: 16px;
   }
 }
+
+/* ---------------------------------------------------------------- stats pages on a wide screen (SPEC pattern A) */
+/* One-day views: a 320 px column for the score and summary, the rest for factors and charts. */
+.stats-cols {
+  display: grid;
+  grid-template-columns: 320px minmax(0, 1fr);
+  gap: 56px;
+  align-items: start;
+}
+.stats-cols--aside-right {
+  grid-template-columns: minmax(0, 1fr) 320px;
+}
+.stats-side,
+.stats-main {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+  min-width: 0;
+}
+.stats-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 48px;
+  min-width: 0;
+}
+.stats-section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+.stats-section__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+}
+.stats-section__head .section-title {
+  padding-bottom: 0;
+}
+.stats-section__aside {
+  font-size: var(--fs-xs);
+  color: var(--text-2);
+  text-align: right;
+}
+.stats-section > .section-title {
+  padding-bottom: 0;
+}
+.stats-note {
+  margin: 0;
+  color: var(--text-2);
+  font-size: var(--fs-xs);
+}
+
+.score-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 8px 0 20px;
+  text-align: center;
+}
+.score-hero__value {
+  font-family: var(--font-display);
+  font-size: 56px;
+  font-weight: var(--display-weight);
+  line-height: 1.1;
+}
+.score-hero__of {
+  font-size: var(--fs-xs);
+  font-weight: 600;
+}
+.score-hero__label {
+  margin-top: 6px;
+  font-size: var(--fs-xs);
+  color: var(--text-2);
+}
+.score-hero__row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.score-hero__row .status-hero__dot {
+  width: 20px;
+  height: 20px;
+}
+.headline {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.headline__title {
+  margin: 0;
+  font-size: var(--fs-base);
+  font-weight: 600;
+}
+.headline__text {
+  margin: 0;
+  font-size: var(--fs-base);
+  line-height: 1.5;
+}
+
+.factor-list {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.factor-list--tight {
+  gap: 12px;
+}
+.factor-list--grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+.factor-row__main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.factor-row__sub {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+a.factor-row {
+  color: inherit;
+  text-decoration: none;
+}
+a.factor-row:hover {
+  background: var(--hover);
+}
+a.factor-row .factor-row__name {
+  color: var(--link);
+}
+
+.pill-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.pill-row--center {
+  justify-content: center;
+}
+
+/* Previous and next buttons and a date chip, for pages whose period is one day or one month. */
+.day-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 24px;
+  flex-wrap: wrap;
+}
+.day-toolbar__nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.day-toolbar__end {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.day-toolbar__link {
+  font-size: var(--fs-base);
+}
+
+/* A row of a plain list on the sheet: no card, a rule between rows. */
+.rule-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--line);
+}
+.rule-list > li {
+  border-bottom: 1px solid var(--line);
+}
+.big-value {
+  font-family: var(--font-display);
+  font-size: var(--fs-stat-lg, 32px);
+  font-weight: var(--display-weight);
+  line-height: 1.2;
+}
+.stats-section .segmented,
+.stats-main .segmented {
+  align-self: flex-start;
+  max-width: 100%;
+}
+/* In the 320 px column the strip is two cells wide. */
+.stats-side .stat-strip {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.score-hero--text .score-hero__value {
+  font-size: 40px;
+}

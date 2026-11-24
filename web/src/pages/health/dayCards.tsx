@@ -1,8 +1,10 @@
+import type { ReactNode } from 'react';
 import { Card, CardHeader, EmptyState, Legend, ListRow, SeriesChart, StressBars, Unavailable, type XLabel } from '../../components';
 import type { DayResponse } from '../../api/generated/DayResponse';
 import { fmtDurationMin, fmtInt } from '../../lib/format';
 import { useIsDesktop } from '../../lib/hooks';
 import { energyAside, energySummary, fmtSeconds, hourSeries, hrAside, hrSummary, kindName, stressAside, stressBuckets, stressSummary } from './model';
+import { FactorList, FactorRow, StatsSection } from './desktop';
 import { ChartSummary } from './parts';
 import { clock } from './time';
 
@@ -13,12 +15,29 @@ export const HOURS = ['00', '06', '12', '18', '24'];
 /** The hour labels as the chart's x axis: "00" at hour 0 ... "24" at hour 24. */
 export const HOUR_LABELS: XLabel[] = HOURS.map((text, i) => ({ value: i * 6, text }));
 
+/** A phone shows a card with a small title; a wide screen a titled section on the sheet, no card. */
+export function Panel({ title, aside, children, padding, muted }: { title: string; aside?: ReactNode; children: ReactNode; padding?: 'lg'; muted?: boolean }) {
+  const desktop = useIsDesktop();
+  if (desktop) {
+    return (
+      <StatsSection title={title} aside={aside}>
+        {children}
+      </StatsSection>
+    );
+  }
+  return (
+    <Card {...(padding ? { padding } : {})}>
+      <CardHeader title={title} aside={aside} {...(muted ? { tone: 'muted' as const } : {})} />
+      {children}
+    </Card>
+  );
+}
+
 export function HeartRateCard({ day }: { day: DayResponse }) {
   const desktop = useIsDesktop();
   const hr = hourSeries(day.date, day.heart_rate.day.series);
   return (
-    <Card>
-      <CardHeader title="Heart rate" aside={hrAside(day.heart_rate) ?? <Unavailable />} />
+    <Panel title="Heart rate" aside={hrAside(day.heart_rate) ?? <Unavailable />}>
       <SeriesChart
         label="Heart rate across the day"
         summary={hrSummary(day.heart_rate)}
@@ -26,10 +45,10 @@ export function HeartRateCard({ day }: { day: DayResponse }) {
         x={hr?.x ?? []}
         xRange={[0, 24]}
         series={[{ label: 'Heart rate', color: 'heart', data: hr?.y ?? [] }]}
-        height={desktop ? 150 : 110}
+        height={desktop ? 200 : 110}
         xLabels={HOUR_LABELS}
       />
-    </Card>
+    </Panel>
   );
 }
 
@@ -37,8 +56,7 @@ export function StressCard({ day }: { day: DayResponse }) {
   const st = day.stress;
   const buckets = stressBuckets(day.date, st.series);
   return (
-    <Card>
-      <CardHeader title="Stress" aside={stressAside(st) ?? <Unavailable />} />
+    <Panel title="Stress" aside={stressAside(st) ?? <Unavailable />}>
       <StressBars buckets={buckets} label="Stress level across the day" xLabels={HOURS} />
       <Legend
         items={[
@@ -50,7 +68,7 @@ export function StressCard({ day }: { day: DayResponse }) {
         ]}
       />
       <ChartSummary>{stressSummary(st)}</ChartSummary>
-    </Card>
+    </Panel>
   );
 }
 
@@ -59,8 +77,7 @@ export function EnergyCard({ day }: { day: DayResponse }) {
   const energy = hourSeries(day.date, day.energy.series);
   const wake = clock(day.energy.wake_time);
   return (
-    <Card>
-      <CardHeader title="Energy" aside={energyAside(day.energy) ?? <Unavailable />} />
+    <Panel title="Energy" aside={energyAside(day.energy) ?? <Unavailable />}>
       <SeriesChart
         label="Energy across the day"
         summary={`${energySummary(day.energy)}${wake ? ` Woke at ${wake}.` : ''}`}
@@ -69,19 +86,40 @@ export function EnergyCard({ day }: { day: DayResponse }) {
         xRange={[0, 24]}
         series={[{ label: 'Energy', color: 'energy', data: energy?.y ?? [], area: true }]}
         yRange={[0, 100]}
-        height={desktop ? 140 : 100}
+        height={desktop ? 180 : 100}
         xLabels={HOUR_LABELS}
       />
       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
         <span className="tone-energy">{day.energy.charged === null ? <Unavailable /> : `+${fmtInt(day.energy.charged)} charged`}</span>
         <span className="tone-warn">{day.energy.drained === null ? <Unavailable /> : `-${fmtInt(day.energy.drained)} drained`}</span>
       </div>
-    </Card>
+    </Panel>
   );
 }
 
 export function ActivitiesSection({ day }: { day: DayResponse }) {
   const desktop = useIsDesktop();
+  if (desktop) {
+    return (
+      <StatsSection title="Activities">
+        {day.activities.length === 0 ? (
+          <p className="stat__sub">No activities this day.</p>
+        ) : (
+          <FactorList tight label="Activities this day">
+            {day.activities.map((a) => (
+              <FactorRow
+                key={a.id}
+                to={`/activities/${a.id}`}
+                name={a.sport_name && a.kind === 'other' ? a.sport_name : kindName(a.kind)}
+                sub={[clock(a.start), a.distance_m === null ? null : `${(a.distance_m / 1000).toFixed(1)} km`, a.avg_hr_bpm === null ? null : `${fmtInt(a.avg_hr_bpm)} bpm avg`].filter(Boolean).join(' · ')}
+                rating={fmtDurationMin(a.duration_s === null ? null : a.duration_s / 60) ?? undefined}
+              />
+            ))}
+          </FactorList>
+        )}
+      </StatsSection>
+    );
+  }
   return (
     <section aria-labelledby="day-activities" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
       <h2 className="section-label" id="day-activities">

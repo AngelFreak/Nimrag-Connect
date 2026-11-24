@@ -12,6 +12,7 @@ import {
   nightBars,
   nightsSummary,
   rangeAxis,
+  ratingWord,
   rhrSummary,
   scoreLabel,
   sleepTicks,
@@ -188,5 +189,13 @@ describe('trends', () => {
   it('labels the range axis', () => {
     expect(rangeAxis({ from: '2026-10-23', to: '2026-11-19' })).toEqual(['23 Oct', '1 Nov', '10 Nov', '19 Nov']);
     expect(rangeAxis({ from: '2025-11-20', to: '2026-11-19' })[0]).toBe('Nov 2025');
+  });
+});
+
+describe('ratingWord', () => {
+  it('uses the same bands as the overall score label, and nothing without a score', () => {
+    expect([95, 90, 85, 80, 70, 60, 59, 0].map(ratingWord)).toEqual(['Excellent', 'Excellent', 'Good', 'Good', 'Fair', 'Fair', 'Poor', 'Poor']);
+    expect(ratingWord(null)).toBeNull();
+    expect(ratingWord(undefined)).toBeNull();
   });
 });

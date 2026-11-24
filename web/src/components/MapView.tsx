@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { MapOptions } from 'maplibre-gl';
+import { useTheme, type Theme } from '../lib/theme';
 
 // Maps use MapLibre GL JS with PMTiles from the owner's own server (/tiles/*.pmtiles).
 // There is no third-party tile server and no hosted style or glyph URL: when the tile file
@@ -25,31 +26,88 @@ export function tilesAvailable(url: string): Promise<boolean> {
   return p;
 }
 
-/** Dark base style for the Protomaps vector schema, without labels (no glyph server needed). */
-export function buildStyle(pmtilesUrl: string): MapStyle {
+type MapLayers = MapStyle['layers'];
+
+/** Land use that reads as green on the light map (Protomaps `pmap:kind`); a tile without the property simply gets the plain fill. */
+const GREEN_KINDS = ['park', 'nature_reserve', 'forest', 'wood', 'grass', 'grassland', 'golf_course', 'cemetery', 'garden', 'recreation_ground', 'scrub', 'meadow'];
+
+const ROAD_WIDTH = (a: number, b: number, c: number): ['interpolate', ['linear'], ['zoom'], number, number, number, number, number, number] => [
+  'interpolate',
+  ['linear'],
+  ['zoom'],
+  8,
+  a,
+  14,
+  b,
+  18,
+  c,
+];
+
+function darkLayers(): MapLayers {
+  return [
+    { id: 'background', type: 'background', paint: { 'background-color': '#141b1f' } },
+    { id: 'earth', type: 'fill', source: 'base', 'source-layer': 'earth', paint: { 'fill-color': '#182126' } },
+    { id: 'landuse', type: 'fill', source: 'base', 'source-layer': 'landuse', paint: { 'fill-color': '#1a2428' } },
+    { id: 'water', type: 'fill', source: 'base', 'source-layer': 'water', paint: { 'fill-color': '#0f2230' } },
+    { id: 'buildings', type: 'fill', source: 'base', 'source-layer': 'buildings', minzoom: 14, paint: { 'fill-color': '#1c262b' } },
+    {
+      id: 'roads',
+      type: 'line',
+      source: 'base',
+      'source-layer': 'roads',
+      layout: { 'line-cap': 'round', 'line-join': 'round' },
+      paint: { 'line-color': '#2b373d', 'line-width': ROAD_WIDTH(0.5, 2, 8) },
+    },
+  ];
+}
+
+/** Light grey map in Connect's manner: pale land, green parks, blue water, white roads with a thin edge. */
+function lightLayers(): MapLayers {
+  const green = ['in', ['get', 'pmap:kind'], ['literal', GREEN_KINDS]] as const;
+  return [
+    { id: 'background', type: 'background', paint: { 'background-color': '#e8ecee' } },
+    { id: 'earth', type: 'fill', source: 'base', 'source-layer': 'earth', paint: { 'fill-color': '#f1f2f0' } },
+    { id: 'landuse', type: 'fill', source: 'base', 'source-layer': 'landuse', paint: { 'fill-color': '#ebeeea' } },
+    { id: 'landuse-green', type: 'fill', source: 'base', 'source-layer': 'landuse', filter: green as never, paint: { 'fill-color': '#d8e7cf' } },
+    { id: 'natural-green', type: 'fill', source: 'base', 'source-layer': 'natural', filter: green as never, paint: { 'fill-color': '#d8e7cf' } },
+    { id: 'water', type: 'fill', source: 'base', 'source-layer': 'water', paint: { 'fill-color': '#bcd6ea' } },
+    { id: 'buildings', type: 'fill', source: 'base', 'source-layer': 'buildings', minzoom: 14, paint: { 'fill-color': '#dfe1e2' } },
+    {
+      id: 'roads-edge',
+      type: 'line',
+      source: 'base',
+      'source-layer': 'roads',
+      layout: { 'line-cap': 'round', 'line-join': 'round' },
+      paint: { 'line-color': '#cdd1d4', 'line-width': ROAD_WIDTH(0.8, 3, 10) },
+    },
+    {
+      id: 'roads',
+      type: 'line',
+      source: 'base',
+      'source-layer': 'roads',
+      layout: { 'line-cap': 'round', 'line-join': 'round' },
+      paint: { 'line-color': '#ffffff', 'line-width': ROAD_WIDTH(0.4, 2, 8) },
+    },
+  ];
+}
+
+/** Base style for the Protomaps vector schema, without labels (no glyph server needed): dark by default, light on request. */
+export function buildStyle(pmtilesUrl: string, theme: Theme = 'dark'): MapStyle {
   const absolute = new URL(pmtilesUrl, window.location.origin).href;
   return {
     version: 8,
     sources: {
       base: { type: 'vector', url: `pmtiles://${absolute}`, attribution: '© OpenStreetMap contributors' },
     },
-    layers: [
-      { id: 'background', type: 'background', paint: { 'background-color': '#141b1f' } },
-      { id: 'earth', type: 'fill', source: 'base', 'source-layer': 'earth', paint: { 'fill-color': '#182126' } },
-      { id: 'landuse', type: 'fill', source: 'base', 'source-layer': 'landuse', paint: { 'fill-color': '#1a2428' } },
-      { id: 'water', type: 'fill', source: 'base', 'source-layer': 'water', paint: { 'fill-color': '#0f2230' } },
-      { id: 'buildings', type: 'fill', source: 'base', 'source-layer': 'buildings', minzoom: 14, paint: { 'fill-color': '#1c262b' } },
-      {
-        id: 'roads',
-        type: 'line',
-        source: 'base',
-        'source-layer': 'roads',
-        layout: { 'line-cap': 'round', 'line-join': 'round' },
-        paint: { 'line-color': '#2b373d', 'line-width': ['interpolate', ['linear'], ['zoom'], 8, 0.5, 14, 2, 18, 8] },
-      },
-    ],
+    layers: theme === 'light' ? lightLayers() : darkLayers(),
   };
 }
+
+/** The route and start-dot colours on each base map. */
+const ROUTE = {
+  dark: { line: '#7dbbff', start: '#ffb066', background: '#141b1f' },
+  light: { line: '#1265c2', start: '#e8680c', background: '#e8ecee' },
+} as const;
 
 interface MapViewProps {
   /** Route as [longitude, latitude] pairs. */
@@ -79,17 +137,18 @@ export function routePath(track: [number, number][] | undefined, width: number, 
   return { d, start: pt(0) };
 }
 
-function Placeholder({ track, height, label }: { track?: [number, number][]; height: number; label: string }) {
+function Placeholder({ track, height, label, theme }: { track?: [number, number][]; height: number; label: string; theme: Theme }) {
+  const colors = ROUTE[theme];
   const width = 350;
   const h = Math.round((height / 220) * 150);
   const route = routePath(track, width, h);
   return (
     <svg viewBox={`0 0 ${width} ${h}`} role="img" aria-label={label}>
-      <rect width={width} height={h} fill="#141b1f" />
+      <rect width={width} height={h} fill={colors.background} />
       {route ? (
         <>
-          <path d={route.d} fill="none" stroke="#7dbbff" strokeWidth="3" strokeLinejoin="round" strokeLinecap="round" />
-          <circle cx={route.start[0]} cy={route.start[1]} r="5" fill="#ffb066" />
+          <path d={route.d} fill="none" stroke={colors.line} strokeWidth="3" strokeLinejoin="round" strokeLinecap="round" />
+          <circle cx={route.start[0]} cy={route.start[1]} r="5" fill={colors.start} {...(theme === 'light' ? { stroke: '#fff', strokeWidth: 1.5 } : {})} />
         </>
       ) : null}
     </svg>
@@ -99,6 +158,7 @@ function Placeholder({ track, height, label }: { track?: [number, number][]; hei
 /** Route map on the owner's PMTiles, or the route drawn alone while tiles are absent. */
 export function MapView({ track, tilesUrl = DEFAULT_TILES_URL, label = 'Route map', height = 220 }: MapViewProps) {
   const container = useRef<HTMLDivElement>(null);
+  const theme = useTheme();
   const [mode, setMode] = useState<'checking' | 'placeholder' | 'map'>('checking');
 
   useEffect(() => {
@@ -131,7 +191,7 @@ export function MapView({ track, tilesUrl = DEFAULT_TILES_URL, label = 'Route ma
       const first = track?.[0];
       const map = new maplibre.Map({
         container: container.current,
-        style: buildStyle(tilesUrl),
+        style: buildStyle(tilesUrl, theme),
         center: first ?? [10, 56],
         zoom: first ? 12 : 5,
         attributionControl: { compact: true },
@@ -140,9 +200,14 @@ export function MapView({ track, tilesUrl = DEFAULT_TILES_URL, label = 'Route ma
       map.on('load', () => {
         if (!track || track.length < 2) return;
         map.addSource('track', { type: 'geojson', data: { type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: track } } });
-        map.addLayer({ id: 'track-line', type: 'line', source: 'track', layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': '#7dbbff', 'line-width': 3 } });
+        const colors = ROUTE[theme];
+        // On the light map the route gets a white edge so it stays clear of white roads.
+        if (theme === 'light') {
+          map.addLayer({ id: 'track-edge', type: 'line', source: 'track', layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': '#ffffff', 'line-width': 7 } });
+        }
+        map.addLayer({ id: 'track-line', type: 'line', source: 'track', layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': colors.line, 'line-width': theme === 'light' ? 4 : 3 } });
         map.addSource('start', { type: 'geojson', data: { type: 'Feature', properties: {}, geometry: { type: 'Point', coordinates: track[0] as [number, number] } } });
-        map.addLayer({ id: 'start-dot', type: 'circle', source: 'start', paint: { 'circle-color': '#ffb066', 'circle-radius': 5 } });
+        map.addLayer({ id: 'start-dot', type: 'circle', source: 'start', paint: { 'circle-color': colors.start, 'circle-radius': 5, ...(theme === 'light' ? { 'circle-stroke-color': '#ffffff', 'circle-stroke-width': 2 } : {}) } });
         const lons = track.map((p) => p[0]);
         const lats = track.map((p) => p[1]);
         map.fitBounds(
@@ -164,7 +229,7 @@ export function MapView({ track, tilesUrl = DEFAULT_TILES_URL, label = 'Route ma
       disposed = true;
       remove?.();
     };
-  }, [mode, tilesUrl, track]);
+  }, [mode, tilesUrl, track, theme]);
 
   return (
     <div className="map">
@@ -172,7 +237,7 @@ export function MapView({ track, tilesUrl = DEFAULT_TILES_URL, label = 'Route ma
         <div ref={container} className="map__canvas" style={{ height }} role="group" aria-label={label} />
       ) : (
         <>
-          <Placeholder track={track} height={height} label={label} />
+          <Placeholder track={track} height={height} label={label} theme={theme} />
           {mode === 'checking' ? <p className="map__caption">Loading map.</p> : null}
         </>
       )}

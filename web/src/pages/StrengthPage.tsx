@@ -1,6 +1,6 @@
 import { useParams } from 'react-router-dom';
 import { SampleDataChip, TopBar } from '../components';
-import { usePageTitle } from '../lib/hooks';
+import { useIsDesktop, usePageTitle } from '../lib/hooks';
 import { useStrength } from './activities/api';
 import { whenLabel } from './activities/format';
 import { PageSkeleton, QueryError } from './activities/PageStates';
@@ -11,6 +11,10 @@ export function StrengthPage() {
   usePageTitle('Strength session');
   const query = useStrength(id);
   const data = query.data;
+  const desktop = useIsDesktop();
+
+  // On a wide screen the session draws its own breadcrumb and title.
+  if (desktop && query.isSuccess) return <StrengthSession data={query.data} />;
 
   return (
     <>

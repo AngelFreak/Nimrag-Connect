@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -148,6 +148,57 @@ function renderAt(path: string) {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+});
+
+describe('MetricPage on a wide screen', () => {
+  const real = window.matchMedia;
+  afterEach(() => {
+    window.matchMedia = real;
+  });
+  const wide = () => {
+    window.matchMedia = ((query: string) => ({ matches: query.includes('min-width: 1024px'), media: query, addEventListener: () => {}, removeEventListener: () => {} })) as unknown as typeof window.matchMedia;
+  };
+
+  it('has the title, a toolbar with the arrows, the dates and the range labels in words, and the figures in a strip', async () => {
+    wide();
+    const calls = mockApi({ '/api/metrics/heart_rate': metric('heart_rate', '4w', { stats: [{ key: 'avg_resting', label: 'Avg resting', value: 53, unit: 'bpm' }] as MetricRange['stats'] }) });
+    renderAt('/metrics/heart_rate?range=4w');
+    expect(await screen.findByRole('heading', { level: 1, name: 'Heart rate' })).toBeInTheDocument();
+    const tabs = screen.getByRole('group', { name: 'Period' });
+    expect(within(tabs).getAllByRole('button').map((b) => b.textContent)).toEqual(['1 Day', '7 Days', '4 Weeks', '1 Year']);
+    expect(within(tabs).getByRole('button', { name: '4 Weeks' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: 'Next period' })).toBeDisabled();
+    expect(await screen.findByText('Avg resting')).toBeInTheDocument();
+    expect(document.querySelector('.stat-strip')).not.toBeNull();
+    expect(document.querySelector('.metric-tiles')).toBeNull();
+    expect(calls.some((c) => c.startsWith('/api/metrics/heart_rate?range=4w'))).toBe(true);
+    await userEvent.click(within(tabs).getByRole('button', { name: '7 Days' }));
+    expect(screen.getByTestId('where')).toHaveTextContent('range=7d');
+    await userEvent.click(screen.getByRole('button', { name: 'Previous period' }));
+    expect(screen.getByTestId('where')).toHaveTextContent('end=');
+  });
+});
+
+describe('MetricPage, one day, on a wide screen', () => {
+  const real = window.matchMedia;
+  afterEach(() => {
+    window.matchMedia = real;
+  });
+
+  it('puts the figures in a strip in the left column and the chart as a titled section beside it', async () => {
+    window.matchMedia = ((query: string) => ({ matches: query.includes('min-width: 1024px'), media: query, addEventListener: () => {}, removeEventListener: () => {} })) as unknown as typeof window.matchMedia;
+    mockApi({ [`/api/days/${TODAY}`]: emptyDay(TODAY) });
+    renderAt('/metrics/heart_rate');
+    const side = await waitFor(() => {
+      const el = document.querySelector('.stats-side');
+      if (!el) throw new Error('no side column yet');
+      return el as HTMLElement;
+    });
+    expect(within(side).getByRole('heading', { name: 'Summary' })).toBeInTheDocument();
+    expect(within(side).getByText('Resting')).toBeInTheDocument();
+    expect(within(document.querySelector('.stats-main') as HTMLElement).getByRole('heading', { name: 'Heart rate' })).toBeInTheDocument();
+    expect(document.querySelector('.metric-tiles')).toBeNull();
+  });
 });
 
 describe('MetricPage, a week', () => {

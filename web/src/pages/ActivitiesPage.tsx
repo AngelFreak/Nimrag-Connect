@@ -1,11 +1,24 @@
 import { useMemo, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Button, Card, EmptyState, FilterChips, LinkButton, ListRow, SampleDataChip, TopBar } from '../components';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Button, EmptyState, FilterChips, LinkButton, ListRow, PageHeader, SampleDataChip, TopBar } from '../components';
 import { browserToday } from '../lib/dates';
 import { useIsDesktop, usePageTitle } from '../lib/hooks';
-import { ActivitiesTable, activityHref } from './activities/ActivitiesTable';
+import { ActivityRows, ActivitySearch, activityHref, TypeFilter } from './activities/ActivityRows';
 import { useActivityList } from './activities/api';
-import { activityTitle, groupByPeriod, parseType, rowText, sortActivities, TYPE_OPTIONS, whenLabel, type Sort, type SortKey } from './activities/format';
+import {
+  activityTitle,
+  groupByPeriod,
+  parseType,
+  rowText,
+  searchActivities,
+  sortActivities,
+  SORT_CHOICES,
+  sortChoiceId,
+  TYPE_OPTIONS,
+  whenLabel,
+  type Sort,
+  type TypeKey,
+} from './activities/format';
 import { errorText, QueryError, RowsSkeleton } from './activities/PageStates';
 import './activities/activities.css';
 
@@ -25,10 +38,15 @@ export function ActivitiesPage({ strength = false }: { strength?: boolean }) {
   const items = useMemo(() => query.data?.pages.flatMap((p) => p.items) ?? [], [query.data]);
   const sample = query.data?.pages[0]?.sample ?? false;
   const groups = useMemo(() => groupByPeriod(items, browserToday()), [items]);
-  const sorted = useMemo(() => sortActivities(items, sort), [items, sort]);
+  const [search, setSearch] = useState('');
+  const sorted = useMemo(() => searchActivities(sortActivities(items, sort), search), [items, sort, search]);
 
-  const onSort = (key: SortKey) =>
-    setSort((s) => (s.key === key ? { key, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: key === 'type' ? 'asc' : 'desc' }));
+  const onType = (v: TypeKey) => {
+    // Strength has its own path; every other type is a filter of /activities.
+    if (v === 'strength') void navigate('/strength', { replace: true });
+    else if (strength) void navigate(v === 'all' ? '/activities' : `/activities?type=${v}`, { replace: true });
+    else setParams(v === 'all' ? {} : { type: v }, { replace: true });
+  };
 
   let body;
   if (query.isPending) {
@@ -45,12 +63,20 @@ export function ActivitiesPage({ strength = false }: { strength?: boolean }) {
     );
   } else {
     body = (
-      <div className="page" style={{ paddingTop: 0 }}>
+      <div className={desktop ? 'acts-list' : 'page'} style={desktop ? undefined : { paddingTop: 0 }}>
         {desktop ? (
-          <Card padding="xl">
-            <ActivitiesTable rows={sorted} sort={sort} onSort={onSort} />
-            {query.hasNextPage ? <p className="list-hint">Sorting applies to the {items.length} activities loaded so far.</p> : null}
-          </Card>
+          <>
+            {sorted.length > 0 ? (
+              <ActivityRows rows={sorted} label={strength ? 'Strength sessions' : 'Activities'} />
+            ) : (
+              <p className="list-hint" role="status">
+                No loaded activity matches “{search.trim()}”.{query.hasNextPage ? ' Load more to search further back.' : ''}
+              </p>
+            )}
+            {query.hasNextPage && (search.trim() || sort.key !== 'date' || sort.dir !== 'desc') ? (
+              <p className="list-hint">Search and sorting apply to the {items.length} activities loaded so far.</p>
+            ) : null}
+          </>
         ) : (
           groups.map((g) => (
             <section key={g.label} aria-label={g.label} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -80,6 +106,44 @@ export function ActivitiesPage({ strength = false }: { strength?: boolean }) {
     );
   }
 
+  if (desktop) {
+    return (
+      <>
+        <PageHeader
+          title={strength ? 'Strength' : 'Activities'}
+          actions={
+            <>
+              <SampleDataChip sample={sample} />
+              <nav className="acts-actions" aria-label="Activity actions">
+                {strength ? <Link to="/workouts">Workouts</Link> : null}
+                <Link to="/workouts/new">+ Workout</Link>
+                <Link to="/profile/import-garmin">Import</Link>
+                <a href="/api/export" download title="Download all your data as a zip">
+                  Export data
+                </a>
+              </nav>
+            </>
+          }
+        />
+        <div className="acts-toolbar">
+          <ActivitySearch value={search} onChange={setSearch} />
+          <TypeFilter value={type} onChange={onType} />
+          <label className="acts-sort">
+            <span className="sr-only">Sort loaded activities</span>
+            <select value={sortChoiceId(sort)} onChange={(e) => setSort((SORT_CHOICES.find((c) => c.id === e.target.value) ?? SORT_CHOICES[0]!).sort)}>
+              {SORT_CHOICES.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+        {body}
+      </>
+    );
+  }
+
   return (
     <>
       <TopBar
@@ -92,17 +156,7 @@ export function ActivitiesPage({ strength = false }: { strength?: boolean }) {
           </>
         }
       />
-      <FilterChips
-        label="Filter by type"
-        options={TYPE_OPTIONS}
-        value={type}
-        onChange={(v) => {
-          // Strength has its own path; every other type is a filter of /activities.
-          if (v === 'strength') void navigate('/strength', { replace: true });
-          else if (strength) void navigate(v === 'all' ? '/activities' : `/activities?type=${v}`, { replace: true });
-          else setParams(v === 'all' ? {} : { type: v }, { replace: true });
-        }}
-      />
+      <FilterChips label="Filter by type" options={TYPE_OPTIONS} value={type} onChange={onType} />
       {body}
     </>
   );

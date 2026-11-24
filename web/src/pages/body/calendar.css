@@ -1,0 +1,47 @@
+/* The calendar on a wide screen: a month grid on the sheet (no card), days as ruled cells. */
+.cal-sheet {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+.cal-sheet .cal-head {
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  padding-bottom: 4px;
+}
+.cal-sheet .cal-grid {
+  gap: 1px;
+  background: var(--line);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.cal-sheet .cal-grid > span {
+  background: var(--hover);
+  min-height: 96px;
+}
+.cal-sheet .cal-day {
+  min-height: 96px;
+  border-radius: 0;
+  background: var(--sheet, var(--bg));
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 10px 12px;
+  font-size: var(--fs-base);
+}
+.cal-sheet .cal-day:hover {
+  background: var(--hover);
+}
+.cal-sheet .cal-day[aria-current='date'] {
+  box-shadow: inset 0 0 0 2px var(--accent);
+}
+.cal-sheet .cal-day--future {
+  color: var(--text-2);
+}
+.cal-sheet .cal-day .dot {
+  width: 8px;
+  height: 8px;
+}

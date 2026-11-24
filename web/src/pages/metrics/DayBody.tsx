@@ -1,12 +1,13 @@
 import type { ReactNode } from 'react';
 import type { DayResponse } from '../../api/generated/DayResponse';
 import type { MovementResponse } from '../../api/generated/MovementResponse';
-import { BarSeries, Card, CardHeader, Legend, Ring, SampleDataChip, SeriesChart, StatTile, ValueOrUnavailable } from '../../components';
+import { BarSeries, Legend, Ring, SampleDataChip, SeriesChart, StatStrip, StatTile, ValueOrUnavailable } from '../../components';
 import { fmtDay, fmtMonthDay } from '../../lib/dates';
 import { fmtFixed, fmtInt, withUnit } from '../../lib/format';
 import { useIsDesktop } from '../../lib/hooks';
 import { fmtKcal, fmtKm } from '../body/movement';
-import { ActivitiesSection, EnergyCard, HOUR_LABELS, HeartRateCard, StressCard } from '../health/dayCards';
+import { ActivitiesSection, EnergyCard, HOUR_LABELS, HeartRateCard, Panel, StressCard } from '../health/dayCards';
+import { StatsColumns, StatsSection } from '../health/desktop';
 import { fmtSeconds, hourSeries, stepsPercent } from '../health/model';
 import { CardSkeleton, LoadError } from '../health/parts';
 import { useDay } from '../health/queries';
@@ -18,16 +19,41 @@ import { useMovementDay } from './queries';
 // The 1-day tab of a metric page: the day's own data (GET /api/days/{date}), with the day's
 // summary figures beside it. Heart rate, stress and energy draw the same cards as the Day view.
 
-const tile = (label: string, value: string | null, tone: 'energy' | 'sleep' | 'heart' | 'steps' | 'warn' | 'link' | 'muted' = 'muted', sub?: string) => (
-  <StatTile key={label} size="sm" label={label} value={value} tone={tone} {...(sub ? { sub } : {})} />
-);
+type Tone = 'energy' | 'sleep' | 'heart' | 'steps' | 'warn' | 'link' | 'muted';
+interface TileSpec {
+  label: string;
+  value: string | null;
+  tone: Tone;
+  sub?: string;
+}
+const tile = (label: string, value: string | null, tone: Tone = 'muted', sub?: string): TileSpec => ({ label, value, tone, ...(sub ? { sub } : {}) });
 
-function Layout({ chart, tiles, children }: { chart: ReactNode; tiles: ReactNode; children?: ReactNode }) {
+/** The chart, and the day's figures: tiles beside it on a phone, a strip in the 320 px column on a wide screen. */
+function Layout({ chart, tiles, children }: { chart: ReactNode; tiles: TileSpec[]; children?: ReactNode }) {
+  const desktop = useIsDesktop();
+  if (desktop) {
+    return (
+      <StatsColumns
+        side={
+          <StatsSection title="Summary">
+            <StatStrip items={tiles.map((t) => ({ key: t.label, label: t.sub ? `${t.label}, ${t.sub}` : t.label, value: t.value }))} />
+          </StatsSection>
+        }
+      >
+        {chart}
+        {children}
+      </StatsColumns>
+    );
+  }
   return (
     <>
       <div className="metric-top">
         {chart}
-        <div className="metric-tiles">{tiles}</div>
+        <div className="metric-tiles">
+          {tiles.map((t) => (
+            <StatTile key={t.label} size="sm" label={t.label} value={t.value} tone={t.tone} {...(t.sub ? { sub: t.sub } : {})} />
+          ))}
+        </div>
       </div>
       {children}
     </>
@@ -134,8 +160,7 @@ function StepsDay({ day }: { day: DayResponse }) {
   return (
     <Layout
       chart={
-        <Card padding="lg">
-          <CardHeader title="Steps today" tone="muted" />
+        <Panel title="Steps today" padding="lg" muted>
           <div className="metric-ring">
             <Ring value={day.steps} max={day.step_goal} label="Steps against the daily goal" color="var(--steps)" size={112} strokeWidth={12} showValue={false} />
             <div className="stat">
@@ -143,7 +168,7 @@ function StepsDay({ day }: { day: DayResponse }) {
               <span className="stat__sub tone-steps">{pct === null ? `Goal ${fmtInt(day.step_goal)}` : `${pct}% of ${fmtInt(day.step_goal)}`}</span>
             </div>
           </div>
-        </Card>
+        </Panel>
       }
       tiles={[tile('Distance', fmtKm(move?.distance_m)), tile('Calories', fmtKcal(move?.calories.total_kcal))]}
     >
@@ -156,8 +181,7 @@ function WeekSteps({ move }: { move: MovementResponse }) {
   const desktop = useIsDesktop();
   const values = move.week_steps.map((d) => d.value);
   return (
-    <Card padding="lg">
-      <CardHeader title="This week" tone="muted" />
+    <Panel title="This week" padding="lg" muted>
       <BarSeries
         values={values}
         labels={move.week_steps.map((d) => fmtDay(d.date, { weekday: 'short' }))}
@@ -166,7 +190,7 @@ function WeekSteps({ move }: { move: MovementResponse }) {
         color="var(--steps)"
         belowGoalColor="var(--steps-dim)"
         goal={move.step_goal}
-        height={desktop ? 160 : 110}
+        height={desktop ? 200 : 110}
       />
       <Legend
         items={[
@@ -175,7 +199,7 @@ function WeekSteps({ move }: { move: MovementResponse }) {
           { key: 'goal', label: 'Goal', color: 'var(--text-2)', shape: 'dash' },
         ]}
       />
-    </Card>
+    </Panel>
   );
 }
 
@@ -199,8 +223,7 @@ function IntensityDay({ day, today }: { day: DayResponse; today: string }) {
   return (
     <Layout
       chart={
-        <Card padding="lg">
-          <CardHeader title="Week so far" tone="muted" />
+        <Panel title="Week so far" padding="lg" muted>
           <div className="metric-ring">
             <Ring value={week?.total_min ?? null} max={week?.goal_min ?? 150} label="Intensity minutes against the weekly goal" color="var(--energy)" size={112} strokeWidth={12} showValue={false} />
             <div className="stat">
@@ -218,12 +241,12 @@ function IntensityDay({ day, today }: { day: DayResponse; today: string }) {
                 xRange={spec.xRange}
                 xLabels={spec.xLabels}
                 {...(spec.yRange ? { yRange: spec.yRange } : {})}
-                height={desktop ? 180 : 120}
+                height={desktop ? 220 : 120}
               />
               <Legend items={spec.legend} />
             </>
           ) : null}
-        </Card>
+        </Panel>
       }
       tiles={[
         tile('Moderate', withUnit(fmtInt(dayFigures?.moderate_min), 'min'), 'energy'),
@@ -249,8 +272,7 @@ function BreathingDay({ day }: { day: DayResponse }) {
   return (
     <Layout
       chart={
-        <Card>
-          <CardHeader title="Breathing by the hour" aside={b.avg_awake === null ? undefined : `Awake ${fmtFixed(b.avg_awake, 1)}`} />
+        <Panel title="Breathing by the hour" aside={b.avg_awake === null ? undefined : `Awake ${fmtFixed(b.avg_awake, 1)}`}>
           <SeriesChart
             label="Breathing rate across the day"
             summary={summary}
@@ -259,10 +281,10 @@ function BreathingDay({ day }: { day: DayResponse }) {
             xRange={[0, 24]}
             series={[{ label: 'Breathing', color: 'link', data: hours?.y ?? [], points: true }]}
             yUnit="decimal"
-            height={desktop ? 170 : 120}
+            height={desktop ? 220 : 120}
             xLabels={HOUR_LABELS}
           />
-        </Card>
+        </Panel>
       }
       tiles={[tile('Lowest', brpm(b.lowest)), tile('Highest', brpm(b.highest)), tile('Awake avg', brpm(b.avg_awake), 'link'), tile('Asleep avg', brpm(b.avg_asleep), 'sleep')]}
     />
@@ -284,8 +306,7 @@ function Spo2Day({ day }: { day: DayResponse }) {
   return (
     <Layout
       chart={
-        <Card>
-          <CardHeader title="Blood oxygen by the hour" aside={o.average === null ? undefined : `Avg ${fmtInt(o.average)}%`} />
+        <Panel title="Blood oxygen by the hour" aside={o.average === null ? undefined : `Avg ${fmtInt(o.average)}%`}>
           <SeriesChart
             label="Blood oxygen across the day"
             summary={summary}
@@ -294,10 +315,10 @@ function Spo2Day({ day }: { day: DayResponse }) {
             xRange={[0, 24]}
             series={[{ label: 'Blood oxygen', color: 'link', data: hours?.y ?? [], points: true }]}
             yRange={[floor, 100]}
-            height={desktop ? 170 : 120}
+            height={desktop ? 220 : 120}
             xLabels={HOUR_LABELS}
           />
-        </Card>
+        </Panel>
       }
       tiles={[
         tile('Average', pct(o.average), 'link'),

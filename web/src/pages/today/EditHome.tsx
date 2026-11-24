@@ -33,6 +33,8 @@ export function moveCard(order: HomeCard[], id: HomeCard, to: number): HomeCard[
 }
 
 interface SheetProps {
+  /** The web Home: the sheet says what In Focus holds there. */
+  desktop?: boolean;
   initial: HomeCards;
   error: string | null;
   onSave: (cards: HomeCards) => void;
@@ -44,7 +46,7 @@ interface SheetProps {
  * focus goes back to the button that opened it. Rows reorder by drag and drop or with the
  * move up and move down buttons.
  */
-export function EditHomeSheet({ initial, error, onSave, onClose }: SheetProps) {
+export function EditHomeSheet({ desktop = false, initial, error, onSave, onClose }: SheetProps) {
   const titleId = useId();
   const hintId = useId();
   const dialog = useRef<HTMLDivElement>(null);
@@ -160,7 +162,9 @@ export function EditHomeSheet({ initial, error, onSave, onClose }: SheetProps) {
           </h2>
         </div>
         <p className="sheet__hint" id={hintId}>
-          Choose which cards appear under At a glance and in what order. Drag a row, or use the arrow buttons. Energy, Sleep and Overnight HRV already show under In focus on the Today page.
+          {desktop
+            ? 'Choose which cards appear and in what order. Drag a row, or use the arrow buttons. Energy, Steps, Sleep and Training status are shown under In Focus in a fixed place; the others follow your order under At a Glance. A hidden card is left out of both.'
+            : 'Choose which cards appear under At a glance and in what order. Drag a row, or use the arrow buttons. Energy, Sleep and Overnight HRV already show under In focus on the Today page.'}
         </p>
         {error ? (
           <p className="today-alert sheet__error" role="alert">
@@ -228,10 +232,12 @@ interface EditHomeProps {
   settings: SettingsResponse | undefined;
   /** Full-width button (phone). */
   block?: boolean;
+  /** The web Home (>= 1024 px). */
+  desktop?: boolean;
 }
 
 /** The "Edit home" button, its sheet, and the optimistic save with rollback on error. */
-export function EditHome({ settings, block = false }: EditHomeProps) {
+export function EditHome({ settings, block = false, desktop = false }: EditHomeProps) {
   const [open, setOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [draft, setDraft] = useState<HomeCards | null>(null);
@@ -258,10 +264,11 @@ export function EditHome({ settings, block = false }: EditHomeProps) {
   return (
     <>
       <Button block={block} onClick={() => setOpen(true)} disabled={!settings}>
-        Edit home
+        {desktop ? 'Edit Home' : 'Edit home'}
       </Button>
       {open && settings ? (
         <EditHomeSheet
+          desktop={desktop}
           initial={draft ?? settings.home_cards}
           error={error}
           onSave={onSave}

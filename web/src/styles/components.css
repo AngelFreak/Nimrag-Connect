@@ -5,60 +5,17 @@
   flex-direction: column;
   min-width: 0;
 }
+.shell__frame {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
 
+/* The sidebar and the header exist from 1024 px; a phone has the top bar and the bottom navigation. */
+.sidebar,
 .shell__header {
   display: none;
-  border-bottom: 1px solid var(--line);
-  background: var(--raised);
-}
-.shell__header-inner {
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: 12px 24px;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 12px 32px;
-}
-.shell__brand {
-  display: inline-flex;
-  align-items: center;
-  min-height: var(--touch);
-  font-family: var(--font-display);
-  font-size: 18px;
-  font-weight: 600;
-  color: var(--text);
-  text-decoration: none;
-}
-.shell__tools {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-.desk-nav {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 20px;
-  flex: 1;
-  font-size: var(--fs-md);
-}
-.desk-nav a {
-  display: inline-flex;
-  align-items: center;
-  min-height: var(--touch);
-  min-width: var(--touch);
-  justify-content: center;
-  color: var(--text-2);
-  text-decoration: none;
-  border-bottom: 2px solid transparent;
-}
-.desk-nav a:hover {
-  color: var(--text);
-}
-.desk-nav a[aria-current='page'] {
-  color: var(--text);
-  font-weight: 600;
-  border-bottom-color: var(--link);
 }
 
 .shell__body {
@@ -107,20 +64,237 @@
 }
 
 @media (min-width: 1024px) {
-  .shell__header {
-    display: block;
-  }
   .bottom-nav,
   .shell .mainbar {
     display: none;
   }
+
+  /* Sidebar: fixed, full height, scrolls on its own. */
+  .sidebar {
+    display: flex;
+    flex-direction: column;
+    position: fixed;
+    inset: 0 auto 0 0;
+    z-index: 30;
+    width: 264px;
+    background: var(--sidebar);
+    color: var(--sidebar-text);
+    overflow-x: hidden;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: #555 transparent;
+  }
+  .sidebar__brand {
+    flex: none;
+    display: flex;
+    align-items: center;
+    height: 64px;
+    padding: 0 20px;
+    color: var(--sidebar-text);
+    font-family: var(--font-body);
+    font-size: 26px;
+    font-weight: 300;
+    letter-spacing: 0.18em;
+    text-decoration: none;
+    overflow: hidden;
+    white-space: nowrap;
+  }
+  .sidebar__brand:hover {
+    color: var(--sidebar-text);
+  }
+  .sidebar__nav {
+    display: flex;
+    flex-direction: column;
+    padding-bottom: 24px;
+  }
+  .sidebar__rule {
+    height: 1px;
+    margin: 8px 0;
+    background: var(--sidebar-line);
+  }
+  .sidebar__item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    height: 40px;
+    padding: 8px 15px 8px 16px;
+    border: 0;
+    border-left: 4px solid transparent;
+    background: none;
+    color: var(--sidebar-text);
+    font-family: var(--font-body);
+    font-size: 16px;
+    font-weight: 300;
+    text-align: left;
+    text-decoration: none;
+    cursor: pointer;
+  }
+  .sidebar__item:hover {
+    background: var(--sidebar-hover);
+    color: var(--sidebar-text);
+  }
+  .sidebar__item[aria-current='page'] {
+    border-left-color: var(--sidebar-text);
+    background: var(--sidebar-active);
+  }
+  .sidebar__icon {
+    flex: none;
+    width: 24px;
+    height: 24px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .sidebar__icon svg {
+    width: 22px;
+    height: 22px;
+  }
+  .sidebar__label {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .sidebar__chevron {
+    flex: none;
+    display: inline-flex;
+    transition: transform 0.15s ease;
+  }
+  .sidebar__head[aria-expanded='true'] .sidebar__chevron {
+    transform: rotate(180deg);
+  }
+  .sidebar__sub {
+    display: flex;
+    flex-direction: column;
+    padding: 0 0 4px;
+  }
+  .sidebar__sub[hidden] {
+    display: none;
+  }
+  .sidebar__subitem {
+    display: flex;
+    align-items: center;
+    height: 31px;
+    padding: 0 15px 0 52px;
+    color: var(--sidebar-text);
+    font-size: 14px;
+    font-weight: 300;
+    text-decoration: none;
+  }
+  .sidebar__subitem:hover {
+    background: var(--sidebar-hover);
+    color: var(--sidebar-text);
+  }
+  .sidebar__subitem[aria-current='page'] {
+    background: var(--sidebar-active);
+  }
+  .sidebar :focus-visible {
+    outline: 2px solid var(--sidebar-text);
+    outline-offset: -2px;
+  }
+
+  .shell__frame {
+    margin-left: 264px;
+  }
+
+  /* Header: white strip with the collapse button on the left, sync, watch and profile on the right. */
+  .shell__header {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex: none;
+    height: 60px;
+    padding: 0 30px;
+    background: var(--raised);
+    border-bottom: 1px solid var(--line);
+  }
+  .shell__collapse {
+    width: 32px;
+    height: 32px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border: 1px solid var(--line-strong);
+    border-radius: 50%;
+    background: var(--raised);
+    color: var(--text);
+  }
+  .shell__collapse:hover {
+    background: var(--hover);
+  }
+  .shell__tools {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+  }
+  .shell__tools .icon-btn {
+    width: 40px;
+    height: 40px;
+  }
+  .shell__tools .icon-btn svg {
+    width: 20px;
+    height: 20px;
+  }
+  .shell__tools .status-dot {
+    top: 6px;
+    right: 6px;
+  }
+
+  /* The page: grey backdrop, a white sheet up to 1152 px wide inside it. */
   .shell__body {
-    max-width: 1280px;
-    padding: 0 24px;
+    max-width: none;
+    margin: 0;
+    padding: 0 30px;
+    background: var(--page);
+  }
+  .shell__body > main {
+    flex: 1;
+    width: 100%;
+    max-width: 1152px;
+    margin: 0 auto;
+    padding: 56px;
+    background: var(--sheet);
+    /* Focus moves here on a route change: keep the top of the page clear of the sticky header. */
+    scroll-margin-top: 60px;
   }
   .page {
     padding: 0 0 32px;
     gap: 20px;
+  }
+
+  /* Collapsed: a 64 px icon rail; labels, chevrons and sub items go, names stay in aria-label and title. */
+  .shell[data-sidebar='collapsed'] .sidebar {
+    width: 64px;
+  }
+  .shell[data-sidebar='collapsed'] .shell__frame {
+    margin-left: 64px;
+  }
+  .shell[data-sidebar='collapsed'] .sidebar__brand {
+    padding: 0;
+    justify-content: center;
+    font-size: 0;
+  }
+  .shell[data-sidebar='collapsed'] .sidebar__brand::before {
+    content: 'N';
+    font-size: 26px;
+    letter-spacing: 0;
+  }
+  .shell[data-sidebar='collapsed'] .sidebar__item {
+    padding-left: 16px;
+    padding-right: 0;
+  }
+  .shell[data-sidebar='collapsed'] .sidebar__label,
+  .shell[data-sidebar='collapsed'] .sidebar__chevron {
+    display: none;
+  }
+  .shell[data-sidebar='collapsed'] .sidebar__head[data-current='true'] {
+    background: var(--sidebar-active);
   }
 }
 
@@ -152,7 +326,7 @@
   padding: 0;
 }
 .icon-btn:hover {
-  background: var(--card);
+  background: var(--hover);
   color: var(--text);
 }
 .icon-btn[data-disabled='true'] {
@@ -257,7 +431,7 @@
 }
 .topbar__title {
   font-family: var(--font-display);
-  font-weight: 600;
+  font-weight: var(--display-weight);
   font-size: var(--fs-title);
   line-height: 1.2;
   /* Break between words; only split a word when it alone is wider than the line. */
@@ -313,6 +487,17 @@
 }
 
 /* ------------------------------------------------------------------ card, tiles */
+/* Card surface: 1px border and a soft shadow from the tokens (flat in the dark theme). */
+.card,
+.state,
+.list-row,
+.step,
+.sgroup__card,
+.profile-head,
+.watch-card {
+  border: 1px solid var(--card-border);
+  box-shadow: var(--card-shadow);
+}
 .card {
   background: var(--card);
   border-radius: var(--radius-card);
@@ -420,7 +605,7 @@
 }
 .stat__value {
   font-family: var(--font-display);
-  font-weight: 600;
+  font-weight: var(--display-weight);
   font-size: var(--fs-stat);
   line-height: 1.15;
   overflow-wrap: break-word;
@@ -501,7 +686,7 @@
   font-weight: 500;
 }
 .filter-chip:hover {
-  background: var(--card);
+  background: var(--hover);
 }
 .filter-chip[aria-pressed='true'] {
   background: var(--accent);
@@ -517,7 +702,9 @@
 
 .segmented {
   display: flex;
-  border: 1px solid var(--line-strong);
+  padding: var(--seg-pad);
+  background: var(--seg-track);
+  border: 1px solid var(--seg-border);
   border-radius: var(--radius-segment);
   overflow: hidden;
 }
@@ -527,20 +714,22 @@
   margin: 0 var(--gutter) 12px;
 }
 .segmented button {
-  min-height: var(--touch);
+  min-height: var(--seg-h);
   padding: 0 16px;
   white-space: nowrap;
   border: 0;
+  border-radius: var(--seg-inner);
   background: none;
-  color: var(--text-2);
+  color: var(--seg-text);
   font-size: var(--fs-base);
-  font-weight: 500;
+  font-weight: 400;
 }
 .segmented button:hover {
   color: var(--text);
 }
 .segmented button[aria-pressed='true'] {
-  background: var(--line);
+  background: var(--seg-on);
+  box-shadow: var(--seg-shadow);
   color: var(--text);
   font-weight: 600;
 }
@@ -553,6 +742,8 @@
   }
 }
 
+/* Buttons: secondary on the track grey, primary in the accent; 12px / 600, 4px radius and 30px tall
+   on a wide screen (the touch size stays on a phone). */
 .btn {
   min-height: var(--touch);
   padding: 10px 18px;
@@ -560,11 +751,11 @@
   text-align: center;
   line-height: 1.25;
   border-radius: var(--radius-control);
-  border: 1px solid var(--line-strong);
-  background: none;
+  border: 1px solid var(--btn-border);
+  background: var(--btn-bg);
   color: var(--text);
   font-size: var(--fs-base);
-  font-weight: 500;
+  font-weight: 600;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -572,7 +763,7 @@
   text-decoration: none;
 }
 .btn:hover {
-  background: var(--card);
+  background: var(--btn-hover);
   color: var(--text);
 }
 .btn--lg {
@@ -591,6 +782,8 @@
   color: var(--on-accent);
 }
 .btn--dashed {
+  background: none;
+  border-color: var(--line-strong);
   border-style: dashed;
   color: var(--link);
 }
@@ -599,6 +792,18 @@
 }
 .btn:disabled {
   opacity: 0.6;
+}
+@media (min-width: 1024px) {
+  .btn {
+    min-height: 30px;
+    padding: 4px 16px;
+    font-size: var(--fs-xs);
+  }
+  .btn--lg {
+    min-height: 36px;
+    padding: 6px 20px;
+    font-size: var(--fs-base);
+  }
 }
 
 .field {
@@ -745,7 +950,7 @@
   min-height: var(--touch);
 }
 .list-row:hover {
-  background: #1b2429;
+  background: var(--hover);
   color: var(--text);
 }
 .list-row__main,
@@ -1379,7 +1584,7 @@
   height: 100%;
 }
 .stat-link:hover > .card {
-  background: #1b252a;
+  background: var(--hover);
 }
 .chart-summary {
   margin: 0;
@@ -1437,7 +1642,7 @@
   height: var(--h, 16px);
   width: var(--w, 100%);
   border-radius: 8px;
-  background: linear-gradient(90deg, #1b252a 0%, #232f35 50%, #1b252a 100%);
+  background: linear-gradient(90deg, var(--skel-a) 0%, var(--skel-b) 50%, var(--skel-a) 100%);
   background-size: 200% 100%;
   animation: nimrag-shimmer 1.4s ease-in-out infinite;
 }
@@ -1777,4 +1982,208 @@
     min-width: 0;
     overflow-wrap: anywhere;
   }
+}
+
+/* ------------------------------------------------------------------ page pattern (docs/design/web-layout/SPEC.md) */
+/* Page title and section title in Connect's light scale; PageHeader and the stats pages use them. */
+.page-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--fs-title-lg);
+  font-weight: var(--display-weight);
+  line-height: 1.2;
+  overflow-wrap: break-word;
+}
+.section-title {
+  margin: 0;
+  padding: 5px 0 11px;
+  font-family: var(--font-display);
+  font-size: var(--fs-title);
+  font-weight: var(--display-weight);
+  line-height: 1.3;
+}
+@media (min-width: 1024px) {
+  .page-title {
+    font-size: var(--fs-title-xl);
+    line-height: 1.25;
+  }
+}
+
+/* PageHeader: title row, toolbar row 24px below it, then a rule and 48px of air. */
+.page-header {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+.page-header__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.page-header__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+}
+.page-header__rule {
+  margin: 0;
+  border: 0;
+  border-top: 1px solid var(--line);
+}
+@media (min-width: 1024px) {
+  .page-header {
+    gap: 24px;
+    margin-bottom: 48px;
+  }
+  .page-header--bare {
+    margin-bottom: 24px;
+  }
+  .page-header__rule {
+    margin-top: 16px;
+  }
+}
+
+/* PeriodToolbar: round prev/next buttons and the date chip on the left, the range control on the right. */
+.period-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 24px;
+}
+.period-toolbar__nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.round-btn {
+  flex: none;
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--track);
+  color: var(--text);
+}
+.round-btn:hover:not(:disabled) {
+  background: var(--btn-hover);
+}
+.round-btn:disabled {
+  opacity: 0.5;
+}
+.date-chip {
+  margin: 0;
+  min-height: 36px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  border-radius: var(--radius-control);
+  background: var(--track);
+  color: var(--text);
+  font-size: var(--fs-base);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.period-toolbar .segmented {
+  /* About 120px a segment: the control takes the room of its options, never more than the row. */
+  width: min(100%, calc(var(--cols, 4) * 120px));
+  margin-left: auto;
+}
+.period-toolbar .segmented button {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 28px;
+  padding: 0 8px;
+}
+@media (max-width: 1023px) {
+  .period-toolbar .segmented {
+    width: 100%;
+  }
+}
+
+/* StatStrip: figures side by side, each under a rule; wraps to rows of equal cells. */
+.stat-strip {
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(145px, 165px));
+  gap: 16px;
+}
+.stat-strip__cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--line-strong);
+}
+.stat-strip__value {
+  order: -1;
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--fs-stat);
+  font-weight: var(--display-weight);
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+.stat-strip__value .unavailable {
+  font-size: var(--fs-base);
+}
+.stat-strip__label {
+  font-size: var(--fs-xs);
+  color: var(--text-2);
+}
+
+/* Toggle pill under a chart: one more series on or off. */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-pill);
+  background: none;
+  color: var(--text);
+  font-size: var(--fs-xs);
+}
+.pill:hover {
+  background: var(--hover);
+}
+.pill[aria-pressed='true'] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--on-accent);
+}
+
+/* Factor row (Sleep score factors and the like): name and sub line left, rating right. */
+.factor-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 64px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+}
+.factor-row__name {
+  font-size: var(--fs-lg);
+}
+.factor-row__sub {
+  font-size: var(--fs-xs);
+  color: var(--text-2);
+}
+.factor-row__rating {
+  font-size: var(--fs-lg);
+  font-weight: var(--display-weight);
+  text-align: right;
 }

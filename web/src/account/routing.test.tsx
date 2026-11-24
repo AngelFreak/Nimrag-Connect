@@ -85,7 +85,9 @@ describe('who sees what', () => {
     mockApi(adminApi());
     renderApp('/admin');
     expect(await screen.findByRole('heading', { level: 1, name: 'Admin' })).toBeInTheDocument();
-    expect(screen.queryByRole('navigation', { name: 'Main' })).not.toBeInTheDocument();
+    // The sidebar holds the admin page and the profile, no data pages.
+    const nav = screen.getByRole('navigation', { name: 'Main' });
+    expect(within(nav).getAllByRole('link').map((a) => a.textContent)).toEqual(['Admin', 'Profile']);
     expect(screen.queryByRole('button', { name: 'Refresh' })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: /Watch/ })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Activities' })).not.toBeInTheDocument();

@@ -466,3 +466,290 @@ describe('StrengthPage', () => {
     expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument();
   });
 });
+
+// ---- the wide-screen layout (>= 1024 px): cards, toolbar, two-column activity page ----------------
+
+describe('on a wide screen', () => {
+  const real = window.matchMedia;
+  beforeEach(() => {
+    window.matchMedia = ((query: string) => ({ matches: query.includes('min-width: 1024px'), media: query, addEventListener: () => {}, removeEventListener: () => {} })) as unknown as typeof window.matchMedia;
+  });
+  afterEach(() => {
+    window.matchMedia = real;
+  });
+
+  const track = { sample: true, id: ID_RUN, available: true, points: [[56.1, 10.2], [56.2, 10.3]], start: null, end: null, bounds: null };
+  const runAndStrength = () => ({
+    sample: false,
+    items: [
+      listItem(),
+      listItem({ id: ID_STR, kind: 'strength', distance_m: null, avg_pace_s_per_km: null, sets: 18, volume_kg: 3300, exercises: 6, duration_s: 2520, date: '2026-11-18', start: '2026-11-18T18:05:00+00:00' }),
+    ],
+    next_before: null,
+  });
+
+  describe('ActivitiesPage', () => {
+    it('lists the activities as cards: a real link on the name, five labelled figures, and the title-row actions', async () => {
+      handler = () => ({ body: runAndStrength() });
+      renderAt('/activities');
+      const list = await screen.findByRole('list', { name: 'Activities' });
+      const rows = within(list).getAllByRole('listitem');
+      expect(rows).toHaveLength(2);
+      expect(screen.getByRole('heading', { level: 1, name: 'Activities' })).toBeInTheDocument();
+      // Newest first: the strength session (18 Nov), then the run (16 Nov).
+      // Run: distance, time, pace, ascent, heart rate; each value sits with its label.
+      const run = within(rows[1]!);
+      expect(run.getByRole('link', { name: /^Run/ })).toHaveAttribute('href', `/activities/${ID_RUN}`);
+      expect(run.getByText('Distance').closest('div')).toHaveTextContent('6.40 km');
+      expect(run.getByText('Avg pace').closest('div')).toHaveTextContent('5:56 /km');
+      expect(run.getByText('Total ascent').closest('div')).toHaveTextContent('42 m');
+      expect(run.getByText('Avg HR').closest('div')).toHaveTextContent('151 bpm');
+      expect(run.getByText('Nov 16')).toBeInTheDocument();
+      // Strength: exercises, sets, volume instead; its link goes to the sets view.
+      const str = within(rows[0]!);
+      expect(str.getByRole('link', { name: /^Strength/ })).toHaveAttribute('href', `/activities/${ID_STR}/strength`);
+      expect(str.getByText('Sets').closest('div')).toHaveTextContent('18');
+      expect(str.getByText('Volume').closest('div')).toHaveTextContent('3,300 kg');
+      expect(str.getByText('Exercises').closest('div')).toHaveTextContent('6');
+      // Actions that exist in Nimrag.
+      const actions = screen.getByRole('navigation', { name: 'Activity actions' });
+      expect(within(actions).getByRole('link', { name: '+ Workout' })).toHaveAttribute('href', '/workouts/new');
+      expect(within(actions).getByRole('link', { name: 'Import' })).toHaveAttribute('href', '/profile/import-garmin');
+      expect(within(actions).getByRole('link', { name: 'Export data' })).toHaveAttribute('href', '/api/export');
+    });
+
+    it('the icon filter keeps the same values: it asks the API for the type and shows an empty state', async () => {
+      const user = userEvent.setup();
+      handler = (url) => ({ body: { sample: false, items: url.searchParams.get('type') === 'swim' ? [] : [listItem()], next_before: null } });
+      renderAt('/activities');
+      await screen.findByRole('list', { name: 'Activities' });
+      const filter = screen.getByRole('group', { name: 'Filter by type' });
+      expect(within(filter).getAllByRole('button').map((b) => b.getAttribute('aria-label'))).toEqual(['All', 'Run', 'Strength', 'Walk', 'Hike', 'Cycle', 'Swim', 'Training', 'Other']);
+      expect(within(filter).getByRole('button', { name: 'All' })).toHaveAttribute('aria-pressed', 'true');
+      await user.click(within(filter).getByRole('button', { name: 'Swim' }));
+      expect(await screen.findByText('No activities of this type')).toBeInTheDocument();
+      expect(calls.some((c) => c.url.searchParams.get('type') === 'swim')).toBe(true);
+      expect(screen.getByRole('button', { name: 'Swim' })).toHaveAttribute('aria-pressed', 'true');
+    });
+
+    it('the Strength button goes to /strength, which is the strength list', async () => {
+      const user = userEvent.setup();
+      handler = () => ({ body: runAndStrength() });
+      renderAt('/activities');
+      await screen.findByRole('list', { name: 'Activities' });
+      await user.click(screen.getByRole('button', { name: 'Strength' }));
+      expect(await screen.findByRole('heading', { level: 1, name: 'Strength' })).toBeInTheDocument();
+      expect(screen.getByRole('list', { name: 'Strength sessions' })).toBeInTheDocument();
+      expect(calls.some((c) => c.url.searchParams.get('type') === 'strength')).toBe(true);
+    });
+
+    it('searches the loaded rows by type and says so when nothing matches', async () => {
+      const user = userEvent.setup();
+      handler = () => ({ body: runAndStrength() });
+      renderAt('/activities');
+      await screen.findByRole('list', { name: 'Activities' });
+      await user.type(screen.getByRole('searchbox', { name: 'Search loaded activities' }), 'stren');
+      const rows = within(screen.getByRole('list', { name: 'Activities' })).getAllByRole('listitem');
+      expect(rows).toHaveLength(1);
+      expect(within(rows[0]!).getByRole('link', { name: /^Strength/ })).toBeInTheDocument();
+      await user.type(screen.getByRole('searchbox', { name: 'Search loaded activities' }), 'xyz');
+      expect(await screen.findByText(/No loaded activity matches/)).toBeInTheDocument();
+      expect(screen.queryByRole('list', { name: 'Activities' })).not.toBeInTheDocument();
+    });
+
+    it('sorts the loaded rows from the select (missing values last) and loads more with next_before', async () => {
+      const user = userEvent.setup();
+      handler = (url) => {
+        if (url.searchParams.get('before')) return { body: { sample: false, items: [listItem({ id: 'd'.repeat(64), date: '2026-10-02', start: '2026-10-02T12:00:00+00:00', kind: 'walk', distance_m: 4800, duration_s: 4000 })], next_before: null } };
+        return { body: { sample: false, items: [listItem({ duration_s: 3000 }), listItem({ id: ID_STR, kind: 'strength', duration_s: 600, date: '2026-11-18', start: '2026-11-18T18:05:00+00:00' })], next_before: '2026-11-16T17:40:00+00:00' } };
+      };
+      renderAt('/activities');
+      await screen.findByRole('list', { name: 'Activities' });
+      const order = () => within(screen.getByRole('list', { name: 'Activities' })).getAllByRole('link').map((l) => l.textContent?.split(',')[0]);
+      expect(order()).toEqual(['Strength', 'Run']);
+      await user.selectOptions(screen.getByRole('combobox', { name: 'Sort loaded activities' }), 'longest');
+      expect(order()).toEqual(['Run', 'Strength']);
+      expect(screen.getByText(/Search and sorting apply to the 2 activities loaded so far/)).toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: 'Load more' }));
+      await waitFor(() => expect(order()).toHaveLength(3));
+      expect(order()[0]).toBe('Walk');
+      expect(screen.queryByRole('button', { name: 'Load more' })).not.toBeInTheDocument();
+    });
+
+    it('says "unavailable" for a figure the watch did not record, never 0', async () => {
+      handler = () => ({ body: { sample: false, items: [listItem({ kind: 'other', sport_name: 'generic', duration_s: null, distance_m: null, avg_hr_bpm: null, max_hr_bpm: null, calories_kcal: null })], next_before: null } });
+      renderAt('/activities');
+      await screen.findByRole('list', { name: 'Activities' });
+      expect(screen.getAllByText('unavailable')).toHaveLength(5);
+      expect(screen.queryByText(/^0/)).not.toBeInTheDocument();
+    });
+  });
+
+  describe('ActivityDetailPage', () => {
+    const fullDetail = () => {
+      handler = (url) => (url.pathname.endsWith('/track') ? { body: track } : { body: detail() });
+    };
+
+    it('has a breadcrumb, a title, five headline figures, the map and a chart for each series', async () => {
+      fullDetail();
+      renderAt(`/activities/${ID_RUN}`);
+      expect(await screen.findByRole('heading', { level: 1, name: 'Run' })).toBeInTheDocument();
+      const crumb = screen.getByRole('navigation', { name: 'Breadcrumb' });
+      expect(within(crumb).getByRole('link', { name: 'Activities' })).toHaveAttribute('href', '/activities');
+      expect(crumb).toHaveTextContent('Running · on November 16, 2026 @ 17:40');
+      for (const [label, value] of [
+        ['Distance', '6.40 km'],
+        ['Time', '38:00'],
+        ['Avg pace', '5:56 /km'],
+        ['Total ascent', '42 m'],
+        ['Avg HR', '151 bpm'],
+      ] as const) {
+        expect(screen.getAllByText(label)[0]!.closest('div')).toHaveTextContent(value);
+      }
+      const map = await screen.findByRole('img', { name: /^Route map: the 6\.4 km route of this activity/ });
+      // The API sends [lat, lon]; the map gets [lon, lat].
+      expect(map).toHaveAttribute('data-first', '[10.2,56.1]');
+      for (const name of ['Heart rate over the activity', 'Pace over the activity', 'Elevation over the activity', 'Cadence over the activity']) {
+        expect(screen.getByRole('img', { name })).toBeInTheDocument();
+      }
+      // One chart title and one Stats group are called Pace.
+      expect(screen.getAllByRole('heading', { level: 3, name: 'Pace' })).toHaveLength(2);
+      expect(screen.getByText(/Pace over 2 minutes/)).toBeInTheDocument();
+    });
+
+    it('offers a Time / Distance switch when the samples have a distance, and not otherwise', async () => {
+      const user = userEvent.setup();
+      fullDetail();
+      renderAt(`/activities/${ID_RUN}`);
+      const sw = await screen.findByRole('group', { name: 'Chart x axis' });
+      expect(within(sw).getByRole('button', { name: 'Time' })).toHaveAttribute('aria-pressed', 'true');
+      await user.click(within(sw).getByRole('button', { name: 'Distance' }));
+      expect(within(sw).getByRole('button', { name: 'Distance' })).toHaveAttribute('aria-pressed', 'true');
+      expect(screen.getByRole('img', { name: 'Heart rate over the activity' })).toBeInTheDocument();
+    });
+
+    it('has no switch when the file has no distance samples', async () => {
+      handler = (url) =>
+        url.pathname.endsWith('/track')
+          ? { body: track }
+          : { body: detail({ series: { elapsed_s: [0, 60, 120], heart_rate_bpm: [100, 140, 150], speed_mps: [2.5, 3, 2.8], altitude_m: [10, 12, 11], distance_m: [null, null, null], cadence: [null, null, null] } }) };
+      renderAt(`/activities/${ID_RUN}`);
+      await screen.findByRole('heading', { level: 1, name: 'Run' });
+      expect(screen.queryByRole('group', { name: 'Chart x axis' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('img', { name: 'Cadence over the activity' })).not.toBeInTheDocument();
+    });
+
+    it('tabs: Stats first as groups, then Laps and Time in Zones, with the arrow keys moving between them', async () => {
+      const user = userEvent.setup();
+      fullDetail();
+      renderAt(`/activities/${ID_RUN}`);
+      const tabs = await screen.findByRole('tablist', { name: 'Activity details' });
+      expect(within(tabs).getAllByRole('tab').map((t) => t.textContent)).toEqual(['Stats', 'Laps', 'Time in Zones']);
+      const panel = screen.getByRole('tabpanel');
+      for (const group of ['Distance', 'Timing', 'Pace', 'Heart rate', 'Elevation', 'Cadence', 'Energy']) {
+        expect(within(panel).getByRole('heading', { level: 3, name: group })).toBeInTheDocument();
+      }
+      expect(within(panel).getByText('Total descent').closest('div')).toHaveTextContent('40 m');
+      expect(within(panel).getByText('Min elev').closest('div')).toHaveTextContent('10 m');
+
+      await user.click(within(tabs).getByRole('tab', { name: 'Laps' }));
+      expect(screen.getByRole('table', { name: 'Laps' })).toBeInTheDocument();
+
+      within(tabs).getByRole('tab', { name: 'Laps' }).focus();
+      await user.keyboard('{ArrowRight}');
+      expect(within(tabs).getByRole('tab', { name: 'Time in Zones' })).toHaveAttribute('aria-selected', 'true');
+      const zones = screen.getByRole('list', { name: 'Time in heart rate zones' });
+      expect(within(zones).getByText('18 min')).toBeInTheDocument();
+      expect(within(zones).getAllByText('unavailable')).toHaveLength(3);
+      await user.keyboard('{Home}');
+      expect(within(tabs).getByRole('tab', { name: 'Stats' })).toHaveAttribute('aria-selected', 'true');
+    });
+
+    it('the side column has the training effect and labels VO2 max as derived', async () => {
+      fullDetail();
+      renderAt(`/activities/${ID_RUN}`);
+      const side = await screen.findByRole('complementary', { name: 'More about this activity' });
+      expect(within(side).getByText('Aerobic effect').closest('div')).toHaveTextContent('3.2');
+      expect(within(side).queryByText('Anaerobic effect')).not.toBeInTheDocument();
+      expect(within(side).getByText('Training load').closest('div')).toHaveTextContent('76');
+      expect(within(side).getByText('VO2 max (derived)').closest('div')).toHaveTextContent('46.2 ml/kg/min');
+      expect(within(side).getByText(/not Garmin's published value/)).toBeInTheDocument();
+    });
+
+    it('leaves out the figures that have no value instead of saying "unavailable"', async () => {
+      handler = () => ({ body: detail({ avg_cadence: null, descent_m: null, aerobic_te: null, anaerobic_te: null, training_load: null, vo2max_derived: null, avg_hr_bpm: null, ascent_m: null, calories_kcal: null, series: null, has_track: false }) });
+      renderAt(`/activities/${ID_RUN}`);
+      await screen.findByRole('heading', { level: 1, name: 'Run' });
+      expect(screen.getByText('This activity has no GPS track.')).toBeInTheDocument();
+      for (const label of ['Total ascent', 'Avg HR', 'Aerobic effect', 'Training load', 'VO2 max (derived)', 'Avg cadence', 'Total descent', 'Calories']) {
+        expect(screen.queryByText(label)).not.toBeInTheDocument();
+      }
+      // Distance, time and pace are there; the only "unavailable" left are the zones the file does not list (the tab is not open).
+      expect(screen.queryByText('unavailable')).not.toBeInTheDocument();
+      expect(screen.getByText('No heart rate samples were recorded.')).toBeInTheDocument();
+    });
+
+    it('a strength activity links to its sets in the side column', async () => {
+      handler = () => ({ body: detail({ id: ID_STR, kind: 'strength', has_strength: true, has_track: false, distance_m: null, sets: 18, volume_kg: 3300 }) });
+      renderAt(`/activities/${ID_STR}`);
+      expect(await screen.findByRole('link', { name: 'View strength sets' })).toHaveAttribute('href', `/activities/${ID_STR}/strength`);
+      expect(screen.getAllByText('Volume')[0]!.closest('div')).toHaveTextContent('3,300 kg');
+    });
+
+    it('says so when the activity does not exist', async () => {
+      handler = () => ({ status: 404, body: { error: 'no such activity' } });
+      renderAt(`/activities/${ID_RUN}`);
+      expect(await screen.findByText('Activity not found')).toBeInTheDocument();
+    });
+  });
+
+  describe('StrengthPage', () => {
+    it('has the breadcrumb, headline figures, a Sets tab with the exercises and a link to the previous session', async () => {
+      handler = () => ({ body: strength() });
+      renderAt(`/activities/${ID_STR}/strength`);
+      expect(await screen.findByRole('navigation', { name: 'Breadcrumb' })).toHaveTextContent('Strength training · on November 18, 2026 @ 18:05');
+      expect(screen.getAllByText('Sets', { selector: 'dt' })[0]!.closest('div')).toHaveTextContent('3');
+      expect(screen.getAllByText('Volume', { selector: 'dt' })[0]!.closest('div')).toHaveTextContent('660 kg');
+      expect(screen.getByRole('img', { name: 'Heart rate during the session' })).toBeInTheDocument();
+      expect(screen.getByRole('tab', { name: 'Sets' })).toHaveAttribute('aria-selected', 'true');
+      expect(screen.getByText('Bench press')).toBeInTheDocument();
+      expect(screen.getByText('Bodyweight')).toBeInTheDocument();
+      expect(screen.getByRole('link', { name: 'Open previous session' })).toHaveAttribute('href', `/activities/${ID_PREV}/strength`);
+      expect(screen.getByRole('link', { name: /^Previous session/ })).toHaveAttribute('href', `/activities/${ID_PREV}/strength`);
+    });
+
+    it('compares with the last session in its own tab', async () => {
+      const user = userEvent.setup();
+      handler = (url) => {
+        if (url.pathname === `/api/activities/${ID_PREV}/strength`) return { body: strength({ id: ID_PREV, previous: null }) };
+        return { body: strength() };
+      };
+      renderAt(`/activities/${ID_STR}/strength`);
+      await user.click(await screen.findByRole('tab', { name: 'Compare to last' }));
+      expect(await screen.findByText(/Compared with/)).toBeInTheDocument();
+      expect(await screen.findByRole('table', { name: 'Exercises, this session against the last' })).toBeInTheDocument();
+    });
+
+    it('edits a set and sends only what changed; the compare tab waits while editing', async () => {
+      const user = userEvent.setup();
+      let saved: unknown;
+      handler = (_url, init) => {
+        if (init?.method === 'PATCH') {
+          saved = JSON.parse(String(init.body));
+          return { body: strength() };
+        }
+        return { body: strength() };
+      };
+      renderAt(`/activities/${ID_STR}/strength`);
+      await user.click(await screen.findByRole('button', { name: 'Edit sets' }));
+      expect(screen.getByRole('tab', { name: 'Compare to last' })).toBeDisabled();
+      const reps = screen.getByRole('textbox', { name: 'Bench press, set 1, reps' });
+      await user.clear(reps);
+      await user.type(reps, '12');
+      await user.click(screen.getByRole('button', { name: 'Save changes' }));
+      await waitFor(() => expect(saved).toBeDefined());
+      expect(JSON.stringify(saved)).toContain('12');
+      expect(await screen.findByText(/Saved\. 1 set changed\./)).toBeInTheDocument();
+    });
+  });
+});

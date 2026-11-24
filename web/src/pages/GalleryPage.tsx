@@ -10,12 +10,13 @@ import {
   Chip,
   ConfirmDialog,
   DataList,
-  DesktopNav,
   EmptyState,
   ErrorState,
   FilterChips,
   Legend,
   ListRow,
+  PageHeader,
+  PeriodToolbar,
   MapView,
   ProfileLink,
   ProgressBar,
@@ -23,6 +24,7 @@ import {
   Ring,
   SampleDataChip,
   SegmentedControl,
+  StatStrip,
   SeriesChart,
   SettingsGroup,
   SettingsRow,
@@ -191,9 +193,32 @@ export function GalleryPage() {
             <BottomNav active="activities" label="Example bottom navigation" />
           </Frame>
         </div>
-        <Frame label="Desktop navigation, Overview active">
-          <div style={{ padding: '0 16px' }}>
-            <DesktopNav active="today" label="Example desktop navigation" />
+        <Frame label="Stats page header: title, period toolbar and a stat strip">
+          <div style={{ padding: '0 16px 16px' }}>
+            <PageHeader title="Heart rate" headingLevel={2}>
+              <PeriodToolbar
+                from="2026-11-18"
+                to="2026-11-24"
+                atToday
+                onStep={() => undefined}
+                unit="week"
+                options={[
+                  { value: '1d', label: '1 Day' },
+                  { value: '7d', label: '7 Days' },
+                  { value: '4w', label: '4 Weeks' },
+                ]}
+                value="7d"
+                onChange={() => undefined}
+                label="Example period"
+              />
+            </PageHeader>
+            <StatStrip
+              items={[
+                { key: 'rest', label: 'Avg resting', value: '54 bpm' },
+                { key: 'high', label: 'Avg highest', value: '121 bpm' },
+                { key: 'none', label: 'Lowest', value: null },
+              ]}
+            />
           </div>
         </Frame>
         <div className="gallery__grid">

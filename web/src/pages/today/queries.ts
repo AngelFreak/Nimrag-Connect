@@ -23,11 +23,12 @@ export function useSettings(enabled = true) {
   return useQuery({ queryKey: SETTINGS_KEY, queryFn: ({ signal }) => api.get<SettingsResponse>('/api/settings', { signal }), enabled });
 }
 
-/** Desktop overview: the five newest activities. */
+/** Desktop Home: the newest activities. The list on the right shows the first few; the week cards use the last 4 weeks. */
+export const HOME_ACTIVITY_LIMIT = 100;
 export function useRecentActivities(enabled: boolean) {
   return useQuery({
-    queryKey: ['overview', 'activities', 5],
-    queryFn: ({ signal }) => api.get<ActivityList>('/api/activities?limit=5', { signal }),
+    queryKey: ['overview', 'activities', HOME_ACTIVITY_LIMIT],
+    queryFn: ({ signal }) => api.get<ActivityList>(`/api/activities?limit=${HOME_ACTIVITY_LIMIT}`, { signal }),
     enabled,
   });
 }

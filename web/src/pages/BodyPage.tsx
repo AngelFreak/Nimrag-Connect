@@ -2,10 +2,11 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { api } from '../api/client';
 import type { BodyEntry, BodyResponse } from '../api/generated';
-import { Button, Card, EmptyState, SampleDataChip, StatTile, TopBar, ValueOrUnavailable } from '../components';
+import { Button, Card, EmptyState, PageHeader, SampleDataChip, StatStrip, StatTile, TopBar, ValueOrUnavailable } from '../components';
 import { browserToday, fmtShortDay } from '../lib/dates';
 import { fmtFixed } from '../lib/format';
-import { usePageTitle } from '../lib/hooks';
+import { useIsDesktop, usePageTitle } from '../lib/hooks';
+import { StatsSection } from './health/desktop';
 import { EntryForm } from './body/EntryForm';
 import { WeightChart } from './body/WeightChart';
 import { entryWhat, fmtChange, fmtEntryWhen } from './body/body';
@@ -23,10 +24,15 @@ export function BodyPage() {
     queryFn: ({ signal }) => api.get<BodyResponse>('/api/body', { signal }),
   });
   const data = query.data;
+  const desktop = useIsDesktop();
 
   return (
     <>
-      <TopBar variant="back" backTo="/health" title="Body" subtitle="Weight and measurements" aside={<SampleDataChip sample={data?.sample} />} />
+      {desktop ? (
+        <PageHeader title="Weight & Body" actions={<SampleDataChip sample={data?.sample} />} />
+      ) : (
+        <TopBar variant="back" backTo="/health" title="Body" subtitle="Weight and measurements" aside={<SampleDataChip sample={data?.sample} />} />
+      )}
       {query.isError ? (
         <PageError title="Body measurements could not be loaded" error={query.error} onRetry={() => void query.refetch()} />
       ) : !data ? (
@@ -50,6 +56,48 @@ export function BodyBody({ data, today }: { data: BodyResponse; today: string })
     setSaved(false);
     setAdding(true);
   };
+  const desktop = useIsDesktop();
+
+  if (desktop) {
+    return (
+      <div className="page" style={{ paddingTop: 0 }}>
+        <div className="stats-stack">
+          <StatsSection title="Weight" aside={weightDay ? fmtShortDay(weightDay) : undefined}>
+            <WeightChart weights={data.weights} trend={data.weight_trend} />
+            <StatStrip
+              items={[
+                { key: 'weight', label: 'Weight', value: data.latest_weight ? `${fmtFixed(data.latest_weight.value, 1)} kg` : null },
+                { key: 'change', label: '30-day change', value: change },
+                { key: 'fat', label: fatDay ? `Body fat, ${fmtShortDay(fatDay)}` : 'Body fat', value: data.latest_body_fat ? `${fmtFixed(data.latest_body_fat.value, 1)} %` : null },
+                { key: 'waist', label: waistDay ? `Waist, ${fmtShortDay(waistDay)}` : 'Waist', value: data.latest_waist ? `${fmtFixed(data.latest_waist.value, 1)} cm` : null },
+              ]}
+            />
+          </StatsSection>
+
+          {saved ? (
+            <p role="status" className="stat__sub tone-energy">
+              Entry saved.
+            </p>
+          ) : null}
+
+          {adding ? (
+            <div style={{ maxWidth: 640 }}>
+              <EntryForm
+                today={today}
+                onCancel={() => setAdding(false)}
+                onDone={() => {
+                  setAdding(false);
+                  setSaved(true);
+                }}
+              />
+            </div>
+          ) : null}
+
+          <Entries entries={data.entries} onAdd={open} adding={adding} />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <>
@@ -115,7 +163,8 @@ export function BodyBody({ data, today }: { data: BodyResponse; today: string })
 /** How many entries the list shows before "Show all" (the server sends them newest first). */
 export const ENTRIES_SHOWN = 10;
 
-function Entries({ entries, onAdd }: { entries: BodyEntry[]; onAdd: () => void }) {
+function Entries({ entries, onAdd, adding = false }: { entries: BodyEntry[]; onAdd: () => void; adding?: boolean }) {
+  const desktop = useIsDesktop();
   const client = useQueryClient();
   const [confirming, setConfirming] = useState<number | null>(null);
   const [showAll, setShowAll] = useState(false);
@@ -127,6 +176,23 @@ function Entries({ entries, onAdd }: { entries: BodyEntry[]; onAdd: () => void }
       await client.invalidateQueries({ queryKey: ['today'] });
     },
   });
+
+  if (entries.length === 0 && desktop) {
+    return (
+      <StatsSection title="Entries">
+        <EmptyState
+          title="No entries yet"
+          action={
+            <Button variant="primary" onClick={onAdd}>
+              Add entry
+            </Button>
+          }
+        >
+          Add your weight, body fat or waist to start the trend.
+        </EmptyState>
+      </StatsSection>
+    );
+  }
 
   if (entries.length === 0) {
     return (
@@ -145,11 +211,8 @@ function Entries({ entries, onAdd }: { entries: BodyEntry[]; onAdd: () => void }
     );
   }
 
-  return (
-    <Card padding="list" aria-labelledby="entries-title">
-      <h2 id="entries-title" className="card__title card__title--muted" style={{ padding: '10px 0 6px' }}>
-        Entries
-      </h2>
+  const list = (
+    <>
       {remove.isError ? (
         <p role="alert" className="field__hint" style={{ color: 'var(--heart)' }}>
           The entry was not deleted. {errorText(remove.error)}
@@ -196,6 +259,18 @@ function Entries({ entries, onAdd }: { entries: BodyEntry[]; onAdd: () => void }
           </Button>
         </div>
       ) : null}
+    </>
+  );
+  return desktop ? (
+    <StatsSection title="Entries" aside={adding ? undefined : <Button variant="primary" onClick={onAdd}>Add entry</Button>}>
+      {list}
+    </StatsSection>
+  ) : (
+    <Card padding="list" aria-labelledby="entries-title">
+      <h2 id="entries-title" className="card__title card__title--muted" style={{ padding: '10px 0 6px' }}>
+        Entries
+      </h2>
+      {list}
     </Card>
   );
 }

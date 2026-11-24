@@ -11,7 +11,6 @@ import {
   AppShell,
   BarSeries,
   BottomNav,
-  DesktopNav,
   Button,
   Card,
   ConfirmDialog,
@@ -20,6 +19,11 @@ import {
   FilterChips,
   Legend,
   navKeyFor,
+  PageHeader,
+  PeriodToolbar,
+  rangeLabel,
+  sidebarTargetFor,
+  StatStrip,
   ProgressBar,
   Notice,
   Ring,
@@ -315,11 +319,93 @@ describe('AppShell', () => {
       '/admin',
     );
     expect(document.querySelector('.bottom-nav')).toBeNull();
-    expect(document.querySelector('.desk-nav')).toBeNull();
+    // The admin sidebar holds the admin page and the profile, nothing with data.
+    const side = document.querySelector('.sidebar__nav') as HTMLElement;
+    expect(within(side).getAllByRole('link').map((a) => a.textContent)).toEqual(['Admin', 'Profile']);
     expect(screen.queryByRole('button', { name: 'Refresh' })).toBeNull();
     expect(screen.queryByRole('link', { name: /Watch/ })).toBeNull();
     expect(screen.getByRole('link', { name: 'Nimrag Connect' })).toHaveAttribute('href', '/admin');
     expect(screen.getAllByRole('link', { name: 'Profile' }).length).toBeGreaterThan(0);
+  });
+
+  it('the sidebar lists the groups as buttons, opens the one holding the page and remembers what was opened', async () => {
+    window.localStorage.clear();
+    wrap(
+      <AppShell>
+        <h1>Heart rate</h1>
+      </AppShell>,
+      '/metrics/heart_rate',
+    );
+    const nav = document.querySelector('.sidebar__nav') as HTMLElement;
+    expect(nav.tagName).toBe('NAV');
+    expect(nav).toHaveAttribute('aria-label', 'Main');
+    const health = within(nav).getByRole('button', { name: 'Health Stats' });
+    const activities = within(nav).getByRole('button', { name: 'Activities' });
+    expect(health).toHaveAttribute('aria-expanded', 'true');
+    expect(activities).toHaveAttribute('aria-expanded', 'false');
+    expect(within(nav).getByRole('link', { name: 'Heart Rate' })).toHaveAttribute('aria-current', 'page');
+    expect(within(nav).getByRole('link', { name: 'Sleep' })).not.toHaveAttribute('aria-current');
+    // A closed group's links are hidden from the accessibility tree.
+    expect(within(nav).queryByRole('link', { name: 'Strength' })).toBeNull();
+    await userEvent.click(activities);
+    expect(activities).toHaveAttribute('aria-expanded', 'true');
+    expect(within(nav).getByRole('link', { name: 'Strength' })).toHaveAttribute('href', '/strength');
+    expect(window.localStorage.getItem('nimrag.nav.activities')).toBe('1');
+    await userEvent.click(health);
+    expect(window.localStorage.getItem('nimrag.nav.health')).toBe('0');
+  });
+
+  it('the collapse button folds the sidebar to an icon rail with names on the icons, and remembers it', async () => {
+    window.localStorage.clear();
+    const { unmount } = wrap(
+      <AppShell>
+        <h1>Today</h1>
+      </AppShell>,
+    );
+    const shell = document.querySelector('.shell') as HTMLElement;
+    expect(shell).toHaveAttribute('data-sidebar', 'open');
+    await userEvent.click(screen.getByRole('button', { name: 'Collapse sidebar' }));
+    expect(shell).toHaveAttribute('data-sidebar', 'collapsed');
+    expect(window.localStorage.getItem('nimrag.nav.collapsed')).toBe('1');
+    expect(within(document.querySelector('.sidebar__nav') as HTMLElement).getByRole('link', { name: 'Calendar' })).toHaveAttribute('title', 'Calendar');
+    unmount();
+    wrap(
+      <AppShell>
+        <h1>Today</h1>
+      </AppShell>,
+    );
+    expect(document.querySelector('.shell')).toHaveAttribute('data-sidebar', 'collapsed');
+    await userEvent.click(screen.getByRole('button', { name: 'Expand sidebar' }));
+    expect(document.querySelector('.shell')).toHaveAttribute('data-sidebar', 'open');
+  });
+
+  it('a group button on the icon rail widens the sidebar and opens the group', async () => {
+    window.localStorage.setItem('nimrag.nav.collapsed', '1');
+    window.localStorage.removeItem('nimrag.nav.performance');
+    wrap(
+      <AppShell>
+        <h1>Today</h1>
+      </AppShell>,
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Performance Stats' }));
+    expect(document.querySelector('.shell')).toHaveAttribute('data-sidebar', 'open');
+    expect(screen.getByRole('link', { name: 'HRV Status' })).toBeInTheDocument();
+    window.localStorage.clear();
+  });
+
+  it('has no web sidebar inside the Android app', () => {
+    window.NimragApp = { native: true };
+    try {
+      wrap(
+        <AppShell tabs>
+          <h1>Today</h1>
+        </AppShell>,
+      );
+      expect(document.querySelector('.sidebar')).toBeNull();
+      expect(document.querySelector('.shell')).toHaveAttribute('data-sidebar', 'none');
+    } finally {
+      delete window.NimragApp;
+    }
   });
 
   it('detail pages have no bottom navigation', () => {
@@ -384,12 +470,10 @@ describe('narrow screens (a phone at 200 % zoom is 195 px wide)', () => {
       <>
         <BottomNav active="today" />
         <BottomNav active="today" label="Example bottom navigation" />
-        <DesktopNav active="today" label="Example desktop navigation" />
       </>,
     );
     expect(screen.getByRole('navigation', { name: 'Main' })).toBeInTheDocument();
     expect(screen.getByRole('navigation', { name: 'Example bottom navigation' })).toBeInTheDocument();
-    expect(screen.getByRole('navigation', { name: 'Example desktop navigation' })).toBeInTheDocument();
   });
 });
 
@@ -496,6 +580,86 @@ describe('navKeyFor', () => {
     expect(navKeyFor('/movement/2026-11-18', '')).toBe('health');
     expect(navKeyFor('/devices', '')).toBe('devices');
     expect(navKeyFor('/profile', '')).toBe('other');
+  });
+});
+
+describe('sidebarTargetFor', () => {
+  it('maps a page to the sidebar link it belongs to', () => {
+    expect(sidebarTargetFor('/', '')).toBe('/');
+    expect(sidebarTargetFor('/calendar/2026-11', '')).toBe('/calendar');
+    expect(sidebarTargetFor('/activities', '')).toBe('/activities');
+    expect(sidebarTargetFor('/activities/9', '')).toBe('/activities');
+    expect(sidebarTargetFor('/activities', '?type=strength')).toBe('/strength');
+    expect(sidebarTargetFor('/activities/9/strength', '')).toBe('/strength');
+    expect(sidebarTargetFor('/metrics/steps', '?range=7d')).toBe('/metrics/steps');
+    expect(sidebarTargetFor('/metrics/vo2_max', '')).toBe('/metrics/vo2_max');
+    expect(sidebarTargetFor('/sleep/2026-11-18', '')).toBe('/sleep');
+    expect(sidebarTargetFor('/training/status', '')).toBe('/training/status');
+    expect(sidebarTargetFor('/training', '')).toBe('/training');
+    expect(sidebarTargetFor('/workouts/new', '')).toBe('/workouts');
+    expect(sidebarTargetFor('/profile/goals', '')).toBe('/profile/goals');
+    expect(sidebarTargetFor('/profile/phones', '')).toBe('/profile');
+    expect(sidebarTargetFor('/health', '')).toBeNull();
+  });
+});
+
+describe('PageHeader, PeriodToolbar and StatStrip', () => {
+  const options = [
+    { value: '7d', label: '7 Days' },
+    { value: '4w', label: '4 Weeks' },
+  ];
+
+  it('the header has the title as the h1, the toolbar, and a rule under the toolbar', () => {
+    const { container } = wrap(
+      <PageHeader title="Sleep" actions={<span>actions</span>}>
+        <p>toolbar</p>
+      </PageHeader>,
+    );
+    expect(screen.getByRole('heading', { level: 1, name: 'Sleep' })).toBeInTheDocument();
+    expect(screen.getByText('actions')).toBeInTheDocument();
+    expect(container.querySelector('hr.page-header__rule')).not.toBeNull();
+  });
+
+  it('a header without a toolbar draws no rule', () => {
+    const { container } = wrap(<PageHeader title="Body" />);
+    expect(container.querySelector('hr')).toBeNull();
+  });
+
+  it('the toolbar steps back and forward, stops at today and switches the range', async () => {
+    const onStep = vi.fn();
+    const onChange = vi.fn();
+    wrap(<PeriodToolbar from="2026-11-18" to="2026-11-24" atToday={false} onStep={onStep} unit="week" options={options} value="7d" onChange={onChange} />);
+    expect(screen.getByText('Nov 18 – Nov 24')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Previous week' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Next week' }));
+    expect(onStep.mock.calls).toEqual([[-1], [1]]);
+    const group = screen.getByRole('group', { name: 'Period' });
+    expect(within(group).getByRole('button', { name: '7 Days' })).toHaveAttribute('aria-pressed', 'true');
+    await userEvent.click(within(group).getByRole('button', { name: '4 Weeks' }));
+    expect(onChange).toHaveBeenCalledWith('4w');
+  });
+
+  it('the next button is disabled when the period ends today', () => {
+    wrap(<PeriodToolbar from="2026-11-24" to="2026-11-24" atToday onStep={() => undefined} unit="day" options={options} value="7d" onChange={() => undefined} />);
+    expect(screen.getByRole('button', { name: 'Next day' })).toBeDisabled();
+    expect(screen.getByText('Nov 24')).toBeInTheDocument();
+  });
+
+  it('the stat strip pairs every label with its value and says "unavailable" for a missing one', () => {
+    wrap(
+      <StatStrip
+        items={[
+          { key: 'a', label: 'Avg resting', value: '54 bpm' },
+          { key: 'b', label: 'Lowest', value: null },
+        ]}
+      />,
+    );
+    expect(screen.getByText('Avg resting').nextElementSibling).toHaveTextContent('54 bpm');
+    expect(screen.getByText('Lowest').nextElementSibling).toHaveTextContent('unavailable');
+  });
+
+  it('labels the periods the pages use in words', () => {
+    expect(['1d', '7d', '4w', '12w', '6m', '1y'].map(rangeLabel)).toEqual(['1 Day', '7 Days', '4 Weeks', '12 Weeks', '6 Months', '1 Year']);
   });
 });
 

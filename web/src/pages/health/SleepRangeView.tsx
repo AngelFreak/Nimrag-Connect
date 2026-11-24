@@ -1,10 +1,11 @@
 import { useNavigate } from 'react-router-dom';
 import type { SleepBucket } from '../../api/generated/SleepBucket';
 import type { SleepHistory } from '../../api/generated/SleepHistory';
-import { BarSeries, Card, CardHeader, EmptyState, Legend, SampleDataChip, SeriesChart, StatTile, Table, TopBar } from '../../components';
+import { BarSeries, Card, CardHeader, EmptyState, Legend, PageHeader, PeriodToolbar, SampleDataChip, SeriesChart, StatStrip, StatTile, Table, TopBar, rangeLabel } from '../../components';
 import { fmtInt } from '../../lib/format';
 import { useIsDesktop, usePageTitle } from '../../lib/hooks';
 import { fmtSeconds } from './model';
+import { StatsSection } from './desktop';
 import { CardSkeleton, ChartSummary, LoadError } from './parts';
 import { PeriodNav, RangeBar, usePeriod, type PeriodOption } from './period';
 import { useSleepHistory, type SleepGroup } from './queries';
@@ -28,6 +29,38 @@ export function SleepRangeBar({ value }: { value: SleepPeriod }) {
   return <RangeBar label="Period" options={SLEEP_PERIODS} value={value} onChange={(k) => void navigate(k === '1d' ? '/sleep' : `/sleep?range=${k}`)} />;
 }
 
+/** The header toolbar of the Sleep page on a wide screen: arrows, dates and the four periods. */
+export function SleepToolbar({
+  from,
+  to,
+  atToday,
+  onStep,
+  unit,
+  value,
+  onChange,
+}: {
+  from: string;
+  to: string;
+  atToday: boolean;
+  onStep: (direction: -1 | 1) => void;
+  unit: string;
+  value: SleepPeriod;
+  onChange: (value: SleepPeriod) => void;
+}) {
+  return (
+    <PeriodToolbar
+      from={from}
+      to={to}
+      atToday={atToday}
+      onStep={onStep}
+      unit={unit}
+      options={SLEEP_PERIODS.map((o) => ({ value: o.value, label: rangeLabel(o.value) }))}
+      value={value}
+      onChange={onChange}
+    />
+  );
+}
+
 const GROUP: Record<SleepPeriod, SleepGroup> = { '1d': 'day', '7d': 'day', '4w': 'day', '1y': 'month' };
 
 export function SleepRangeView() {
@@ -35,12 +68,22 @@ export function SleepRangeView() {
   const period = usePeriod<SleepPeriod>(SLEEP_PERIODS, '7d');
   const q = useSleepHistory(period.from, period.to, GROUP[period.option.value]);
   const navigate = useNavigate();
+  const desktop = useIsDesktop();
+  const pick = (k: SleepPeriod) => (k === '1d' ? void navigate('/sleep') : period.setRange(k));
   return (
     <>
-      <TopBar variant="back" backTo="/health" backLabel="Back to Health" title="Sleep score" aside={<SampleDataChip sample={q.data?.sample} />} />
-      <RangeBar label="Period" options={SLEEP_PERIODS} value={period.option.value} onChange={(k) => (k === '1d' ? void navigate('/sleep') : period.setRange(k))} />
+      {desktop ? (
+        <PageHeader title="Sleep" actions={<SampleDataChip sample={q.data?.sample} />}>
+          <SleepToolbar from={period.from} to={period.to} atToday={period.atToday} onStep={period.step} unit="period" value={period.option.value} onChange={pick} />
+        </PageHeader>
+      ) : (
+        <>
+          <TopBar variant="back" backTo="/health" backLabel="Back to Health" title="Sleep score" aside={<SampleDataChip sample={q.data?.sample} />} />
+          <RangeBar label="Period" options={SLEEP_PERIODS} value={period.option.value} onChange={pick} />
+        </>
+      )}
       <div className="page" style={{ paddingTop: 0 }} aria-busy={q.isPending}>
-        <PeriodNav from={period.from} to={period.to} atToday={period.atToday} onStep={period.step} unit="period" />
+        {desktop ? null : <PeriodNav from={period.from} to={period.to} atToday={period.atToday} onStep={period.step} unit="period" />}
         {q.isPending ? (
           <>
             <CardSkeleton lines={4} height={20} />
@@ -59,9 +102,11 @@ export function SleepRangeView() {
 }
 
 function Body({ data }: { data: SleepHistory }) {
+  const desktop = useIsDesktop();
   if (data.stats.nights === 0) {
     return <EmptyState title="No sleep recorded in this period">Nights appear here after the watch has synced them. Try another period.</EmptyState>;
   }
+  if (desktop) return <BodyDesktop data={data} />;
   return (
     <>
       <div className="grid-panels" style={{ alignItems: 'start' }}>
@@ -155,5 +200,74 @@ function DataTable({ data }: { data: SleepHistory }) {
         ]}
       />
     </details>
+  );
+}
+
+// ---- wide screen ------------------------------------------------------------------------------------
+
+function BodyDesktop({ data }: { data: SleepHistory }) {
+  const chart = sleepChart(data);
+  const names = sleepStatLabels(data.group);
+  const s = data.stats;
+  const summary = scoreChartSummary(data);
+  const high = data.group === 'day' ? s.highest_score : s.avg_highest;
+  const low = data.group === 'day' ? s.lowest_score : s.avg_lowest;
+  const slots = data.buckets.length;
+  const goalMin = data.long_night_s / 60;
+  const goalText = `${Math.round(data.long_night_s / 3600)} h`;
+  const per = data.group === 'month' ? 'month' : 'night';
+  return (
+    <div className="stats-stack">
+      <StatsSection title="Sleep Score" aside={s.scored_nights > 0 ? `${s.scored_nights} scored night${s.scored_nights === 1 ? '' : 's'}` : undefined}>
+        <SeriesChart
+          label={`Sleep score ${data.group === 'month' ? 'by month' : 'by night'}`}
+          summary={summary}
+          x={chart.x}
+          series={[{ label: 'Sleep score', color: 'sleep', data: chart.score, points: true, width: 2 }]}
+          xRange={[-0.5, slots - 0.5]}
+          height={240}
+          xLabels={chart.labels && chart.labels.length <= 13 ? chart.labels.map((text, value) => ({ value, text })) : chart.axisLabels}
+        />
+        <ChartSummary hidden={chart.score.some((v) => v !== null)}>{summary}</ChartSummary>
+        <Legend items={[{ key: 'score', label: 'Score', color: 'var(--sleep)' }]} />
+        <StatStrip
+          items={[
+            { key: 'avg', label: names.avg, value: fmtInt(s.avg_score) },
+            { key: 'high', label: names.high, value: fmtInt(high) },
+            { key: 'low', label: names.low, value: fmtInt(low) },
+          ]}
+        />
+      </StatsSection>
+
+      <StatsSection title="Sleep Duration">
+        <BarSeries
+          values={chart.minutes}
+          labels={chart.labels ?? chart.minutes.map(() => '')}
+          {...(chart.labels ? {} : { axisLabels: chart.axis })}
+          label={`Time asleep per ${per}`}
+          yUnit="minutes"
+          color="var(--good)"
+          belowGoalColor="var(--accent)"
+          goal={goalMin}
+          summary={durationChartSummary(data)}
+          summaryVisible
+          height={200}
+        />
+        <Legend
+          items={[
+            { key: 'under', label: `Under ${goalText}`, color: 'var(--accent)' },
+            { key: 'over', label: `${goalText} or more`, color: 'var(--good)' },
+          ]}
+        />
+        <StatStrip
+          items={[
+            { key: 'avg', label: 'Average time asleep', value: fmtSeconds(s.avg_duration_s) },
+            { key: 'nights', label: s.nights === 1 ? 'Night recorded' : 'Nights recorded', value: fmtInt(s.nights) },
+          ]}
+        />
+      </StatsSection>
+
+      <DataTable data={data} />
+    </div>
   );
 }

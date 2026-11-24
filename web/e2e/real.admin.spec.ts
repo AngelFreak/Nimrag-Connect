@@ -26,7 +26,8 @@ test('an admin has no data tabs: data routes lead to /admin, and the data API an
   await page.goto('/');
   await expect(page).toHaveURL(/\/admin$/);
   await settled(page, 'Admin');
-  await expect(page.getByRole('navigation', { name: 'Main' })).toHaveCount(0);
+  // The sidebar holds the admin page and the profile, no data pages.
+  await expect(page.getByRole('navigation', { name: 'Main' }).getByRole('link')).toHaveText(['Admin', 'Profile']);
   for (const name of ['Activities', 'Strength', 'Health', 'Today', 'Overview']) await expect(page.getByRole('link', { name, exact: true })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Refresh' })).toHaveCount(0);
   for (const path of ['/activities', '/sleep', '/day', '/devices', '/profile/phones', '/does-not-exist']) {

@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import type { MetricRange } from '../../api/generated/MetricRange';
-import { BarSeries, Card, CardHeader, EmptyState, Legend, SeriesChart, StatTile, ValueOrUnavailable } from '../../components';
+import { BarSeries, Card, CardHeader, EmptyState, Legend, SeriesChart, StatStrip, StatTile, ValueOrUnavailable } from '../../components';
 import { useIsDesktop } from '../../lib/hooks';
 import { chartHasData, rangeChart, rangeRows, rangeSummary, statText, tileStats, type ChartSpec, type RangeRow } from './model';
 import { metricHref, type MetricDef } from './period';
@@ -13,16 +13,50 @@ export function RangeBody({ def, data, today }: { def: MetricDef; data: MetricRa
   const rows = rangeRows(def, data, today);
   const tiles = tileStats(def.key, data);
   const week = data.bucket === 'week';
+  const desktop = useIsDesktop();
+  const chart = chartHasData(spec) ? (
+    <Plot spec={spec} label={`${def.title} ${week ? 'by week' : 'by day'}`} summary={rangeSummary(def, data)} />
+  ) : (
+    <EmptyState title={`No ${def.title.toLowerCase()} in this period`}>The watch has not recorded any for these days. Try an earlier period.</EmptyState>
+  );
+  const rowList =
+    rows.length > 0 ? (
+      <section aria-labelledby="metric-rows" className="page-stack">
+        <h2 className="section-label" id="metric-rows">
+          {week ? 'Weeks, newest first' : 'Days, newest first'}
+        </h2>
+        <div className="metric-rows">
+          {rows.map((r) => (
+            <Row key={r.start} def={def} row={r} today={today} />
+          ))}
+        </div>
+      </section>
+    ) : null;
+  // A wide screen: a section title, the chart without a card, and the figures in a strip under it.
+  if (desktop) {
+    const items = tiles.map((s) => {
+      const t = statText(s);
+      return { key: s.key, label: s.label, value: t.value && t.unit ? `${t.value} ${t.unit}` : t.value };
+    });
+    return (
+      <>
+        <section aria-labelledby="metric-chart" className="page-stack">
+          <h2 className="section-title" id="metric-chart">
+            {week ? 'Week by week' : 'Day by day'}
+          </h2>
+          {chart}
+          {items.length > 0 ? <StatStrip items={items} /> : null}
+        </section>
+        {rowList}
+      </>
+    );
+  }
   return (
     <>
       <div className="metric-top">
         <Card padding="lg">
           <CardHeader title={week ? 'Week by week' : 'Day by day'} tone="muted" />
-          {chartHasData(spec) ? (
-            <Plot spec={spec} label={`${def.title} ${week ? 'by week' : 'by day'}`} summary={rangeSummary(def, data)} />
-          ) : (
-            <EmptyState title={`No ${def.title.toLowerCase()} in this period`}>The watch has not recorded any for these days. Try an earlier period.</EmptyState>
-          )}
+          {chart}
         </Card>
         <div className="metric-tiles">
           {tiles.map((s) => {
@@ -31,18 +65,7 @@ export function RangeBody({ def, data, today }: { def: MetricDef; data: MetricRa
           })}
         </div>
       </div>
-      {rows.length > 0 ? (
-        <section aria-labelledby="metric-rows" className="page-stack">
-          <h2 className="section-label" id="metric-rows">
-            {week ? 'Weeks, newest first' : 'Days, newest first'}
-          </h2>
-          <div className="metric-rows">
-            {rows.map((r) => (
-              <Row key={r.start} def={def} row={r} today={today} />
-            ))}
-          </div>
-        </section>
-      ) : null}
+      {rowList}
     </>
   );
 }

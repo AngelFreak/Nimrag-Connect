@@ -32,16 +32,13 @@ const ACTIVITIES = {
   ],
 };
 
-const trend = (points: number) => ({ average: 62, min: 55, max: 68, points: Array.from({ length: points }, (_, i) => ({ date: `2026-11-${String(i + 1).padStart(2, '0')}`, value: 55 + (i % 10) })) });
-
 const desktopRoutes: Record<string, Handler> = {
-  '/api/activities?limit=5': () => json(ACTIVITIES),
-  '/api/trends?range=4w': () =>
-    json({ sample: true, range: '4w', from: '2026-11-01', to: '2026-11-19', hrv: { series: trend(19), baseline_low_ms: 55, baseline_high_ms: 70 }, resting_hr: trend(0), breathing: { asleep: trend(0), awake_avg_brpm: null }, spo2: { overnight: trend(0), low_percent: null }, sleep_score: trend(0), sleep_duration_s: trend(0) }),
+  '/api/activities?limit=100': () => json(ACTIVITIES),
   '/api/sleep?nights=14': () =>
     json({ sample: true, average_duration_s: 25000, average_score: 72, nights: [{ date: '2026-11-17', start: '', end: '', duration_s: 24000, score: 70, deep_s: null, light_s: null, rem_s: null, awake_s: null }, { date: '2026-11-18', start: '', end: '', duration_s: 27000, score: 80, deep_s: null, light_s: null, rem_s: null, awake_s: null }] }),
   '/api/storage': () => json({ sample: true, files: 1284, bytes: 222298112, by_source: [], parsed_ok: 1284, parsed_partial: 0, parsed_error: 0, database_bytes: 5865528, last_backup_at: null }),
   '/api/devices': () => json({ sample: true, watch: { model: null, firmware: null, battery_percent: 74, battery_at: null, last_data_at: '2026-11-19T07:40:00+00:00' }, last_sync_at: '2026-11-19T07:42:00+00:00', new_files_24h: 5, upload_devices: [] }),
+  '/api/workouts': () => json({ watch_send: { available: false }, limits: {}, workouts: [{ id: 7, name: 'Tempo 5k', sport: 'running', steps: 4, duration_s: 1800, updated_at: '2026-11-18T10:00:00+00:00', send: { state: 'idle', requested_at: null, finished_at: null, error: null } }] }),
 };
 
 let calls: { url: string; init: RequestInit | undefined }[] = [];
@@ -85,6 +82,7 @@ function renderPage() {
 }
 
 const glanceIds = (root: ParentNode = document) => Array.from(root.querySelectorAll<HTMLElement>('.glance-grid [data-card]')).map((el) => el.dataset['card']);
+const cardIds = (selector: string) => Array.from(document.querySelectorAll<HTMLElement>(`${selector} [data-card]`)).map((el) => el.dataset['card']);
 
 beforeEach(() => setDesktop(false));
 afterEach(() => {
@@ -414,63 +412,129 @@ describe('Edit home', () => {
   });
 });
 
-describe('Overview on a desktop', () => {
-  it('renders the dashboard: tiles, glance cards, HRV, sleep, activities, sync and storage', async () => {
+describe('Home on a desktop', () => {
+  const desktopApi = (extra: Record<string, Handler> = {}, today = makeToday(), settings = makeSettings()) => {
     setDesktop(true);
-    mockApi({ '/api/today': () => json(makeToday()), '/api/settings': () => json(makeSettings()), ...desktopRoutes });
+    mockApi({ '/api/today': () => json(today), '/api/settings': () => json(settings), ...desktopRoutes, ...extra });
+  };
+
+  it('renders In Focus, At a Glance, Yesterday, Last 7 Days and the right column', async () => {
+    desktopApi();
     renderPage();
 
-    expect(await screen.findByRole('heading', { level: 1, name: 'Overview' })).toBeInTheDocument();
-    expect(await screen.findByText('Thursday 19 November 2026')).toBeInTheDocument();
-    expect(await screen.findByText('Energy now')).toBeInTheDocument();
-    expect(screen.getByText('3 sessions')).toBeInTheDocument();
-    expect(screen.getByText('2h 31m total')).toBeInTheDocument();
-    expect(screen.getByText('Range 55 to 70')).toBeInTheDocument();
-    // The tiles above already show Energy, Sleep and HRV.
-    expect(glanceIds()[0]).toBe('heart_rate');
-    expect(glanceIds()).not.toContain('energy');
+    expect(await screen.findByRole('heading', { level: 1, name: 'Home' })).toBeInTheDocument();
+    expect(await screen.findByText('Watch synced 07:42')).toBeInTheDocument();
+    expect(screen.getByText('Sample data')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'In Focus' })).toBeInTheDocument();
+    await waitFor(() => expect(cardIds('.hgrid--focus')).toEqual(['energy', 'week_activities', 'week_running', 'steps', 'sleep', 'training_status']));
+    // Heading, then the link carries the name.
+    const energy = document.querySelector<HTMLElement>('[data-card="energy"]')!;
+    expect(within(energy).getByRole('link', { name: 'Energy' })).toHaveAttribute('href', '/metrics/energy');
+    expect(energy).toHaveTextContent('Charged');
 
-    expect(await screen.findByRole('heading', { name: 'HRV, last 4 weeks' })).toBeInTheDocument();
-    const hrv = screen.getByRole('region', { name: 'HRV, last 4 weeks' });
-    expect(await within(hrv).findByRole('img', { name: 'Overnight HRV, last 4 weeks' })).toBeInTheDocument();
-    expect(within(hrv).getByText(/Overnight HRV for 19 nights, average 62 milliseconds/)).toBeInTheDocument();
-    expect(await screen.findByRole('heading', { name: 'Sleep, last 14 nights' })).toBeInTheDocument();
-    expect(await screen.findByText('Average 6h 57m')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'At a Glance' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'See All' })).toBeInTheDocument();
+    // In Focus already shows Energy, Steps, Sleep and Training status; HRV is a glance card here.
+    expect(cardIds('.hgrid--glance')).toEqual(['heart_rate', 'stress', 'hrv', 'intensity_minutes', 'training_load', 'recovery_time', 'vo2_max']);
 
-    const table = await screen.findByRole('table', { name: 'Recent activities' });
-    const rows = within(table).getAllByRole('row');
-    expect(rows).toHaveLength(3);
-    expect(within(rows[1]!).getByRole('link', { name: 'Thu 19 Nov' })).toHaveAttribute('href', '/activities/a1');
-    expect(rows[1]).toHaveTextContent('6.4 km · 5:45 /km');
-    expect(rows[2]).toHaveTextContent('18 sets · 3,600 kg');
+    expect(screen.getByRole('heading', { name: 'Yesterday' })).toBeInTheDocument();
+    const yesterday = screen.getByRole('region', { name: 'Yesterday' });
+    expect(within(yesterday).getByRole('link', { name: 'Steps' })).toHaveAttribute('href', '/metrics/steps');
+    expect(yesterday).toHaveTextContent('114% of 8,000');
+    expect(yesterday).toHaveTextContent('81 / 7h 12m');
+    expect(yesterday).toHaveTextContent('51 Rest / 148 High');
+    const week = screen.getByRole('region', { name: 'Last 7 Days' });
+    expect(week).toHaveTextContent('4 · 2 run, 2 strength');
+    expect(week).toHaveTextContent('8,441 Avg');
+
+    expect(screen.getByRole('button', { name: 'Edit Home' })).toBeEnabled();
+    // Our word is Energy.
+    expect(document.body.textContent).not.toMatch(/body battery/i);
+  });
+
+  it('the right column lists recent activities, sync and watch, and workouts', async () => {
+    desktopApi();
+    renderPage();
+
+    const list = await screen.findByRole('list', { name: 'Recent activities' });
+    const items = within(list).getAllByRole('listitem');
+    expect(items).toHaveLength(2);
+    expect(within(items[0]!).getByRole('link', { name: 'Run' })).toHaveAttribute('href', '/activities/a1');
+    expect(items[0]).toHaveTextContent('Thu 19 Nov');
+    expect(items[0]).toHaveTextContent('6.4 km');
+    expect(items[0]).toHaveTextContent('37m');
+    expect(items[1]).toHaveTextContent('18');
+    expect(items[1]).toHaveTextContent('Sets');
 
     expect(await screen.findByText('1,284 original files · 212 MB')).toBeInTheDocument();
     expect(screen.getByText('Battery 74%')).toBeInTheDocument();
     // Backups are not built yet: the API sends null, so the row is left out instead of saying "unavailable".
     expect(screen.queryByText('Last backup')).not.toBeInTheDocument();
-    expect(calls.map((c) => c.url)).toEqual(expect.arrayContaining(['/api/activities?limit=5', '/api/trends?range=4w', '/api/sleep?nights=14', '/api/storage', '/api/devices']));
+    expect(screen.getByRole('link', { name: 'Open the Watch page' })).toHaveAttribute('href', '/devices');
+
+    expect(await screen.findByRole('link', { name: 'Tempo 5k' })).toHaveAttribute('href', '/workouts/7');
+    expect(screen.getByRole('link', { name: 'Open workouts' })).toHaveAttribute('href', '/workouts');
+    expect(calls.map((c) => c.url)).toEqual(expect.arrayContaining(['/api/activities?limit=100', '/api/sleep?nights=14', '/api/storage', '/api/devices', '/api/workouts']));
   });
 
-  it('the HRV range control asks the trends endpoint for the chosen range', async () => {
-    setDesktop(true);
-    mockApi({
-      '/api/today': () => json(makeToday()),
-      '/api/settings': () => json(makeSettings()),
-      ...desktopRoutes,
-      '/api/trends?range=7d': () => json({ sample: true, range: '7d', from: '2026-11-13', to: '2026-11-19', hrv: { series: trend(7), baseline_low_ms: null, baseline_high_ms: null }, resting_hr: trend(0), breathing: { asleep: trend(0), awake_avg_brpm: null }, spo2: { overnight: trend(0), low_percent: null }, sleep_score: trend(0), sleep_duration_s: trend(0) }),
+  it('the week cards total the last 7 days of activities', async () => {
+    desktopApi();
+    renderPage();
+    const all = await waitFor(() => {
+      const el = document.querySelector('[data-card="week_activities"]');
+      if (!el || !el.textContent?.includes('1h 22m')) throw new Error('not ready');
+      return el as HTMLElement;
     });
-    renderPage();
-    await screen.findByRole('heading', { name: 'HRV, last 4 weeks' });
-    await userEvent.click(screen.getByRole('button', { name: 'Week' }));
-    expect(await screen.findByRole('heading', { name: 'HRV, last 7 nights' })).toBeInTheDocument();
-    await waitFor(() => expect(calls.some((c) => c.url === '/api/trends?range=7d')).toBe(true));
+    expect(all).toHaveTextContent('All activities · Nov 13–Nov 19');
+    expect(all).toHaveTextContent('2Activities');
+    const run = document.querySelector('[data-card="week_running"]') as HTMLElement;
+    expect(run).toHaveTextContent('6.4 km');
+    expect(run).toHaveTextContent('5:47 /km');
+    expect(within(run).getByRole('img', { name: /Running per day/ })).toBeInTheDocument();
+    expect(within(run).getByRole('img', { name: /1 day with a run in the last 4 weeks/ })).toBeInTheDocument();
   });
 
-  it('shows an error with a retry when a panel fails, without losing the rest of the page', async () => {
-    setDesktop(true);
-    mockApi({ '/api/today': () => json(makeToday()), '/api/settings': () => json(makeSettings()), ...desktopRoutes, '/api/activities?limit=5': () => json({ error: 'boom' }, 500) });
+  it('leaves out the focus cards hidden in Edit Home, and follows the order for At a Glance', async () => {
+    desktopApi({}, makeToday(), makeSettings({ home_cards: { order: ['vo2_max', 'energy', 'heart_rate', 'steps', 'sleep', 'hrv', 'stress', 'training_status', 'intensity_minutes', 'training_load', 'recovery_time', 'respiration', 'spo2', 'weight', 'training_readiness'], hidden: ['energy', 'stress', 'respiration', 'spo2', 'weight', 'training_readiness'] } }));
     renderPage();
-    expect(await screen.findByText('Could not load recent activities')).toBeInTheDocument();
-    expect(screen.getByText('Energy now')).toBeInTheDocument();
+    await screen.findByRole('heading', { name: 'At a Glance' });
+    await waitFor(() => expect(cardIds('.hgrid--glance')).toEqual(['vo2_max', 'heart_rate', 'hrv', 'intensity_minutes', 'training_load', 'recovery_time']));
+    expect(cardIds('.hgrid--focus')).toEqual(['week_activities', 'week_running', 'steps', 'sleep', 'training_status']);
+  });
+
+  it('shows calm empty states, never zeros, when the watch gave no data', async () => {
+    desktopApi({ '/api/activities?limit=100': () => json({ sample: true, items: [], next_before: null }) }, makeEmptyToday(), makeSettings({ home_cards: { order: makeSettings().home_cards.order, hidden: ['respiration', 'spo2', 'weight'] } }));
+    renderPage();
+    expect(await screen.findByText('No energy data yet today.')).toBeInTheDocument();
+    expect(screen.getByText('No sleep detected last night.')).toBeInTheDocument();
+    expect(screen.getByText('No steps recorded yet today.')).toBeInTheDocument();
+    expect(screen.getByText('No training status yet.')).toBeInTheDocument();
+    expect(screen.getByText('Wear your watch while sleeping to reveal your status.')).toBeInTheDocument();
+    expect(await screen.findByText('No runs this week.')).toBeInTheDocument();
+    expect(screen.getByText('No activities in the last 7 days.')).toBeInTheDocument();
+    expect(screen.getByText('Not provided by this watch yet.')).toBeInTheDocument();
+    expect(screen.getByText('The watch has no data for this day.')).toBeInTheDocument();
+    expect(await screen.findByText(/No activities yet/)).toBeInTheDocument();
+  });
+
+  it('opens Edit Home with the desktop hint and saves a new layout', async () => {
+    desktopApi({ '/api/settings': (init) => (init?.method === 'PATCH' ? json(makeSettings()) : json(makeSettings())) });
+    renderPage();
+    await userEvent.click(await screen.findByRole('button', { name: 'Edit Home' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Edit home' });
+    expect(dialog).toHaveTextContent('shown under In Focus');
+    await userEvent.click(within(dialog).getByRole('checkbox', { name: /Heart rate/ }));
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(calls.some((c) => c.init?.method === 'PATCH')).toBe(true));
+    const patch = calls.find((c) => c.init?.method === 'PATCH')!;
+    expect(JSON.parse(String(patch.init?.body)).home_cards.hidden).toContain('heart_rate');
+  });
+
+  it('shows an error without losing the rest of the page when activities fail', async () => {
+    desktopApi({ '/api/activities?limit=100': () => json({ error: 'boom' }, 500) });
+    renderPage();
+    expect(await screen.findByText('Could not load recent activities.')).toBeInTheDocument();
+    expect(document.querySelector('[data-card="energy"]')).toBeInTheDocument();
+    expect(screen.getAllByText('Could not load your activities.')).toHaveLength(2);
   });
 });

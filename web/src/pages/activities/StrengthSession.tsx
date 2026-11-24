@@ -1,12 +1,16 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
+import { Link } from 'react-router-dom';
 import type { ExerciseGroup } from '../../api/generated/ExerciseGroup';
 import type { StrengthResponse } from '../../api/generated';
 import type { StrengthSet } from '../../api/generated/StrengthSet';
 import { Button, Card, CardHeader, SeriesChart, StatTile, Unavailable } from '../../components';
-import { fmtInt } from '../../lib/format';
+import { fmtShortDay } from '../../lib/dates';
+import { fmtClock, fmtInt } from '../../lib/format';
 import { useIsDesktop } from '../../lib/hooks';
 import { useSaveStrength } from './api';
-import { fmtKg, fmtMinutes } from './format';
+import { ChartBlock, DetailHeader, DetailLayout, SideCard, SideFacts } from './DetailParts';
+import { fmtBpm, fmtKg, fmtMinutes, longWhen } from './format';
+import { Tabs } from './Tabs';
 import { errorText } from './PageStates';
 import { spread, timedToMinutes, timeLabels } from './series';
 import { StrengthCompare } from './StrengthCompare';
@@ -250,6 +254,7 @@ export function StrengthSession({ data }: { data: StrengthResponse }) {
   const save = useSaveStrength(data.id);
   const [editing, setEditing] = useState(false);
   const [comparing, setComparing] = useState(false);
+  const [tab, setTab] = useState<'sets' | 'compare'>('sets');
   const [drafts, setDraftsState] = useState<Drafts>({});
   const [attempted, setAttempted] = useState(false);
   const [notice, setNotice] = useState<Notice>(null);
@@ -273,6 +278,7 @@ export function StrengthSession({ data }: { data: StrengthResponse }) {
     setAttempted(false);
     setNotice(null);
     save.reset();
+    setTab('sets');
     setEditing(true);
   };
   const cancelEdit = () => {
@@ -331,6 +337,112 @@ export function StrengthSession({ data }: { data: StrengthResponse }) {
 
   const compare = comparing && !editing ? <StrengthCompare current={data} /> : null;
 
+  const messages = (
+    <>
+      {notice ? (
+        <p className={`status-msg status-msg--${notice.kind}`} role={notice.kind === 'error' ? 'alert' : 'status'}>
+          {notice.text}
+        </p>
+      ) : null}
+      {attempted && errorCount > 0 ? (
+        <div className="status-msg status-msg--error" role="alert" tabIndex={-1} ref={summary}>
+          Fix {errorCount} {errorCount === 1 ? 'set' : 'sets'} before saving:
+          <ul>
+            {Object.entries(errors).map(([idx, e]) => (
+              <li key={idx}>{[e.reps, e.weight, e.exercise].filter(Boolean).join(' ')}</li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+    </>
+  );
+
+  if (desktop) {
+    const prev = data.previous;
+    const day = data.start.slice(0, 10);
+    const when = { date: day, start: data.start };
+    const editFooter = editing ? (
+      <div className="footer-bar">
+        <Button size="lg" onClick={cancelEdit} disabled={save.isPending}>
+          Discard changes
+        </Button>
+        <Button size="lg" variant="primary" type="submit" form={FORM_ID} disabled={save.isPending || (!dirty && errorCount === 0)} aria-busy={save.isPending}>
+          {save.isPending ? 'Saving' : 'Save changes'}
+        </Button>
+      </div>
+    ) : tab === 'sets' ? (
+      <div className="footer-bar footer-bar--single">
+        <Button size="lg" onClick={startEdit} disabled={data.exercises.length === 0}>
+          Edit sets
+        </Button>
+      </div>
+    ) : null;
+    const main = (
+      <>
+        <DetailHeader
+          backTo="/strength"
+          section="Strength"
+          noun="Strength training"
+          when={longWhen(when)}
+          kind="strength"
+          title="Strength"
+          sample={data.sample}
+          headline={[
+            { label: 'Time', value: fmtClock(data.duration_s) },
+            { label: 'Sets', value: data.exercises.length === 0 && data.sets === 0 ? null : String(data.sets) },
+            { label: 'Volume', value: fmtKg(data.volume_kg === null ? null : Math.round(data.volume_kg)) },
+            { label: 'Avg HR', value: fmtBpm(data.avg_hr_bpm) },
+            { label: 'Max HR', value: fmtBpm(data.max_hr_bpm) },
+          ]}
+          prev={prev ? { to: `/activities/${prev.id}/strength`, label: `Previous session, ${fmtShortDay(prev.start.slice(0, 10))}` } : null}
+        />
+        <ChartBlock
+          color="heart"
+          title="Heart rate"
+          label="Heart rate during the session"
+          summary={hrSummary}
+          x={hr.x}
+          data={hr.y}
+          xLabels={hrSpread ? timeLabels(hr.x[hr.x.length - 1] ?? 0) : []}
+          {...(hrSpread && data.avg_hr_bpm !== null ? { refLine: { value: data.avg_hr_bpm, label: `Avg: ${Math.round(data.avg_hr_bpm)} bpm` } } : {})}
+        />
+        {messages}
+        <Tabs
+          label="Session details"
+          value={editing ? 'sets' : tab}
+          onChange={(id) => setTab(id === 'compare' ? 'compare' : 'sets')}
+          tabs={[
+            { id: 'sets', label: 'Sets', content: exercises },
+            { id: 'compare', label: 'Compare to last', disabled: editing, content: <StrengthCompare current={data} /> },
+          ]}
+        />
+        {editFooter}
+      </>
+    );
+    const side = prev ? (
+      <SideCard title="Previous session">
+        <SideFacts
+          items={[
+            { label: 'Date', value: fmtShortDay(prev.start.slice(0, 10)) },
+            { label: 'Time', value: fmtMinutes(prev.duration_s) },
+            { label: 'Sets', value: prev.sets === null ? null : String(prev.sets) },
+            { label: 'Volume', value: fmtKg(prev.volume_kg === null ? null : Math.round(prev.volume_kg)) },
+          ]}
+        />
+        <Link to={`/activities/${prev.id}/strength`}>Open previous session</Link>
+      </SideCard>
+    ) : (
+      <SideCard title="Previous session">
+        <p className="adt-note">There is no earlier strength session to compare with.</p>
+      </SideCard>
+    );
+    return (
+      <div className="adt-root" data-activity-id={data.id}>
+        <DetailLayout main={main} side={side} />
+      </div>
+    );
+  }
+
   return (
     <>
       <div className="page" data-activity-id={data.id}>
@@ -351,23 +463,7 @@ export function StrengthSession({ data }: { data: StrengthResponse }) {
           />
         </Card>
 
-        {notice ? (
-          <p className={`status-msg status-msg--${notice.kind}`} role={notice.kind === 'error' ? 'alert' : 'status'}>
-            {notice.text}
-          </p>
-        ) : null}
-        {attempted && errorCount > 0 ? (
-          <div className="status-msg status-msg--error" role="alert" tabIndex={-1} ref={summary}>
-            Fix {errorCount} {errorCount === 1 ? 'set' : 'sets'} before saving:
-            <ul>
-              {Object.entries(errors).map(([idx, e]) => (
-                <li key={idx}>
-                  {[e.reps, e.weight, e.exercise].filter(Boolean).join(' ')}
-                </li>
-              ))}
-            </ul>
-          </div>
-        ) : null}
+        {messages}
 
         {desktop && compare ? (
           <div className="strength-grid">

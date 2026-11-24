@@ -1,9 +1,9 @@
 import { useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useMe } from '../../account/queries';
-import { SampleDataChip, TopBar } from '../../components';
+import { PageHeader, PeriodToolbar, SampleDataChip, TopBar, rangeLabel } from '../../components';
 import { todayIn } from '../../lib/dates';
-import { usePageTitle } from '../../lib/hooks';
+import { useIsDesktop, usePageTitle } from '../../lib/hooks';
 import { CardSkeleton, LoadError } from '../health/parts';
 import { PeriodNav, RangeBar, type PeriodOption } from '../health/period';
 import { DayBody } from './DayBody';
@@ -48,6 +48,7 @@ function useMetricPeriod(def: MetricDef): MetricPeriod {
 }
 
 const optionOf = (range: RangeKey): PeriodOption<RangeKey> => ({ value: range, label: range, days: RANGE_DAYS[range] });
+const longOptionOf = (range: RangeKey) => ({ value: range, label: rangeLabel(range) });
 
 export function MetricView({ metric }: { metric: MetricKey }) {
   const def = METRICS[metric];
@@ -56,12 +57,23 @@ export function MetricView({ metric }: { metric: MetricKey }) {
   const single = p.range === '1d';
   const q = useMetricRange(metric, single ? null : (p.range as ServerRange), p.anchor);
   const unit = single ? 'day' : metric === 'intensity_minutes' && p.range === '7d' ? 'week' : 'period';
+  const desktop = useIsDesktop();
+  const sample = single ? undefined : <SampleDataChip sample={q.data?.sample} />;
   return (
     <>
-      <TopBar variant="back" backTo="/" backLabel="Back to Today" title={def.title} aside={single ? undefined : <SampleDataChip sample={q.data?.sample} />} />
-      <RangeBar label="Period" options={def.ranges.map(optionOf)} value={p.range} onChange={p.setRange} />
+      {desktop ? (
+        // A wide screen: the title, then the arrows, dates and range control in one toolbar.
+        <PageHeader title={def.title} actions={sample}>
+          <PeriodToolbar from={p.from} to={p.to} atToday={p.atToday} onStep={p.step} unit={unit} options={def.ranges.map(longOptionOf)} value={p.range} onChange={p.setRange} />
+        </PageHeader>
+      ) : (
+        <>
+          <TopBar variant="back" backTo="/" backLabel="Back to Today" title={def.title} aside={sample} />
+          <RangeBar label="Period" options={def.ranges.map(optionOf)} value={p.range} onChange={p.setRange} />
+        </>
+      )}
       <div className="page" style={{ paddingTop: 0 }} aria-busy={single ? undefined : q.isPending}>
-        <PeriodNav from={p.from} to={p.to} atToday={p.atToday} onStep={p.step} unit={unit} />
+        {desktop ? null : <PeriodNav from={p.from} to={p.to} atToday={p.atToday} onStep={p.step} unit={unit} />}
         {single ? (
           <DayBody metric={metric} date={p.to} today={p.today} />
         ) : q.isPending ? (

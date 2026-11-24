@@ -27,6 +27,15 @@ export function scoreLabel(label: string | null | undefined): string | null {
   return label ? label.charAt(0).toUpperCase() + label.slice(1) : null;
 }
 
+/**
+ * A word for a 0-100 sub-score, on the same bands the server uses for the overall score
+ * (excellent 90+, good 80+, fair 60+, otherwise poor). null when there is no score.
+ */
+export function ratingWord(score: number | null | undefined): string | null {
+  if (score === null || score === undefined || Number.isNaN(score)) return null;
+  return score >= 90 ? 'Excellent' : score >= 80 ? 'Good' : score >= 60 ? 'Fair' : 'Poor';
+}
+
 /** Sleep-stage spans in minutes from bedtime, for the timeline. Stages the watch could not measure are left out. */
 export function stageSpans(night: SleepNight): { spans: StageSpan[]; totalMinutes: number } {
   const start = epochMs(night.start);

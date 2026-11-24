@@ -1,74 +1,103 @@
-/* Design tokens, taken from the design canvas (docs/design/artifact/project/*.dc.html).
+/* Design tokens. The web default is the light theme (measured from Connect's web layout, see
+   docs/design/web-layout/SPEC.md); the dark theme is the original palette from the design canvas
+   (docs/design/artifact/project/*.dc.html) and is chosen with <html data-theme="dark">. The inline
+   script in index.html sets that attribute before first paint (the Android app always gets dark).
    Every colour, size and radius used by the components comes from here. */
 :root {
-  color-scheme: dark;
+  color-scheme: light;
 
   /* Surfaces */
-  --bg: #0f1417;
-  --card: #171e22;
-  --raised: #12181c;
-  --line: #243037;
-  --line-strong: #2a353b;
-  --track: #243037;
-  --band: #1d3144;
+  --page: #efefef; /* backdrop behind the content sheet */
+  --bg: #ffffff;
+  --sheet: #ffffff;
+  --card: #ffffff;
+  --raised: #ffffff;
+  --sidebar: #1a1a1a;
+  --sidebar-text: #ffffff;
+  --sidebar-line: #333333;
+  --sidebar-hover: rgb(255 255 255 / 0.05);
+  --sidebar-active: rgb(255 255 255 / 0.08);
+  --line: #e4e4e4;
+  --line-strong: #c3c3c3;
+  --track: #dbdbdb;
+  --band: #dce9f7;
+  --hover: #f4f4f4;
+  --skel-a: #e9e9e9;
+  --skel-b: #f4f4f4;
+  --scrim: rgb(0 0 0 / 0.45);
+  --card-border: var(--line);
+  --card-shadow: 0 4px 8px -4px rgb(0 0 0 / 0.08), 0 2px 2px rgb(0 0 0 / 0.1), 0 0 2px rgb(0 0 0 / 0.1), 0 0 4px rgb(0 0 0 / 0.12);
+  --seg-track: var(--track);
+  --seg-border: transparent;
+  --seg-on: #ffffff;
+  --seg-pad: 4px;
+  --seg-inner: 3px;
+  --seg-h: 36px;
+  --seg-text: var(--text);
+  --btn-bg: var(--track);
+  --btn-border: transparent;
+  --btn-hover: #cfcfcf;
+  --seg-shadow: 0 1px 3px rgb(0 0 0 / 0.25);
 
   /* Text */
-  --text: #e8edee;
-  --text-2: #9aa7ac;
-  --link: #7dbbff;
-  --link-hover: #a9d2ff;
-  --on-accent: #0f1417;
-  --accent: #7dbbff;
+  --text: #101010;
+  --text-2: #6c6c6c;
+  --link: #1265c2;
+  --link-hover: #0d4f9c;
+  --on-accent: #ffffff;
+  --accent: #1265c2;
 
-  /* Metric colours */
-  --energy: #4fd1b5;
-  --energy-fill: #173a36;
-  --sleep: #a594ff;
-  --heart: #ff6b6b;
-  --steps: #f2d45c;
-  --steps-dim: #9c8a3c;
-  --warn: #ffb066;
+  /* Metric colours (>= 3:1 on white) */
+  --energy: #0aa58a;
+  --energy-fill: #cdeee7;
+  --sleep: #7b5cff;
+  --heart: #e23b3b;
+  --steps: #c79a00;
+  --steps-dim: #a37e00;
+  --warn: #d9730d;
+  --stress: #f08a00;
 
   /* Heart-rate zones 1..5 */
-  --zone-1: #5b8dbe;
-  --zone-2: #4fd1b5;
-  --zone-3: #f2d45c;
-  --zone-4: #ffa24d;
-  --zone-5: #ff6b6b;
+  --zone-1: #3b7bbf;
+  --zone-2: #0aa58a;
+  --zone-3: #c79a00;
+  --zone-4: #e8801a;
+  --zone-5: #e23b3b;
 
   /* Sleep stages */
-  --stage-deep: #5b4fcf;
-  --stage-light: #8f82f0;
-  --stage-rem: #c9c1ff;
-  --stage-awake: #ffb066;
+  --stage-deep: #1f6fd1;
+  --stage-light: #4aa3f0;
+  --stage-rem: #d42fbf;
+  --stage-awake: #f06ad8;
 
   /* Stress buckets */
-  --stress-rest: #2f5c8a;
-  --stress-low: #5b8dbe;
-  --stress-medium: #ffb066;
-  --stress-activity: #1f292e;
+  --stress-rest: #3b6ea5;
+  --stress-low: #6da0d6;
+  --stress-medium: #f08a00;
+  --stress-activity: #d4dade;
 
   /* Training status timeline (recovery blue, strained magenta, maintaining yellow, productive green,
      detraining muted orange-brown, no status grey); green also marks a good night and a balanced HRV */
-  --good: #6fcf5f;
-  --status-recovery: #4f9bff;
-  --status-strained: #d65bd0;
-  --status-maintaining: #f2d45c;
-  --status-productive: #6fcf5f;
-  --status-detraining: #b0743c;
-  --status-none: #55636a;
+  --good: #0a7d3e;
+  --status-recovery: #1265c2;
+  --status-strained: #c2189f;
+  --status-maintaining: #c79a00;
+  --status-productive: #2e9e3a;
+  --status-detraining: #9a5f2a;
+  --status-none: #8d979c;
   /* HRV status markers: balanced green dot, unbalanced orange square, low and poor red triangle */
-  --hrv-balanced: #6fcf5f;
-  --hrv-unbalanced: #ffb066;
-  --hrv-low: #ff6b6b;
+  --hrv-balanced: #2e9e3a;
+  --hrv-unbalanced: #e8801a;
+  --hrv-low: #e23b3b;
 
   /* Map */
-  --map-bg: #141b1f;
-  --map-grid: #1f292e;
+  --map-bg: #e8ecee;
+  --map-grid: #d8dde0;
 
   /* Type */
-  --font-body: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
-  --font-display: 'Space Grotesk', 'Inter', system-ui, sans-serif;
+  --font-body: 'Open Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-display: 'Open Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --display-weight: 300; /* headline numbers and titles are light in Connect's scale */
   --fs-xs: 12px;
   --fs-sm: 13px;
   --fs-base: 14px;
@@ -78,21 +107,114 @@
   --fs-title-sm: 20px;
   --fs-title: 22px;
   --fs-title-lg: 30px;
-  --fs-title-xl: 32px;
+  --fs-title-xl: 40px;
   --fs-stat-sm: 20px;
   --fs-stat: 24px;
-  --fs-stat-lg: 34px;
-  --fs-stat-xl: 30px;
+  --fs-stat-lg: 32px;
+  --fs-stat-xl: 32px;
 
   /* Shape and spacing */
-  --radius-card: 16px;
-  --radius-card-sm: 14px;
-  --radius-control: 12px;
-  --radius-segment: 10px;
+  --radius-card: 8px;
+  --radius-card-sm: 8px;
+  --radius-control: 4px;
+  --radius-segment: 4px;
   --radius-pill: 999px;
   --touch: 44px;
   --touch-lg: 48px;
   --gap: 12px;
   --gutter: 20px;
+  --focus: #1265c2;
+}
+
+/* Dark theme: the palette the app shipped with. The Android app always uses it. */
+:root[data-theme='dark'] {
+  color-scheme: dark;
+
+  --page: #0f1417;
+  --bg: #0f1417;
+  --sheet: #0f1417;
+  --card: #171e22;
+  --raised: #12181c;
+  --sidebar: #0b0f11;
+  --line: #243037;
+  --line-strong: #2a353b;
+  --track: #243037;
+  --band: #1d3144;
+  --hover: #1b2429;
+  --skel-a: #1b252a;
+  --skel-b: #232f35;
+  --scrim: rgb(5 8 10 / 0.72);
+  --card-border: transparent;
+  --card-shadow: none;
+  --seg-track: transparent;
+  --seg-border: var(--line-strong);
+  --seg-on: var(--line);
+  --seg-pad: 0;
+  --seg-inner: 0;
+  --seg-h: var(--touch);
+  --seg-text: var(--text-2);
+  --btn-bg: transparent;
+  --btn-border: var(--line-strong);
+  --btn-hover: var(--hover);
+  --seg-shadow: none;
+
+  --text: #e8edee;
+  --text-2: #9aa7ac;
+  --link: #7dbbff;
+  --link-hover: #a9d2ff;
+  --on-accent: #0f1417;
+  --accent: #7dbbff;
+
+  --energy: #4fd1b5;
+  --energy-fill: #173a36;
+  --sleep: #a594ff;
+  --heart: #ff6b6b;
+  --steps: #f2d45c;
+  --steps-dim: #9c8a3c;
+  --warn: #ffb066;
+  --stress: #ffb066;
+
+  --zone-1: #5b8dbe;
+  --zone-2: #4fd1b5;
+  --zone-3: #f2d45c;
+  --zone-4: #ffa24d;
+  --zone-5: #ff6b6b;
+
+  --stage-deep: #5b4fcf;
+  --stage-light: #8f82f0;
+  --stage-rem: #c9c1ff;
+  --stage-awake: #ffb066;
+
+  --stress-rest: #2f5c8a;
+  --stress-low: #5b8dbe;
+  --stress-medium: #ffb066;
+  --stress-activity: #1f292e;
+
+  --good: #6fcf5f;
+  --status-recovery: #4f9bff;
+  --status-strained: #d65bd0;
+  --status-maintaining: #f2d45c;
+  --status-productive: #6fcf5f;
+  --status-detraining: #b0743c;
+  --status-none: #55636a;
+  --hrv-balanced: #6fcf5f;
+  --hrv-unbalanced: #ffb066;
+  --hrv-low: #ff6b6b;
+
+  --map-bg: #141b1f;
+  --map-grid: #1f292e;
+
+  --font-body: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-display: 'Space Grotesk', 'Inter', system-ui, sans-serif;
+  --display-weight: 600;
+  --fs-title-xl: 32px;
+  --fs-stat-lg: 34px;
+  --fs-stat-xl: 30px;
+
+  --radius-card: 16px;
+  --radius-card-sm: 14px;
+  --radius-control: 12px;
+  --radius-segment: 10px;
+
   --focus: #a9d2ff;
 }

@@ -51,7 +51,7 @@
 a.srow:hover,
 button.srow:hover:not(:disabled),
 label.srow:hover {
-  background: var(--raised);
+  background: var(--hover);
   color: var(--text);
 }
 .srow:disabled {
@@ -300,11 +300,11 @@ label.srow:hover {
     font-size: var(--fs-md);
   }
   .profile-nav a:hover {
-    background: var(--card);
+    background: var(--hover);
     color: var(--text);
   }
   .profile-nav a[aria-current='page'] {
-    background: var(--card);
+    background: var(--hover);
     color: var(--text);
     font-weight: 600;
   }

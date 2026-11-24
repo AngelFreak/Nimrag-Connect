@@ -5,6 +5,9 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import { registerSW } from 'virtual:pwa-register';
 
 // Fonts are bundled (self-hosted); nothing is fetched from Google Fonts or any CDN at runtime.
+import '@fontsource/open-sans/latin-300.css';
+import '@fontsource/open-sans/latin-400.css';
+import '@fontsource/open-sans/latin-600.css';
 import '@fontsource/inter/latin-400.css';
 import '@fontsource/inter/latin-500.css';
 import '@fontsource/inter/latin-600.css';
@@ -19,6 +22,11 @@ import './styles/settings.css';
 import { App } from './App';
 import { queryClient } from './api/queryClient';
 import { listenForFreshData, refetchWhenWorkerTakesOver } from './dataRefresh';
+import { initTheme } from './lib/theme';
+
+// index.html already set the theme before first paint; this repeats it (the app's bridge may arrive
+// late) and follows the system setting.
+initTheme();
 
 const root = document.getElementById('root');
 if (!root) throw new Error('missing #root');

@@ -15,7 +15,9 @@ import {
   SendIcon,
   SettingsGroup,
   SettingsRow,
+  SegmentedControl,
   ShieldIcon,
+  SunIcon,
   TargetIcon,
   TopBar,
   UsersIcon,
@@ -23,6 +25,8 @@ import {
 import { todayIn } from '../../lib/dates';
 import { fmtInt } from '../../lib/format';
 import { usePageTitle } from '../../lib/hooks';
+import { setThemeChoice, useThemeChoice, type ThemeChoice } from '../../lib/theme';
+import { isNativeApp } from '../../native';
 import { useSettings } from '../today/queries';
 import { useAbout, useGarmin, useTokens } from '../system/queries';
 import { breakableZone, phonesSummary } from './common';
@@ -45,6 +49,26 @@ export type ProfileSection = 'account' | 'preferences' | 'about';
 export function sectionFromSearch(search: string): ProfileSection {
   const section = new URLSearchParams(search).get('section');
   return section === 'preferences' || section === 'about' ? section : 'account';
+}
+
+const THEME_OPTIONS: { value: ThemeChoice; label: string }[] = [
+  { value: 'light', label: 'Light' },
+  { value: 'dark', label: 'Dark' },
+  { value: 'system', label: 'Match system' },
+];
+
+/** Light, dark or the system's setting. Not shown in the Android app, which is always dark. */
+function AppearanceRow() {
+  const choice = useThemeChoice();
+  if (isNativeApp()) return null;
+  return (
+    <SettingsRow
+      icon={<SunIcon />}
+      tone="steps"
+      title="Appearance"
+      action={<SegmentedControl label="Appearance" options={THEME_OPTIONS} value={choice} onChange={setThemeChoice} />}
+    />
+  );
 }
 
 function Head({ name, host, admin }: { name: string | undefined; host: string; admin: boolean }) {
@@ -97,6 +121,7 @@ function UserRows() {
       </div>
       <div data-pane="preferences">
         <SettingsGroup title="Preferences">
+          <AppearanceRow />
           <SettingsRow icon={<GlobeIcon />} tone="warn" title="Timezone" value={s ? breakableZone(s.timezone) : settingValue(null)} to="/profile/timezone" />
           <SettingsRow
             icon={<TargetIcon />}
@@ -136,6 +161,11 @@ function AdminRows() {
         <SettingsGroup title="Account">
           <SettingsRow icon={<KeyIcon />} tone="accent" title="Password" to="/profile/password" />
           <SettingsRow icon={<ShieldIcon />} tone="energy" title="Two-step login" value="On" to="/profile/two-step" />
+        </SettingsGroup>
+      </div>
+      <div data-pane="account">
+        <SettingsGroup title="Appearance">
+          <AppearanceRow />
         </SettingsGroup>
       </div>
       <div data-pane="account">

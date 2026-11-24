@@ -234,3 +234,9 @@ export function GlanceCard({ id, today }: { id: HomeCard; today: Today }) {
     </StatTile>
   );
 }
+
+/**
+ * Desktop: the "In Focus" grid shows these cards of the layout (when not hidden in Edit Home), next to
+ * the two weekly activity cards that have no entry in the layout. "At a Glance" shows the rest.
+ */
+export const DESKTOP_FOCUS_CARDS: readonly HomeCard[] = ['energy', 'steps', 'sleep', 'training_status'];

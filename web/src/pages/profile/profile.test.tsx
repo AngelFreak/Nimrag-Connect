@@ -129,6 +129,35 @@ describe('Profile: the list', () => {
     expect(exportFileName(undefined, '2026-11-22')).toBe('nimrag-export-2026-11-22.zip');
   });
 
+  it('Appearance switches the theme between light, dark and the system setting, and is not offered in the app', async () => {
+    window.localStorage.clear();
+    mockApi(routes());
+    const { unmount } = renderApp('/profile');
+    await screen.findByRole('link', { name: /^Timezone/ });
+    const group = screen.getByRole('group', { name: 'Appearance' });
+    expect(within(group).getByRole('button', { name: 'Light' })).toHaveAttribute('aria-pressed', 'true');
+    await userEvent.click(within(group).getByRole('button', { name: 'Dark' }));
+    expect(document.documentElement.dataset['theme']).toBe('dark');
+    expect(window.localStorage.getItem('nimrag.theme')).toBe('dark');
+    expect(within(group).getByRole('button', { name: 'Dark' })).toHaveAttribute('aria-pressed', 'true');
+    await userEvent.click(within(group).getByRole('button', { name: 'Match system' }));
+    expect(window.localStorage.getItem('nimrag.theme')).toBe('system');
+    // jsdom has no dark system preference.
+    expect(document.documentElement.dataset['theme']).toBe('light');
+    unmount();
+
+    window.NimragApp = { native: true };
+    try {
+      renderApp('/profile');
+      await screen.findByRole('link', { name: /^Timezone/ });
+      expect(screen.queryByRole('group', { name: 'Appearance' })).not.toBeInTheDocument();
+    } finally {
+      delete window.NimragApp;
+      window.localStorage.clear();
+      document.documentElement.removeAttribute('data-theme');
+    }
+  });
+
   it('groups the rows Account, Preferences, Garmin Connect, About, Log out, with no form on the list', async () => {
     mockApi(routes());
     renderApp('/profile');

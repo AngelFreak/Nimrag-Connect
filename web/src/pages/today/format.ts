@@ -152,3 +152,13 @@ export function syncLine(lastSyncAt: Maybe<string>, lastDataAt: Maybe<string>, t
   if (data) return `Latest watch data ${data}`;
   return 'No watch data yet';
 }
+
+/** "6.4 km" from metres; `null` stays null. */
+export function fmtKm(meters: Maybe<number>, digits = 1): string | null {
+  return isMissing(meters) ? null : `${(meters / 1000).toFixed(digits)} km`;
+}
+
+/** "Mon" to "Sun" letters for a day: "M", "T", "W" ... */
+export function dayLetter(day: string): string {
+  return fmtDay(day, { weekday: 'narrow' });
+}

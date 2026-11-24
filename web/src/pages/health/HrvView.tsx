@@ -3,10 +3,11 @@ import { Link } from 'react-router-dom';
 import type { HrvDay } from '../../api/generated/HrvDay';
 import type { HrvRange } from '../../api/generated/HrvRange';
 import type { HrvStatusKind } from '../../api/generated/HrvStatusKind';
-import { Card, CardHeader, DataList, EmptyState, Legend, SampleDataChip, SeriesChart, StatTile, TopBar, Toggle, ValueOrUnavailable, type LegendItem } from '../../components';
+import { Card, CardHeader, DataList, EmptyState, Legend, PageHeader, PeriodToolbar, SampleDataChip, SeriesChart, StatStrip, StatTile, TopBar, Toggle, ValueOrUnavailable, rangeLabel, type LegendItem } from '../../components';
 import { fmtDayLong, fmtMonthDay } from '../../lib/dates';
 import { fmtInt, statusName, withUnit } from '../../lib/format';
 import { useIsDesktop, usePageTitle } from '../../lib/hooks';
+import { FactorList, FactorRow, ScoreHero, StatsColumns, StatsSection } from './desktop';
 import { CardSkeleton, ChartSummary, LoadError } from './parts';
 import { PeriodNav, RangeBar, usePeriod, type PeriodOption } from './period';
 import { useHrv } from './queries';
@@ -53,12 +54,30 @@ export function HrvView() {
   const period = usePeriod<Key>(OPTIONS, '7d');
   const single = period.option.value === '1d';
   const q = useHrv(period.from, period.to);
+  const desktop = useIsDesktop();
   return (
     <>
-      <TopBar variant="back" backTo="/health" backLabel="Back to Health" title="HRV status" aside={<SampleDataChip sample={q.data?.sample} />} />
-      <RangeBar label="Period" options={OPTIONS} value={period.option.value} onChange={period.setRange} />
+      {desktop ? (
+        <PageHeader title="HRV Status" actions={<SampleDataChip sample={q.data?.sample} />}>
+          <PeriodToolbar
+            from={period.from}
+            to={period.to}
+            atToday={period.atToday}
+            onStep={period.step}
+            unit={single ? 'day' : 'period'}
+            options={OPTIONS.map((o) => ({ value: o.value, label: rangeLabel(o.value) }))}
+            value={period.option.value}
+            onChange={period.setRange}
+          />
+        </PageHeader>
+      ) : (
+        <>
+          <TopBar variant="back" backTo="/health" backLabel="Back to Health" title="HRV status" aside={<SampleDataChip sample={q.data?.sample} />} />
+          <RangeBar label="Period" options={OPTIONS} value={period.option.value} onChange={period.setRange} />
+        </>
+      )}
       <div className="page" style={{ paddingTop: 0 }} aria-busy={q.isPending}>
-        <PeriodNav from={period.from} to={period.to} atToday={period.atToday} onStep={period.step} unit={single ? 'day' : 'period'} />
+        {desktop ? null : <PeriodNav from={period.from} to={period.to} atToday={period.atToday} onStep={period.step} unit={single ? 'day' : 'period'} />}
         {q.isPending ? (
           <>
             <CardSkeleton lines={4} height={20} />
@@ -80,9 +99,11 @@ export function HrvView() {
 
 function RangeBody({ data }: { data: HrvRange }) {
   const [mode, setMode] = useState<HrvMode>('weekly');
+  const desktop = useIsDesktop();
   const withData = data.days.filter(hrvHasData);
   const weekly = [...data.days].reverse().find((d) => d.weekly_avg_ms !== null)?.weekly_avg_ms ?? null;
   const range = baselineShort(data.baseline_low_ms, data.baseline_high_ms);
+  if (desktop) return <RangeDesktop data={data} mode={mode} onMode={setMode} withData={withData} weekly={weekly} range={range} />;
   return (
     <>
       <div className="hrv-top">
@@ -179,10 +200,12 @@ function DayCard({ day }: { day: HrvDay }) {
 // ---- 1d ---------------------------------------------------------------------------------------------
 
 function NightBody({ data }: { data: HrvRange }) {
+  const desktop = useIsDesktop();
   const day = data.days[0];
   if (!day || (!hrvHasData(day) && !data.night)) {
     return <EmptyState title="No HRV for this night">The watch records HRV overnight. Try the previous day.</EmptyState>;
   }
+  if (desktop) return <NightDesktop day={day} night={data.night} />;
   return (
     <div className="grid-panels" style={{ alignItems: 'start' }}>
       <Card padding="xl">
@@ -242,5 +265,141 @@ function ReadingsCard({ day, night }: { day: HrvDay; night: HrvRange['night'] })
       </div>
       {band ? <Legend items={[{ key: 'band', label: 'Balanced range', color: 'var(--band)', outlined: true }]} /> : null}
     </Card>
+  );
+}
+
+// ---- wide screen ------------------------------------------------------------------------------------
+
+function RangeDesktop({ data, mode, onMode, withData, weekly, range }: { data: HrvRange; mode: HrvMode; onMode: (m: HrvMode) => void; withData: HrvDay[]; weekly: number | null; range: string | null }) {
+  const chart = hrvChart(data.days, mode);
+  const summary = hrvChartSummary(data, mode);
+  const items: LegendItem[] = [
+    { key: 'balanced', label: 'Balanced', color: 'var(--hrv-balanced)', shape: 'dot' },
+    { key: 'unbalanced', label: 'Unbalanced', color: 'var(--hrv-unbalanced)', shape: 'square' },
+    { key: 'low', label: 'Low or poor', color: 'var(--hrv-low)', shape: 'triangle' },
+    ...(chart.band ? [{ key: 'band', label: 'Balanced range', color: 'var(--band)', outlined: true }] : []),
+  ];
+  return (
+    <div className="stats-stack">
+      <StatsSection title={mode === 'weekly' ? '7-day averages' : 'Overnight averages'}>
+        <SeriesChart
+          label={mode === 'weekly' ? '7-day average HRV by day' : 'Overnight HRV by day'}
+          summary={summary}
+          x={chart.x}
+          series={[{ label: mode === 'weekly' ? '7-day average' : 'Overnight average', color: 'link', data: chart.y, markers: chart.markers, width: 1.5 }]}
+          {...(chart.band ? { band: chart.band } : {})}
+          xRange={[-0.5, data.days.length - 0.5]}
+          height={240}
+          xLabels={dayAxisLabels(data.from, data.days.length)}
+        />
+        <ChartSummary hidden={chart.count > 0}>{summary}</ChartSummary>
+        <Legend items={items} />
+        <div className="pill-row">
+          <button type="button" className="pill" aria-pressed={mode === 'overnight'} onClick={() => onMode(mode === 'overnight' ? 'weekly' : 'overnight')}>
+            Overnight averages
+          </button>
+        </div>
+        <StatStrip
+          items={[
+            { key: 'overnight', label: data.nights > 0 ? `Overnight avg, ${data.nights} night${data.nights === 1 ? '' : 's'}` : 'Overnight avg', value: withUnit(fmtInt(data.overnight_avg_ms), 'ms') },
+            { key: 'baseline', label: 'Baseline', value: withUnit(range, 'ms') },
+            { key: 'weekly', label: weekly === null ? '7-day avg' : '7-day avg, latest', value: withUnit(fmtInt(weekly), 'ms') },
+          ]}
+        />
+      </StatsSection>
+      <StatsSection title="Day by day">
+        {withData.length === 0 ? (
+          <EmptyState title="No HRV in this period">The watch records HRV overnight. Days appear here after a night with a reading.</EmptyState>
+        ) : (
+          <FactorList grid label="HRV by day, newest first">
+            {[...withData].reverse().map((d) => (
+              <FactorRow
+                key={d.date}
+                to={`/hrv?range=1d&end=${d.date}`}
+                name={fmtDayLong(d.date)}
+                sub={
+                  <>
+                    <StatusMark status={d.status} />
+                    {statusName(d.status_label) ?? 'No status'}
+                    {d.weekly_avg_ms === null ? '' : ` · 7-day avg ${fmtInt(d.weekly_avg_ms)} ms`}
+                  </>
+                }
+                rating={withUnit(fmtInt(d.last_night_ms), 'ms') ?? undefined}
+              />
+            ))}
+          </FactorList>
+        )}
+      </StatsSection>
+    </div>
+  );
+}
+
+function NightDesktop({ day, night }: { day: HrvDay; night: HrvRange['night'] }) {
+  const value = withUnit(fmtInt(hrvValue(day, 'overnight')), 'ms');
+  return (
+    <StatsColumns
+      side={
+        <>
+          <StatsSection title={`Overnight HRV, ${fmtMonthDay(day.date)}`}>
+            <ScoreHero
+              text
+              value={
+                <span className="score-hero__row">
+                  <StatusMark status={day.status} />
+                  {value ?? <span className="unavailable">unavailable</span>}
+                </span>
+              }
+              label={statusName(day.status_label) ?? 'No status for this night'}
+            />
+            <StatStrip
+              items={[
+                { key: 'weekly', label: '7-day average', value: withUnit(fmtInt(day.weekly_avg_ms), 'ms') },
+                { key: 'high5', label: 'Highest 5-minute average', value: withUnit(fmtInt(day.last_night_5min_high_ms), 'ms') },
+                { key: 'band', label: 'Balanced range', value: baselineText(day.baseline_low_ms, day.baseline_high_ms) },
+              ]}
+            />
+          </StatsSection>
+        </>
+      }
+    >
+      <ReadingsDesktop day={day} night={night} />
+    </StatsColumns>
+  );
+}
+
+function ReadingsDesktop({ day, night }: { day: HrvDay; night: HrvRange['night'] }) {
+  if (!night) {
+    return (
+      <StatsSection title="Readings through the night">
+        <p className="stat__sub">The individual readings were not recorded for this night.</p>
+      </StatsSection>
+    );
+  }
+  const secs = night.readings.map((r) => Date.parse(r.time) / 1000);
+  const band: [number, number] | undefined = day.baseline_low_ms !== null && day.baseline_high_ms !== null ? [day.baseline_low_ms, day.baseline_high_ms] : undefined;
+  const first = night.readings[0]?.time;
+  const last = night.readings[night.readings.length - 1]?.time;
+  const summary = `${night.readings.length} HRV reading${night.readings.length === 1 ? '' : 's'} through the night, from ${fmtInt(night.low_ms)} to ${fmtInt(night.high_ms)} ms, average ${fmtInt(night.avg_ms)} ms.`;
+  return (
+    <StatsSection title="Readings through the night" aside={withUnit(fmtInt(night.avg_ms), 'ms average') ?? undefined}>
+      <SeriesChart
+        label="HRV readings through the night"
+        summary={summary}
+        x={secs}
+        series={[{ label: 'HRV', color: 'link', data: night.readings.map((r) => r.value), points: night.readings.length <= 12 }]}
+        {...(band ? { band } : {})}
+        height={240}
+        xLabels={secs.length < 2 ? [] : [{ value: secs[0] as number, text: clock(first) ?? '' }, { value: secs[secs.length - 1] as number, text: clock(last) ?? '' }]}
+      />
+      <ChartSummary hidden>{summary}</ChartSummary>
+      {band ? <Legend items={[{ key: 'band', label: 'Balanced range', color: 'var(--band)', outlined: true }]} /> : null}
+      <StatStrip
+        items={[
+          { key: 'low', label: 'Lowest', value: withUnit(fmtInt(night.low_ms), 'ms') },
+          { key: 'avg', label: 'Average', value: withUnit(fmtInt(night.avg_ms), 'ms') },
+          { key: 'high', label: 'Highest', value: withUnit(fmtInt(night.high_ms), 'ms') },
+        ]}
+      />
+    </StatsSection>
   );
 }

@@ -8,6 +8,7 @@ export * from './StageBar';
 export * from './ZoneBars';
 export * from './Chip';
 export * from './SegmentedControl';
+export * from './PageHeader';
 export * from './DataList';
 export * from './Table';
 export * from './States';

@@ -3,7 +3,7 @@
 
 import type { ActivityListItem } from '../../api/generated/ActivityListItem';
 import { fmtClock, fmtInt, isMissing, type Maybe } from '../../lib/format';
-import { addDays, fmtMonth, fmtShortDay } from '../../lib/dates';
+import { addDays, fmtDay, fmtMonth, fmtShortDay } from '../../lib/dates';
 
 export const KIND_LABELS: Record<string, string> = {
   run: 'Run',
@@ -210,4 +210,101 @@ export function sortActivities(items: readonly ActivityListItem[], sort: Sort): 
     if (typeof x === 'string' && typeof y === 'string') return x.localeCompare(y) * sign;
     return ((x as number) - (y as number)) * sign;
   });
+}
+
+// ---- desktop list rows and detail headline ------------------------------------------------------
+
+export interface ListStat {
+  label: string;
+  /** null means the watch did not record it ("unavailable"). */
+  value: string | null;
+}
+
+/** The five figures of a desktop list row, chosen by sport from what the list API returns. */
+export function listStats(a: ActivityListItem): ListStat[] {
+  const time = fmtClock(a.duration_s);
+  const distance = fmtDistance(a.distance_m, 2);
+  const ascent = fmtMeters(a.ascent_m);
+  const avgHr = fmtBpm(a.avg_hr_bpm);
+  switch (a.kind) {
+    case 'run':
+    case 'walk':
+    case 'hike':
+      return [
+        { label: 'Distance', value: distance },
+        { label: 'Time', value: time },
+        { label: 'Avg pace', value: fmtPace(a.avg_pace_s_per_km) },
+        { label: 'Total ascent', value: ascent },
+        { label: 'Avg HR', value: avgHr },
+      ];
+    case 'cycle':
+      return [
+        { label: 'Distance', value: distance },
+        { label: 'Time', value: time },
+        { label: 'Avg speed', value: a.distance_m && a.duration_s ? fmtSpeed(a.distance_m / a.duration_s) : null },
+        { label: 'Total ascent', value: ascent },
+        { label: 'Avg HR', value: avgHr },
+      ];
+    case 'swim':
+      return [
+        { label: 'Distance', value: fmtDistance(a.distance_m, 1) },
+        { label: 'Time', value: time },
+        { label: 'Avg HR', value: avgHr },
+        { label: 'Max HR', value: fmtBpm(a.max_hr_bpm) },
+        { label: 'Calories', value: fmtKcal(a.calories_kcal) },
+      ];
+    case 'strength':
+      return [
+        { label: 'Time', value: time },
+        { label: 'Exercises', value: a.exercises === null ? null : String(a.exercises) },
+        { label: 'Sets', value: a.sets === null ? null : String(a.sets) },
+        { label: 'Volume', value: a.volume_kg === null ? null : fmtKg(Math.round(a.volume_kg)) },
+        { label: 'Avg HR', value: avgHr },
+      ];
+    default:
+      return [
+        { label: 'Time', value: time },
+        { label: 'Distance', value: distance },
+        { label: 'Avg HR', value: avgHr },
+        { label: 'Max HR', value: fmtBpm(a.max_hr_bpm) },
+        { label: 'Calories', value: fmtKcal(a.calories_kcal) },
+      ];
+  }
+}
+
+/** "Monday · 18:14", the line under a row's name. */
+export function weekdayClock(a: { date: string; start: string }): string {
+  const day = fmtDay(a.date, { weekday: 'long' });
+  const clock = clockOf(a.start);
+  return clock ? `${day} · ${clock}` : day;
+}
+
+/** "November 8, 2026 @ 17:22", the breadcrumb of an activity. */
+export function longWhen(a: { date: string; start: string }): string {
+  const day = new Intl.DateTimeFormat('en-US', { timeZone: 'UTC', month: 'long', day: 'numeric', year: 'numeric' }).format(new Date(`${a.date}T00:00:00Z`));
+  const clock = clockOf(a.start);
+  return clock ? `${day} @ ${clock}` : day;
+}
+
+/** The sort choices of the desktop list: a label and the Sort it stands for. */
+export const SORT_CHOICES: readonly { id: string; label: string; sort: Sort }[] = [
+  { id: 'newest', label: 'Newest first', sort: { key: 'date', dir: 'desc' } },
+  { id: 'oldest', label: 'Oldest first', sort: { key: 'date', dir: 'asc' } },
+  { id: 'longest', label: 'Longest first', sort: { key: 'duration', dir: 'desc' } },
+  { id: 'hr', label: 'Highest avg HR', sort: { key: 'hr', dir: 'desc' } },
+  { id: 'type', label: 'Type A to Z', sort: { key: 'type', dir: 'asc' } },
+];
+
+/** The id of the choice a Sort matches; the default when it is one of the table's other states. */
+export function sortChoiceId(sort: Sort): string {
+  return SORT_CHOICES.find((c) => c.sort.key === sort.key && c.sort.dir === sort.dir)?.id ?? 'newest';
+}
+
+/** Rows whose type name or sport name contains the text (case-insensitive); everything when it is empty. */
+export function searchActivities<T extends { kind: string; sport_name: string | null; sub_sport_name?: string | null }>(items: readonly T[], text: string): T[] {
+  const q = text.trim().toLowerCase();
+  if (!q) return [...items];
+  return items.filter((a) =>
+    [activityTitle(a), a.kind, a.sport_name, a.sub_sport_name ?? null].some((s) => s !== null && s.replace(/_/g, ' ').toLowerCase().includes(q)),
+  );
 }

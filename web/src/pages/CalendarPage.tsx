@@ -3,13 +3,15 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../api/client';
 import type { CalendarResponse } from '../api/generated';
-import { Card, CardHeader, DataList, LinkButton, TopBar } from '../components';
+import { Card, CardHeader, DataList, LinkButton, PageHeader, SampleDataChip, StatStrip, TopBar } from '../components';
 import { addMonths, browserToday, fmtMonth, fmtShortDay, isIsoMonth } from '../lib/dates';
 import { fmtInt } from '../lib/format';
-import { usePageTitle } from '../lib/hooks';
+import { useIsDesktop, usePageTitle } from '../lib/hooks';
+import { DayToolbar, StatsColumns, StatsSection } from './health/desktop';
 import { activityRow, activityWords, CALENDAR_KEYS, dayMarkers, daysOfMonth, energyText, leadingBlanks, moveFocus, sleepText } from './body/calendar';
 import { PageError, PageSkeleton, useOwnerToday } from './body/common';
 import type { CalendarDay } from './body/types';
+import './body/calendar.css';
 
 // Stage 3l: GET /api/calendar/{yyyy-mm}. The month is in the URL (/calendar/2026-11, none means
 // the current month). Every day is a link to /day/{date}; the grid is one tab stop and moves with
@@ -33,17 +35,32 @@ export function CalendarPage() {
     enabled: month !== undefined,
   });
   const data = query.data;
+  const desktop = useIsDesktop();
+  const navigate = useNavigate();
   return (
     <>
-      <TopBar
-        variant="pager"
-        title={title}
-        subtitle={data?.sample ? 'Calendar · sample data' : 'Calendar'}
-        prevLabel="Previous month"
-        nextLabel="Next month"
-        prev={month ? { to: `/calendar/${addMonths(month, -1)}` } : null}
-        next={month ? { to: `/calendar/${addMonths(month, 1)}` } : null}
-      />
+      {desktop ? (
+        <PageHeader title="Calendar" actions={data?.sample ? <SampleDataChip sample /> : undefined}>
+          <DayToolbar
+            label={title}
+            prevLabel="Previous month"
+            nextLabel="Next month"
+            onPrev={() => month && void navigate(`/calendar/${addMonths(month, -1)}`)}
+            onNext={() => month && void navigate(`/calendar/${addMonths(month, 1)}`)}
+            atEnd={false}
+          />
+        </PageHeader>
+      ) : (
+        <TopBar
+          variant="pager"
+          title={title}
+          subtitle={data?.sample ? 'Calendar · sample data' : 'Calendar'}
+          prevLabel="Previous month"
+          nextLabel="Next month"
+          prev={month ? { to: `/calendar/${addMonths(month, -1)}` } : null}
+          next={month ? { to: `/calendar/${addMonths(month, 1)}` } : null}
+        />
+      )}
       {query.isError ? (
         <PageError title="The calendar could not be loaded" error={query.error} onRetry={() => void query.refetch()} />
       ) : !data || !month ? (
@@ -102,54 +119,101 @@ export function CalendarBody({ month, data, today }: { month: string; data: Cale
 
   const selected = byDate.get(focusDay);
   const isCurrentMonth = today.startsWith(month);
+  const desktop = useIsDesktop();
+
+  const heads = (
+    <div className="cal-head" aria-hidden="true">
+      {WEEKDAYS.map((d) => (
+        <span key={d}>{d}</span>
+      ))}
+    </div>
+  );
+  const cells = (
+    <div className="cal-grid" ref={grid} role="group" aria-label="Days, use the arrow keys to move between them">
+      {Array.from({ length: leadingBlanks(month) }, (_, i) => (
+        <span key={`lead-${i}`} aria-hidden="true" />
+      ))}
+      {days.map((d) => {
+        const markers = dayMarkers(byDate.get(d));
+        const words = activityWords(byDate.get(d));
+        const n = Number(d.slice(8));
+        const label = [`${n} ${monthName}`, words, d === today ? 'today' : null].filter(Boolean).join(', ');
+        return (
+          <Link
+            key={d}
+            to={`/day/${d}`}
+            data-date={d}
+            className={d > today ? 'cal-day cal-day--future' : 'cal-day'}
+            aria-current={d === today ? 'date' : undefined}
+            aria-label={label}
+            tabIndex={d === focusDay ? 0 : -1}
+            onFocus={() => setFocusDay(d)}
+          >
+            {n}
+            <span style={{ display: 'flex', gap: 3, height: desktop ? 8 : 6 }} aria-hidden="true">
+              {markers.length === 0 ? <span className="dot" style={{ background: 'none' }} /> : markers.map((m) => <span key={m} className={`dot dot--${m}`} />)}
+            </span>
+          </Link>
+        );
+      })}
+      {desktop
+        ? Array.from({ length: (7 - ((leadingBlanks(month) + days.length) % 7)) % 7 }, (_, i) => <span key={`trail-${i}`} aria-hidden="true" />)
+        : null}
+    </div>
+  );
+  const legend = (
+    <ul className="legend">
+      <li className="legend__item">
+        <span className="dot dot--cardio" aria-hidden="true" />
+        <span className="legend__label">Cardio (circle)</span>
+      </li>
+      <li className="legend__item">
+        <span className="dot dot--strength" aria-hidden="true" />
+        <span className="legend__label">Strength (square)</span>
+      </li>
+    </ul>
+  );
+
+  if (desktop) {
+    return (
+      <div className="page" style={{ paddingTop: 0 }}>
+        <StatsColumns
+          asideRight
+          side={
+            <>
+              <StatsSection title={fmtShortDay(focusDay)}>
+                <DaySummary day={selected} />
+                <LinkButton to={`/day/${focusDay}`}>Open day view</LinkButton>
+              </StatsSection>
+              <StatsSection title={isCurrentMonth ? 'Month so far' : 'Month totals'}>
+                <StatStrip
+                  items={[
+                    { key: 'activities', label: 'Activities', value: fmtInt(data.totals.activities) },
+                    { key: 'strength', label: 'Strength sessions', value: fmtInt(data.totals.strength_sessions) },
+                    { key: 'cardio', label: 'Cardio sessions', value: fmtInt(data.totals.cardio_sessions) },
+                  ]}
+                />
+              </StatsSection>
+            </>
+          }
+        >
+          <section className="cal-sheet" aria-label={`Calendar for ${fmtMonth(month)}`}>
+            {heads}
+            {cells}
+            {legend}
+          </section>
+        </StatsColumns>
+      </div>
+    );
+  }
 
   return (
     <div className="page">
       <div className="grid-panels" style={{ alignItems: 'start' }}>
         <Card padding="sm" aria-label={`Calendar for ${fmtMonth(month)}`} className="cal">
-          <div className="cal-head" aria-hidden="true">
-            {WEEKDAYS.map((d) => (
-              <span key={d}>{d}</span>
-            ))}
-          </div>
-          <div className="cal-grid" ref={grid} role="group" aria-label="Days, use the arrow keys to move between them">
-            {Array.from({ length: leadingBlanks(month) }, (_, i) => (
-              <span key={`lead-${i}`} aria-hidden="true" />
-            ))}
-            {days.map((d) => {
-              const markers = dayMarkers(byDate.get(d));
-              const words = activityWords(byDate.get(d));
-              const n = Number(d.slice(8));
-              const label = [`${n} ${monthName}`, words, d === today ? 'today' : null].filter(Boolean).join(', ');
-              return (
-                <Link
-                  key={d}
-                  to={`/day/${d}`}
-                  data-date={d}
-                  className={d > today ? 'cal-day cal-day--future' : 'cal-day'}
-                  aria-current={d === today ? 'date' : undefined}
-                  aria-label={label}
-                  tabIndex={d === focusDay ? 0 : -1}
-                  onFocus={() => setFocusDay(d)}
-                >
-                  {n}
-                  <span style={{ display: 'flex', gap: 3, height: 6 }} aria-hidden="true">
-                    {markers.length === 0 ? <span className="dot" style={{ background: 'none' }} /> : markers.map((m) => <span key={m} className={`dot dot--${m}`} />)}
-                  </span>
-                </Link>
-              );
-            })}
-          </div>
-          <ul className="legend">
-            <li className="legend__item">
-              <span className="dot dot--cardio" aria-hidden="true" />
-              <span className="legend__label">Cardio (circle)</span>
-            </li>
-            <li className="legend__item">
-              <span className="dot dot--strength" aria-hidden="true" />
-              <span className="legend__label">Strength (square)</span>
-            </li>
-          </ul>
+          {heads}
+          {cells}
+          {legend}
         </Card>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>

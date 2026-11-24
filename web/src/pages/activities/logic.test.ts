@@ -2,8 +2,23 @@ import { describe, expect, it } from 'vitest';
 import type { ActivityListItem } from '../../api/generated/ActivityListItem';
 import type { ExerciseGroup } from '../../api/generated/ExerciseGroup';
 import type { StrengthSet } from '../../api/generated/StrengthSet';
-import { activityTitle, groupByPeriod, groupLabel, parseType, rowText, sortActivities, weekStart, whenLabel } from './format';
-import { minutesAxis, paceMinutes, spread, timeLabels, timedToMinutes, timeTicks } from './series';
+import {
+  activityTitle,
+  groupByPeriod,
+  groupLabel,
+  listStats,
+  longWhen,
+  parseType,
+  rowText,
+  searchActivities,
+  sortActivities,
+  sortChoiceId,
+  SORT_CHOICES,
+  weekdayClock,
+  weekStart,
+  whenLabel,
+} from './format';
+import { distanceAxis, distanceLabels, minutesAxis, paceMinutes, spread, timeLabels, timedToMinutes, timeTicks } from './series';
 import { buildPatch, compareExercises, deltaText, differsFromWatch, draftsOf, loadText, parseReps, parseWeight, repsText, validateAll } from './strengthModel';
 import { zoneEntries } from './ActivityBody';
 
@@ -249,5 +264,83 @@ describe('timeLabels', () => {
   });
   it('has none without a duration', () => {
     expect(timeLabels(0)).toEqual([]);
+  });
+});
+
+describe('listStats (the five figures of a desktop row)', () => {
+  const labels = (a: ActivityListItem) => listStats(a).map((s) => s.label);
+  const values = (a: ActivityListItem) => listStats(a).map((s) => s.value);
+
+  it('a run: distance, time, pace, ascent, average heart rate', () => {
+    expect(labels(item())).toEqual(['Distance', 'Time', 'Avg pace', 'Total ascent', 'Avg HR']);
+    expect(values(item())).toEqual(['6.40 km', '38:00', '5:56 /km', '42 m', '151 bpm']);
+  });
+  it('a walk and a hike show the pace too', () => {
+    expect(labels(item({ kind: 'walk' }))).toContain('Avg pace');
+    expect(labels(item({ kind: 'hike' }))).toContain('Avg pace');
+  });
+  it('a ride shows the average speed worked out from distance and time', () => {
+    const ride = item({ kind: 'cycle', distance_m: 10000, duration_s: 1800, avg_pace_s_per_km: null });
+    expect(labels(ride)).toEqual(['Distance', 'Time', 'Avg speed', 'Total ascent', 'Avg HR']);
+    expect(values(ride)[2]).toBe('20.0 km/h');
+  });
+  it('a swim and an unnamed sport lean on heart rate and energy', () => {
+    expect(labels(item({ kind: 'swim', distance_m: 800 }))).toEqual(['Distance', 'Time', 'Avg HR', 'Max HR', 'Calories']);
+    expect(values(item({ kind: 'swim', distance_m: 800 }))[0]).toBe('800 m');
+    expect(labels(item({ kind: 'other', distance_m: null }))).toEqual(['Time', 'Distance', 'Avg HR', 'Max HR', 'Calories']);
+  });
+  it('strength: time, exercises, sets, volume, average heart rate', () => {
+    const str = item({ kind: 'strength', distance_m: null, avg_pace_s_per_km: null, sets: 18, volume_kg: 3300.4, exercises: 6 });
+    expect(labels(str)).toEqual(['Time', 'Exercises', 'Sets', 'Volume', 'Avg HR']);
+    expect(values(str)).toEqual(['38:00', '6', '18', '3,300 kg', '151 bpm']);
+  });
+  it('a missing figure is null, never 0', () => {
+    const empty = item({ duration_s: null, distance_m: null, avg_pace_s_per_km: null, avg_hr_bpm: null, ascent_m: null });
+    expect(values(empty)).toEqual([null, null, null, null, null]);
+    const str = item({ kind: 'strength', sets: null, volume_kg: null, exercises: null });
+    expect(values(str).slice(1, 4)).toEqual([null, null, null]);
+  });
+});
+
+describe('searchActivities', () => {
+  const rows = [item({ id: '1' }), item({ id: '2', kind: 'strength', sport_name: 'training' }), item({ id: '3', kind: 'other', sport_name: 'stand_up_paddleboarding' })];
+  it('keeps everything for an empty search', () => {
+    expect(searchActivities(rows, '  ')).toHaveLength(3);
+  });
+  it('matches the type name, whatever the case', () => {
+    expect(searchActivities(rows, 'RUN').map((r) => r.id)).toEqual(['1']);
+    expect(searchActivities(rows, 'strength').map((r) => r.id)).toEqual(['2']);
+  });
+  it('matches the watch sport name of an unnamed type, underscores as spaces', () => {
+    expect(searchActivities(rows, 'paddle').map((r) => r.id)).toEqual(['3']);
+    expect(searchActivities(rows, 'up paddle').map((r) => r.id)).toEqual(['3']);
+  });
+  it('finds nothing for a word no row has', () => {
+    expect(searchActivities(rows, 'swim')).toEqual([]);
+  });
+});
+
+describe('desktop list sorting and dates', () => {
+  it('every sort choice is found again from its Sort', () => {
+    for (const c of SORT_CHOICES) expect(sortChoiceId(c.sort)).toBe(c.id);
+  });
+  it('writes the weekday and clock under a row name and a long date in the breadcrumb', () => {
+    expect(weekdayClock({ date: '2026-11-23', start: '2026-11-23T18:14:00+00:00' })).toBe('Monday · 18:14');
+    expect(longWhen({ date: '2026-11-08', start: '2026-11-08T17:22:00+00:00' })).toBe('November 8, 2026 @ 17:22');
+    expect(longWhen({ date: '2026-11-08', start: '' })).toBe('November 8, 2026');
+  });
+});
+
+describe('distance axis', () => {
+  it('turns cumulative metres into kilometres, carrying a gap forward', () => {
+    expect(distanceAxis([0, 500, null, 1500])).toEqual([0, 0.5, 0.5, 1.5]);
+  });
+  it('is not offered without a distance', () => {
+    expect(distanceAxis([null, null])).toBeNull();
+    expect(distanceAxis([0, 0])).toBeNull();
+  });
+  it('labels a few round kilometres, the unit on the last', () => {
+    expect(distanceLabels(4.3).map((l) => l.text)).toEqual(['0', '1', '2', '3', '4 km']);
+    expect(distanceLabels(0)).toEqual([]);
   });
 });

@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { Card, CardHeader, SampleDataChip, SegmentedControl, SeriesChart, TopBar, Unavailable } from '../../components';
+import { Card, CardHeader, PageHeader, SampleDataChip, SegmentedControl, SeriesChart, TopBar, Unavailable } from '../../components';
 import type { TrendSeries } from '../../api/generated/TrendSeries';
 import type { TrendsResponse } from '../../api/generated/TrendsResponse';
 import { fmtFixed, fmtInt, withUnit } from '../../lib/format';
@@ -21,6 +21,7 @@ import {
   trendXY,
   type RangeKey,
 } from './model';
+import { StatsSection } from './desktop';
 import { CardSkeleton, ChartSummary, HubLink, LoadError } from './parts';
 import { useTrends } from './queries';
 
@@ -96,39 +97,60 @@ export function HealthView({ initialRange = '4w' }: { initialRange?: RangeKey })
   const desktop = useIsDesktop();
   const [range, setRange] = useState<RangeKey>(initialRange);
   const q = useTrends(range);
+  const explore = (
+    <div className="hub-links">
+      <HubLink to="/sleep" title="Sleep" sub="Last night, stages and vitals" />
+      <HubLink to="/sleep?range=4w" title="Score history" sub="Sleep score and time asleep over weeks" />
+      <HubLink to="/hrv" title="HRV status" sub="7-day averages and your balanced range" />
+      <HubLink to="/training/status" title="Training status" sub="Recovery, productive, strained and more" />
+      <HubLink to="/day" title="Day" sub="Heart rate, stress and energy" />
+      <HubLink to="/movement" title="Movement" sub="Steps and intensity minutes" />
+      <HubLink to="/training" title="Training" sub="Recovery, load and VO2 max" />
+      <HubLink to="/body" title="Body" sub="Weight and measurements" />
+      <HubLink to="/calendar" title="Calendar" sub="Every day at a glance" />
+    </div>
+  );
+  const body = q.isPending ? (
+    <>
+      <CardSkeleton lines={4} height={20} />
+      <CardSkeleton lines={3} height={20} />
+      <CardSkeleton lines={3} height={20} />
+    </>
+  ) : q.isError && !q.data ? (
+    <LoadError what="health trends" error={q.error} onRetry={() => void q.refetch()} />
+  ) : q.data ? (
+    <Trends trends={q.data} range={range} fetching={q.isFetching} />
+  ) : null;
+  // A wide screen: the page is a menu of the health pages first (it is not in the sidebar), then the trends.
+  if (desktop) {
+    return (
+      <>
+        <PageHeader title="Health" actions={<SampleDataChip sample={q.data?.sample} />} />
+        <div className="page" style={{ paddingTop: 0 }} aria-busy={q.isPending}>
+          <div className="stats-stack">
+            <StatsSection title="Explore">{explore}</StatsSection>
+            <StatsSection title="Trends">
+              <SegmentedControl label="Time range" options={RANGES} value={range} onChange={setRange} layout="inline" />
+              {body}
+            </StatsSection>
+          </div>
+        </div>
+      </>
+    );
+  }
   return (
     <>
       <TopBar variant="large" title="Health" aside={<SampleDataChip sample={q.data?.sample} />} />
       <div className="range-bar">
-        <SegmentedControl label="Time range" options={RANGES} value={range} onChange={setRange} layout={desktop ? 'inline' : 'grid'} />
+        <SegmentedControl label="Time range" options={RANGES} value={range} onChange={setRange} layout="grid" />
       </div>
-      <div className="page" style={desktop ? undefined : { paddingTop: 0 }} aria-busy={q.isPending}>
-        {q.isPending ? (
-          <>
-            <CardSkeleton lines={4} height={20} />
-            <CardSkeleton lines={3} height={20} />
-            <CardSkeleton lines={3} height={20} />
-          </>
-        ) : q.isError && !q.data ? (
-          <LoadError what="health trends" error={q.error} onRetry={() => void q.refetch()} />
-        ) : q.data ? (
-          <Trends trends={q.data} range={range} fetching={q.isFetching} />
-        ) : null}
+      <div className="page" style={{ paddingTop: 0 }} aria-busy={q.isPending}>
+        {body}
         <section aria-labelledby="health-explore" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
           <h2 className="section-label" id="health-explore">
             Explore
           </h2>
-          <div className="hub-links">
-            <HubLink to="/sleep" title="Sleep" sub="Last night, stages and vitals" />
-            <HubLink to="/sleep?range=4w" title="Score history" sub="Sleep score and time asleep over weeks" />
-            <HubLink to="/hrv" title="HRV status" sub="7-day averages and your balanced range" />
-            <HubLink to="/training/status" title="Training status" sub="Recovery, productive, strained and more" />
-            <HubLink to="/day" title="Day" sub="Heart rate, stress and energy" />
-            <HubLink to="/movement" title="Movement" sub="Steps and intensity minutes" />
-            <HubLink to="/training" title="Training" sub="Recovery, load and VO2 max" />
-            <HubLink to="/body" title="Body" sub="Weight and measurements" />
-            <HubLink to="/calendar" title="Calendar" sub="Every day at a glance" />
-          </div>
+          {explore}
         </section>
       </div>
     </>

@@ -120,3 +120,37 @@ export function timedToMinutes(points: readonly TimedValue[]): { x: number[]; y:
     y: points.map((p) => p.value),
   };
 }
+
+// ---- desktop activity charts: distance axis, cadence ----------------------------------------------
+
+/** Kilometres on the x axis from the cumulative distance samples; gaps carry the last value forward. `null` without a distance. */
+export function distanceAxis(distanceM: readonly (number | null)[]): number[] | null {
+  let last = 0;
+  let any = false;
+  const out = distanceM.map((d) => {
+    if (!isMissing(d)) {
+      any = true;
+      last = Math.max(last, d);
+    }
+    return Math.round((last / 1000) * 1000) / 1000;
+  });
+  return any && last > 0 ? out : null;
+}
+
+/** Distance-axis labels (0, 1, 2 km): a step that reads well, at most six labels, the unit on the last one. */
+export function distanceLabels(totalKm: number): { value: number; text: string }[] {
+  if (!Number.isFinite(totalKm) || totalKm <= 0) return [];
+  const steps = [0.25, 0.5, 1, 2, 5, 10, 20, 25, 50, 100];
+  const step = steps.find((st) => Math.floor(totalKm / st) + 1 <= 6) ?? 100;
+  const out: { value: number; text: string }[] = [];
+  for (let k = 0; k <= totalKm + 1e-9; k += step) out.push({ value: Math.round(k * 1000) / 1000, text: String(Math.round(k * 100) / 100) });
+  const last = out[out.length - 1];
+  if (last) last.text += ' km';
+  return out.length < 2 ? [] : out;
+}
+
+export function cadenceSummary(values: readonly (number | null)[], elapsed: readonly number[]): string {
+  const s = spread(values);
+  if (!s) return 'No cadence samples were recorded.';
+  return `Cadence over ${durationText(elapsed)}: lowest ${fmtInt(s.min)}, average ${fmtInt(s.avg)}, highest ${fmtInt(s.max)} per minute.`;
+}
