@@ -94,14 +94,15 @@ export function statusLine(data: BackupsResponse, timezone: string, nowMs = Date
   const { status } = data;
   if (status.running) return { text: 'Backing up…', error: false };
   if (status.last_error) return { text: `The last backup failed ${fmtWhen(status.last_error.at, timezone, nowMs)}: ${status.last_error.text}`, error: true };
-  const last = status.last_ok ?? data.backups[0];
-  const lastAt = status.last_ok?.at ?? data.backups[0]?.at;
+  const newest = data.backups[0];
+  const lastAt = status.last_ok?.at ?? newest?.at;
   const parts: string[] = [];
   const off = status.next_at === null;
   if (off) parts.push('Off');
-  if (last && lastAt !== undefined) {
+  if (lastAt !== undefined) {
     parts.push(`Last backup ${fmtWhen(lastAt, timezone, nowMs)}`);
-    if (status.last_ok) parts.push(`${fmtBytes(status.last_ok.copied_bytes)} copied`);
+    // The backup's whole size: "copied" would say 0 B when everything was linked from the one before.
+    if (newest && (newest.db_bytes !== null || newest.files_bytes !== null)) parts.push(sizeOf(newest));
   } else if (!off) {
     parts.push('No backup yet');
   }
@@ -274,6 +275,21 @@ export function BackupsCard({ timezone }: { timezone: string }) {
           <p className={line.error ? 'status-msg status-msg--error' : 'stat__sub'} role={line.error ? 'alert' : undefined}>
             {line.text}
           </p>
+          <Button
+            disabled={!folder || data.status.running || run.isPending}
+            aria-busy={data.status.running || run.isPending}
+            onClick={() => {
+              setDone(null);
+              run.mutate();
+            }}
+          >
+            Back up now
+          </Button>
+          {run.isError ? (
+            <p className="status-msg status-msg--error" role="alert">
+              {errorMessage(run.error)}
+            </p>
+          ) : null}
           <BackupsForm key={`${data.source}:${JSON.stringify(data.settings)}`} data={data} onSaved={setDone} />
           {done ? (
             <p className="status-msg status-msg--ok" role="status">
@@ -300,22 +316,9 @@ export function BackupsCard({ timezone }: { timezone: string }) {
               {errorMessage(useStartup.error)}
             </p>
           ) : null}
-          <Button
-            variant="primary"
-            disabled={!folder || data.status.running || run.isPending}
-            aria-busy={data.status.running || run.isPending}
-            onClick={() => {
-              setDone(null);
-              run.mutate();
-            }}
-          >
-            Back up now
-          </Button>
-          {run.isError ? (
-            <p className="status-msg status-msg--error" role="alert">
-              {errorMessage(run.error)}
-            </p>
-          ) : null}
+          <h3 className="stat__label" style={{ margin: '8px 0 0' }}>
+            Backups in the folder
+          </h3>
           <BackupList backups={data.backups} timezone={timezone} />
           <p className="stat__sub">
             To restore, stop the server and run <code>nimrag-server restore --from {'<folder>/<backup>'} --data-dir {'<new folder>'}</code> (see the runbook).

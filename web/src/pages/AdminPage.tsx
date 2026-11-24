@@ -20,8 +20,11 @@ export function AdminPage() {
       <div className="page">
         <div className="grid-panels" style={{ alignItems: 'start' }}>
           <UsersCard />
-          <UnassignedCard timezone={timezone} />
-          <BackupsCard timezone={timezone} />
+          {/* One column for the two smaller cards, so Backups sits beside Users on a wide screen. */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16, minWidth: 0 }}>
+            <UnassignedCard timezone={timezone} />
+            <BackupsCard timezone={timezone} />
+          </div>
         </div>
       </div>
     </>

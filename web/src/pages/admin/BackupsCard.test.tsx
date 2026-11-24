@@ -42,10 +42,14 @@ afterEach(() => vi.unstubAllGlobals());
 describe('Backups card: wording', () => {
   const now = Date.parse('2026-11-24T12:00:00Z');
 
-  it('says when, how much was copied and when the next one is', () => {
+  it('says when, how big the newest backup is and when the next one is', () => {
     const at = Math.floor(Date.parse('2026-11-24T02:00:00Z') / 1000);
-    const d = data({ status: { running: false, last_ok: { name: 'x', at, duration_ms: 900, copied_bytes: 213 * 1024 * 1024 }, last_error: null, next_at: Math.floor(now / 1000) + 21 * 3600 } });
-    expect(statusLine(d, TZ, now)).toEqual({ text: 'Last backup today 03:00 · 213 MB copied · next in 21 h', error: false });
+    // Everything was linked from the backup before, so nothing was copied: the size is the backup's own.
+    const d = data({
+      status: { running: false, last_ok: { name: 'x', at, duration_ms: 900, copied_bytes: 0 }, last_error: null, next_at: Math.floor(now / 1000) + 21 * 3600 },
+      backups: [entry()],
+    });
+    expect(statusLine(d, TZ, now)).toEqual({ text: 'Last backup today 03:00 · 213 MB · next in 21 h', error: false });
   });
 
   it('says Off, backing up, and shows an error as an error', () => {
@@ -61,7 +65,7 @@ describe('Backups card: wording', () => {
       status: { running: false, last_ok: null, last_error: null, next_at: Math.floor(now / 1000) + 21 * 3600 },
       backups: [entry({ at: Math.floor(Date.parse('2026-11-23T10:00:00Z') / 1000) })],
     });
-    expect(statusLine(d, TZ, now).text).toBe('Last backup yesterday 11:00 · next in 21 h');
+    expect(statusLine(d, TZ, now).text).toBe('Last backup yesterday 11:00 · 213 MB · next in 21 h');
   });
 
   it('formats days, times and waits', () => {
@@ -92,7 +96,7 @@ describe('Backups card', () => {
         backups: [entry({ name: 'nimrag-backup-20261124T020000Z' }), entry({ name: 'nimrag-backup-20261123T020000Z', files_bytes: null, db_bytes: null })],
       }),
     );
-    expect(await screen.findByText(/Last backup today \d\d:\d\d · 5\.0 MB copied · next in 21 h/)).toBeInTheDocument();
+    expect(await screen.findByText(/Last backup today \d\d:\d\d · 213 MB · next in 21 h/)).toBeInTheDocument();
     expect(screen.getByLabelText('Folder')).toHaveValue('/backups');
     expect(screen.getByLabelText('How often')).toHaveValue('86400');
     expect(screen.getByLabelText('Keep')).toHaveValue(7);
