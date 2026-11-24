@@ -15,6 +15,8 @@ import java.util.concurrent.TimeUnit
  */
 class EditWatcher(
     private val outbox: () -> EditOutbox?,
+    /** Also run on every look while on screen (the test inbox of debuggable builds). */
+    private val alsoEachPoll: () -> Unit = {},
     /** The count changed ([wake]: a new edit is there to send). Called on the watcher's thread. */
     private val onChange: (count: Int, wake: Boolean) -> Unit,
 ) {
@@ -39,6 +41,7 @@ class EditWatcher(
     }
 
     private fun poll() {
+        runCatching { alsoEachPoll() }
         val count = try {
             outbox()?.pending()
         } catch (_: Exception) {

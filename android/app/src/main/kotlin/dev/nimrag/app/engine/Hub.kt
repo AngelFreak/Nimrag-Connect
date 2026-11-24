@@ -2,6 +2,7 @@ package dev.nimrag.app.engine
 
 import android.Manifest
 import android.app.Application
+import android.content.pm.ApplicationInfo
 import android.bluetooth.BluetoothManager
 import android.app.NotificationManager
 import android.content.ComponentName
@@ -24,6 +25,7 @@ import dev.nimrag.app.engine.phone.WeatherBridge
 import dev.nimrag.app.engine.store.EngineDb
 import dev.nimrag.app.engine.store.EngineLog
 import dev.nimrag.app.engine.store.FileStore
+import dev.nimrag.app.engine.store.TestInbox
 import dev.nimrag.app.engine.upload.EditWatcher
 import dev.nimrag.app.engine.upload.UploadWorker
 import dev.nimrag.app.engine.workouts.WorkoutSender
@@ -67,8 +69,20 @@ class Hub(val app: Application) {
         onEditNotices = { notices -> update { it.copy(editNotices = it.editNotices + notices) } },
     )
 
+    /** Testing without a watch (debuggable builds): files dropped in `files/test-inbox/` count as a sync. */
+    val testInbox = TestInbox(
+        filesDir = app.filesDir,
+        store = store,
+        log = log,
+        onStored = {
+            uploader.wake()
+            local.onFileStored()
+        },
+        enabled = app.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0,
+    )
+
     /** Notices changes made on the phone's copy while the app is on screen and wakes [uploader] for them. */
-    val editWatcher = EditWatcher({ local.edits }) { _, newEdit -> uploader.editsChanged(newEdit) }
+    val editWatcher = EditWatcher({ local.edits }, testInbox::poll) { _, newEdit -> uploader.editsChanged(newEdit) }
 
     /**
      * The account: first sign-in, unlock, sign out ([AccountManager]). A new token, a new server

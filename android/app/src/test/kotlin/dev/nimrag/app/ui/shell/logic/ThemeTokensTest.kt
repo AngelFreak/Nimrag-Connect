@@ -7,7 +7,10 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
 
-/** The native primary colour must stay the web app's (`web/src/styles/tokens.css`). */
+/**
+ * The native primary colour must stay the web app's dark theme (`web/src/styles/tokens.css`,
+ * the `:root[data-theme='dark']` block): the app is always dark, the web's `:root` is light.
+ */
 class ThemeTokensTest {
     private fun tokens(): String? {
         var dir: File? = File("").absoluteFile
@@ -29,8 +32,10 @@ class ThemeTokensTest {
     fun `native accent colours match the web tokens`() {
         val css = tokens()
         assumeTrue(css != null, "web/ not present")
-        assertEquals(token(css!!, "accent"), NimragColors.Accent)
-        assertEquals(token(css, "on-accent"), NimragColors.OnAccent)
-        assertEquals(token(css, "link-hover"), NimragColors.AccentHover)
+        val dark = css!!.substringAfter(":root[data-theme='dark']", missingDelimiterValue = "").substringBefore("}")
+        assumeTrue(dark.isNotEmpty(), "dark theme block not found in tokens.css")
+        assertEquals(token(dark, "accent"), NimragColors.Accent)
+        assertEquals(token(dark, "on-accent"), NimragColors.OnAccent)
+        assertEquals(token(dark, "link-hover"), NimragColors.AccentHover)
     }
 }
