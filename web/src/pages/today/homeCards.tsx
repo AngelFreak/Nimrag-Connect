@@ -4,13 +4,19 @@ import type { HomeCard, Today } from '../../api/generated';
 import type { StatusKind } from '../../api/generated/StatusKind';
 import type { ActivityListItem } from '../../api/generated/ActivityListItem';
 import type { NightSummary } from '../../api/generated/NightSummary';
-import { RangeBar, Ring, Skeleton, StageBar, Unavailable, ValueOrUnavailable } from '../../components';
+import { RangeBar, Ring, Skeleton, StageBar, StatusWord, Unavailable, ValueOrUnavailable } from '../../components';
 import { addDays, fmtMonthDay, fmtShortDay } from '../../lib/dates';
 import { fmtFixed, fmtInt, isMissing, statusName } from '../../lib/format';
+import { glanceWord, METRIC_SHORT, STATE_WORD } from '../health/healthStatus';
+import { useHealthStatus } from '../health/healthStatusQueries';
+import { LEVEL_COLOR, LEVEL_NAME } from '../health/readiness';
+import { useReadiness } from '../health/readinessQueries';
+import { RATING_WORD, headlineFor, ratingOfScore } from '../health/sleepNight';
 import { CARD_LABEL, CARD_LINK } from './cards';
 import { dayLetter, baselineLabel, fmtKm, fmtPace, fmtSeconds, fmtTime, hrvStatusLabel, signed, stressLevelWord, targetLabel, unit } from './format';
 import { Glyph, type GlyphName } from './glyphs';
 import { DayArea, DotStrip, MiniBars, Sparkline } from './homeCharts';
+import '../health/healthStatus.css';
 
 // The cards of the desktop Home: "In Focus" (332 x 304) and "At a Glance" (185 x 257). Layout from
 // docs/design/web-layout/SPEC.md part B; the data is what GET /api/today and the activity list already give.
@@ -281,6 +287,7 @@ function SleepCard({ today, nights }: { today: Today; nights: NightSummary[] | u
       </Shell>
     );
   }
+  const rating = ratingOfScore(s.score);
   const recent = (nights ?? [])
     .slice()
     .sort((a, b) => a.date.localeCompare(b.date))
@@ -310,10 +317,11 @@ function SleepCard({ today, nights }: { today: Today; nights: NightSummary[] | u
         <Side
           items={[
             { value: fmtSeconds(s.duration_s), label: 'Asleep' },
-            { value: s.score_label ? s.score_label.charAt(0).toUpperCase() + s.score_label.slice(1) : null, label: 'Quality' },
+            { value: rating ? <StatusWord type="sleep" value={rating}>{RATING_WORD[rating]}</StatusWord> : null, label: 'Quality' },
           ]}
         />
       </div>
+      <p className="hcard__caption">{headlineFor(s).title}</p>
       {recent.length > 0 ? (
         <MiniBars
           values={recent.map((n) => n.score)}
@@ -579,15 +587,10 @@ export function HomeGlanceCard({ id, today }: { id: HomeCard; today: Today }) {
         </Glance>
       );
     }
-    case 'training_readiness': {
-      const r = today.training_readiness;
-      if (!r) return <GlanceEmpty id={id} glyph="readiness" tone="var(--text-2)">Not provided by this watch yet.</GlanceEmpty>;
-      return (
-        <Glance id={id} glyph="readiness" tone="var(--zone-2)">
-          <Stat value={fmtInt(r.score)} label={r.label ?? 'Score'} />
-        </Glance>
-      );
-    }
+    case 'training_readiness':
+      return <ReadinessGlance />;
+    case 'health_status':
+      return <HealthStatusGlance />;
     case 'energy':
     case 'steps':
     case 'sleep':
@@ -595,4 +598,66 @@ export function HomeGlanceCard({ id, today }: { id: HomeCard; today: Today }) {
       // These four are cards of "In Focus".
       return null;
   }
+}
+
+/** Readiness: the estimate's ring, its level word and headline. Nothing is shown without an estimate. */
+function ReadinessGlance() {
+  const q = useReadiness();
+  const r = q.data;
+  if (q.isPending) {
+    return (
+      <Glance id="training_readiness" glyph="readiness" tone="var(--zone-2)">
+        <Loading />
+      </Glance>
+    );
+  }
+  if (!r || r.score === null || !r.level) return null;
+  return (
+    <Glance id="training_readiness" glyph="readiness" tone={LEVEL_COLOR[r.level]} footer={<span className="hfoot__label">Nimrag estimate</span>}>
+      <div className="hcard__center">
+        <Ring value={r.score} label="Readiness estimate" color={LEVEL_COLOR[r.level]} size={92} strokeWidth={8} />
+      </div>
+      <p className="hcard__caption hcard__caption--center">
+        <StatusWord type="readiness" value={r.level}>
+          {LEVEL_NAME[r.level]}
+        </StatusWord>
+        {r.headline ? <span className="hcard__sub">{r.headline}</span> : null}
+      </p>
+    </Glance>
+  );
+}
+
+/** Health status: last night's overnight values against your usual range. */
+function HealthStatusGlance() {
+  const q = useHealthStatus();
+  const r = q.data;
+  if (q.isPending) {
+    return (
+      <Glance id="health_status" glyph="heart" tone="var(--heart)">
+        <Loading />
+      </Glance>
+    );
+  }
+  if (!r) return <GlanceEmpty id="health_status" glyph="heart" tone="var(--heart)">Could not be loaded.</GlanceEmpty>;
+  if (!r.has_night) return <GlanceEmpty id="health_status" glyph="heart" tone="var(--heart)">No night recorded yet.</GlanceEmpty>;
+  const word = glanceWord(r);
+  return (
+    <Glance id="health_status" glyph="heart" tone="var(--heart)" footer={<span className="hfoot__label">Last night against your usual</span>}>
+      <p className="hcard__caption">
+        <StatusWord type="health" value={word.state} size="lg">
+          {word.text}
+        </StatusWord>
+      </p>
+      <ul className="hs-list" aria-label="Last night against your usual range">
+        {r.metrics.map((m) => (
+          <li key={m.key}>
+            <span className="hs-list__name">{METRIC_SHORT[m.key]}</span>
+            <StatusWord type="health" value={m.state}>
+              {STATE_WORD[m.state]}
+            </StatusWord>
+          </li>
+        ))}
+      </ul>
+    </Glance>
+  );
 }

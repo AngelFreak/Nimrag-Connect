@@ -1,9 +1,14 @@
 import { useCallback, useRef, useState, type KeyboardEvent } from 'react';
 import { Link } from 'react-router-dom';
-import type { Today } from '../../api/generated';
+import type { HomeCard, HomeCards, Today } from '../../api/generated';
+import type { ReadinessResponse } from '../../api/generated/ReadinessResponse';
 import { Card, Legend, Ring, SeriesChart, StageBar, StatusWord, Unavailable } from '../../components';
 import { energyKey } from '../../lib/status';
 import { fmtInt, isMissing } from '../../lib/format';
+import { LEVEL_COLOR, LEVEL_NAME } from '../health/readiness';
+import { useReadiness } from '../health/readinessQueries';
+import { RATING_COLOR, RATING_WORD, headlineFor, ratingOfScore } from '../health/sleepNight';
+import { DEFAULT_HOME_CARDS } from './cards';
 import { EnergyDayChart } from './EnergyDayChart';
 import { baselineLabel, energyHeadline, fmtSeconds, fmtTime, hrvStatusLabel, signed, unit } from './format';
 
@@ -34,6 +39,37 @@ function EnergySlide({ today }: { today: Today }) {
   );
 }
 
+/** Today's readiness estimate: the ring, its level word, the headline, and a link to the page that explains it. */
+function ReadinessSlide({ data }: { data: ReadinessResponse }) {
+  const level = data.level;
+  const color = level ? LEVEL_COLOR[level] : 'var(--accent)';
+  return (
+    <Card as="div" padding="lg">
+      <div className="focus-energy">
+        <Ring value={data.score} label="Readiness estimate" color={color} />
+        <div className="focus-energy__text">
+          <span className="stat__label">Readiness</span>
+          <span className="focus-energy__head">
+            {level ? (
+              <StatusWord type="readiness" value={level} size="lg">
+                {LEVEL_NAME[level]}
+              </StatusWord>
+            ) : (
+              <Unavailable />
+            )}
+          </span>
+          {data.headline ? <span className="focus__headline">{data.headline}</span> : null}
+          <span className="focus__sub">Nimrag estimate</span>
+        </div>
+      </div>
+      {data.sentence ? <p className="focus__sentence">{data.sentence}</p> : null}
+      <Link to="/training/readiness" className="focus__sub focus__link">
+        What it is made from
+      </Link>
+    </Card>
+  );
+}
+
 function SleepSlide({ today }: { today: Today }) {
   const s = today.sleep;
   const tz = today.timezone;
@@ -50,24 +86,28 @@ function SleepSlide({ today }: { today: Today }) {
   }
   const bed = fmtTime(s.start, tz);
   const wake = fmtTime(s.end, tz);
+  const rating = ratingOfScore(s.score);
+  const headline = headlineFor(s);
   return (
     <Card as="div" padding="lg">
-      <span className="stat__label">Sleep last night</span>
-      <div className="focus__row">
-        <span className="focus__big">{fmtSeconds(s.duration_s) ?? <Unavailable />}</span>
-        <div className="stat">
-          <span className="stat__sub">
-            {isMissing(s.score) ? (
-              <>Score <Unavailable /></>
-            ) : s.score_label ? (
-              <StatusWord type="sleep" value={s.score_label}>{`Score ${fmtInt(s.score)}, ${s.score_label}`}</StatusWord>
+      <div className="focus-energy">
+        <Ring value={s.score} label="Sleep score" color={rating ? RATING_COLOR[rating] : 'var(--sleep)'} />
+        <div className="focus-energy__text">
+          <span className="stat__label">Sleep last night</span>
+          <span className="focus-energy__head">
+            {rating ? (
+              <StatusWord type="sleep" value={rating} size="lg">
+                {RATING_WORD[rating]}
+              </StatusWord>
             ) : (
-              `Score ${fmtInt(s.score)}`
+              <Unavailable />
             )}
           </span>
+          <span className="focus__asleep">{fmtSeconds(s.duration_s) ?? <Unavailable />} asleep</span>
           <span className="focus__sub">{bed && wake ? `${bed} to ${wake}` : null}</span>
         </div>
       </div>
+      <p className="focus__headline">{headline.title}</p>
       {s.stages_available ? (
         <>
           <StageBar
@@ -93,7 +133,7 @@ function SleepSlide({ today }: { today: Today }) {
       ) : (
         <span className="focus__sub">Sleep stages: <Unavailable /></span>
       )}
-      <Link to="/sleep" className="focus__sub" style={{ minHeight: 44, display: 'inline-flex', alignItems: 'center' }}>
+      <Link to="/sleep" className="focus__sub focus__link">
         Open last night
       </Link>
     </Card>
@@ -133,11 +173,24 @@ function HrvSlide({ today }: { today: Today }) {
   );
 }
 
-const SLIDES = [
-  { id: 'energy', label: 'Energy' },
-  { id: 'sleep', label: 'Sleep' },
-  { id: 'hrv', label: 'HRV' },
-] as const;
+type SlideId = 'energy' | 'readiness' | 'sleep' | 'hrv';
+
+/** The home card each slide belongs to, so Edit home can order and hide the slides too. */
+const SLIDE_CARD: Record<SlideId, HomeCard> = { energy: 'energy', readiness: 'training_readiness', sleep: 'sleep', hrv: 'hrv' };
+const SLIDE_NAME: Record<SlideId, { dot: string; title: string }> = {
+  energy: { dot: 'Energy', title: 'Energy' },
+  readiness: { dot: 'Readiness', title: 'Readiness' },
+  sleep: { dot: 'Sleep', title: 'Sleep last night' },
+  hrv: { dot: 'HRV', title: 'Overnight HRV' },
+};
+
+/** The slides to show, in the owner's card order, without the hidden cards and without a readiness estimate that does not exist. */
+export function focusSlides(cards: HomeCards, hasReadiness: boolean): SlideId[] {
+  const hidden = new Set(cards.hidden);
+  return (Object.keys(SLIDE_CARD) as SlideId[])
+    .filter((id) => !hidden.has(SLIDE_CARD[id]) && (id !== 'readiness' || hasReadiness))
+    .sort((a, b) => cards.order.indexOf(SLIDE_CARD[a]) - cards.order.indexOf(SLIDE_CARD[b]));
+}
 
 function prefersReducedMotion(): boolean {
   return typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -147,22 +200,29 @@ function prefersReducedMotion(): boolean {
  * "In focus": a swipeable row of large cards (scroll-snap) with page dots.
  * The track takes focus and answers the left and right arrow keys; the dots are buttons.
  */
-export function FocusCarousel({ today }: { today: Today }) {
+export function FocusCarousel({ today, cards = DEFAULT_HOME_CARDS }: { today: Today; cards?: HomeCards }) {
   const track = useRef<HTMLDivElement>(null);
   const [active, setActive] = useState(0);
+  const readiness = useReadiness();
+  const estimate = readiness.data && readiness.data.score !== null ? readiness.data : null;
+  const slides = focusSlides(cards, estimate !== null);
+  const count = slides.length;
 
-  const goTo = useCallback((index: number) => {
-    const el = track.current;
-    if (!el) return;
-    const i = Math.max(0, Math.min(SLIDES.length - 1, index));
-    const slide = el.children[i] as HTMLElement | undefined;
-    if (!slide) return;
-    // Position of the slide's left edge inside the track's scroll area.
-    const left = slide.offsetLeft - (el.firstElementChild as HTMLElement).offsetLeft;
-    if (typeof el.scrollTo === 'function') el.scrollTo({ left, behavior: prefersReducedMotion() ? 'auto' : 'smooth' });
-    else el.scrollLeft = left;
-    setActive(i);
-  }, []);
+  const goTo = useCallback(
+    (index: number) => {
+      const el = track.current;
+      if (!el) return;
+      const i = Math.max(0, Math.min(count - 1, index));
+      const slide = el.children[i] as HTMLElement | undefined;
+      if (!slide) return;
+      // Position of the slide's left edge inside the track's scroll area.
+      const left = slide.offsetLeft - (el.firstElementChild as HTMLElement).offsetLeft;
+      if (typeof el.scrollTo === 'function') el.scrollTo({ left, behavior: prefersReducedMotion() ? 'auto' : 'smooth' });
+      else el.scrollLeft = left;
+      setActive(i);
+    },
+    [count],
+  );
 
   const onScroll = useCallback(() => {
     const el = track.current;
@@ -173,8 +233,8 @@ export function FocusCarousel({ today }: { today: Today }) {
     const step = second.offsetLeft - first.offsetLeft;
     if (step <= 0) return;
     const atEnd = el.scrollLeft + el.clientWidth >= el.scrollWidth - 2;
-    setActive(atEnd ? SLIDES.length - 1 : Math.max(0, Math.min(SLIDES.length - 1, Math.round(el.scrollLeft / step))));
-  }, []);
+    setActive(atEnd ? count - 1 : Math.max(0, Math.min(count - 1, Math.round(el.scrollLeft / step))));
+  }, [count]);
 
   const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
     if (e.target !== e.currentTarget) return;
@@ -189,29 +249,27 @@ export function FocusCarousel({ today }: { today: Today }) {
       goTo(0);
     } else if (e.key === 'End') {
       e.preventDefault();
-      goTo(SLIDES.length - 1);
+      goTo(count - 1);
     }
   };
 
+  if (count === 0) return null;
+  const current = Math.min(active, count - 1);
   return (
     <section className="focus" aria-roledescription="carousel" aria-label="In focus">
       <h2 className="section-label">In focus</h2>
       {/* The track scrolls sideways, so it must be reachable by keyboard (arrow keys move between slides). */}
       {/* eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex, jsx-a11y/no-noninteractive-element-interactions */}
       <div ref={track} className="focus__track" data-scroll="x" tabIndex={0} aria-label="In focus cards, use the left and right arrow keys" role="group" onScroll={onScroll} onKeyDown={onKeyDown}>
-        <div className="focus__slide" role="group" aria-roledescription="slide" aria-label="1 of 3: Energy">
-          <EnergySlide today={today} />
-        </div>
-        <div className="focus__slide" role="group" aria-roledescription="slide" aria-label="2 of 3: Sleep last night">
-          <SleepSlide today={today} />
-        </div>
-        <div className="focus__slide" role="group" aria-roledescription="slide" aria-label="3 of 3: Overnight HRV">
-          <HrvSlide today={today} />
-        </div>
+        {slides.map((id, i) => (
+          <div key={id} className="focus__slide" role="group" aria-roledescription="slide" aria-label={`${i + 1} of ${count}: ${SLIDE_NAME[id].title}`}>
+            {id === 'energy' ? <EnergySlide today={today} /> : id === 'readiness' && estimate ? <ReadinessSlide data={estimate} /> : id === 'sleep' ? <SleepSlide today={today} /> : <HrvSlide today={today} />}
+          </div>
+        ))}
       </div>
       <div className="focus__dots" role="group" aria-label="Choose a card">
-        {SLIDES.map((s, i) => (
-          <button key={s.id} type="button" className="focus__dot" aria-label={`Show ${s.label}, card ${i + 1} of ${SLIDES.length}`} aria-current={active === i ? 'true' : undefined} onClick={() => goTo(i)} />
+        {slides.map((id, i) => (
+          <button key={id} type="button" className="focus__dot" aria-label={`Show ${SLIDE_NAME[id].dot}, card ${i + 1} of ${count}`} aria-current={current === i ? 'true' : undefined} onClick={() => goTo(i)} />
         ))}
       </div>
     </section>

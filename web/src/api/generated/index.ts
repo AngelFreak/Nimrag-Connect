@@ -33,6 +33,8 @@ export type { GarminLoginResponse } from "./GarminLoginResponse";
 export type { GarminMfaRequest } from "./GarminMfaRequest";
 export type { GarminSettingsRequest } from "./GarminSettingsRequest";
 export type { GarminStatus } from "./GarminStatus";
+export type { HealthStatusHistory } from "./HealthStatusHistory";
+export type { HealthStatusResponse } from "./HealthStatusResponse";
 export type { HomeCard } from "./HomeCard";
 export type { HomeCards } from "./HomeCards";
 export type { HrvRange } from "./HrvRange";

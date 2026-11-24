@@ -1,7 +1,10 @@
 import { Link } from 'react-router-dom';
 import type { MetricRange } from '../../api/generated/MetricRange';
 import { BarSeries, Card, CardHeader, EmptyState, Legend, SeriesChart, StackedBars, StatStrip, StatTile, ValueOrUnavailable } from '../../components';
+import { fmtDay } from '../../lib/dates';
 import { useIsDesktop } from '../../lib/hooks';
+import { flowChart } from './energyDay';
+import { FlowBars } from './FlowBars';
 import { chartHasData, rangeChart, rangeRows, rangeSummary, statText, tileStats, type ChartSpec, type RangeRow } from './model';
 import { metricHref, type MetricDef } from './period';
 
@@ -9,13 +12,28 @@ import { metricHref, type MetricDef } from './period';
 // value, newest first. A row opens that day (on 1d) or that week (on 7d).
 
 export function RangeBody({ def, data, today }: { def: MetricDef; data: MetricRange; today: string }) {
+  const desktop = useIsDesktop();
   const spec = rangeChart(def.key, data, today);
   const rows = rangeRows(def, data, today);
   const tiles = tileStats(def.key, data);
   const week = data.bucket === 'week';
-  const desktop = useIsDesktop();
+  const flows = def.key === 'energy' ? flowChart(data, (iso) => fmtDay(iso, { weekday: 'short' })) : null;
   const chart = chartHasData(spec) ? (
-    <Plot spec={spec} label={`${def.title} ${week ? 'by week' : 'by day'}`} summary={rangeSummary(def, data)} />
+    <>
+      <Plot spec={spec} label={`${def.title} ${week ? 'by week' : 'by day'}`} summary={rangeSummary(def, data)} />
+      {flows?.hasData ? (
+        <>
+          <p className="chart-note">Charged and drained {week ? 'per week' : 'per day'}</p>
+          <FlowBars chart={flows} height={desktop ? 200 : 130} />
+          <Legend
+            items={[
+              { key: 'charged', label: 'Charged', color: 'var(--energy)' },
+              { key: 'drained', label: 'Drained', color: 'var(--warn)' },
+            ]}
+          />
+        </>
+      ) : null}
+    </>
   ) : (
     <EmptyState title={`No ${def.title.toLowerCase()} in this period`}>The watch has not recorded any for these days. Try an earlier period.</EmptyState>
   );

@@ -14,6 +14,7 @@ import { CalendarPage } from './pages/CalendarPage';
 import { DayPage } from './pages/DayPage';
 import { GalleryPage } from './pages/GalleryPage';
 import { HealthPage } from './pages/HealthPage';
+import { HealthStatusPage } from './pages/HealthStatusPage';
 import { HrvPage } from './pages/HrvPage';
 import { LoginPage } from './pages/LoginPage';
 import { MetricPage } from './pages/MetricPage';
@@ -125,6 +126,7 @@ export function App() {
           <Route path="training/status" element={<TrainingStatusPage />} />
           <Route path="training/readiness" element={<ReadinessPage />} />
           <Route path="training/race-predictor" element={<RacePredictorPage />} />
+          <Route path="health/status" element={<HealthStatusPage />} />
           <Route path="hrv" element={<HrvPage />} />
           <Route path="body" element={<BodyPage />} />
           <Route path="calendar/:month?" element={<CalendarPage />} />

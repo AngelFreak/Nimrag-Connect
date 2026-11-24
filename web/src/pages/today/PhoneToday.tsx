@@ -88,7 +88,7 @@ export function PhoneToday({ today, settings }: Props) {
       ) : t ? (
         <div className="page">
           <TimezoneNotice timezone={t.timezone} />
-          <FocusCarousel today={t} />
+          <FocusCarousel today={t} {...(settings.data ? { cards: settings.data.home_cards } : {})} />
           <AtAGlance today={t} settings={settings.data} />
           {settings.isError ? <p className="today-note">Your saved card layout could not be loaded, so the default one is shown.</p> : null}
           <YesterdayCard today={t} />

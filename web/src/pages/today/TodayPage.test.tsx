@@ -32,7 +32,36 @@ const ACTIVITIES = {
   ],
 };
 
+const READINESS = {
+  sample: true,
+  date: '2026-11-19',
+  score: 78,
+  level: 'high',
+  headline_key: 'high',
+  headline: 'Ready for a solid session',
+  sentence: 'Your numbers look good, so this is a fine day for a hard session.',
+  factors: [],
+  present: 6,
+  data_days: 14,
+  unavailable: null,
+};
+
+const NO_READINESS = { ...READINESS, score: null, level: null, headline_key: null, headline: null, sentence: null, present: 2, data_days: 2, unavailable: 'Readiness needs at least 3 days of data.' };
+
+const metricStatus = (key: string, unit: string, value: number | null, state: string) => ({ key, unit, value, low: value === null ? null : value - 5, high: value === null ? null : value + 5, state, nights: 20, nights_needed: 0 });
+
+const HEALTH_STATUS = {
+  sample: true,
+  date: '2026-11-19',
+  has_night: true,
+  metrics: [metricStatus('hrv', 'ms', 62, 'in_range'), metricStatus('resting_hr', 'bpm', 58, 'above'), metricStatus('breathing', 'brpm', 13.4, 'in_range'), metricStatus('spo2', '%', 95.8, 'in_range')],
+  outside: 1,
+  compared: 4,
+};
+
 const desktopRoutes: Record<string, Handler> = {
+  '/api/readiness': () => json(READINESS),
+  '/api/health-status': () => json(HEALTH_STATUS),
   '/api/activities?limit=100': () => json(ACTIVITIES),
   '/api/sleep?nights=14': () =>
     json({ sample: true, average_duration_s: 25000, average_score: 72, nights: [{ date: '2026-11-17', start: '', end: '', duration_s: 24000, score: 70, deep_s: null, light_s: null, rem_s: null, awake_s: null }, { date: '2026-11-18', start: '', end: '', duration_s: 27000, score: 80, deep_s: null, light_s: null, rem_s: null, awake_s: null }] }),
@@ -244,6 +273,7 @@ describe('In focus carousel', () => {
     renderPage();
     const region = await screen.findByRole('region', { name: 'In focus' });
     const dots = within(region).getAllByRole('button');
+    // Without a readiness estimate there are three slides.
     expect(dots.map((d) => d.getAttribute('aria-label'))).toEqual(['Show Energy, card 1 of 3', 'Show Sleep, card 2 of 3', 'Show HRV, card 3 of 3']);
     expect(dots[0]).toHaveAttribute('aria-current', 'true');
 
@@ -260,18 +290,63 @@ describe('In focus carousel', () => {
     expect(dots[0]).toHaveAttribute('aria-current', 'true');
   });
 
-  it('puts Energy, Sleep last night and HRV in the three slides', async () => {
-    mockApi({ '/api/today': () => json(makeToday()), '/api/settings': () => json(makeSettings()) });
+  it('puts Energy, Readiness, Sleep last night and HRV in the slides', async () => {
+    mockApi({ '/api/today': () => json(makeToday()), '/api/settings': () => json(makeSettings()), '/api/readiness': () => json(READINESS) });
     renderPage();
     const region = await screen.findByRole('region', { name: 'In focus' });
     expect(within(region).getByRole('img', { name: 'Energy level 68 out of 100' })).toBeInTheDocument();
     expect(within(region).getByText('Good reserve')).toBeInTheDocument();
     expect(within(region).getByText(/Woke 06:36/)).toBeInTheDocument();
-    expect(within(region).getByText('7h 12m')).toBeInTheDocument();
-    expect(within(region).getByText('Score 81, good')).toBeInTheDocument();
+    // The estimate: ring, level word, headline, its own label, and a link to the page.
+    expect(await within(region).findByRole('img', { name: 'Readiness estimate 78 out of 100' })).toBeInTheDocument();
+    expect(within(region).getByText('High')).toBeInTheDocument();
+    expect(within(region).getByText('Ready for a solid session')).toBeInTheDocument();
+    expect(within(region).getByText('Nimrag estimate')).toBeInTheDocument();
+    expect(within(region).getByRole('link', { name: 'What it is made from' })).toHaveAttribute('href', '/training/readiness');
+    // Sleep: score ring with its level word, time asleep, the sleep page's headline, link to the night.
+    expect(within(region).getByRole('img', { name: 'Sleep score 81 out of 100' })).toBeInTheDocument();
+    expect(within(region).getByText('Good')).toBeInTheDocument();
+    expect(within(region).getByText('7h 12m asleep')).toBeInTheDocument();
+    expect(within(region).getByRole('link', { name: 'Open last night' })).toHaveAttribute('href', '/sleep');
     expect(within(region).getByRole('img', { name: /^Sleep stages: deep 1h 40m/ })).toBeInTheDocument();
     expect(within(region).getByText('62 ms')).toBeInTheDocument();
     expect(within(region).getByText(/Within your range/)).toBeInTheDocument();
+    const dots = within(region).getAllByRole('button');
+    expect(dots.map((d) => d.getAttribute('aria-label'))).toEqual(['Show Energy, card 1 of 4', 'Show Readiness, card 2 of 4', 'Show Sleep, card 3 of 4', 'Show HRV, card 4 of 4']);
+  });
+
+  it('leaves the readiness slide out when there is no estimate yet', async () => {
+    mockApi({ '/api/today': () => json(makeToday()), '/api/settings': () => json(makeSettings()), '/api/readiness': () => json(NO_READINESS) });
+    renderPage();
+    const region = await screen.findByRole('region', { name: 'In focus' });
+    await waitFor(() => expect(calls.some((c) => c.url === '/api/readiness')).toBe(true));
+    expect(within(region).queryByText('Readiness')).not.toBeInTheDocument();
+    expect(within(region).getAllByRole('button')).toHaveLength(3);
+  });
+
+  it('follows Edit home: a hidden card has no slide and the order of the cards is the order of the slides', async () => {
+    const order = makeSettings().home_cards.order.filter((c) => c !== 'sleep');
+    const settings = makeSettings({ home_cards: { order: ['sleep', ...order], hidden: ['energy'] } });
+    mockApi({ '/api/today': () => json(makeToday()), '/api/settings': () => json(settings), '/api/readiness': () => json(READINESS) });
+    renderPage();
+    const region = await screen.findByRole('region', { name: 'In focus' });
+    await waitFor(() => expect(within(region).getAllByRole('button')).toHaveLength(3));
+    expect(within(region).getAllByRole('button').map((d) => d.getAttribute('aria-label'))).toEqual(['Show Sleep, card 1 of 3', 'Show Readiness, card 2 of 3', 'Show HRV, card 3 of 3']);
+    expect(within(region).queryByRole('img', { name: /Energy level/ })).not.toBeInTheDocument();
+  });
+
+  it('shows Health status in At a glance, linking to its page', async () => {
+    mockApi({ '/api/today': () => json(makeToday()), '/api/settings': () => json(makeSettings()), '/api/health-status': () => json(HEALTH_STATUS) });
+    renderPage();
+    const card = await waitFor(() => {
+      const el = document.querySelector('.glance-grid [data-card="health_status"]');
+      if (!el || !el.textContent?.includes('outside')) throw new Error('not ready');
+      return el as HTMLElement;
+    });
+    expect(card).toHaveAttribute('href', '/health/status');
+    expect(card).toHaveTextContent('1 outside');
+    expect(card).toHaveTextContent('4 of 4 values compared');
+    expect(within(card).getByText('Above')).toBeInTheDocument();
   });
 });
 
@@ -308,10 +383,10 @@ describe('Edit home', () => {
     mockApi({ '/api/today': () => json(makeToday()), '/api/settings': () => json(makeSettings()) });
     renderPage();
     const { dialog } = await open();
-    expect(within(dialog).getAllByRole('checkbox')).toHaveLength(15);
+    expect(within(dialog).getAllByRole('checkbox')).toHaveLength(16);
     expect(within(dialog).getByRole('checkbox', { name: 'Steps' })).toBeChecked();
     expect(within(dialog).getByRole('checkbox', { name: /Body weight/ })).not.toBeChecked();
-    expect(dialog.querySelectorAll('.edit-row__state')).toHaveLength(4);
+    expect(dialog.querySelectorAll('.edit-row__state')).toHaveLength(3);
   });
 
   it('reorders with the move buttons and keeps keyboard focus on the moved row', async () => {
@@ -319,17 +394,17 @@ describe('Edit home', () => {
     renderPage();
     const { user, dialog } = await open();
     const names = () => within(dialog).getAllByRole('checkbox').map((c) => c.closest('label')?.textContent?.replace(' (hidden)', ''));
-    expect(names().slice(0, 3)).toEqual(['Energy', 'Heart rate', 'Stress']);
+    expect(names().slice(0, 3)).toEqual(['Energy', 'Readiness', 'Sleep']);
     expect(within(dialog).getByRole('button', { name: 'Move Energy up' })).toBeDisabled();
 
-    await user.click(within(dialog).getByRole('button', { name: 'Move Heart rate up' }));
-    expect(names().slice(0, 3)).toEqual(['Heart rate', 'Energy', 'Stress']);
-    // Heart rate is first now: its up button is disabled, so focus lands on its down button.
-    expect(within(dialog).getByRole('button', { name: 'Move Heart rate down' })).toHaveFocus();
-    expect(screen.getByRole('status')).toHaveTextContent('Heart rate moved to position 1 of 15');
+    await user.click(within(dialog).getByRole('button', { name: 'Move Readiness up' }));
+    expect(names().slice(0, 3)).toEqual(['Readiness', 'Energy', 'Sleep']);
+    // Readiness is first now: its up button is disabled, so focus lands on its down button.
+    expect(within(dialog).getByRole('button', { name: 'Move Readiness down' })).toHaveFocus();
+    expect(screen.getByRole('status')).toHaveTextContent('Readiness moved to position 1 of 16');
 
     await user.keyboard('{Enter}');
-    expect(names().slice(0, 3)).toEqual(['Energy', 'Heart rate', 'Stress']);
+    expect(names().slice(0, 3)).toEqual(['Energy', 'Readiness', 'Sleep']);
   });
 
   it('reorders by drag and drop', async () => {
@@ -343,7 +418,7 @@ describe('Edit home', () => {
     fireEvent.drop(row('energy'), { dataTransfer });
     fireEvent.dragEnd(row('steps'), { dataTransfer });
     const order = Array.from(dialog.querySelectorAll<HTMLElement>('[data-card]')).map((el) => el.dataset['card']);
-    expect(order.slice(0, 3)).toEqual(['steps', 'energy', 'heart_rate']);
+    expect(order.slice(0, 3)).toEqual(['steps', 'energy', 'training_readiness']);
   });
 
   it('saves with PATCH and the X-Nimrag header, and updates the cards before the server answers', async () => {
@@ -359,19 +434,19 @@ describe('Edit home', () => {
     const { user, dialog } = await open();
     await user.click(within(dialog).getByRole('checkbox', { name: 'Steps' }));
     expect(within(dialog).getByRole('checkbox', { name: /Steps/ })).not.toBeChecked();
-    await user.click(within(dialog).getByRole('button', { name: 'Move Heart rate up' }));
+    await user.click(within(dialog).getByRole('button', { name: 'Move Stress up' }));
     await user.click(screen.getByRole('button', { name: 'Save' }));
 
     // The dialog is gone and the grid already follows the new layout while the request is pending.
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-    await waitFor(() => expect(glanceIds().slice(0, 2)).toEqual(['heart_rate', 'stress']));
+    await waitFor(() => expect(glanceIds().slice(0, 2)).toEqual(['stress', 'heart_rate']));
     expect(glanceIds()).not.toContain('steps');
 
     const patch = calls.find((c) => c.init?.method === 'PATCH');
     expect(patch?.url).toBe('/api/settings');
     expect((patch?.init?.headers as Record<string, string>)['X-Nimrag']).toBe('1');
     const body = JSON.parse(String(patch?.init?.body)) as { home_cards: HomeCards };
-    expect(body.home_cards.order.slice(0, 2)).toEqual(['heart_rate', 'energy']);
+    expect(body.home_cards.order.slice(3, 5)).toEqual(['stress', 'heart_rate']);
     expect(body.home_cards.hidden).toContain('steps');
     expect(body.home_cards.hidden).toContain('weight');
 
@@ -435,7 +510,7 @@ describe('Home on a desktop', () => {
     expect(screen.getByRole('heading', { name: 'At a Glance' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'See All' })).toBeInTheDocument();
     // In Focus already shows Energy, Steps, Sleep and Training status; HRV is a glance card here.
-    expect(cardIds('.hgrid--glance')).toEqual(['heart_rate', 'stress', 'hrv', 'intensity_minutes', 'training_load', 'recovery_time', 'vo2_max']);
+    expect(cardIds('.hgrid--glance')).toEqual(['training_readiness', 'heart_rate', 'stress', 'hrv', 'intensity_minutes', 'training_load', 'recovery_time', 'vo2_max', 'health_status']);
 
     expect(screen.getByRole('heading', { name: 'Yesterday' })).toBeInTheDocument();
     const yesterday = screen.getByRole('region', { name: 'Yesterday' });
@@ -512,7 +587,6 @@ describe('Home on a desktop', () => {
     expect(screen.getByText('Wear your watch while sleeping to reveal your status.')).toBeInTheDocument();
     expect(await screen.findByText('No runs this week.')).toBeInTheDocument();
     expect(screen.getByText('No activities in the last 7 days.')).toBeInTheDocument();
-    expect(screen.getByText('Not provided by this watch yet.')).toBeInTheDocument();
     expect(screen.getByText('Shows after your watch syncs a day of data.')).toBeInTheDocument();
     expect(await screen.findByText(/No activities yet/)).toBeInTheDocument();
   });

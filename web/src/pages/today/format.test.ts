@@ -72,10 +72,11 @@ describe('activity detail', () => {
 });
 
 describe('home card layout helpers', () => {
-  it('default layout holds each of the 15 cards once, with the four optional ones hidden', () => {
-    expect(new Set(DEFAULT_HOME_CARDS.order).size).toBe(15);
-    expect(DEFAULT_HOME_CARDS.order).toHaveLength(15);
-    expect(visibleCards(DEFAULT_HOME_CARDS)).toHaveLength(11);
+  it('default layout holds each of the 16 cards once, with the three optional ones hidden', () => {
+    expect(new Set(DEFAULT_HOME_CARDS.order).size).toBe(16);
+    expect(DEFAULT_HOME_CARDS.order).toHaveLength(16);
+    expect(DEFAULT_HOME_CARDS.order.slice(0, 3)).toEqual(['energy', 'training_readiness', 'sleep']);
+    expect(visibleCards(DEFAULT_HOME_CARDS)).toHaveLength(13);
   });
 
   it('visibleCards keeps the order and drops hidden ids', () => {

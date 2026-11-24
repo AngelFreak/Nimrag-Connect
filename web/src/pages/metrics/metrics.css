@@ -85,3 +85,11 @@
   flex: 1;
   color: var(--text-2);
 }
+
+/* The one sentence under the Energy day chart. */
+.day-sentence {
+  margin: 0;
+  font-size: var(--fs-md);
+  line-height: 1.45;
+  color: var(--text);
+}
