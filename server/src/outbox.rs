@@ -280,7 +280,16 @@ pub async fn done(
 
 /// The changes that could not be applied, once: they are forgotten as they are returned.
 pub async fn take_dropped(pool: &SqlitePool) -> Result<Vec<Dropped>> {
-    let mut tx = pool.begin().await?;
+    // Called on every upload pass: nothing to take is the usual answer, and needs no write lock.
+    let any: bool = sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM edit_dropped)")
+        .fetch_one(pool)
+        .await?;
+    if !any {
+        return Ok(Vec::new());
+    }
+    // IMMEDIATE: the write lock first. A read-then-delete in a deferred transaction fails at once
+    // ("database is locked") when a file is ingested meanwhile, instead of waiting for it.
+    let mut tx = pool.begin_with("BEGIN IMMEDIATE").await?;
     let rows: Vec<(String, String, String)> =
         sqlx::query_as("SELECT method, path, reason FROM edit_dropped ORDER BY id")
             .fetch_all(&mut *tx)

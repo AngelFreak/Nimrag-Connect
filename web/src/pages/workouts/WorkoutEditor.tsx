@@ -53,6 +53,10 @@ export function WorkoutEditor({ detail, list }: Props) {
 
   const [draft, setDraft] = useState<WorkoutDraft>(() => (detail ? draftOf(detail.workout) : emptyDraft()));
   const [baseline, setBaseline] = useState(() => signature(detail ? draftOf(detail.workout) : emptyDraft()));
+  // The saved version this form last took in; it changes when the workout is changed elsewhere
+  // (the web, or the server's state reaching the phone's copy).
+  const savedSignature = detail ? signature(draftOf(detail.workout)) : null;
+  const [seenSaved, setSeenSaved] = useState(savedSignature);
   const [submitted, setSubmitted] = useState(false);
   const [focusTick, setFocusTick] = useState(0);
   const [notice, setNotice] = useState<string | null>(() => {
@@ -75,6 +79,15 @@ export function WorkoutEditor({ detail, list }: Props) {
   const checked = validate(draft, limits);
   const errors = submitted ? checked.errors : NO_ERRORS;
   const dirty = signature(draft) !== baseline;
+  // A newer saved version: the form shows it unless the person has unsaved changes (those win,
+  // and saving them replaces it). The same content as the form (its own save) changes nothing.
+  if (detail && savedSignature !== seenSaved) {
+    setSeenSaved(savedSignature);
+    if (!dirty && savedSignature !== baseline) {
+      setDraft(draftOf(detail.workout));
+      setBaseline(savedSignature ?? '');
+    }
+  }
   const watch = list.watch_send;
   const used = fileSteps(draft.nodes);
   const room = limits.max_steps - used;

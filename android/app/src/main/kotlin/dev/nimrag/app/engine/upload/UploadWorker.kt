@@ -82,6 +82,9 @@ class UploadWorker(
     /** The server's state went onto the phone in the current pass (worker thread only). */
     private var stateTakenInPass = false
 
+    /** The server took a change or gave its state in the current pass: it is reachable (worker thread only). */
+    private var serverAnsweredInPass = false
+
     private val editBackoff = EditBackoff()
 
     /** The server's state should be pulled when the outbox is empty: at start, after sending, on resume. */
@@ -208,6 +211,7 @@ class UploadWorker(
         while (true) {
             uploadedInPass = 0
             stateTakenInPass = false
+            serverAnsweredInPass = false
             val waitMs = try {
                 runOnce()
             } catch (t: Throwable) {
@@ -238,6 +242,8 @@ class UploadWorker(
         val filesWait = uploadFiles(base, token) ?: return IDLE_MS
         val editsWait = syncEdits(base, token) ?: return IDLE_MS
         publish()
+        // Files skipped for their retry delay while the server just answered: it is back, send them now.
+        if (serverAnsweredInPass && db.retryWaitingNow(clock()) > 0) return 0L
         return minOf(filesWait, editsWait)
     }
 
@@ -280,6 +286,7 @@ class UploadWorker(
             }
             reportDropped(outbox)
             if (report.applied > 0) {
+                serverAnsweredInPass = true
                 pullWanted = true
                 lastError = null
                 log.info("Sent ${report.applied} offline change(s) to the server")
@@ -300,6 +307,7 @@ class UploadWorker(
                 pullWanted = false
                 lastPullAt = clock()
                 stateTakenInPass = true
+                serverAnsweredInPass = true
                 editBackoff.succeeded()
                 log.info("Took the server's settings, workouts and entries onto the phone")
             }

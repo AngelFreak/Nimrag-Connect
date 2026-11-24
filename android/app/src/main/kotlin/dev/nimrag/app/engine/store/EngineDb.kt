@@ -141,6 +141,20 @@ class EngineDb(context: Context) : SQLiteOpenHelper(context, "nimrag.db", null, 
         writableDatabase.update("files", v, "uploaded_at IS NULL", null)
     }
 
+    /**
+     * The server answered again: files waiting out a retry delay are due now (attempts are kept, so a
+     * file that fails again waits longer). Parked files stay parked. Returns how many.
+     */
+    fun retryWaitingNow(nowMs: Long): Int {
+        val v = ContentValues().apply { put("next_attempt_at", 0) }
+        return writableDatabase.update(
+            "files",
+            v,
+            "uploaded_at IS NULL AND next_attempt_at > ? AND next_attempt_at < ?",
+            arrayOf(nowMs.toString(), UploadPolicy.PARKED.toString()),
+        )
+    }
+
     /** Earliest automatic retry among pending files, or null (nothing pending or all parked). */
     fun earliestRetryAt(): Long? = readableDatabase.rawQuery(
         "SELECT MIN(next_attempt_at) FROM files WHERE uploaded_at IS NULL AND next_attempt_at < ?",

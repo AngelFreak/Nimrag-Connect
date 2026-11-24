@@ -61,7 +61,7 @@ function Where() {
 
 function renderApp(path: string) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
-  return render(
+  return { client, ...render(
     <QueryClientProvider client={client}>
       <MemoryRouter initialEntries={[path]}>
         <Routes>
@@ -73,7 +73,7 @@ function renderApp(path: string) {
         <Where />
       </MemoryRouter>
     </QueryClientProvider>,
-  );
+  ) };
 }
 
 const bodyOf = (init: RequestInit | undefined): unknown => JSON.parse(String(init?.body));
@@ -306,6 +306,28 @@ describe('a saved workout', () => {
     await user.click(screen.getByRole('button', { name: 'Cancel sending' }));
     expect(await screen.findByText('Not sent to the watch yet.')).toBeInTheDocument();
     expect(await screen.findByText('Sending cancelled.')).toBeInTheDocument();
+  });
+
+  it('shows a version saved elsewhere, unless it has unsaved changes of its own', async () => {
+    const user = userEvent.setup();
+    let saved = detail();
+    mockApi({ 'GET /api/workouts/7': () => json(saved), 'GET /api/workouts': list() });
+    const { client } = renderApp('/workouts/7');
+    const name = await screen.findByLabelText('Name');
+    expect(name).toHaveValue('Tempo 20');
+
+    // Renamed on the web (or the server's state reached the phone): the untouched form follows.
+    saved = detail({ revision: 2, workout: { ...BODY, name: 'Tempo 30' } });
+    await client.invalidateQueries();
+    await waitFor(() => expect(screen.getByLabelText('Name')).toHaveValue('Tempo 30'));
+    expect(screen.queryByText(/You have unsaved changes/)).not.toBeInTheDocument();
+
+    // With a change typed here, the typed text stays.
+    await user.type(screen.getByLabelText('Name'), '!');
+    saved = detail({ revision: 3, workout: { ...BODY, name: 'Tempo 40' } });
+    await client.invalidateQueries();
+    await waitFor(() => expect(screen.getByRole('heading', { level: 1, name: 'Tempo 40' })).toBeInTheDocument());
+    expect(screen.getByLabelText('Name')).toHaveValue('Tempo 30!');
   });
 
   it('sends the saved version: with unsaved changes the button waits', async () => {
