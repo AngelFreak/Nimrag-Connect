@@ -18,7 +18,7 @@ const LEVEL_COLOR: Record<StressLevel, string> = {
   rest: 'var(--stress-rest)',
   low: 'var(--stress-low)',
   medium: 'var(--stress-medium)',
-  high: 'var(--heart)',
+  high: 'var(--stress-high)',
   activity: 'var(--stress-activity)',
 };
 

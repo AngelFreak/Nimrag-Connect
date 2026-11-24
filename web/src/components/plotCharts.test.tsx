@@ -130,3 +130,11 @@ describe('WeightChart value axis', () => {
     expect(chart.querySelectorAll('.plot__area > span')).toHaveLength(3);
   });
 });
+
+describe('StressBars colours', () => {
+  it('colours each bar by the level of its own value', () => {
+    const { container } = render(<StressBars buckets={[{ level: 'low', value: 25 }, { level: 'low', value: 26 }, { level: 'medium', value: 75 }, { level: 'high', value: 76 }]} label='Stress' />);
+    const fills = Array.from(container.querySelectorAll('svg rect')).map((r) => (r as SVGElement).style.fill);
+    expect(fills).toEqual(['var(--stress-rest)', 'var(--stress-low)', 'var(--stress-medium)', 'var(--stress-high)']);
+  });
+});

@@ -1,4 +1,5 @@
 import type { CSSProperties, ReactNode } from 'react';
+import { LEVEL_COLOR as STRESS_COLOR, stressLevelOf } from '../lib/stress';
 import { tickCountFor, unitTicks } from '../lib/ticks';
 import { evenLabels, PlotFrame, PlotXLabels, plotTicks, type PlotTick } from './PlotFrame';
 import { Unavailable } from './Unavailable';
@@ -88,14 +89,6 @@ export interface StressBucket {
   span?: number;
 }
 
-const STRESS_COLOR: Record<StressLevel, string> = {
-  rest: 'var(--stress-rest)',
-  low: 'var(--stress-low)',
-  medium: 'var(--stress-medium)',
-  high: 'var(--heart)',
-  activity: 'var(--stress-activity)',
-};
-
 interface StressBarsProps {
   buckets: StressBucket[];
   label: string;
@@ -103,7 +96,7 @@ interface StressBarsProps {
   xLabels?: string[];
 }
 
-/** Stress across the day: one column per time bucket, coloured by level, on a 0 to 100 scale. Pair it with a Legend. */
+/** Stress across the day: one column per time bucket, on a 0 to 100 scale, each coloured by the level of its own value (0-25 rest, 26-50 low, 51-75 medium, 76-100 high). Pair it with a Legend. */
 export function StressBars({ buckets, label, xLabels }: StressBarsProps) {
   const slots = buckets.reduce((a, b) => a + (b.span ?? 1), 0);
   const anyData = buckets.some((b) => b.level === 'rest' || b.level === 'activity' || b.value !== null);
@@ -131,7 +124,7 @@ export function StressBars({ buckets, label, xLabels }: StressBarsProps) {
           if (b.level === 'rest') return <rect key={i} x={x} y={H - 10} width={w} height={10} style={{ fill: STRESS_COLOR.rest }} />;
           if (b.value === null) return null;
           const h = Math.max(4, (b.value / 100) * H);
-          return <rect key={i} x={x} y={H - h} width={w} height={h} style={{ fill: STRESS_COLOR[b.level] }} />;
+          return <rect key={i} x={x} y={H - h} width={w} height={h} style={{ fill: STRESS_COLOR[stressLevelOf(b.value)] }} />;
         })}
       </PlotFrame>
     </div>

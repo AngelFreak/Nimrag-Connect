@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import type { MetricRange } from '../../api/generated/MetricRange';
-import { BarSeries, Card, CardHeader, EmptyState, Legend, SeriesChart, StatStrip, StatTile, ValueOrUnavailable } from '../../components';
+import { BarSeries, Card, CardHeader, EmptyState, Legend, SeriesChart, StackedBars, StatStrip, StatTile, ValueOrUnavailable } from '../../components';
 import { useIsDesktop } from '../../lib/hooks';
 import { chartHasData, rangeChart, rangeRows, rangeSummary, statText, tileStats, type ChartSpec, type RangeRow } from './model';
 import { metricHref, type MetricDef } from './period';
@@ -73,6 +73,26 @@ export function RangeBody({ def, data, today }: { def: MetricDef; data: MetricRa
 function Plot({ spec, label, summary }: { spec: ChartSpec; label: string; summary: string }) {
   const desktop = useIsDesktop();
   const height = desktop ? 240 : 150;
+  if (spec.kind === 'stacked') {
+    return (
+      <>
+        <StackedBars parts={spec.parts} labels={spec.labels} {...(spec.axisLabels ? { axisLabels: spec.axisLabels } : {})} label={`${label}, minutes in each stress level`} summary={summary} height={height} />
+        <Legend items={spec.legend} />
+        <p className="chart-note">Average stress</p>
+        <SeriesChart
+          label={`${label}, average stress`}
+          summary={`${summary} Average stress for each ${label.endsWith('by week') ? 'week' : 'day'} on a scale of 0 to 100.`}
+          x={spec.average.x}
+          series={spec.average.series}
+          xRange={spec.average.xRange}
+          xLabels={spec.average.xLabels}
+          yUnit={spec.average.yUnit}
+          {...(spec.average.yRange ? { yRange: spec.average.yRange } : {})}
+          height={desktop ? 140 : 100}
+        />
+      </>
+    );
+  }
   return (
     <>
       {spec.kind === 'line' ? (

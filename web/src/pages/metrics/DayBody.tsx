@@ -12,7 +12,9 @@ import { fmtSeconds, hourSeries, stepsPercent } from '../health/model';
 import { CardSkeleton, LoadError } from '../health/parts';
 import { useDay } from '../health/queries';
 import { clock } from '../health/time';
+import { levelSeconds } from '../../lib/stress';
 import { weekLine } from './model';
+import { StressLevelsPanel } from './StressLevels';
 import type { MetricKey } from './period';
 import { useMovementDay } from './queries';
 
@@ -119,7 +121,12 @@ function StressDay({ day }: { day: DayResponse }) {
   const st = day.stress;
   return (
     <Layout
-      chart={<StressCard day={day} />}
+      chart={
+        <div className="page-stack">
+          <StressCard day={day} ranges />
+          <StressLevelsPanel secs={levelSeconds(st)} />
+        </div>
+      }
       tiles={[
         tile('Average', fmtInt(st.average), 'warn'),
         tile('Rest', fmtSeconds(st.rest_s)),

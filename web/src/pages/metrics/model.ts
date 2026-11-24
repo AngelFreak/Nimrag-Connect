@@ -4,9 +4,10 @@
 
 import type { MetricRange } from '../../api/generated/MetricRange';
 import type { MetricStat } from '../../api/generated/MetricStat';
-import type { BandSeries, ChartSeries, LegendItem, XLabel } from '../../components';
+import type { BandSeries, ChartSeries, LegendItem, StackPart, XLabel } from '../../components';
 import { addDays, fmtDay, fmtMonthDay, fmtMonthShort, fmtPeriod, fmtRunDates } from '../../lib/dates';
 import { fmtFixed, fmtInt, isMissing, withUnit } from '../../lib/format';
+import { LEVEL_COLOR, LEVEL_NAME, LEVEL_RANGE, MEASURED_LEVELS } from '../../lib/stress';
 import type { AxisUnit } from '../../lib/ticks';
 import { drillTarget, type MetricDef, type MetricKey, type RangeTarget } from './period';
 
@@ -145,7 +146,18 @@ export interface BarChartSpec {
   legend: LegendItem[];
 }
 
-export type ChartSpec = LineChartSpec | BarChartSpec;
+/** Bars stacked by part (minutes of stress per level), with a line chart of a figure under them. */
+export interface StackedChartSpec {
+  kind: 'stacked';
+  parts: StackPart[];
+  labels: string[];
+  axisLabels?: string[];
+  /** The average stress, drawn as its own line chart under the bars. */
+  average: LineChartSpec;
+  legend: LegendItem[];
+}
+
+export type ChartSpec = LineChartSpec | BarChartSpec | StackedChartSpec;
 
 /** Points get a dot when there are few enough for the dots not to touch. */
 const dots = (n: number): boolean => n <= 31;
@@ -220,7 +232,20 @@ export function rangeChart(metric: MetricKey, d: MetricRange, today: string): Ch
     }
     case 'stress': {
       const s: ChartSeries[] = [{ label: 'Average stress', color: 'warn', data: values(d, 'average') }];
-      return line(d, s, { yRange: [0, 100], legend: s.map(key) });
+      const average = line(d, s, { yRange: [0, 100], legend: s.map(key) });
+      // Minutes per level per day (the figures are seconds); a week bucket shows the mean day.
+      const parts: StackPart[] = MEASURED_LEVELS.map((level) => ({
+        key: level,
+        color: LEVEL_COLOR[level],
+        values: values(d, `${level}_s`).map((v) => (v === null ? null : v / 60)),
+      }));
+      return {
+        kind: 'stacked',
+        parts,
+        ...barLabels(d),
+        average,
+        legend: MEASURED_LEVELS.map((level) => ({ key: level, label: `${LEVEL_NAME[level]} ${LEVEL_RANGE[level]}`, color: LEVEL_COLOR[level] })),
+      };
     }
     case 'energy': {
       // Each day is a floating range from its lowest to its highest value.
@@ -315,7 +340,9 @@ export function rangeChart(metric: MetricKey, d: MetricRange, today: string): Ch
 
 /** Whether the chart has anything to draw. */
 export function chartHasData(c: ChartSpec): boolean {
-  return c.kind === 'bars' ? present(c.values).length > 0 : c.series.some((s) => s.label !== GOAL_LABEL && present(s.data).length > 0);
+  if (c.kind === 'bars') return present(c.values).length > 0;
+  if (c.kind === 'stacked') return c.parts.some((p) => present(p.values).length > 0) || chartHasData(c.average);
+  return c.series.some((s) => s.label !== GOAL_LABEL && present(s.data).length > 0);
 }
 
 // ---- list -------------------------------------------------------------------------------------------

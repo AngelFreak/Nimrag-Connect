@@ -4,7 +4,7 @@ import type { HomeCard, Today } from '../../api/generated';
 import type { StatusKind } from '../../api/generated/StatusKind';
 import type { ActivityListItem } from '../../api/generated/ActivityListItem';
 import type { NightSummary } from '../../api/generated/NightSummary';
-import { Ring, Skeleton, StageBar, Unavailable, ValueOrUnavailable } from '../../components';
+import { RangeBar, Ring, Skeleton, StageBar, Unavailable, ValueOrUnavailable } from '../../components';
 import { addDays, fmtMonthDay, fmtShortDay } from '../../lib/dates';
 import { fmtFixed, fmtInt, isMissing, statusName } from '../../lib/format';
 import { CARD_LABEL, CARD_LINK } from './cards';
@@ -426,13 +426,13 @@ export function HomeGlanceCard({ id, today }: { id: HomeCard; today: Today }) {
     case 'heart_rate': {
       const h = today.heart_rate;
       if (isMissing(h.resting_hr_bpm) && h.day.series.length === 0) return <GlanceEmpty id={id} glyph="heart" tone="var(--heart)">No heart rate recorded yet today.</GlanceEmpty>;
-      const values = today.heart_rate_24h.series.map((p) => p.value);
+      const values = h.day.series.map((p) => p.value);
       return (
-        <Glance id={id} glyph="heart" tone="var(--heart)" footer={<span className="hfoot__label">Last 24h</span>}>
+        <Glance id={id} glyph="heart" tone="var(--heart)" footer={<span className="hfoot__label">Today</span>}>
           <Stat value={unit(h.resting_hr_bpm, 'bpm')} label="Resting" />
           <Stat value={unit(h.avg_7d_resting_hr_bpm, 'bpm')} label="Avg 7d resting" />
           <div className="hcard__chart hcard__chart--end">
-            <Sparkline values={values} color="var(--heart)" height={44} dot={false} label={sparkSummary('Heart rate over the last 24 hours', values, ' bpm')} />
+            <Sparkline values={values} color="var(--heart)" height={44} dot={false} {...(isMissing(h.resting_hr_bpm) ? {} : { reference: h.resting_hr_bpm })} label={`${sparkSummary('Heart rate today', values, ' bpm')}${isMissing(h.resting_hr_bpm) ? '' : ` Resting ${h.resting_hr_bpm} bpm.`}`} />
           </div>
         </Glance>
       );
@@ -454,7 +454,7 @@ export function HomeGlanceCard({ id, today }: { id: HomeCard; today: Today }) {
                 { key: 'rest', label: 'Rest', value: s.rest_s, color: 'var(--stress-rest)' },
                 { key: 'low', label: 'Low', value: s.low_s, color: 'var(--stress-low)' },
                 { key: 'medium', label: 'Medium', value: s.medium_s, color: 'var(--stress-medium)' },
-                { key: 'high', label: 'High', value: s.high_s, color: 'var(--heart)' },
+                { key: 'high', label: 'High', value: s.high_s, color: 'var(--stress-high)' },
               ]}
             />
           }
@@ -506,6 +506,11 @@ export function HomeGlanceCard({ id, today }: { id: HomeCard; today: Today }) {
         <Glance id={id} glyph="load" tone="var(--zone-1)" footer={<span className="hfoot__label">Last 4w</span>}>
           <Stat value={targetLabel(l.vs_target)?.replace(' range', '') ?? null} label={range ?? 'Target range'} />
           <Stat value={fmtInt(l.seven_day_load)} label="7-day load" />
+          {isMissing(l.target_min) || isMissing(l.target_max) ? null : (
+            <div className="hcard__range">
+              <RangeBar value={l.seven_day_load} min={0} max={Math.max(l.target_max, l.seven_day_load, 1) * 1.4} target={[l.target_min, l.target_max]} label={`7-day load of ${fmtInt(l.seven_day_load)} against a target range of ${fmtInt(l.target_min)} to ${fmtInt(l.target_max)}`} />
+            </div>
+          )}
           <div className="hcard__chart hcard__chart--end">
             <Sparkline values={values} color="var(--zone-1)" height={40} dot={false} label={sparkSummary('7-day training load over the last 4 weeks', values)} />
           </div>
@@ -519,11 +524,9 @@ export function HomeGlanceCard({ id, today }: { id: HomeCard; today: Today }) {
       return (
         <Glance id={id} glyph="recovery" tone="var(--zone-2)">
           <Stat value={r.remaining_s === 0 ? 'Recovered' : fmtSeconds(r.remaining_s)} label={r.remaining_s === 0 ? 'Ready to train' : ready ? `Ready around ${ready}` : 'Remaining'} />
-          {isMissing(r.percent_complete) ? null : (
+          {isMissing(r.percent_complete) || r.remaining_s === 0 ? null : (
             <div className="hcard__center hcard__center--grow">
-              <Ring value={r.percent_complete} label="Recovery complete" color="var(--zone-2)" size={92} strokeWidth={8}>
-                {fmtInt(r.percent_complete)}
-              </Ring>
+              <Ring value={100 - r.percent_complete} label="Recovery time left" color="var(--zone-2)" size={92} strokeWidth={8} showValue={false} />
             </div>
           )}
         </Glance>

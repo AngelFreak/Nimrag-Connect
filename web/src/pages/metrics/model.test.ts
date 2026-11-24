@@ -17,6 +17,7 @@ import {
   weekLine,
   type BarChartSpec,
   type LineChartSpec,
+  type StackedChartSpec,
 } from './model';
 import { METRICS, type MetricKey } from './period';
 
@@ -174,7 +175,9 @@ describe('rangeChart', () => {
 
   it('fixes stress to 0 to 100, and energy to a ribbon between each day\'s low and high', () => {
     const s = week('stress', (f) => [series('average', f, [20, 30, 25, null, null, null, null])]);
-    expect((rangeChart('stress', s, TODAY) as LineChartSpec).yRange).toEqual([0, 100]);
+    const stress = rangeChart('stress', s, TODAY);
+    expect(stress.kind).toBe('stacked');
+    expect((stress as StackedChartSpec).average.yRange).toEqual([0, 100]);
     const e = week('energy', (f) => [series('high', f, [90, 95, null, null, null, null, null]), series('low', f, [10, 20, null, null, null, null, null])]);
     const c = rangeChart('energy', e, TODAY) as LineChartSpec;
     expect(c.band).toEqual({ lo: [10, 20, null, null, null, null, null], hi: [90, 95, null, null, null, null, null] });
@@ -261,5 +264,21 @@ describe('the figures and the words', () => {
     expect(rangeSummary(METRICS.heart_rate, d)).toBe('Heart rate Nov 13 – Nov 19: 3 of 7 days with a reading; avg resting 54 bpm, avg high 115 bpm.');
     const none = week('heart_rate', (f) => [series('resting', f, Array(7).fill(null))]);
     expect(rangeSummary(METRICS.heart_rate, none)).toBe('No heart rate readings Nov 13 – Nov 19.');
+  });
+});
+
+describe('stress range chart', () => {
+  it('stacks minutes per level per day, from the seconds of the API', () => {
+    const s = week('stress', (f) => [
+      series('average', f, [20, 30, null, null, null, null, null]),
+      series('rest_s', f, [3600, 7200, null, null, null, null, null]),
+      series('low_s', f, [1800, 0, null, null, null, null, null]),
+      series('medium_s', f, [0, 600, null, null, null, null, null]),
+      series('high_s', f, [0, 0, null, null, null, null, null]),
+    ]);
+    const c = rangeChart('stress', s, TODAY) as StackedChartSpec;
+    expect(c.parts.map((p) => p.key)).toEqual(['rest', 'low', 'medium', 'high']);
+    expect(c.parts[0]?.values.slice(0, 3)).toEqual([60, 120, null]);
+    expect(c.parts[2]?.values.slice(0, 2)).toEqual([0, 10]);
   });
 });

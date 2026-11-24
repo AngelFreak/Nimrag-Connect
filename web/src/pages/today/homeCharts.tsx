@@ -15,17 +15,20 @@ interface SparklineProps {
   area?: boolean;
   /** Draw the last point as a dot. */
   dot?: boolean;
+  /** A faint dashed line across the chart at this value (the resting heart rate). */
+  reference?: number;
 }
 
 const W = 200;
 
 /** A thin line over the width of its box. */
-export function Sparkline({ values, color, label, height = 56, band, area = false, dot = true }: SparklineProps) {
+export function Sparkline({ values, color, label, height = 56, band, area = false, dot = true, reference }: SparklineProps) {
   const gradient = useId();
   const known = values.filter((v): v is number => v !== null && Number.isFinite(v));
   if (known.length === 0) return null;
-  let lo = Math.min(...known, ...(band ? [band[0]] : []));
-  let hi = Math.max(...known, ...(band ? [band[1]] : []));
+  const extra = [...(band ? band : []), ...(reference !== undefined ? [reference] : [])];
+  let lo = Math.min(...known, ...extra);
+  let hi = Math.max(...known, ...extra);
   if (hi - lo < 1e-9) {
     lo -= 1;
     hi += 1;
@@ -49,6 +52,7 @@ export function Sparkline({ values, color, label, height = 56, band, area = fals
   return (
     <svg className="hchart" viewBox={`0 0 ${W} ${height}`} preserveAspectRatio="none" style={{ height }} role="img" aria-label={label}>
       {band ? <rect x={0} width={W} y={y(band[1])} height={Math.max(1, y(band[0]) - y(band[1]))} style={{ fill: 'var(--band)' }} /> : null}
+      {reference !== undefined ? <line x1={0} x2={W} y1={y(reference)} y2={y(reference)} strokeDasharray="3 3" strokeWidth={1} vectorEffect="non-scaling-stroke" style={{ stroke: color, opacity: 0.45 }} /> : null}
       {area ? (
         <defs>
           <linearGradient id={gradient} x1="0" x2="0" y1="0" y2="1">
