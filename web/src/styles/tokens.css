@@ -90,6 +90,13 @@
   --hrv-balanced: #2e9e3a;
   --hrv-unbalanced: #e8801a;
   --hrv-low: #e23b3b;
+  /* Readiness ratings and levels, worst to best: red, orange, yellow, green, teal. They follow the theme
+     because they point at the tokens above. Always shown with a word, never colour alone. */
+  --rate-1: var(--hrv-low);
+  --rate-2: var(--hrv-unbalanced);
+  --rate-3: var(--status-maintaining);
+  --rate-4: var(--status-productive);
+  --rate-5: var(--energy);
 
   /* Map */
   --map-bg: #e8ecee;

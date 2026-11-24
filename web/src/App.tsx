@@ -25,6 +25,7 @@ import { StrengthPage } from './pages/StrengthPage';
 import { TodayPage } from './pages/TodayPage';
 import { TrainingPage } from './pages/TrainingPage';
 import { TrainingStatusPage } from './pages/TrainingStatusPage';
+import { ReadinessPage } from './pages/ReadinessPage';
 import { WatchPage } from './pages/WatchPage';
 import { WorkoutPage } from './pages/WorkoutPage';
 import { WorkoutListPage } from './pages/workouts/WorkoutListPage';
@@ -119,6 +120,7 @@ export function App() {
           <Route path="metrics/:metric" element={<MetricPage />} />
           <Route path="training" element={<TrainingPage />} />
           <Route path="training/status" element={<TrainingStatusPage />} />
+          <Route path="training/readiness" element={<ReadinessPage />} />
           <Route path="hrv" element={<HrvPage />} />
           <Route path="body" element={<BodyPage />} />
           <Route path="calendar/:month?" element={<CalendarPage />} />
