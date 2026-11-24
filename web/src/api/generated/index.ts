@@ -9,6 +9,8 @@ export type { AppResumeRequest } from "./AppResumeRequest";
 export type { AppUnlockRequest } from "./AppUnlockRequest";
 export type { AssignRequest } from "./AssignRequest";
 export type { AssignResponse } from "./AssignResponse";
+export type { BackupSettings } from "./BackupSettings";
+export type { BackupsResponse } from "./BackupsResponse";
 export type { BodyEntry } from "./BodyEntry";
 export type { BodyResponse } from "./BodyResponse";
 export type { CalendarResponse } from "./CalendarResponse";

@@ -129,6 +129,20 @@ Then `docker compose up -d`. The log shows `backup done` with the file counts af
 backup logs a warning and the server keeps running; look for `backup failed` in
 `docker compose logs server`.
 
+**In the web app.** The admin page has a Backups card: switch backups on, choose the folder (a path
+inside the container, like `/backups`, so the folder must be mounted first), how often (every 6 hours
+to weekly, or a custom number of hours up to 720), and how many to keep (1 to 365). It also shows
+the last backup, when the next one is due and the backups in the folder, and has **Back up now**.
+A change applies at once, without a restart. The folder must exist, be writable and lie outside the
+data folder.
+
+Which settings count: when an admin has saved settings on that page, they are used. Otherwise the
+start-up options above (`--backup-dir`, `--backup-every`, `--backup-keep` or the `NIMRAG_BACKUP_*`
+variables) are used exactly as before, and with neither nothing is backed up. The page says which
+applies ("Set here" or "Set at server start"); **Use start-up settings** deletes the saved ones, so
+the options apply again. Saved settings stay in force after a restart, also when the options differ.
+The status on the page (last backup, last error) is kept in memory and starts empty after a restart.
+
 Each backup is a folder `nimrag-backup-<UTC time>` with `nimrag.db`, `files/` and `backup.json`.
 Unchanged files are hard-linked to the previous backup, so a daily backup costs little more than
 the new files. Only the newest 7 are kept.

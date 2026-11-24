@@ -13,6 +13,7 @@ pub mod account;
 pub mod activities;
 pub mod admin;
 pub mod app;
+pub mod backups;
 pub mod body;
 pub mod daily;
 pub mod days;
@@ -47,6 +48,7 @@ pub fn router() -> Router<AppState> {
     Router::new()
         .merge(account::routes())
         .merge(admin::routes())
+        .merge(backups::routes())
         .merge(app::routes())
         .merge(prefs::routes())
         .merge(today::routes())
@@ -274,6 +276,8 @@ pub fn export_types(dir: &Path) -> anyhow::Result<()> {
         admin::UnassignedResponse,
         admin::AssignRequest,
         admin::AssignResponse,
+        backups::BackupSettings,
+        backups::BackupsResponse,
         app::AppLoginRequest,
         app::AppLoginResponse,
         app::AppUnlockRequest,

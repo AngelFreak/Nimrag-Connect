@@ -65,6 +65,8 @@ pub struct AppState {
     /// phone's copy: the server writes the file when the phone asks for it, and this build may
     /// have no profile to write it with).
     pub(crate) defer_watch_send: bool,
+    /// Scheduled backups: start-up options, saved settings, status (see `backup.rs`).
+    pub backups: Arc<crate::backup::Control>,
     clock: Arc<dyn Fn() -> i64 + Send + Sync>,
 }
 
@@ -94,12 +96,20 @@ impl AppState {
             gps_assist: Arc::new(crate::gps_assist::GpsAssist::new(Default::default())),
             edits_lock: Default::default(),
             defer_watch_send: false,
+            backups: Arc::new(crate::backup::Control::new(None)),
             clock: Arc::new(system_now),
         }
     }
 
     pub fn with_insecure_cookies(mut self, insecure: bool) -> Self {
         self.insecure_cookies = insecure;
+        self
+    }
+
+    /// The backup options given at start-up (`--backup-dir` and friends); settings the admin saved
+    /// in the web app win over them.
+    pub fn with_backup_startup(mut self, cfg: Option<crate::backup::Config>) -> Self {
+        self.backups = Arc::new(crate::backup::Control::new(cfg));
         self
     }
 

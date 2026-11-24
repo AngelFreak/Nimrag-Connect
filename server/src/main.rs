@@ -53,6 +53,9 @@ usage:
 --backup-dir (or $NIMRAG_BACKUP_DIR) makes serve back up by itself: every --backup-every ($NIMRAG_BACKUP_EVERY,
   default 24h; 30m, 6h, 1d) a folder nimrag-backup-<UTC time> with a database snapshot and the files, of which
   the newest --backup-keep ($NIMRAG_BACKUP_KEEP, default 7) stay. Without --backup-dir nothing is backed up.
+  An admin can also set the folder, interval, keep count and on/off on the Admin page (Backups). Settings
+  saved there win over these options (the page can go back to them); with nothing saved the options apply
+  exactly as given.
 --weather off (or $NIMRAG_WEATHER=off) switches the watch's weather off: POST /api/device/weather answers
   503 and Open-Meteo is never contacted. Default on. --weather-url (or $NIMRAG_WEATHER_URL) replaces
   https://api.open-meteo.com (tests and proxies); the phone only ever talks to this server.
@@ -475,7 +478,24 @@ async fn serve(o: Opts) -> Result<()> {
     if swept > 0 {
         tracing::warn!(swept, "removed leftovers of interrupted uploads");
     }
+    let backup_startup = match &o.backup_dir {
+        Some(dir) => {
+            if o.backup_every < Duration::from_secs(60) {
+                bail!("--backup-every must be at least 1m");
+            }
+            if o.backup_keep == 0 {
+                bail!("--backup-keep must be at least 1");
+            }
+            Some(backup::Config {
+                dir: dir.clone(),
+                every: o.backup_every,
+                keep: o.backup_keep,
+            })
+        }
+        None => None,
+    };
     let state = api::AppState::new(pool, o.data_dir, api::MAX_BODY_BYTES)
+        .with_backup_startup(backup_startup)
         .with_max_import(o.max_import)
         .with_insecure_cookies(o.insecure_cookies)
         .with_trusted_proxies(o.trusted_proxies.clone())
@@ -522,29 +542,27 @@ async fn serve(o: Opts) -> Result<()> {
             "trusting X-Forwarded-For from the configured proxy networks"
         );
     }
-    if let Some(dir) = &o.backup_dir {
-        if o.backup_every < Duration::from_secs(60) {
-            bail!("--backup-every must be at least 1m");
-        }
-        if o.backup_keep == 0 {
-            bail!("--backup-keep must be at least 1");
-        }
-        tracing::info!(
-            dir = %dir.display(),
-            every_s = o.backup_every.as_secs(),
-            keep = o.backup_keep,
-            "scheduled backups on"
-        );
-        backup::spawn_scheduler(
-            state.pool.clone(),
-            state.data_dir.as_ref().clone(),
-            backup::Config {
-                dir: dir.clone(),
-                every: o.backup_every,
-                keep: o.backup_keep,
+    // Backups: the settings the admin saved in the web app win over the start-up options.
+    state.backups.reload(&state.pool).await?;
+    match state.backups.current() {
+        Some(cfg) => tracing::info!(
+            dir = %cfg.dir.display(),
+            every_s = cfg.every.as_secs(),
+            keep = cfg.keep,
+            source = if nimrag_server::backup::load_saved(&state.pool).await?.is_some() {
+                "web app"
+            } else {
+                "start-up options"
             },
-        );
+            "scheduled backups on"
+        ),
+        None => tracing::info!("scheduled backups off (the admin page can switch them on)"),
     }
+    backup::spawn_scheduler_with(
+        state.pool.clone(),
+        state.data_dir.as_ref().clone(),
+        state.backups.clone(),
+    );
     // Forward mode: uploads queued activity files to Garmin Connect (idle until a user logs in to Garmin).
     nimrag_server::garmin::queue::spawn_worker(state.clone());
     let app = api::router(state);

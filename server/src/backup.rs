@@ -29,6 +29,7 @@ use sqlx::SqlitePool;
 use std::fs::{self, File};
 use std::io;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime};
 
 /// Backup folders are named `nimrag-backup-20261121T020000Z` (a `-N` suffix when two start in
@@ -485,67 +486,377 @@ fn copy_file(from: &Path, to: &Path, meta: &fs::Metadata) -> Result<()> {
     Ok(())
 }
 
+// ---- settings saved in the web app ------------------------------------------------------------
+
+const KEY_ENABLED: &str = "backup_enabled";
+const KEY_DIR: &str = "backup_dir";
+const KEY_EVERY: &str = "backup_every_s";
+const KEY_KEEP: &str = "backup_keep";
+const KEYS: [&str; 4] = [KEY_ENABLED, KEY_DIR, KEY_EVERY, KEY_KEEP];
+
+/// Bounds the web app enforces (the start-up options allow shorter intervals).
+pub const MIN_EVERY_S: i64 = 3600;
+pub const MAX_EVERY_S: i64 = 30 * 86_400;
+pub const MAX_KEEP: i64 = 365;
+pub const MAX_DIR_BYTES: usize = 1024;
+const PROBE: &str = ".nimrag-write-test";
+
+/// What the admin saved in the web app (the global `settings` table).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Saved {
+    pub enabled: bool,
+    /// Empty only while backups are off and no folder was ever given.
+    pub dir: String,
+    pub every_s: u32,
+    pub keep: u32,
+}
+
+impl Saved {
+    /// The scheduler's config; `None` when off.
+    pub fn config(&self) -> Option<Config> {
+        (self.enabled && !self.dir.is_empty()).then(|| Config {
+            dir: PathBuf::from(&self.dir),
+            every: Duration::from_secs(self.every_s as u64),
+            keep: self.keep.max(1) as usize,
+        })
+    }
+}
+
+/// The saved settings; `None` when none were saved (or the stored values are unusable, which is
+/// logged: the start-up options apply then).
+pub async fn load_saved(pool: &SqlitePool) -> Result<Option<Saved>> {
+    let rows: Vec<(String, String)> = sqlx::query_as(
+        "SELECT key, value FROM settings WHERE key IN ('backup_enabled', 'backup_dir', 'backup_every_s', 'backup_keep')",
+    )
+    .fetch_all(pool)
+    .await?;
+    let get = |k: &str| rows.iter().find(|r| r.0 == k).map(|r| r.1.as_str());
+    if rows.is_empty() {
+        return Ok(None);
+    }
+    let parsed = (|| {
+        Some(Saved {
+            enabled: match get(KEY_ENABLED)? {
+                "1" => true,
+                "0" => false,
+                _ => return None,
+            },
+            dir: get(KEY_DIR)?.to_owned(),
+            every_s: get(KEY_EVERY)?.parse().ok()?,
+            keep: get(KEY_KEEP)?.parse().ok()?,
+        })
+    })();
+    if parsed.is_none() {
+        tracing::warn!("the saved backup settings are incomplete or unreadable; ignoring them");
+    }
+    Ok(parsed)
+}
+
+pub async fn store_saved(pool: &SqlitePool, s: &Saved) -> Result<()> {
+    let mut tx = pool.begin().await?;
+    for (k, v) in [
+        (KEY_ENABLED, if s.enabled { "1" } else { "0" }.to_owned()),
+        (KEY_DIR, s.dir.clone()),
+        (KEY_EVERY, s.every_s.to_string()),
+        (KEY_KEEP, s.keep.to_string()),
+    ] {
+        sqlx::query(
+            "INSERT INTO settings (key, value) VALUES (?, ?)
+             ON CONFLICT (key) DO UPDATE SET value = excluded.value",
+        )
+        .bind(k)
+        .bind(v)
+        .execute(&mut *tx)
+        .await?;
+    }
+    tx.commit().await?;
+    Ok(())
+}
+
+/// Forget the saved settings: the start-up options apply again.
+pub async fn clear_saved(pool: &SqlitePool) -> Result<()> {
+    let mut tx = pool.begin().await?;
+    for k in KEYS {
+        sqlx::query("DELETE FROM settings WHERE key = ?")
+            .bind(k)
+            .execute(&mut *tx)
+            .await?;
+    }
+    tx.commit().await?;
+    Ok(())
+}
+
+/// Check a folder the admin typed. The text is for the browser: plain, and without the data dir's
+/// path. Blocking (file system).
+pub fn check_folder(data_dir: &Path, dir: &Path) -> std::result::Result<(), String> {
+    if !dir.is_absolute() {
+        return Err("The folder must be a full path, starting with /.".into());
+    }
+    if !dir.is_dir() {
+        return Err("This folder does not exist on the server. With Docker, mount a folder into the container first, for example /backups.".into());
+    }
+    let probe = dir.join(PROBE);
+    if File::create(&probe).is_err() {
+        return Err("The server cannot write to this folder.".into());
+    }
+    let _ = fs::remove_file(&probe);
+    let (Ok(data), Ok(out)) = (data_dir.canonicalize(), dir.canonicalize()) else {
+        return Err("This folder cannot be read.".into());
+    };
+    if out.starts_with(&data) || data.starts_with(&out) {
+        return Err("This folder overlaps the server's data folder. Use a folder outside it, ideally on another disk.".into());
+    }
+    Ok(())
+}
+
 // ---- the scheduler ----------------------------------------------------------------------------
 
-/// Back up every `cfg.every`, for as long as the server runs. The first backup is due when the
-/// newest existing one is older than `every` (at once when there is none), so a restart does not
-/// make an extra backup. A failed backup is logged as a warning and tried again after
-/// `min(every, 1 h)`. Nothing here can stop the server.
+#[derive(Debug, Clone)]
+pub struct LastOk {
+    pub name: String,
+    /// Unix seconds when it finished.
+    pub at: i64,
+    pub duration_ms: u64,
+    pub copied_bytes: u64,
+}
+
+#[derive(Debug, Clone)]
+pub struct LastError {
+    /// Without the data dir's path.
+    pub text: String,
+    pub at: i64,
+}
+
+/// What the admin page shows. Kept in memory only.
+#[derive(Debug, Clone, Default)]
+pub struct Status {
+    pub running: bool,
+    pub last_ok: Option<LastOk>,
+    pub last_error: Option<LastError>,
+    /// Unix seconds of the next scheduled backup; `None` when off.
+    pub next_at: Option<i64>,
+}
+
+/// Where the scheduler's config comes from, live: the start-up options, or (when the admin saved
+/// some) the settings of the web app. The scheduler follows [`Control::reload`] at once.
+pub struct Control {
+    startup: Option<Config>,
+    tx: tokio::sync::watch::Sender<Option<Config>>,
+    status: std::sync::Mutex<Status>,
+    /// One backup at a time, scheduled or by hand.
+    gate: Arc<tokio::sync::Mutex<()>>,
+}
+
+/// The right to run one backup. Dropping it ends "running".
+pub struct RunGuard {
+    ctl: Arc<Control>,
+    _gate: tokio::sync::OwnedMutexGuard<()>,
+}
+
+impl Drop for RunGuard {
+    fn drop(&mut self) {
+        self.ctl.with_status(|s| s.running = false);
+    }
+}
+
+impl Control {
+    pub fn new(startup: Option<Config>) -> Self {
+        Self {
+            tx: tokio::sync::watch::channel(startup.clone()).0,
+            startup,
+            status: Default::default(),
+            gate: Default::default(),
+        }
+    }
+
+    /// The start-up options (`--backup-dir` and friends), if given.
+    pub fn startup(&self) -> Option<&Config> {
+        self.startup.as_ref()
+    }
+
+    /// The config the scheduler runs on now.
+    pub fn current(&self) -> Option<Config> {
+        self.tx.borrow().clone()
+    }
+
+    pub fn status(&self) -> Status {
+        self.status
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
+    }
+
+    fn with_status(&self, f: impl FnOnce(&mut Status)) {
+        f(&mut self.status.lock().unwrap_or_else(|e| e.into_inner()));
+    }
+
+    /// Re-read the saved settings and hand the result to the scheduler.
+    pub async fn reload(&self, pool: &SqlitePool) -> Result<()> {
+        let cfg = match load_saved(pool).await? {
+            Some(saved) => saved.config(),
+            None => self.startup.clone(),
+        };
+        self.tx.send_replace(cfg);
+        Ok(())
+    }
+
+    /// Take the right to run a backup at once; `None` while one is running.
+    pub fn try_begin(self: &Arc<Self>) -> Option<RunGuard> {
+        let gate = self.gate.clone().try_lock_owned().ok()?;
+        self.with_status(|s| s.running = true);
+        Some(RunGuard {
+            ctl: self.clone(),
+            _gate: gate,
+        })
+    }
+
+    /// Wait for a running backup to end, then take the right to run the next one.
+    async fn begin(self: &Arc<Self>) -> RunGuard {
+        let gate = self.gate.clone().lock_owned().await;
+        self.with_status(|s| s.running = true);
+        RunGuard {
+            ctl: self.clone(),
+            _gate: gate,
+        }
+    }
+}
+
+/// Run one backup under `guard`, record the outcome in the status and log it. Returns whether it
+/// worked. Errors are shown to the browser, so the data dir's path is taken out of them.
+pub async fn run_tracked(
+    guard: RunGuard,
+    pool: &SqlitePool,
+    data_dir: &Path,
+    dir: &Path,
+    keep: usize,
+) -> bool {
+    let (pool2, data2, dir2) = (pool.clone(), data_dir.to_path_buf(), dir.to_path_buf());
+    // Its own task, so even a panic ends one backup and not the caller.
+    let result =
+        tokio::spawn(async move { run_once(&pool2, &data2, &dir2, Some(keep)).await }).await;
+    let now = chrono::Utc::now().timestamp();
+    let ok = match result {
+        Ok(Ok(r)) => {
+            tracing::info!(
+                backup = %r.name,
+                files = r.files,
+                files_bytes = r.files_bytes,
+                linked = r.linked,
+                copied = r.copied,
+                db_bytes = r.db_bytes,
+                pruned = r.pruned.len(),
+                duration_ms = r.duration.as_millis() as u64,
+                "backup done"
+            );
+            guard.ctl.with_status(|s| {
+                s.last_error = None;
+                s.last_ok = Some(LastOk {
+                    name: r.name.clone(),
+                    at: now,
+                    duration_ms: r.duration.as_millis() as u64,
+                    copied_bytes: r.copied_bytes,
+                });
+            });
+            true
+        }
+        failed => {
+            let text = match failed {
+                Ok(Err(e)) => format!("{e:#}"),
+                Ok(Ok(_)) => unreachable!(),
+                Err(e) => format!("the backup task died: {e}"),
+            };
+            tracing::warn!(
+                dir = %dir.display(),
+                error = %text,
+                "backup failed; the server keeps running"
+            );
+            let text = scrub(&text, data_dir);
+            guard
+                .ctl
+                .with_status(|s| s.last_error = Some(LastError { text, at: now }));
+            false
+        }
+    };
+    drop(guard);
+    ok
+}
+
+/// Take the data dir's path out of an error text (it is shown in the browser).
+fn scrub(text: &str, data_dir: &Path) -> String {
+    let mut out = text.to_owned();
+    let mut paths = vec![data_dir.to_path_buf()];
+    paths.extend(data_dir.canonicalize());
+    for p in paths {
+        out = out.replace(&p.display().to_string(), "(data folder)");
+    }
+    out
+}
+
+/// Back up every `cfg.every`, for as long as the server runs. See [`spawn_scheduler_with`].
 pub fn spawn_scheduler(
     pool: SqlitePool,
     data_dir: PathBuf,
     cfg: Config,
 ) -> tokio::task::JoinHandle<()> {
+    spawn_scheduler_with(pool, data_dir, Arc::new(Control::new(Some(cfg))))
+}
+
+/// Back up on the schedule of `ctl`, for as long as the server runs. The first backup is due when
+/// the newest existing one is older than `every` (at once when there is none), so a restart does
+/// not make an extra backup. A failed backup is logged as a warning and tried again after
+/// `min(every, 1 h)`. A new config (a changed interval or folder, or off) is picked up at once;
+/// off waits for the next change. Nothing here can stop the server.
+pub fn spawn_scheduler_with(
+    pool: SqlitePool,
+    data_dir: PathBuf,
+    ctl: Arc<Control>,
+) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
+        let mut rx = ctl.tx.subscribe();
         let mut retry = false;
         loop {
+            let cfg = rx.borrow_and_update().clone();
+            let Some(cfg) = cfg else {
+                ctl.with_status(|s| s.next_at = None);
+                retry = false;
+                if rx.changed().await.is_err() {
+                    return;
+                }
+                continue;
+            };
             let wait = if retry {
                 cfg.every.min(RETRY_AFTER)
             } else {
                 due_in(&cfg)
             };
-            tokio::time::sleep(wait).await;
-            let (pool, data, cfg2) = (pool.clone(), data_dir.clone(), cfg.clone());
-            // Its own task, so even a panic ends one backup and not the loop.
-            let result =
-                tokio::spawn(
-                    async move { run_once(&pool, &data, &cfg2.dir, Some(cfg2.keep)).await },
-                )
-                .await;
-            retry = match result {
-                Ok(Ok(r)) => {
-                    tracing::info!(
-                        backup = %r.name,
-                        files = r.files,
-                        files_bytes = r.files_bytes,
-                        linked = r.linked,
-                        copied = r.copied,
-                        db_bytes = r.db_bytes,
-                        pruned = r.pruned.len(),
-                        duration_ms = r.duration.as_millis() as u64,
-                        "backup done"
-                    );
-                    false
+            let next = chrono::Utc::now().timestamp() + wait.as_secs() as i64;
+            ctl.with_status(|s| s.next_at = Some(next));
+            tokio::select! {
+                _ = tokio::time::sleep(wait) => {}
+                changed = rx.changed() => {
+                    if changed.is_err() {
+                        return;
+                    }
+                    retry = false;
+                    continue;
                 }
-                Ok(Err(e)) => {
-                    tracing::warn!(
-                        dir = %cfg.dir.display(),
-                        error = format!("{e:#}"),
-                        "backup failed; the server keeps running"
-                    );
-                    true
-                }
-                Err(e) => {
-                    tracing::warn!(error = %e, "backup task died; the server keeps running");
-                    true
-                }
+            }
+            let (guard, waited) = match ctl.try_begin() {
+                Some(g) => (g, false),
+                None => (ctl.begin().await, true),
             };
+            // A backup by hand ran meanwhile: it may have made this one unnecessary.
+            if waited && !due_in(&cfg).is_zero() {
+                drop(guard);
+                continue;
+            }
+            retry = !run_tracked(guard, &pool, &data_dir, &cfg.dir, cfg.keep).await;
         }
     })
 }
 
 /// How long until the next scheduled backup: `every` after the newest one, now if none.
-fn due_in(cfg: &Config) -> Duration {
+pub fn due_in(cfg: &Config) -> Duration {
     let newest = list(&cfg.dir).ok().and_then(|l| l.last().map(|f| f.at));
     let Some(at) = newest else {
         return Duration::ZERO;

@@ -590,6 +590,12 @@ nimrag-server backup --data-dir DIR --out BACKUPS [--keep N]                  # 
 nimrag-server restore --from BACKUPS/nimrag-backup-<time> --data-dir NEWDIR
 ```
 
+The same schedule can be set by an admin on the web app's Admin page (Backups card): folder, interval,
+keep count, on/off, Back up now. Settings saved there (global `settings` keys `backup_enabled`,
+`backup_dir`, `backup_every_s`, `backup_keep`) win over the start-up options and apply at once; with
+none saved the options apply as given. API: `GET/PUT/DELETE /api/admin/backups`,
+`POST /api/admin/backups/run` (admin session).
+
 One backup is a folder `nimrag-backup-<UTC time>` (`-1`, `-2` if two start in the same second):
 
 ```

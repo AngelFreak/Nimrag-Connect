@@ -92,3 +92,26 @@ under the users:
   scheduling.
 - Web: the card shows status, saves, shows a validation error, Custom hours, Back up now,
   the list.
+
+## Changes while building
+
+- Errors of a refused PUT (and of run-now without a folder) are 422 with `{error, field}` where
+  `field` is `dir`, `every_s` or `keep`, so the page can show the text under the right field.
+- `enabled = false` skips the folder checks (existence, writable, overlap) so backups can be switched
+  off when the folder has gone; the folder must then still be an absolute path or empty (empty only
+  when off). Bounds on `every_s` and `keep` always apply.
+- The overlap check refuses a folder that contains the data dir as well as one inside it
+  (`backup::check_folder`); `run_once` keeps its older "inside only" rule, so `--backup-dir` behaves as
+  before.
+- `Back up now` uses the saved folder and keep count also while backups are off, else the start-up
+  ones. It answers 202 with the same body as GET (running = true).
+- Status times (`last_ok.at`, `last_error.at`, `next_at`) and list times are unix seconds; the web app
+  formats them in the admin's time zone. After a restart `last_ok` is empty, and the page falls back to
+  the newest backup in the list.
+- `status.last_error` is cleared by the next success. When the folder cannot be listed, GET fills it
+  with "The backup folder cannot be read." (nothing is persisted).
+- Saved values that are incomplete or unparseable are ignored (logged), so start-up options apply.
+- `backup::spawn_scheduler(pool, data_dir, config)` still exists (fixed config); `serve` uses
+  `spawn_scheduler_with(.., Arc<Control>)`.
+- Run now while one runs is tested by holding the backup gate (`Control::try_begin`), since a backup of
+  the test database ends in milliseconds.

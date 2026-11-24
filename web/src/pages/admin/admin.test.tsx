@@ -33,10 +33,11 @@ const unassigned = (over: Partial<UnassignedResponse> = {}): UnassignedResponse 
 });
 
 const NOTHING: UnassignedResponse = { tokens: [], unattributed_files: 0, legacy: { settings: false, body_entries: 0, strength_edits: 0, garmin_account: false } };
+const NO_BACKUPS = { settings: null, source: 'none', startup: null, status: { running: false, last_ok: null, last_error: null, next_at: null }, backups: [] };
 const me = { authenticated: true, username: 'admin', role: 'admin', timezone: 'Europe/Copenhagen', sample: false };
 
 function open(extra: Record<string, unknown> = {}, list: UserList = users(admin, user()), un: UnassignedResponse = NOTHING) {
-  const api = mockApi({ ...extra, '/api/me': me, '/api/admin/users': list, '/api/admin/unassigned': un });
+  const api = mockApi({ ...extra, '/api/me': me, '/api/admin/users': list, '/api/admin/unassigned': un, '/api/admin/backups': NO_BACKUPS });
   renderAt(<AdminPage />, '/admin');
   return api;
 }
