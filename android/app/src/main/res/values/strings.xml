@@ -266,7 +266,7 @@
     <string name="phone_access_title">Notification access is off</string>
     <string name="phone_access_body">Android keeps a special switch for apps that read notifications. Notifications and music need it. Turn on \"Nimrag Connect\" on the page that opens; nothing is read until a feature is on.</string>
     <string name="phone_access_open">Open the setting</string>
-    <string name="phone_access_restricted">If the switch is greyed out, open the app info, tap the three dots and choose \"Allow restricted settings\" (Android does this for apps installed outside the Play Store), then try again.</string>
+    <string name="phone_access_restricted">If Android says \"App was denied access\" or the switch is greyed out, open the app info, tap the three dots and choose \"Allow restricted settings\" (Android does this for apps installed outside the Play Store), then try again.</string>
     <string name="phone_access_app_info">Open app info</string>
     <string name="phone_access_manage">Notification access</string>
     <string name="phone_access_manage_on">On · tap to change it in system settings</string>

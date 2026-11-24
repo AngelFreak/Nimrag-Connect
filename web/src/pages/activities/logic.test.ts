@@ -63,13 +63,13 @@ const group = (sets: StrengthSet[], name = 'Bench press'): ExerciseGroup => ({ n
 
 describe('row text', () => {
   it('matches the design for run, strength and walk', () => {
-    expect(rowText(item())).toEqual({ value: '6.4 km', sub: '38:00 · 5:56 /km', detail: '6.4 km · 5:56 /km' });
+    expect(rowText(item())).toEqual({ value: '6.40 km', sub: '38:00 · 5:56 /km', detail: '6.40 km · 5:56 /km' });
     expect(rowText(item({ kind: 'strength', distance_m: null, avg_pace_s_per_km: null, duration_s: 2520, sets: 18, volume_kg: 3300 }))).toEqual({
-      value: '42 min',
+      value: '42:00',
       sub: '18 sets · 3,300 kg',
       detail: '18 sets · 3,300 kg',
     });
-    expect(rowText(item({ kind: 'walk', duration_s: 3120, distance_m: 4800, avg_pace_s_per_km: 650 })).sub).toBe('52 min');
+    expect(rowText(item({ kind: 'walk', duration_s: 3120, distance_m: 4800, avg_pace_s_per_km: 650 })).sub).toBe('52:00');
   });
 
   it('never turns a missing value into 0', () => {
@@ -286,13 +286,13 @@ describe('listStats (the five figures of a desktop row)', () => {
   });
   it('a swim and an unnamed sport lean on heart rate and energy', () => {
     expect(labels(item({ kind: 'swim', distance_m: 800 }))).toEqual(['Distance', 'Time', 'Avg HR', 'Max HR', 'Calories']);
-    expect(values(item({ kind: 'swim', distance_m: 800 }))[0]).toBe('800 m');
+    expect(values(item({ kind: 'swim', distance_m: 800 }))[0]).toBe('0.80 km');
     expect(labels(item({ kind: 'other', distance_m: null }))).toEqual(['Time', 'Distance', 'Avg HR', 'Max HR', 'Calories']);
   });
   it('strength: time, exercises, sets, volume, average heart rate', () => {
     const str = item({ kind: 'strength', distance_m: null, avg_pace_s_per_km: null, sets: 18, volume_kg: 3300.4, exercises: 6 });
     expect(labels(str)).toEqual(['Time', 'Exercises', 'Sets', 'Volume', 'Avg HR']);
-    expect(values(str)).toEqual(['38:00', '6', '18', '3,300 kg', '151 bpm']);
+    expect(values(str)).toEqual(['38:00', '6', '18', '3,300.4 kg', '151 bpm']);
   });
   it('a missing figure is null, never 0', () => {
     const empty = item({ duration_s: null, distance_m: null, avg_pace_s_per_km: null, avg_hr_bpm: null, ascent_m: null });

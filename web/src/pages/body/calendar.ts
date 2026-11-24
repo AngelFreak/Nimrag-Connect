@@ -1,6 +1,5 @@
 import { addDays } from '../../lib/dates';
-import { fmtDurationMin, fmtInt, isMissing } from '../../lib/format';
-import { fmtKm } from './movement';
+import { fmtClock, fmtDurationMin, fmtInt, isMissing } from '../../lib/format';
 import { localParts } from './time';
 import type { ActivityListItem, CalendarDay } from './types';
 
@@ -107,9 +106,9 @@ export function energyText(day: CalendarDay): string | null {
 /** Row for an activity in the day summary: title "Run · 17:40", sub "38m · 6.4 km" or "42m · 18 sets". */
 export function activityRow(a: ActivityListItem): { title: string; sub: string | null } {
   const t = localParts(a.start)?.time;
-  const parts: (string | null)[] = [fmtDurationMin(isMissing(a.duration_s) ? null : a.duration_s / 60)];
+  const parts: (string | null)[] = [fmtClock(a.duration_s)];
   if (a.kind === 'strength') parts.push(isMissing(a.sets) ? null : `${a.sets} sets`);
-  else parts.push(fmtKm(a.distance_m));
+  else parts.push(isMissing(a.distance_m) ? null : `${(a.distance_m / 1000).toFixed(2)} km`);
   const sub = parts.filter((p): p is string => p !== null).join(' · ');
   return { title: t ? `${kindTitle(a.kind)} · ${t}` : kindTitle(a.kind), sub: sub || null };
 }

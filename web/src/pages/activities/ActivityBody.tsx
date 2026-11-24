@@ -41,7 +41,7 @@ export function zoneEntries(a: Pick<ActivityDetail, 'hr_zones'>): ZoneEntry[] {
 
 /** What the route map shows, in words (the drawing itself is not readable by a screen reader). */
 export function routeLabel(distanceM: number | null): string {
-  const length = distanceM !== null && distanceM > 0 ? `${(distanceM / 1000).toFixed(1)} km route` : 'route';
+  const length = distanceM !== null && distanceM > 0 ? `${(distanceM / 1000).toFixed(2)} km route` : 'route';
   return `Route map: the ${length} of this activity as a line from its start, marked with an orange dot. The numbers are in the stats and laps.`;
 }
 
@@ -155,7 +155,7 @@ export function ActivityBody({ a }: { a: ActivityDetail }) {
 
   const primaryTiles: (Tile | null)[] = distanceKind
     ? [
-        { label: 'Distance', value: fmtDistance(a.distance_m, 2) },
+        { label: 'Distance', value: fmtDistance(a.distance_m) },
         { label: 'Time', value: fmtClock(a.duration_s) },
         speedOrPace,
         { label: 'Avg HR', value: fmtBpm(a.avg_hr_bpm) },
@@ -293,7 +293,7 @@ export function ActivityBody({ a }: { a: ActivityDetail }) {
             rowKey={(l) => String(l.index)}
             columns={[
               { key: 'n', header: 'Lap', cell: (l) => l.index },
-              { key: 'd', header: 'Distance', cell: (l) => fmtDistance(l.distance_m, 2) },
+              { key: 'd', header: 'Distance', cell: (l) => fmtDistance(l.distance_m) },
               lapPaced
                 ? { key: 'p', header: 'Pace', cell: (l) => (l.avg_pace_s_per_km === null ? null : fmtClock(l.avg_pace_s_per_km)) }
                 : { key: 't', header: 'Time', cell: (l) => fmtClock(l.duration_s) },

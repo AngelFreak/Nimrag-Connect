@@ -461,8 +461,8 @@ describe('Home on a desktop', () => {
     expect(items).toHaveLength(2);
     expect(within(items[0]!).getByRole('link', { name: 'Run' })).toHaveAttribute('href', '/activities/a1');
     expect(items[0]).toHaveTextContent('Thu 19 Nov');
-    expect(items[0]).toHaveTextContent('6.4 km');
-    expect(items[0]).toHaveTextContent('37m');
+    expect(items[0]).toHaveTextContent('6.40 km');
+    expect(items[0]).toHaveTextContent('37:00');
     expect(items[1]).toHaveTextContent('18');
     expect(items[1]).toHaveTextContent('Sets');
 

@@ -48,19 +48,15 @@ export function activityTitle(a: { kind: string; sport_name: string | null }): s
   return KIND_LABELS[a.kind] ?? titleCase(a.kind);
 }
 
-/** "42 min" under an hour, "1h 05m" above. */
+/** An activity's time as the watch keeps it, to the second: "42:10", "1:05:03" (never rounded to minutes). */
 export function fmtMinutes(seconds: Maybe<number>): string | null {
-  if (isMissing(seconds)) return null;
-  const total = Math.round(seconds / 60);
-  if (total < 60) return `${total} min`;
-  return `${Math.floor(total / 60)}h ${String(total % 60).padStart(2, '0')}m`;
+  return fmtClock(seconds);
 }
 
-/** "6.4 km"; "800 m" under a kilometre when `digits` is below 2; otherwise `digits` decimals. */
-export function fmtDistance(meters: Maybe<number>, digits = 1): string | null {
+/** An activity's distance to the hundredth of a kilometre, as the watch shows it: "7.04 km", "0.80 km". */
+export function fmtDistance(meters: Maybe<number>): string | null {
   if (isMissing(meters)) return null;
-  if (meters < 1000 && digits < 2) return `${Math.round(meters)} m`;
-  return `${(meters / 1000).toFixed(digits)} km`;
+  return `${(meters / 1000).toFixed(2)} km`;
 }
 
 /** "5:56 /km" from seconds per km. */
@@ -129,7 +125,7 @@ export function rowText(a: ActivityListItem): RowText {
   const duration = fmtMinutes(a.duration_s);
   if (a.kind === 'strength') {
     const sets = a.sets === null ? null : `${a.sets} ${a.sets === 1 ? 'set' : 'sets'}`;
-    const volume = a.volume_kg === null ? (a.sets === null ? null : 'volume unavailable') : fmtKg(Math.round(a.volume_kg));
+    const volume = a.volume_kg === null ? (a.sets === null ? null : 'volume unavailable') : fmtKg(a.volume_kg);
     const detail = join([sets, volume]);
     return { value: duration, sub: detail, detail };
   }
@@ -223,7 +219,7 @@ export interface ListStat {
 /** The five figures of a desktop list row, chosen by sport from what the list API returns. */
 export function listStats(a: ActivityListItem): ListStat[] {
   const time = fmtClock(a.duration_s);
-  const distance = fmtDistance(a.distance_m, 2);
+  const distance = fmtDistance(a.distance_m);
   const ascent = fmtMeters(a.ascent_m);
   const avgHr = fmtBpm(a.avg_hr_bpm);
   switch (a.kind) {
@@ -247,7 +243,7 @@ export function listStats(a: ActivityListItem): ListStat[] {
       ];
     case 'swim':
       return [
-        { label: 'Distance', value: fmtDistance(a.distance_m, 1) },
+        { label: 'Distance', value: fmtDistance(a.distance_m) },
         { label: 'Time', value: time },
         { label: 'Avg HR', value: avgHr },
         { label: 'Max HR', value: fmtBpm(a.max_hr_bpm) },
@@ -258,7 +254,7 @@ export function listStats(a: ActivityListItem): ListStat[] {
         { label: 'Time', value: time },
         { label: 'Exercises', value: a.exercises === null ? null : String(a.exercises) },
         { label: 'Sets', value: a.sets === null ? null : String(a.sets) },
-        { label: 'Volume', value: a.volume_kg === null ? null : fmtKg(Math.round(a.volume_kg)) },
+        { label: 'Volume', value: a.volume_kg === null ? null : fmtKg(a.volume_kg) },
         { label: 'Avg HR', value: avgHr },
       ];
     default:

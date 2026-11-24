@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { MapOptions } from 'maplibre-gl';
+import { useMapChoice } from '../lib/mapPref';
 import { useTheme, type Theme } from '../lib/theme';
 
 // Maps use MapLibre GL JS with PMTiles from the owner's own server (/tiles/*.pmtiles).
@@ -159,17 +160,21 @@ function Placeholder({ track, height, label, theme }: { track?: [number, number]
 export function MapView({ track, tilesUrl = DEFAULT_TILES_URL, label = 'Route map', height = 220 }: MapViewProps) {
   const container = useRef<HTMLDivElement>(null);
   const theme = useTheme();
-  const [mode, setMode] = useState<'checking' | 'placeholder' | 'map'>('checking');
+  const choice = useMapChoice();
+  const [checked, setMode] = useState<'checking' | 'placeholder' | 'map'>('checking');
+  // "Route only" (Profile, per browser) never makes the WebGL map.
+  const mode = choice === 'route' ? 'placeholder' : checked;
 
   useEffect(() => {
     let cancelled = false;
+    if (choice === 'route') return;
     void tilesAvailable(tilesUrl).then((ok) => {
       if (!cancelled) setMode(ok ? 'map' : 'placeholder');
     });
     return () => {
       cancelled = true;
     };
-  }, [tilesUrl]);
+  }, [tilesUrl, choice]);
 
   useEffect(() => {
     if (mode !== 'map' || !container.current) return;
@@ -189,13 +194,24 @@ export function MapView({ track, tilesUrl = DEFAULT_TILES_URL, label = 'Route ma
       const protocol = new Protocol();
       maplibre.addProtocol('pmtiles', protocol.tile);
       const first = track?.[0];
-      const map = new maplibre.Map({
-        container: container.current,
-        style: buildStyle(tilesUrl, theme),
-        center: first ?? [10, 56],
-        zoom: first ? 12 : 5,
-        attributionControl: { compact: true },
-      });
+      let map: InstanceType<typeof maplibre.Map>;
+      try {
+        map = new maplibre.Map({
+          container: container.current,
+          style: buildStyle(tilesUrl, theme),
+          center: first ?? [10, 56],
+          zoom: first ? 12 : 5,
+          attributionControl: { compact: true },
+          // Go easy on the GPU: no canvas beyond 2x, and no map at all on a slow or blocklisted GPU
+          // (the route is drawn alone instead).
+          pixelRatio: Math.min(window.devicePixelRatio || 1, 2),
+          canvasContextAttributes: { failIfMajorPerformanceCaveat: true },
+        });
+      } catch {
+        maplibre.removeProtocol('pmtiles');
+        setMode('placeholder');
+        return;
+      }
       map.addControl(new maplibre.NavigationControl({ showCompass: false }), 'top-right');
       let ready = false;
       const fit = () => {
@@ -227,16 +243,27 @@ export function MapView({ track, tilesUrl = DEFAULT_TILES_URL, label = 'Route ma
       });
       // MapLibre follows window resizes only; the page often settles after the map is made (fonts,
       // side column), which left the route fitted to a stale size and running off the edge.
+      // Only on a real change of size, at most once a frame, so the canvas is never resized in a loop.
+      let size = '';
+      let frame = 0;
       const observer =
         typeof ResizeObserver === 'function'
-          ? new ResizeObserver(() => {
-              map.resize();
-              fit();
+          ? new ResizeObserver((entries) => {
+              const box = entries[0]?.contentRect;
+              const next = box ? `${Math.round(box.width)}x${Math.round(box.height)}` : '';
+              if (next === size) return;
+              size = next;
+              cancelAnimationFrame(frame);
+              frame = requestAnimationFrame(() => {
+                map.resize();
+                fit();
+              });
             })
           : undefined;
       observer?.observe(container.current);
       remove = () => {
         observer?.disconnect();
+        cancelAnimationFrame(frame);
         map.remove();
         maplibre.removeProtocol('pmtiles');
       };

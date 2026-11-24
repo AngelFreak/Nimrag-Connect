@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { Card, CardHeader, EmptyState, Legend, ListRow, SeriesChart, StressBars, Unavailable, type XLabel } from '../../components';
 import type { DayResponse } from '../../api/generated/DayResponse';
-import { fmtDurationMin, fmtInt } from '../../lib/format';
+import { fmtClock, fmtInt } from '../../lib/format';
 import { useIsDesktop } from '../../lib/hooks';
 import { energyAside, energySummary, fmtSeconds, hourSeries, hrAside, hrSummary, kindName, stressAside, stressBuckets, stressSummary } from './model';
 import { FactorList, FactorRow, StatsSection } from './desktop';
@@ -111,8 +111,8 @@ export function ActivitiesSection({ day }: { day: DayResponse }) {
                 key={a.id}
                 to={`/activities/${a.id}`}
                 name={a.sport_name && a.kind === 'other' ? a.sport_name : kindName(a.kind)}
-                sub={[clock(a.start), a.distance_m === null ? null : `${(a.distance_m / 1000).toFixed(1)} km`, a.avg_hr_bpm === null ? null : `${fmtInt(a.avg_hr_bpm)} bpm avg`].filter(Boolean).join(' · ')}
-                rating={fmtDurationMin(a.duration_s === null ? null : a.duration_s / 60) ?? undefined}
+                sub={[clock(a.start), a.distance_m === null ? null : `${(a.distance_m / 1000).toFixed(2)} km`, a.avg_hr_bpm === null ? null : `${fmtInt(a.avg_hr_bpm)} bpm avg`].filter(Boolean).join(' · ')}
+                rating={fmtClock(a.duration_s) ?? undefined}
               />
             ))}
           </FactorList>
@@ -134,10 +134,10 @@ export function ActivitiesSection({ day }: { day: DayResponse }) {
               key={a.id}
               to={`/activities/${a.id}`}
               title={a.sport_name && a.kind === 'other' ? a.sport_name : kindName(a.kind)}
-              sub={[clock(a.start), a.distance_m === null ? null : `${(a.distance_m / 1000).toFixed(1)} km`, a.avg_hr_bpm === null ? null : `${fmtInt(a.avg_hr_bpm)} bpm avg`]
+              sub={[clock(a.start), a.distance_m === null ? null : `${(a.distance_m / 1000).toFixed(2)} km`, a.avg_hr_bpm === null ? null : `${fmtInt(a.avg_hr_bpm)} bpm avg`]
                 .filter(Boolean)
                 .join(' · ')}
-              value={fmtDurationMin(a.duration_s === null ? null : a.duration_s / 60)}
+              value={fmtClock(a.duration_s)}
             />
           ))}
         </div>

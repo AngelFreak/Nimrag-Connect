@@ -5,7 +5,7 @@ import type { SettingsResponse, Today } from '../../api/generated';
 import type { ActivityListItem } from '../../api/generated/ActivityListItem';
 import { Button, DataList, LinkButton, ProgressBar, SampleDataChip, Skeleton } from '../../components';
 import { fmtShortDay } from '../../lib/dates';
-import { fmtFixed, fmtInt, isMissing } from '../../lib/format';
+import { fmtClock, fmtFixed, fmtInt, isMissing } from '../../lib/format';
 import { useWorkoutList } from '../workouts/api';
 import { DEFAULT_HOME_CARDS, DESKTOP_FOCUS_CARDS, visibleCards } from './cards';
 import { EditHome } from './EditHome';
@@ -214,7 +214,7 @@ function AtAGlance({ today, settings }: { today: Today; settings: SettingsRespon
 
 function RecentActivityItem({ a }: { a: ActivityListItem }) {
   const strength = a.kind === 'strength';
-  const first = strength && !isMissing(a.sets) ? { value: `${fmtInt(a.sets)}`, label: 'Sets' } : !isMissing(a.distance_m) ? { value: fmtKm(a.distance_m), label: 'Distance' } : !isMissing(a.avg_hr_bpm) ? { value: fmtInt(a.avg_hr_bpm), label: 'Avg HR' } : null;
+  const first = strength && !isMissing(a.sets) ? { value: `${fmtInt(a.sets)}`, label: 'Sets' } : !isMissing(a.distance_m) ? { value: fmtKm(a.distance_m, 2), label: 'Distance' } : !isMissing(a.avg_hr_bpm) ? { value: fmtInt(a.avg_hr_bpm), label: 'Avg HR' } : null;
   return (
     <li className="hact" data-kind={a.kind}>
       <span className="hact__disc" style={{ background: SPORT_COLOR[a.kind] ?? SPORT_COLOR['other']! }}>
@@ -233,7 +233,7 @@ function RecentActivityItem({ a }: { a: ActivityListItem }) {
             </span>
           ) : null}
           <span className="hact__stat">
-            <span className="hact__v">{fmtSeconds(a.duration_s) ?? 'unavailable'}</span>
+            <span className="hact__v">{fmtClock(a.duration_s) ?? 'unavailable'}</span>
             <span className="hact__l">Time</span>
           </span>
         </div>

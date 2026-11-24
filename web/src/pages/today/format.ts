@@ -104,9 +104,9 @@ export function activityDetail(a: ActivityListItem): string | null {
   const parts: string[] = [];
   if (a.kind === 'strength') {
     if (!isMissing(a.sets)) parts.push(`${fmtInt(a.sets)} sets`);
-    if (!isMissing(a.volume_kg)) parts.push(`${fmtInt(a.volume_kg)} kg`);
+    if (!isMissing(a.volume_kg)) parts.push(`${new Intl.NumberFormat('en-GB', { maximumFractionDigits: 1 }).format(a.volume_kg)} kg`);
   } else {
-    if (!isMissing(a.distance_m)) parts.push(`${(a.distance_m / 1000).toFixed(1)} km`);
+    if (!isMissing(a.distance_m)) parts.push(`${(a.distance_m / 1000).toFixed(2)} km`);
     const pace = fmtPace(a.avg_pace_s_per_km);
     if (pace) parts.push(pace);
   }

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useLogout, useMe } from '../../account/queries';
 import {
+  ActivitiesIcon,
   Chip,
   ConfirmDialog,
   DownloadIcon,
@@ -25,6 +26,7 @@ import {
 import { todayIn } from '../../lib/dates';
 import { fmtInt } from '../../lib/format';
 import { usePageTitle } from '../../lib/hooks';
+import { setMapChoice, useMapChoice } from '../../lib/mapPref';
 import { setThemeChoice, useThemeChoice, type ThemeChoice } from '../../lib/theme';
 import { isNativeApp } from '../../native';
 import { useSettings } from '../today/queries';
@@ -67,6 +69,26 @@ function AppearanceRow() {
       tone="steps"
       title="Appearance"
       action={<SegmentedControl label="Appearance" options={THEME_OPTIONS} value={choice} onChange={setThemeChoice} />}
+    />
+  );
+}
+
+const MAP_OPTIONS = [
+  { value: 'interactive', label: 'Interactive' },
+  { value: 'route', label: 'Route only' },
+] as const;
+
+/** Per browser: the interactive map, or the route drawn alone (for a GPU that WebGL upsets). */
+function MapRow() {
+  const choice = useMapChoice();
+  if (isNativeApp()) return null;
+  return (
+    <SettingsRow
+      icon={<ActivitiesIcon />}
+      tone="energy"
+      title="Activity map"
+      value="Route only draws the route without the map (this browser)"
+      action={<SegmentedControl label="Activity map" options={MAP_OPTIONS} value={choice} onChange={setMapChoice} />}
     />
   );
 }
@@ -122,6 +144,7 @@ function UserRows() {
       <div data-pane="preferences">
         <SettingsGroup title="Preferences">
           <AppearanceRow />
+          <MapRow />
           <SettingsRow icon={<GlobeIcon />} tone="warn" title="Timezone" value={s ? breakableZone(s.timezone) : settingValue(null)} to="/profile/timezone" />
           <SettingsRow
             icon={<TargetIcon />}
@@ -166,6 +189,7 @@ function AdminRows() {
       <div data-pane="account">
         <SettingsGroup title="Appearance">
           <AppearanceRow />
+          <MapRow />
         </SettingsGroup>
       </div>
       <div data-pane="account">

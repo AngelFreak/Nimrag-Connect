@@ -66,7 +66,7 @@ describe('formatting never turns a missing value into 0', () => {
 describe('activity detail', () => {
   it('strength gives sets and volume, a run gives distance and pace, nothing gives null', () => {
     expect(activityDetail(activity({ kind: 'strength', sets: 18, volume_kg: 3300 }))).toBe('18 sets · 3,300 kg');
-    expect(activityDetail(activity({ distance_m: 6400, avg_pace_s_per_km: 356 }))).toBe('6.4 km · 5:56 /km');
+    expect(activityDetail(activity({ distance_m: 6400, avg_pace_s_per_km: 356 }))).toBe('6.40 km · 5:56 /km');
     expect(activityDetail(activity({}))).toBeNull();
   });
 });

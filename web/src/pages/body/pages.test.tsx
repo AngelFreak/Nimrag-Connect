@@ -424,7 +424,7 @@ describe('CalendarPage (3l)', () => {
     const card = screen.getByRole('heading', { name: 'Tue 10 Nov' }).closest('section') as HTMLElement;
     expect(within(card).getByText('Run · 18:05')).toBeInTheDocument();
     expect(within(card).getByText('Strength · 18:05')).toBeInTheDocument();
-    expect(within(card).getByText('42m · 18 sets')).toBeInTheDocument();
+    expect(within(card).getByText('42:00 · 18 sets')).toBeInTheDocument();
     expect(within(card).getByText('7h 12m · score 81')).toBeInTheDocument();
     expect(within(card).getByText('8,360')).toBeInTheDocument();
     expect(within(card).getByText('51 bpm')).toBeInTheDocument();

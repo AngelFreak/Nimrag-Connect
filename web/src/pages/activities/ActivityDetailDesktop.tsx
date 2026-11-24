@@ -175,7 +175,7 @@ export function headlineFor(a: ActivityDetail): Headline[] {
   const time = fmtClock(a.duration_s);
   const ascent = fmtMeters(a.ascent_m);
   const avgHr = fmtBpm(a.avg_hr_bpm);
-  const base = { distance: fmtDistance(a.distance_m, 2), kcal: fmtKcal(a.calories_kcal) };
+  const base = { distance: fmtDistance(a.distance_m), kcal: fmtKcal(a.calories_kcal) };
   switch (a.kind) {
     case 'run':
     case 'walk':
@@ -197,7 +197,7 @@ export function headlineFor(a: ActivityDetail): Headline[] {
       ];
     case 'swim':
       return [
-        { label: 'Distance', value: fmtDistance(a.distance_m, 1) },
+        { label: 'Distance', value: fmtDistance(a.distance_m) },
         { label: 'Time', value: time },
         { label: 'Avg HR', value: avgHr },
         { label: 'Max HR', value: fmtBpm(a.max_hr_bpm) },
@@ -228,7 +228,7 @@ export function statGroupsFor(a: ActivityDetail): StatGroup[] {
   const paced = a.kind === 'run' || a.kind === 'walk' || a.kind === 'hike';
   const elapsedDiffers = a.elapsed_s !== null && a.duration_s !== null && Math.abs(a.elapsed_s - a.duration_s) >= 1;
   return [
-    { title: 'Distance', items: [{ label: 'Distance', value: fmtDistance(a.distance_m, 2) }] },
+    { title: 'Distance', items: [{ label: 'Distance', value: fmtDistance(a.distance_m) }] },
     {
       title: 'Timing',
       items: [
@@ -290,7 +290,7 @@ function LapsTable({ a }: { a: ActivityDetail }) {
       rowKey={(l) => String(l.index)}
       columns={[
         { key: 'n', header: 'Lap', cell: (l) => l.index },
-        { key: 'd', header: 'Distance', cell: (l) => fmtDistance(l.distance_m, 2) },
+        { key: 'd', header: 'Distance', cell: (l) => fmtDistance(l.distance_m) },
         { key: 't', header: 'Time', cell: (l) => fmtClock(l.duration_s) },
         ...(paced ? [{ key: 'p', header: 'Avg pace', cell: (l: ActivityDetail['laps'][number]) => (l.avg_pace_s_per_km === null ? null : fmtClock(l.avg_pace_s_per_km)) }] : []),
         { key: 'a', header: 'Ascent', cell: (l) => fmtMeters(l.ascent_m) },

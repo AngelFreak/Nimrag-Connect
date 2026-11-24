@@ -163,14 +163,14 @@ describe('ActivitiesPage', () => {
       };
     };
     renderAt('/activities');
-    expect(await screen.findByText('6.4 km')).toBeInTheDocument();
+    expect(await screen.findByText('6.40 km')).toBeInTheDocument();
     expect(screen.getByText('Sample data')).toBeInTheDocument();
     expect(screen.getByText('18 sets · 3,300 kg')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Strength/ })).toHaveAttribute('href', `/activities/${ID_STR}/strength`);
     expect(screen.getByRole('link', { name: /Run/ })).toHaveAttribute('href', `/activities/${ID_RUN}`);
 
     await user.click(screen.getByRole('button', { name: 'Load more' }));
-    expect(await screen.findByText('4.8 km')).toBeInTheDocument();
+    expect(await screen.findByText('4.80 km')).toBeInTheDocument();
     const last = calls[calls.length - 1]!.url;
     expect(last.searchParams.get('before')).toBe('2026-11-16T17:40:00+00:00');
     expect(screen.queryByRole('button', { name: 'Load more' })).not.toBeInTheDocument();
@@ -180,7 +180,7 @@ describe('ActivitiesPage', () => {
     const user = userEvent.setup();
     handler = (url) => ({ body: { sample: false, items: url.searchParams.get('type') === 'swim' ? [] : [listItem()], next_before: null } });
     renderAt('/activities');
-    await screen.findByText('6.4 km');
+    await screen.findByText('6.40 km');
     expect(screen.queryByText('Sample data')).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Swim' }));
     expect(await screen.findByText('No activities of this type')).toBeInTheDocument();
@@ -199,7 +199,7 @@ describe('ActivitiesPage', () => {
     // Another type leaves the Strength path for the Activities filter.
     handler = () => ({ body: { sample: false, items: [listItem()], next_before: null } });
     await user.click(screen.getByRole('button', { name: 'Run' }));
-    expect(await screen.findByText('6.4 km')).toBeInTheDocument();
+    expect(await screen.findByText('6.40 km')).toBeInTheDocument();
     expect(screen.getByRole('heading', { level: 1, name: 'Activities' })).toBeInTheDocument();
   });
 
@@ -207,7 +207,7 @@ describe('ActivitiesPage', () => {
     const user = userEvent.setup();
     handler = () => ({ body: { sample: false, items: [listItem()], next_before: null } });
     renderAt('/activities');
-    await screen.findByText('6.4 km');
+    await screen.findByText('6.40 km');
     await user.click(screen.getByRole('button', { name: 'Strength' }));
     expect(await screen.findByRole('heading', { level: 1, name: 'Strength' })).toBeInTheDocument();
   });
@@ -227,7 +227,7 @@ describe('ActivitiesPage', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('database is locked');
     fail = false;
     await user.click(screen.getByRole('button', { name: 'Try again' }));
-    expect(await screen.findByText('6.4 km')).toBeInTheDocument();
+    expect(await screen.findByText('6.40 km')).toBeInTheDocument();
   });
 
   it('shows a loading state before the data arrives', () => {
@@ -259,7 +259,7 @@ describe('ActivityDetailPage', () => {
     expect(within(zones).getAllByText('unavailable')).toHaveLength(3);
     expect(screen.getByRole('table', { name: 'Laps' })).toBeInTheDocument();
     // The API sends [lat, lon]; the map gets [lon, lat].
-    const map = await screen.findByRole('img', { name: /^Route map: the 6\.4 km route of this activity/ });
+    const map = await screen.findByRole('img', { name: /^Route map: the 6\.40 km route of this activity/ });
     expect(map).toHaveAttribute('data-first', '[10.2,56.1]');
   });
 
@@ -330,7 +330,7 @@ describe('StrengthPage', () => {
     expect(screen.getByText('22 kg')).toBeInTheDocument();
     expect(screen.getByText(/1 set/)).toHaveTextContent('1 set · 60 s each');
     expect(screen.getByText('Bodyweight')).toBeInTheDocument();
-    expect(screen.getByText('42 min')).toBeInTheDocument();
+    expect(screen.getByText('42:00')).toBeInTheDocument();
     expect(screen.getByRole('img', { name: 'Heart rate during the session' })).toBeInTheDocument();
   });
 
@@ -439,7 +439,7 @@ describe('StrengthPage', () => {
     const table = await screen.findByRole('table', { name: /this session against the last/i });
     expect(within(table).getByText('was 20 kg (+2 kg)')).toBeInTheDocument();
     expect(screen.getByText(/Only in the last session: Squat/)).toBeInTheDocument();
-    expect(screen.getByText('Last: 45 min (-3 min)')).toBeInTheDocument();
+    expect(screen.getByText('Last: 45:00 (-3 min)')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Hide comparison' })).toHaveAttribute('aria-pressed', 'true');
   });
 
@@ -606,7 +606,7 @@ describe('on a wide screen', () => {
       ] as const) {
         expect(screen.getAllByText(label)[0]!.closest('div')).toHaveTextContent(value);
       }
-      const map = await screen.findByRole('img', { name: /^Route map: the 6\.4 km route of this activity/ });
+      const map = await screen.findByRole('img', { name: /^Route map: the 6\.40 km route of this activity/ });
       // The API sends [lat, lon]; the map gets [lon, lat].
       expect(map).toHaveAttribute('data-first', '[10.2,56.1]');
       for (const name of ['Heart rate over the activity', 'Pace over the activity', 'Elevation over the activity', 'Cadence over the activity']) {

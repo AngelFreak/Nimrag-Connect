@@ -5,6 +5,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { createRef, useState, type ReactNode } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import { routePath } from './MapView';
+import { setMapChoice } from '../lib/mapPref';
 import { BarList } from './ZoneBars';
 import { routeLabel } from '../pages/activities/ActivityBody';
 import {
@@ -767,9 +768,25 @@ describe('MapView without tiles', () => {
   });
 });
 
+describe('MapView set to "Route only"', () => {
+  it('draws the route alone and never asks for the tiles', async () => {
+    const fetch = vi.fn(async () => new Response('', { status: 200, headers: { 'content-type': 'application/octet-stream' } }));
+    vi.stubGlobal('fetch', fetch);
+    setMapChoice('route');
+    try {
+      render(<MapView label="Route map: an example" />);
+      expect(await screen.findByRole('img', { name: 'Route map: an example' })).toBeInTheDocument();
+      expect(fetch).not.toHaveBeenCalled();
+    } finally {
+      setMapChoice('interactive');
+      vi.unstubAllGlobals();
+    }
+  });
+});
+
 describe('routeLabel', () => {
   it('says what the map shows, with the length when it is known', () => {
-    expect(routeLabel(6400)).toBe('Route map: the 6.4 km route of this activity as a line from its start, marked with an orange dot. The numbers are in the stats and laps.');
+    expect(routeLabel(6400)).toBe('Route map: the 6.40 km route of this activity as a line from its start, marked with an orange dot. The numbers are in the stats and laps.');
     expect(routeLabel(null)).toMatch(/^Route map: the route of this activity/);
     expect(routeLabel(0)).toMatch(/^Route map: the route of this activity/);
   });
