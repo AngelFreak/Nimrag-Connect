@@ -7,7 +7,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { routePath } from './MapView';
 import { setMapChoice } from '../lib/mapPref';
 import { BarList } from './ZoneBars';
-import { routeLabel } from '../pages/activities/ActivityBody';
+import { routeLabel } from '../pages/activities/RouteExplorer';
 import {
   AppShell,
   BarSeries,

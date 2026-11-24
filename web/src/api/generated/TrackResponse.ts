@@ -5,4 +5,9 @@ export type TrackResponse = { sample: boolean, id: string, available: boolean,
 /**
  * `[latitude, longitude]` in degrees, thinned to at most 1500 points.
  */
-points: Array<[number, number]>, start: [number, number] | null, end: [number, number] | null, bounds: Bounds | null, };
+points: Array<[number, number]>, 
+/**
+ * Per point of `points` (same length): speed in m/s, heart rate in bpm and altitude in
+ * metres at that point; `null` where the file has none. The route is coloured with these.
+ */
+speed_mps: Array<number | null>, heart_rate_bpm: Array<number | null>, altitude_m: Array<number | null>, start: [number, number] | null, end: [number, number] | null, bounds: Bounds | null, };

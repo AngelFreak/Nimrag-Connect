@@ -287,6 +287,8 @@ pub struct ActivityDetail {
     pub hr_zones: Vec<ZoneTime>,
     pub laps: Vec<Lap>,
     pub series: Option<ActivitySeries>,
+    /// Strength only (edits applied): total reps over the working sets that have a rep count.
+    pub reps: Option<f64>,
 }
 
 pub fn valid_id(id: &str) -> bool {
@@ -474,6 +476,14 @@ async fn detail(
             .bind(&id)
             .fetch_one(p)
             .await?;
+    let reps = if summary.kind == "strength" {
+        let ident = super::strength::ident_of(&ctx, &id).await?;
+        let sets = super::strength::load_sets(&ctx, &id, &ident).await?;
+        let counted: Vec<f64> = sets.iter().filter_map(|s| s.reps).collect();
+        (!counted.is_empty()).then(|| counted.iter().sum::<f64>())
+    } else {
+        None
+    };
     Ok(Json(ActivityDetail {
         sample: ctx.sample(),
         end: ctx.opt_ts(start_ts.zip(elapsed).map(|(s, e)| s + e as i64)),
@@ -492,6 +502,7 @@ async fn detail(
         hr_zones,
         laps,
         series,
+        reps,
         summary,
     }))
 }
@@ -513,6 +524,11 @@ pub struct TrackResponse {
     pub available: bool,
     /// `[latitude, longitude]` in degrees, thinned to at most 1500 points.
     pub points: Vec<[f64; 2]>,
+    /// Per point of `points` (same length): speed in m/s, heart rate in bpm and altitude in
+    /// metres at that point; `null` where the file has none. The route is coloured with these.
+    pub speed_mps: Vec<Option<f64>>,
+    pub heart_rate_bpm: Vec<Option<f64>>,
+    pub altitude_m: Vec<Option<f64>>,
     pub start: Option<[f64; 2]>,
     pub end: Option<[f64; 2]>,
     pub bounds: Option<Bounds>,
@@ -525,19 +541,22 @@ async fn track(
 ) -> Res<Json<TrackResponse>> {
     let ctx = Ctx::new(&state, user.id).await?;
     row_for(&ctx, &id).await?;
-    let pts: Vec<(f64, f64)> = sqlx::query_as(
-        "SELECT lat, lon FROM activity_records WHERE sha256 = ? AND lat IS NOT NULL AND lon IS NOT NULL ORDER BY idx",
+    type TrackRow = (f64, f64, Option<f64>, Option<f64>, Option<f64>);
+    let rows: Vec<TrackRow> = sqlx::query_as(
+        "SELECT lat, lon, speed, hr, altitude_m FROM activity_records WHERE sha256 = ? AND lat IS NOT NULL AND lon IS NOT NULL ORDER BY idx",
     )
     .bind(&id)
     .fetch_all(&ctx.pool)
     .await?;
+    let pts: Vec<(f64, f64)> = rows.iter().map(|r| (r.0, r.1)).collect();
     let bounds = (!pts.is_empty()).then(|| Bounds {
         min_lat: pts.iter().map(|p| p.0).fold(f64::MAX, f64::min),
         min_lon: pts.iter().map(|p| p.1).fold(f64::MAX, f64::min),
         max_lat: pts.iter().map(|p| p.0).fold(f64::MIN, f64::max),
         max_lon: pts.iter().map(|p| p.1).fold(f64::MIN, f64::max),
     });
-    let points: Vec<[f64; 2]> = thin(&pts, 1500).into_iter().map(|p| [p.0, p.1]).collect();
+    let kept = thin(&rows, 1500);
+    let points: Vec<[f64; 2]> = kept.iter().map(|r| [r.0, r.1]).collect();
     Ok(Json(TrackResponse {
         sample: ctx.sample(),
         id,
@@ -545,6 +564,9 @@ async fn track(
         start: pts.first().map(|p| [p.0, p.1]),
         end: pts.last().map(|p| [p.0, p.1]),
         points,
+        speed_mps: kept.iter().map(|r| r.2).collect(),
+        heart_rate_bpm: kept.iter().map(|r| r.3).collect(),
+        altitude_m: kept.iter().map(|r| r.4).collect(),
         bounds,
     }))
 }

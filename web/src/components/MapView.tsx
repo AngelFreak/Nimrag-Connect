@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import type { MapOptions } from 'maplibre-gl';
+import type { GeoJSONSource, Map as MapLibreMap, MapOptions } from 'maplibre-gl';
+import { colorRuns } from '../lib/colorRuns';
 import { useMapChoice } from '../lib/mapPref';
 import { useTheme, type Theme } from '../lib/theme';
 
@@ -104,11 +105,30 @@ export function buildStyle(pmtilesUrl: string, theme: Theme = 'dark'): MapStyle 
   };
 }
 
-/** The route and start-dot colours on each base map. */
+/** The route, start-dot and finish-ring colours on each base map. */
 const ROUTE = {
-  dark: { line: '#7dbbff', start: '#ffb066', background: '#141b1f' },
-  light: { line: '#1265c2', start: '#e8680c', background: '#e8ecee' },
+  dark: { line: '#7dbbff', start: '#ffb066', background: '#141b1f', finishFill: '#141b1f', finishRing: '#e8eef0' },
+  light: { line: '#1265c2', start: '#e8680c', background: '#e8ecee', finishFill: '#ffffff', finishRing: '#1c2a33' },
 } as const;
+
+/** The line under the route: white on the light map (clear of white roads), dark under a coloured route (any colour of the ramp stays readable). */
+export function casingFor(theme: Theme, coloured: boolean): { color: string; width: number; opacity: number } {
+  if (coloured) return theme === 'light' ? { color: '#27363f', width: 7.5, opacity: 1 } : { color: '#05090b', width: 7.5, opacity: 1 };
+  return theme === 'light' ? { color: '#ffffff', width: 7, opacity: 1 } : { color: '#ffffff', width: 0, opacity: 0 };
+}
+
+interface RouteFeature {
+  type: 'Feature';
+  properties: { c: string };
+  geometry: { type: 'LineString'; coordinates: [number, number][] };
+}
+
+/** Route as GeoJSON for the line layer: one feature, or one per run of one colour. Every feature carries its colour as `c`. */
+export function routeCollection(track: [number, number][], colors: readonly string[] | null | undefined, plain: string): { type: 'FeatureCollection'; features: RouteFeature[] } {
+  const feature = (coordinates: [number, number][], c: string): RouteFeature => ({ type: 'Feature', properties: { c }, geometry: { type: 'LineString', coordinates } });
+  if (!colors || colors.length !== track.length) return { type: 'FeatureCollection', features: [feature(track, plain)] };
+  return { type: 'FeatureCollection', features: colorRuns(colors).map((r) => feature(track.slice(r.from, r.to + 1), r.color)) };
+}
 
 interface MapViewProps {
   /** Route as [longitude, latitude] pairs. */
@@ -117,13 +137,15 @@ interface MapViewProps {
   /** Accessible name and summary of the route. The map is a group (not an image) because it holds MapLibre's zoom buttons; the stats beside it are what a screen reader reads. */
   label?: string;
   height?: number;
+  /** One colour per point of `track` (a coloured route); without it the route is one colour. */
+  routeColors?: readonly string[] | null;
 }
 
 /**
  * The route drawn on its own, without a base map, for when the server has no tile file. Longitude
  * is scaled by cos(latitude) so the shape is not stretched; with no track there is no drawing.
  */
-export function routePath(track: [number, number][] | undefined, width: number, height: number, pad = 12): { d: string; start: [number, number] } | null {
+export function routePath(track: [number, number][] | undefined, width: number, height: number, pad = 12): { d: string; start: [number, number]; end: [number, number]; at: (i: number) => [number, number] } | null {
   if (!track || track.length < 2) return null;
   const lats = track.map((p) => p[1]);
   const midLat = ((Math.min(...lats) + Math.max(...lats)) / 2) * (Math.PI / 180);
@@ -135,21 +157,36 @@ export function routePath(track: [number, number][] | undefined, width: number, 
   const offY = (height - (maxY - minY) * scale) / 2;
   const pt = (i: number): [number, number] => [offX + ((xs[i] as number) - minX) * scale, offY + ((ys[i] as number) - minY) * scale];
   const d = track.map((_, i) => `${i === 0 ? 'M' : 'L'}${pt(i)[0].toFixed(1)} ${pt(i)[1].toFixed(1)}`).join('');
-  return { d, start: pt(0) };
+  return { d, start: pt(0), end: pt(track.length - 1), at: pt };
 }
 
-function Placeholder({ track, height, label, theme }: { track?: [number, number][]; height: number; label: string; theme: Theme }) {
-  const colors = ROUTE[theme];
+/** The path of points `from` to `to` (inclusive) of a drawn route. */
+export function routeSlice(at: (i: number) => [number, number], from: number, to: number): string {
+  let d = '';
+  for (let i = from; i <= to; i += 1) d += `${i === from ? 'M' : 'L'}${at(i)[0].toFixed(1)} ${at(i)[1].toFixed(1)}`;
+  return d;
+}
+
+function Placeholder({ track, height, label, theme, colors }: { track?: [number, number][]; height: number; label: string; theme: Theme; colors?: readonly string[] | null }) {
+  const palette = ROUTE[theme];
   const width = 350;
   const h = Math.round((height / 220) * 150);
   const route = routePath(track, width, h);
+  const coloured = !!route && !!colors && colors.length === track?.length;
+  const casing = casingFor(theme, coloured);
   return (
     <svg viewBox={`0 0 ${width} ${h}`} role="img" aria-label={label}>
-      <rect width={width} height={h} fill={colors.background} />
+      <rect width={width} height={h} fill={palette.background} />
       {route ? (
         <>
-          <path d={route.d} fill="none" stroke={colors.line} strokeWidth="3" strokeLinejoin="round" strokeLinecap="round" />
-          <circle cx={route.start[0]} cy={route.start[1]} r="5" fill={colors.start} {...(theme === 'light' ? { stroke: '#fff', strokeWidth: 1.5 } : {})} />
+          {casing.width > 0 ? <path d={route.d} fill="none" stroke={casing.color} strokeOpacity={casing.opacity} strokeWidth={casing.width * 0.75} strokeLinejoin="round" strokeLinecap="round" /> : null}
+          {coloured && colors ? (
+            colorRuns(colors).map((r) => <path key={`${r.from}-${r.color}`} d={routeSlice(route.at, r.from, r.to)} fill="none" stroke={r.color} strokeWidth="3" strokeLinejoin="round" strokeLinecap="round" />)
+          ) : (
+            <path d={route.d} fill="none" stroke={palette.line} strokeWidth="3" strokeLinejoin="round" strokeLinecap="round" />
+          )}
+          <circle cx={route.end[0]} cy={route.end[1]} r="4.5" fill={palette.finishFill} stroke={palette.finishRing} strokeWidth="2" />
+          <circle cx={route.start[0]} cy={route.start[1]} r="5" fill={palette.start} {...(theme === 'light' ? { stroke: '#fff', strokeWidth: 1.5 } : {})} />
         </>
       ) : null}
     </svg>
@@ -157,8 +194,14 @@ function Placeholder({ track, height, label, theme }: { track?: [number, number]
 }
 
 /** Route map on the owner's PMTiles, or the route drawn alone while tiles are absent. */
-export function MapView({ track, tilesUrl = DEFAULT_TILES_URL, label = 'Route map', height = 220 }: MapViewProps) {
+export function MapView({ track, tilesUrl = DEFAULT_TILES_URL, label = 'Route map', height = 220, routeColors }: MapViewProps) {
   const container = useRef<HTMLDivElement>(null);
+  // The colours change when the viewer picks another value; the map keeps its view and only redraws the line.
+  const mapRef = useRef<MapLibreMap | null>(null);
+  const colorsRef = useRef(routeColors);
+  useEffect(() => {
+    colorsRef.current = routeColors;
+  }, [routeColors]);
   const theme = useTheme();
   const choice = useMapChoice();
   const [checked, setMode] = useState<'checking' | 'placeholder' | 'map'>('checking');
@@ -212,6 +255,7 @@ export function MapView({ track, tilesUrl = DEFAULT_TILES_URL, label = 'Route ma
         setMode('placeholder');
         return;
       }
+      mapRef.current = map;
       map.addControl(new maplibre.NavigationControl({ showCompass: false }), 'top-right');
       let ready = false;
       const fit = () => {
@@ -230,13 +274,20 @@ export function MapView({ track, tilesUrl = DEFAULT_TILES_URL, label = 'Route ma
       map.on('load', () => {
         ready = true;
         if (!track || track.length < 2) return;
-        map.addSource('track', { type: 'geojson', data: { type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: track } } });
+        const initial = casingFor(theme, !!colorsRef.current);
+        map.addSource('track', { type: 'geojson', data: routeCollection(track, colorsRef.current, ROUTE[theme].line) });
+        // Under the route: a white edge on the light map (clear of white roads), a dark one under colours.
+        map.addLayer({
+          id: 'track-edge',
+          type: 'line',
+          source: 'track',
+          layout: { 'line-cap': 'round', 'line-join': 'round' },
+          paint: { 'line-color': initial.color, 'line-width': initial.width, 'line-opacity': initial.opacity },
+        });
+        map.addLayer({ id: 'track-line', type: 'line', source: 'track', layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': ['get', 'c'], 'line-width': theme === 'light' ? 4 : 3 } });
         const colors = ROUTE[theme];
-        // On the light map the route gets a white edge so it stays clear of white roads.
-        if (theme === 'light') {
-          map.addLayer({ id: 'track-edge', type: 'line', source: 'track', layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': '#ffffff', 'line-width': 7 } });
-        }
-        map.addLayer({ id: 'track-line', type: 'line', source: 'track', layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': colors.line, 'line-width': theme === 'light' ? 4 : 3 } });
+        map.addSource('finish', { type: 'geojson', data: { type: 'Feature', properties: {}, geometry: { type: 'Point', coordinates: track[track.length - 1] as [number, number] } } });
+        map.addLayer({ id: 'finish-ring', type: 'circle', source: 'finish', paint: { 'circle-color': colors.finishFill, 'circle-radius': 4.5, 'circle-stroke-color': colors.finishRing, 'circle-stroke-width': 2 } });
         map.addSource('start', { type: 'geojson', data: { type: 'Feature', properties: {}, geometry: { type: 'Point', coordinates: track[0] as [number, number] } } });
         map.addLayer({ id: 'start-dot', type: 'circle', source: 'start', paint: { 'circle-color': colors.start, 'circle-radius': 5, ...(theme === 'light' ? { 'circle-stroke-color': '#ffffff', 'circle-stroke-width': 2 } : {}) } });
         fit();
@@ -262,6 +313,7 @@ export function MapView({ track, tilesUrl = DEFAULT_TILES_URL, label = 'Route ma
           : undefined;
       observer?.observe(container.current);
       remove = () => {
+        mapRef.current = null;
         observer?.disconnect();
         cancelAnimationFrame(frame);
         map.remove();
@@ -276,13 +328,26 @@ export function MapView({ track, tilesUrl = DEFAULT_TILES_URL, label = 'Route ma
     };
   }, [mode, tilesUrl, track, theme]);
 
+  // A new choice of colouring: swap the line's data and casing in place.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (mode !== 'map' || !map || !track || track.length < 2) return;
+    const source = map.getSource('track') as GeoJSONSource | undefined;
+    if (!source) return;
+    source.setData(routeCollection(track, routeColors, ROUTE[theme].line));
+    const casing = casingFor(theme, !!routeColors);
+    map.setPaintProperty('track-edge', 'line-color', casing.color);
+    map.setPaintProperty('track-edge', 'line-width', casing.width);
+    map.setPaintProperty('track-edge', 'line-opacity', casing.opacity);
+  }, [routeColors, mode, track, theme]);
+
   return (
     <div className="map">
       {mode === 'map' ? (
         <div ref={container} className="map__canvas" style={{ height }} role="group" aria-label={label} />
       ) : (
         <>
-          <Placeholder track={track} height={height} label={label} theme={theme} />
+          <Placeholder track={track} height={height} label={label} theme={theme} colors={routeColors} />
           {mode === 'checking' ? <p className="map__caption">Loading map.</p> : null}
         </>
       )}

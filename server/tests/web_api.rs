@@ -872,6 +872,10 @@ async fn activities_list_detail_track() {
     assert_eq!(tr["points"][0], json!([50.0, 10.0]));
     assert_eq!(tr["bounds"]["max_lon"], 10.006);
     assert_eq!(tr["end"], json!([50.003, 10.006]));
+    // The route colours: one value per point, taken from the same records.
+    assert_eq!(tr["speed_mps"], json!([2.8, 2.8, 2.8, 2.8]));
+    assert_eq!(tr["heart_rate_bpm"], json!([140.0, 145.0, 150.0, 155.0]));
+    assert_eq!(tr["altitude_m"], json!([100.0, 100.0, 100.0, 100.0]));
 }
 
 #[tokio::test]
@@ -969,6 +973,9 @@ async fn strength_read_and_edit() {
     assert_eq!(g["exercises"][0]["sets"][1]["idx"], 2);
     assert_eq!(g["exercises"][0]["volume_kg"], 440.0);
     assert!(g["previous"].is_null());
+    // The activity page's total of reps (10 + 10 + 12).
+    let d = e.get(&c, &format!("/api/activities/{id}")).await;
+    assert_eq!(d["reps"], 32.0);
     let list = e.get(&c, "/api/activities").await;
     assert_eq!(
         (
