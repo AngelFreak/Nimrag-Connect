@@ -33,6 +33,7 @@ import { useSettings } from '../today/queries';
 import { useAbout, useGarmin, useTokens } from '../system/queries';
 import { breakableZone, phonesSummary } from './common';
 import { GARMIN_STATE_VALUE } from './GarminPage';
+import { sleepNeedLabel } from './goals';
 
 /** Where the code lives; the About page links here. */
 export const SOURCE_URL = 'https://github.com/AngelFreak/Nimrag-Connect';
@@ -151,7 +152,7 @@ function UserRows() {
             icon={<TargetIcon />}
             tone="heart"
             title="Goals"
-            value={settingValue(s ? `${fmtInt(s.step_goal)} steps · ${fmtInt(s.intensity_goal_min)} intensity min` : null)}
+            value={settingValue(s ? `${fmtInt(s.step_goal)} steps · ${fmtInt(s.intensity_goal_min)} intensity min · sleep ${sleepNeedLabel(s.sleep_need_min)}` : null)}
             to="/profile/goals"
           />
         </SettingsGroup>

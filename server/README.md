@@ -235,7 +235,7 @@ Conventions: JSON field names are snake_case with the unit as a suffix
 with the offset of the owner's time zone; dates are `YYYY-MM-DD` local days.
 Missing data is `null`, never `0`. `sample: true` marks seeded data.
 Settings: `timezone` (IANA name, default the system zone), `step_goal` (8000),
-`intensity_goal_min` (150), `home_cards` (`{order, hidden}` of card ids, default
+`intensity_goal_min` (150), `sleep_need_min` (480; 360 to 600 in steps of 15), `home_cards` (`{order, hidden}` of card ids, default
 order energy, heart_rate, stress, sleep, hrv, training_status, intensity_minutes,
 training_load, steps, recovery_time, vo2_max, respiration, spo2, weight,
 training_readiness; the last four start hidden; PATCH rejects unknown ids and
@@ -252,7 +252,7 @@ duplicates and appends cards missing from `order`).
 | `GET /api/activities/{id}` | detail with laps, HR zones and a thinned columnar series; `id` is the file sha256 |
 | `GET /api/activities/{id}/track` | GPS points (at most 1500) with bounds |
 | `GET /api/activities/{id}/strength`, `PATCH` | sets grouped by exercise; PATCH `{sets:[{idx, reps?, weight_kg?, exercise?, reset?}]}` stores edits in `strength_set_overrides`, keyed by the activity, so they survive `reparse` and new files of the same activity |
-| `GET /api/sleep/{date}`, `GET /api/sleep?nights=7\|14\|30` | a night with stages and vitals; a list of nights |
+| `GET /api/sleep/{date}`, `GET /api/sleep?nights=7\|14\|30` | a night with stages, vitals, overnight figures and `overlays` (heart rate, energy, stress, breathing, SpO2 and HRV as 5 minute means over the night); a list of nights |
 | `GET /api/trends?range=7d\|4w\|3m\|1y` | HRV with baseline, resting HR, breathing, SpO2, sleep score and duration |
 | `GET /api/metrics/{metric}?range=7d\|4w\|12w\|6m\|1y&end=YYYY-MM-DD` | a metric detail page's period (`heart_rate`, `stress`, `energy`, `steps`, `intensity_minutes`, `training_load`, `vo2_max`, `respiration`, `spo2`): rolling windows of 7, 28, 84, 182 and 364 days ending on `end`; `series` of `points` per bucket (`day` over 7d and 4w, `week`, 7 days, over 12w, 6m and 1y; intensity minutes use calendar weeks: `7d` is the Monday to Sunday week holding `end`, weekly buckets start on Mondays), summary `stats`, `goal` and training-load `target_low`/`target_high`, `has_prev`/`has_next`. Unknown metric 404, bad `range` or `end` 400; `end` defaults to and is capped at today; a bucket without data is `null` |
 | `GET /api/movement/{date}` | steps, distance, week of steps, intensity week, calories |

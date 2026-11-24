@@ -90,6 +90,11 @@
   --hrv-balanced: #2e9e3a;
   --hrv-unbalanced: #e8801a;
   --hrv-low: #e23b3b;
+  /* Sleep factor and score ratings: poor danger, fair warning, good success, excellent a stronger success */
+  --rating-poor: #d03a2f;
+  --rating-fair: #d98a00;
+  --rating-good: #2e9e3a;
+  --rating-excellent: #0a7d3e;
 
   /* Map */
   --map-bg: #e8ecee;
@@ -202,6 +207,10 @@
   --hrv-balanced: #6fcf5f;
   --hrv-unbalanced: #ffb066;
   --hrv-low: #ff6b6b;
+  --rating-poor: #ff6b6b;
+  --rating-fair: #ffb066;
+  --rating-good: #6fcf5f;
+  --rating-excellent: #3de0a0;
 
   --map-bg: #141b1f;
   --map-grid: #1f292e;

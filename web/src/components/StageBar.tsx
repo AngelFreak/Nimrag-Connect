@@ -140,10 +140,10 @@ export interface StageSpan {
   to: number;
 }
 
-const STAGE_Y: Record<SleepStage, number> = { awake: 0, rem: 24, light: 48, deep: 72 };
+const STAGE_Y: Record<SleepStage, number> = { awake: 0, rem: 32, light: 64, deep: 96 };
 const STAGE_NAME: Record<SleepStage, string> = { awake: 'Awake', rem: 'REM', light: 'Light', deep: 'Deep' };
-const STAGE_ROW_H = 20;
-const STAGE_H = 96;
+const STAGE_ROW_H = 22;
+const STAGE_H = 118;
 const STAGE_COLOR: Record<SleepStage, string> = {
   awake: 'var(--stage-awake)',
   rem: 'var(--stage-rem)',
@@ -151,12 +151,25 @@ const STAGE_COLOR: Record<SleepStage, string> = {
   deep: 'var(--stage-deep)',
 };
 
+/** One extra measurement drawn as a line over the stage rows, on its own right-hand axis. */
+export interface StageLine {
+  /** What it is ("Heart rate"), for the accessible name. */
+  name: string;
+  color: string;
+  /** Minutes from the start of the night, and the value. */
+  points: { minute: number; value: number }[];
+  /** One decimal on the axis (breathing rate). */
+  decimals?: boolean;
+}
+
 interface StageTimelineProps {
   spans: StageSpan[];
   totalMinutes: number;
   label: string;
   /** Time labels under the chart, evenly spaced ("23:18", "01:00", ...). */
   ticks?: string[];
+  /** One extra line over the night, with a right-hand axis. */
+  line?: StageLine;
 }
 
 /** At most three time labels (first, middle, last): five clock times do not fit side by side at a large text size. */
@@ -166,7 +179,7 @@ function thinned(ticks: string[]): string[] {
 }
 
 /** Sleep hypnogram: one row per stage (awake on top, deep at the bottom). */
-export function StageTimeline({ spans, totalMinutes, label, ticks }: StageTimelineProps) {
+export function StageTimeline({ spans, totalMinutes, label, ticks, line }: StageTimelineProps) {
   if (spans.length === 0 || totalMinutes <= 0) {
     return (
       <p>
@@ -177,13 +190,42 @@ export function StageTimeline({ spans, totalMinutes, label, ticks }: StageTimeli
   const x = (m: number) => (m / totalMinutes) * 320;
   // The rows are the value axis: one label (and grid line) through the middle of each stage's row.
   const rows: PlotTick[] = (['awake', 'rem', 'light', 'deep'] as const).map((st) => ({ label: STAGE_NAME[st], at: (STAGE_Y[st] + STAGE_ROW_H / 2) / STAGE_H }));
+  const shown = line ? line.points.filter((p) => p.minute >= 0 && p.minute <= totalMinutes && Number.isFinite(p.value)) : [];
+  const drawn = line && shown.length >= 2 ? overlayLine(shown, totalMinutes, line) : null;
   return (
     <div className="chart">
-      <PlotFrame ticks={rows} viewW={320} viewH={STAGE_H} label={label} xAxis={ticks ? <PlotXLabels labels={evenLabels(thinned(ticks))} /> : undefined}>
+      <PlotFrame
+        ticks={rows}
+        viewW={320}
+        viewH={STAGE_H}
+        label={drawn && line ? `${label}, with ${line.name.toLowerCase()} over the night` : label}
+        xAxis={ticks ? <PlotXLabels labels={evenLabels(thinned(ticks))} /> : undefined}
+        rightTicks={drawn?.ticks}
+      >
         {spans.map((s, i) => (
           <rect key={i} x={x(s.from)} y={STAGE_Y[s.stage]} width={Math.max(1.5, x(s.to) - x(s.from))} height={STAGE_ROW_H} style={{ fill: STAGE_COLOR[s.stage] }} />
         ))}
+        {drawn && line ? (
+          <>
+            <path d={drawn.path} fill="none" strokeWidth={4.5} strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" style={{ stroke: 'var(--card)' }} />
+            <path d={drawn.path} fill="none" strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" style={{ stroke: line.color }} />
+          </>
+        ) : null}
       </PlotFrame>
     </div>
   );
+}
+
+/** The path of a line over the stage rows, and its own value axis: the data range with a little room. */
+function overlayLine(points: { minute: number; value: number }[], totalMinutes: number, line: StageLine): { path: string; ticks: PlotTick[] } {
+  const values = points.map((p) => p.value);
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const pad = max - min < 1e-9 ? 1 : (max - min) * 0.12;
+  const lo = min - pad;
+  const hi = max + pad;
+  const at = (v: number) => 1 - (v - lo) / (hi - lo);
+  const path = points.map((p, i) => `${i === 0 ? 'M' : 'L'}${((p.minute / totalMinutes) * 320).toFixed(2)} ${(at(p.value) * STAGE_H).toFixed(2)}`).join(' ');
+  const ticks = plotTicks(unitTicks(lo, hi, 3, line.decimals ? 'decimal' : 'int'), line.decimals ? 'decimal' : 'int', at);
+  return { path, ticks };
 }

@@ -7,7 +7,7 @@ import { App } from '../../App';
 import type { GarminStatus, SettingsResponse, TokenList } from '../../api/generated';
 import { json, mockApi } from '../body/testUtils';
 import { isoDay, parseTokenFile } from './GarminPage';
-import { formFrom, validateGoals } from './goals';
+import { formFrom, SLEEP_NEED_CHOICES, sleepNeedLabel, validateGoals } from './goals';
 import { navKeyForProfile } from './ProfileLayout';
 import { activePhones, phonesSummary } from './common';
 import { phoneLine } from './PhonesPage';
@@ -16,7 +16,7 @@ import { exportFileName, sectionFromSearch } from './ProfilePage';
 const settings: SettingsResponse = {
   timezone: 'Europe/Copenhagen',
   step_goal: 8000,
-  intensity_goal_min: 150,
+  intensity_goal_min: 150, sleep_need_min: 480,
   home_cards: { shown: [], hidden: [] } as unknown as SettingsResponse['home_cards'],
   sample: false,
 };
@@ -82,7 +82,7 @@ describe('Profile: the list', () => {
     link('Two-step login On', '/profile/two-step');
     expect(await screen.findByRole('link', { name: 'Signed-in phones Pixel 9a (this phone) and 1 more' })).toHaveAttribute('href', '/profile/phones');
     link('Timezone Europe/Copenhagen', '/profile/timezone');
-    link('Goals 8,000 steps · 150 intensity min', '/profile/goals');
+    link('Goals 8,000 steps · 150 intensity min · sleep 8 h', '/profile/goals');
     link('Send to Garmin Off', '/profile/garmin');
     expect(screen.getByText('Server 0.1.0 · AGPL-3.0')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /^Source code/ })).toHaveAttribute('href', 'https://github.com/AngelFreak/Nimrag-Connect');
@@ -470,8 +470,20 @@ describe('goal validation', () => {
     expect(validateGoals(form, settings)).toEqual({ errors: {}, patch: { step_goal: 9000 } });
   });
 
+  it('sends the sleep need when it changed and refuses a value that is not a quarter hour from 6 to 10 h', () => {
+    expect(formFrom(settings).sleepNeed).toBe('480');
+    expect(validateGoals({ ...formFrom(settings), sleepNeed: '450' }, settings)).toEqual({ errors: {}, patch: { sleep_need_min: 450 } });
+    expect(validateGoals({ ...formFrom(settings), sleepNeed: '480' }, settings).patch).toBeNull();
+    for (const bad of ['345', '605', '481', '', 'long']) expect(validateGoals({ ...formFrom(settings), sleepNeed: bad }, settings).errors.sleepNeed).toBeDefined();
+    expect(SLEEP_NEED_CHOICES[0]).toBe(360);
+    expect(SLEEP_NEED_CHOICES.at(-1)).toBe(600);
+    expect(SLEEP_NEED_CHOICES).toHaveLength(17);
+    expect(sleepNeedLabel(465)).toBe('7 h 45 min');
+    expect(sleepNeedLabel(480)).toBe('8 h');
+  });
+
   it('refuses a bad timezone, non-numbers and out-of-range goals', () => {
-    const r = validateGoals({ timezone: 'Mars/Olympus', steps: '0', intensity: '1.5' }, settings);
+    const r = validateGoals({ timezone: 'Mars/Olympus', steps: '0', intensity: '1.5', sleepNeed: '480' }, settings);
     expect(r.patch).toBeNull();
     expect(Object.keys(r.errors).sort()).toEqual(['intensity', 'steps', 'timezone']);
     expect(validateGoals({ ...formFrom(settings), steps: '200001' }, settings).errors.steps).toBeDefined();

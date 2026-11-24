@@ -1,11 +1,11 @@
 import { useState, type FormEvent } from 'react';
 import type { SettingsResponse } from '../../api/generated';
-import { Button, Card, ErrorState, Skeleton, TextField } from '../../components';
+import { Button, Card, ErrorState, SelectField, Skeleton, TextField } from '../../components';
 import { useSettings } from '../today/queries';
 import { errorMessage } from '../system/errors';
 import { useSaveSettings } from '../system/queries';
 import { SubPage } from './common';
-import { formFrom, validateGoals, type GoalsErrors } from './goals';
+import { formFrom, SLEEP_NEED_CHOICES, sleepNeedLabel, validateGoals, type GoalsErrors } from './goals';
 
 function GoalsForm({ settings }: { settings: SettingsResponse }) {
   const save = useSaveSettings();
@@ -15,7 +15,7 @@ function GoalsForm({ settings }: { settings: SettingsResponse }) {
   const check = validateGoals(form, settings);
   const changed = check.patch !== null || Object.keys(check.errors).length > 0;
 
-  const set = (key: 'steps' | 'intensity') => (e: { target: { value: string } }) => {
+  const set = (key: 'steps' | 'intensity' | 'sleepNeed') => (e: { target: { value: string } }) => {
     setForm((f) => ({ ...f, [key]: e.target.value }));
     setSaved(false);
     save.reset();
@@ -59,6 +59,20 @@ function GoalsForm({ settings }: { settings: SettingsResponse }) {
           aria-invalid={errors.intensity ? true : undefined}
           hint={errors.intensity}
         />
+        <SelectField
+          label="Sleep need"
+          name="sleep_need_min"
+          value={form.sleepNeed}
+          onChange={set('sleepNeed')}
+          aria-invalid={errors.sleepNeed ? true : undefined}
+          hint={errors.sleepNeed ?? 'The sleep page rates the length of a night against this.'}
+        >
+          {SLEEP_NEED_CHOICES.map((m) => (
+            <option key={m} value={String(m)}>
+              {sleepNeedLabel(m)}
+            </option>
+          ))}
+        </SelectField>
         <Button type="submit" size="lg" variant="primary" disabled={!changed || save.isPending} aria-busy={save.isPending}>
           {save.isPending ? 'Saving' : 'Save goals'}
         </Button>
@@ -77,7 +91,7 @@ function GoalsForm({ settings }: { settings: SettingsResponse }) {
   );
 }
 
-/** Profile, Goals: GET and PATCH /api/settings (daily steps, weekly intensity minutes). */
+/** Profile, Goals: GET and PATCH /api/settings (daily steps, weekly intensity minutes, sleep need). */
 export function GoalsPage() {
   const settings = useSettings();
   return (

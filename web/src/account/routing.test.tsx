@@ -109,7 +109,7 @@ describe('who sees what', () => {
   });
 
   it('a normal user sees the data pages with the tabs', async () => {
-    mockApi({ '/api/me': me(), '/api/settings': { timezone: 'Europe/Copenhagen', step_goal: 8000, intensity_goal_min: 150, home_cards: { order: [], hidden: [] }, sample: false }, '/api/tokens': { tokens: [] }, '/api/garmin': { state: 'off', pending: 0, done: 0, failed: 0, last_error: null, next_attempt_at: null }, '/api/about': { version: '0.1.0' } });
+    mockApi({ '/api/me': me(), '/api/settings': { timezone: 'Europe/Copenhagen', step_goal: 8000, intensity_goal_min: 150, sleep_need_min: 480, home_cards: { order: [], hidden: [] }, sample: false }, '/api/tokens': { tokens: [] }, '/api/garmin': { state: 'off', pending: 0, done: 0, failed: 0, last_error: null, next_attempt_at: null }, '/api/about': { version: '0.1.0' } });
     renderApp('/profile');
     expect(await screen.findByRole('heading', { level: 1, name: 'Profile' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Password' })).toHaveAttribute('href', '/profile/password');
@@ -117,7 +117,7 @@ describe('who sees what', () => {
   });
 
   it('/settings is an old address for /profile', async () => {
-    mockApi({ '/api/me': me(), '/api/settings': { timezone: 'Europe/Copenhagen', step_goal: 8000, intensity_goal_min: 150, home_cards: { order: [], hidden: [] }, sample: false }, '/api/tokens': { tokens: [] }, '/api/garmin': { state: 'off', pending: 0, done: 0, failed: 0, last_error: null, next_attempt_at: null }, '/api/about': { version: '0.1.0' } });
+    mockApi({ '/api/me': me(), '/api/settings': { timezone: 'Europe/Copenhagen', step_goal: 8000, intensity_goal_min: 150, sleep_need_min: 480, home_cards: { order: [], hidden: [] }, sample: false }, '/api/tokens': { tokens: [] }, '/api/garmin': { state: 'off', pending: 0, done: 0, failed: 0, last_error: null, next_attempt_at: null }, '/api/about': { version: '0.1.0' } });
     renderApp('/settings');
     expect(await screen.findByRole('heading', { level: 1, name: 'Profile' })).toBeInTheDocument();
     expect(screen.getByTestId('where')).toHaveTextContent(/^\/profile$/);
@@ -158,7 +158,7 @@ describe('profile link', () => {
   });
 
   it('Log out on the profile asks first, then ends the session and goes to the login page', async () => {
-    const { calls } = mockApi({ '/api/me': me(), 'POST /api/logout': () => new Response(null, { status: 204 }), '/api/setup': { needed: false }, '/api/settings': { timezone: 'Europe/Copenhagen', step_goal: 8000, intensity_goal_min: 150, home_cards: { order: [], hidden: [] }, sample: false }, '/api/tokens': { tokens: [] }, '/api/garmin': { state: 'off', pending: 0, done: 0, failed: 0, last_error: null, next_attempt_at: null }, '/api/about': { version: '0.1.0' } });
+    const { calls } = mockApi({ '/api/me': me(), 'POST /api/logout': () => new Response(null, { status: 204 }), '/api/setup': { needed: false }, '/api/settings': { timezone: 'Europe/Copenhagen', step_goal: 8000, intensity_goal_min: 150, sleep_need_min: 480, home_cards: { order: [], hidden: [] }, sample: false }, '/api/tokens': { tokens: [] }, '/api/garmin': { state: 'off', pending: 0, done: 0, failed: 0, last_error: null, next_attempt_at: null }, '/api/about': { version: '0.1.0' } });
     const u = userEvent.setup();
     renderApp('/profile');
     await u.click(await screen.findByRole('button', { name: 'Log out' }));

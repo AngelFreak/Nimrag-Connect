@@ -191,6 +191,8 @@ pub struct SleepStages {
     pub light_s: Option<f64>,
     pub rem_s: Option<f64>,
     pub awake_s: Option<f64>,
+    /// Restless moments of the night (Connect only).
+    pub restless: Option<f64>,
 }
 
 /// Garmin's whole-day figures for one local day.
@@ -328,7 +330,8 @@ pub async fn write(tx: &mut Transaction<'_, Sqlite>, sha256: &str, p: &Parsed) -
     activity::write(tx, sha256, &p.derived).await?;
     for (idx, st) in p.sleep_stages.iter().enumerate() {
         sqlx::query(
-            "UPDATE sleep_sessions SET asleep_s = ?, deep_s = ?, light_s = ?, rem_s = ?, awake_s = ?
+            "UPDATE sleep_sessions SET asleep_s = ?, deep_s = ?, light_s = ?, rem_s = ?, awake_s = ?,
+                restless_moments = ?
              WHERE sha256 = ? AND idx = ?",
         )
         .bind(st.asleep_s)
@@ -336,6 +339,7 @@ pub async fn write(tx: &mut Transaction<'_, Sqlite>, sha256: &str, p: &Parsed) -
         .bind(st.light_s)
         .bind(st.rem_s)
         .bind(st.awake_s)
+        .bind(st.restless)
         .bind(sha256)
         .bind(idx as i64)
         .execute(&mut **tx)

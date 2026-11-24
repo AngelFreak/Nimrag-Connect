@@ -18,4 +18,28 @@ duration_s: number, time_in_bed_s: number, score: number | null,
 /**
  * excellent (90+), good (80+), fair (60+), poor: derived from the score.
  */
-score_label: string | null, scores: SleepScores, awakenings: number | null, avg_stress: number | null, stages_available: boolean, deep_s: number | null, light_s: number | null, rem_s: number | null, awake_s: number | null, stages: Array<StageSegment>, hrv_ms: number | null, lowest_hr_bpm: number | null, breathing_brpm: number | null, spo2_avg_percent: number | null, spo2_low_percent: number | null, };
+score_label: string | null, scores: SleepScores, awakenings: number | null, avg_stress: number | null, stages_available: boolean, deep_s: number | null, light_s: number | null, rem_s: number | null, awake_s: number | null, stages: Array<StageSegment>, hrv_ms: number | null, lowest_hr_bpm: number | null, breathing_brpm: number | null, spo2_avg_percent: number | null, spo2_low_percent: number | null, 
+/**
+ * Sleep need in minutes a night (the owner's setting; 480 by default).
+ */
+sleep_need_min: number, 
+/**
+ * Restless moments, from a night imported from Garmin Connect (a watch night has none).
+ */
+restless_moments: number | null, 
+/**
+ * Mean heart rate during the night.
+ */
+avg_hr_bpm: number | null, 
+/**
+ * Energy (Body Battery) at the end of the night minus at the start; positive when it charged.
+ */
+energy_change: number | null, 
+/**
+ * Slowest breathing during the night.
+ */
+breathing_low_brpm: number | null, 
+/**
+ * poor, low, unbalanced or balanced: the watch's 7-day HRV status for this night.
+ */
+hrv_status: string | null, };

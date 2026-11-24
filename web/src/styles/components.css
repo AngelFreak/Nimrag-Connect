@@ -1381,6 +1381,17 @@
   right: 0;
   transform: translateY(-50%);
 }
+.plot--right {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+}
+.plot__y--right {
+  grid-column: 3;
+  text-align: left;
+}
+.plot__y--right .plot__y-tick {
+  right: auto;
+  left: 0;
+}
 .plot__area {
   grid-column: 2;
   grid-row: 1;

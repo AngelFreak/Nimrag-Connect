@@ -5,4 +5,8 @@ export type SettingsResponse = {
 /**
  * IANA zone name; days are local days in this zone.
  */
-timezone: string, step_goal: number, intensity_goal_min: number, home_cards: HomeCards, sample: boolean, };
+timezone: string, step_goal: number, intensity_goal_min: number, 
+/**
+ * Sleep need in minutes a night (360 to 600 in steps of 15); the sleep page rates a night against it.
+ */
+sleep_need_min: number, home_cards: HomeCards, sample: boolean, };

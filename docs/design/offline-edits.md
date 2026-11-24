@@ -84,7 +84,7 @@ and answers 503 if it cannot; that is retried like any 5xx.
 `POST /api/device/edits` and `GET /api/device/state`, phone token (`Authorization: Bearer`), no CSRF
 header, a token without a user gets 403. `GET /api/device/state` answers
 `{version: 1, settings: {key: text}, workouts: [row], body: [row], strength: [row]}` with the stored
-rows (ids included): `user_settings` for `timezone`, `step_goal`, `intensity_goal_min`, `home_cards`;
+rows (ids included): `user_settings` for `timezone`, `step_goal`, `intensity_goal_min`, `sleep_need_min`, `home_cards`;
 `workouts` with `definition` as JSON text and the send state columns; `body_measurements`;
 `strength_set_overrides` (`activity_ident`, `set_idx`, `fields` as JSON text, `updated_at`).
 

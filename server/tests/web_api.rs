@@ -1377,6 +1377,170 @@ const DEFAULT_ORDER: [&str; 15] = [
 ];
 
 #[tokio::test]
+async fn sleep_night_carries_overnight_figures_and_series() {
+    let (e, c) = setup().await;
+    fixture(&e).await;
+    // Heart rate in the night 22:30 to 06:00: 60, 50, 56 (the fixture's own readings are later).
+    values(
+        &e,
+        "mon_hr",
+        "ts, bpm, src",
+        &[
+            format!("{}, 60, 1", at(18, 23, 0)),
+            format!("{}, 50, 1", at(19, 1, 0)),
+            format!("{}, 56, 1", at(19, 2, 0)),
+        ],
+    )
+    .await;
+    // Energy 30 at 22:40, 55 at 02:00, 78 at 05:50; stress 12 and 18 (and a movement status without value).
+    values(
+        &e,
+        "stress",
+        "ts, body_battery, stress, src",
+        &[
+            format!("{}, 30, 12, 1", at(18, 22, 40)),
+            format!("{}, 55, 18, 1", at(19, 2, 0)),
+            format!("{}, 78, NULL, 1", at(19, 5, 50)),
+        ],
+    )
+    .await;
+    values(
+        &e,
+        "respiration",
+        "ts, brpm, src",
+        &[
+            format!("{}, 14.04, 1", at(18, 23, 0)),
+            format!("{}, 12.0, 1", at(19, 2, 0)),
+        ],
+    )
+    .await;
+    values(
+        &e,
+        "spo2",
+        "ts, percent, src",
+        &[
+            format!("{}, 96, 1", at(18, 23, 0)),
+            format!("{}, 92, 1", at(19, 2, 0)),
+        ],
+    )
+    .await;
+    values(
+        &e,
+        "hrv_values",
+        "ts, rmssd_ms, src",
+        &[
+            format!("{}, 50, 1", at(19, 1, 0)),
+            format!("{}, 60, 1", at(19, 1, 2)),
+            format!("{}, 70, 1", at(19, 1, 10)),
+        ],
+    )
+    .await;
+
+    let n = e.get(&c, "/api/sleep/2026-11-19").await;
+    let night = &n["night"];
+    assert_eq!(night["sleep_need_min"], 480);
+    assert_eq!(night["lowest_hr_bpm"], 50.0);
+    assert_eq!(night["avg_hr_bpm"], 55.3);
+    // From the first reading of the night (30) to the last, the fixture's 06:00 one (40).
+    assert_eq!(night["energy_change"], 10.0);
+    assert_eq!(night["breathing_low_brpm"], 12.0);
+    assert_eq!(night["breathing_brpm"], 13.0);
+    assert_eq!(night["spo2_low_percent"], 92.0);
+    // The fixture's HRV summary (status 3) sits at 06:05, inside the window after the night.
+    assert_eq!(night["hrv_status"], "unbalanced");
+    assert!(night["restless_moments"].is_null());
+
+    let keys: Vec<&str> = n["overlays"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|s| s["key"].as_str().unwrap())
+        .collect();
+    assert_eq!(
+        keys,
+        ["heart_rate", "energy", "stress", "breathing", "spo2", "hrv"]
+    );
+    let series = |k: &str| {
+        n["overlays"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|s| s["key"] == k)
+            .unwrap()["points"]
+            .clone()
+    };
+    // Minutes from the start of the night (22:30): 23:00 is minute 30, 01:00 is 150, 02:00 is 210.
+    assert_eq!(
+        series("heart_rate"),
+        json!([
+            { "minute": 30.0, "value": 60.0 }, { "minute": 150.0, "value": 50.0 }, { "minute": 210.0, "value": 56.0 }
+        ])
+    );
+    // The movement status (no stress value) is not a point of the stress line.
+    assert_eq!(series("stress").as_array().unwrap().len(), 2);
+    // Two HRV values within the same 5 minute bucket are averaged.
+    assert_eq!(
+        series("hrv"),
+        json!([{ "minute": 150.0, "value": 55.0 }, { "minute": 160.0, "value": 70.0 }])
+    );
+
+    // A night without any of it has no series and null figures.
+    let bare = e.get(&c, "/api/sleep/2026-11-18").await;
+    assert!(bare["night"].is_null());
+    assert_eq!(bare["overlays"], json!([]));
+}
+
+#[tokio::test]
+async fn sleep_need_setting_is_validated_and_reaches_the_night() {
+    let (e, c) = setup().await;
+    fixture(&e).await;
+    assert_eq!(e.get(&c, "/api/settings").await["sleep_need_min"], 480);
+    let (st, s) = e
+        .send(
+            &c,
+            Method::PATCH,
+            "/api/settings",
+            json!({ "sleep_need_min": 435 }),
+        )
+        .await;
+    assert_eq!((st, &s["sleep_need_min"]), (StatusCode::OK, &json!(435)));
+    assert_eq!(
+        e.get(&c, "/api/sleep/2026-11-19").await["night"]["sleep_need_min"],
+        435
+    );
+    for ok in [360, 600] {
+        let (st, _) = e
+            .send(
+                &c,
+                Method::PATCH,
+                "/api/settings",
+                json!({ "sleep_need_min": ok }),
+            )
+            .await;
+        assert_eq!(st, StatusCode::OK, "{ok}");
+    }
+    for bad in [
+        json!(0),
+        json!(345),
+        json!(605),
+        json!(481),
+        json!(615),
+        json!("8h"),
+    ] {
+        let (st, _) = e
+            .send(
+                &c,
+                Method::PATCH,
+                "/api/settings",
+                json!({ "sleep_need_min": bad }),
+            )
+            .await;
+        assert_eq!(st, StatusCode::BAD_REQUEST, "{bad}");
+    }
+    assert_eq!(e.get(&c, "/api/settings").await["sleep_need_min"], 600);
+}
+
+#[tokio::test]
 async fn settings_defaults_and_patch() {
     let e = env_at(cph(D.0, D.1, D.2, 20, 0)).await;
     let c = e.login().await;

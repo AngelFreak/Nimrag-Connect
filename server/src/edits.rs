@@ -40,7 +40,13 @@ use tower::ServiceExt;
 type Res<T> = Result<T, ApiError>;
 
 /// The user settings a phone keeps a copy of (`PATCH /api/settings` changes exactly these).
-pub const SETTING_KEYS: [&str; 4] = ["timezone", "step_goal", "intensity_goal_min", "home_cards"];
+pub const SETTING_KEYS: [&str; 5] = [
+    "timezone",
+    "step_goal",
+    "intensity_goal_min",
+    "sleep_need_min",
+    "home_cards",
+];
 /// Version of [`DeviceState`].
 pub const STATE_VERSION: u32 = 1;
 /// Longest answer of a handler the server relays (a strength session with heart rate is a few KB).

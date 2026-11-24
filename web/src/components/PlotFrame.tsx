@@ -31,6 +31,8 @@ interface PlotFrameProps {
   xAxis?: ReactNode;
   /** Drawn behind the grid lines (shaded bands). */
   behind?: ReactNode;
+  /** A second value axis on the right, for a line on its own scale. Labels only, no grid lines. */
+  rightTicks?: PlotTick[];
 }
 
 /**
@@ -39,10 +41,10 @@ interface PlotFrameProps {
  * by `preserveAspectRatio="none"` and follow the text size; the gutter is as wide as the widest
  * label, and the x labels sit in the plot's column, so they line up with it.
  */
-export function PlotFrame({ ticks, viewW, viewH, label, children, overlay, xAxis, behind }: PlotFrameProps) {
+export function PlotFrame({ ticks, viewW, viewH, label, children, overlay, xAxis, behind, rightTicks }: PlotFrameProps) {
   const widest = ticks.reduce((a, t) => (t.label.length > a.length ? t.label : a), '');
   return (
-    <div className={xAxis ? 'plot' : 'plot plot--bare'} role="img" aria-label={label}>
+    <div className={['plot', !xAxis && 'plot--bare', rightTicks && 'plot--right'].filter(Boolean).join(' ')} role="img" aria-label={label}>
       <div className="plot__y" aria-hidden="true" style={{ height: viewH }}>
         <span className="plot__y-size">{widest}</span>
         {ticks.map((t) => (
@@ -61,6 +63,16 @@ export function PlotFrame({ ticks, viewW, viewH, label, children, overlay, xAxis
         </svg>
         {overlay}
       </div>
+      {rightTicks ? (
+        <div className="plot__y plot__y--right" aria-hidden="true" style={{ height: viewH }}>
+          <span className="plot__y-size">{rightTicks.reduce((a, t) => (t.label.length > a.length ? t.label : a), '')}</span>
+          {rightTicks.map((t) => (
+            <span key={`${t.label}-${t.at}`} className="plot__y-tick" style={{ top: `${t.at * 100}%` }}>
+              {t.label}
+            </span>
+          ))}
+        </div>
+      ) : null}
       {xAxis ? <div className="plot__x">{xAxis}</div> : null}
     </div>
   );

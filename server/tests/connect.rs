@@ -38,6 +38,7 @@ fn night(date: &str, start: i64, end: i64, score: i64, stages: [i64; 4]) -> Valu
         "rem_sleep_seconds": stages[2],
         "awake_seconds": stages[3],
         "awake_count": 2,
+        "restless_moments_count": 14,
         "avg_sleep_stress": 18.5,
         "resting_heart_rate_bpm": 51,
     })
@@ -418,6 +419,9 @@ async fn import_fills_the_history_tables_and_the_pages_read_them() {
         s["stats"]["avg_duration_s"], 27_600.0,
         "time asleep, not the time in bed"
     );
+    // The restless moments of a Connect night reach the night page.
+    let night_page = e.get(&user, "/api/sleep/2026-03-11").await;
+    assert_eq!(night_page["night"]["restless_moments"], 14.0);
     // A night belongs to the day it ends on: 10 Mar 22:30 to 11 Mar 06:30 is the 11th's sleep.
     let d = e.get(&user, "/api/days/2026-03-11").await;
     let n = &d["sleep"];

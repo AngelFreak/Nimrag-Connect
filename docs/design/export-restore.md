@@ -62,7 +62,7 @@ Steps, for the signed-in user only (the archive's own user does not matter):
    is unowned, as ingest does). Entries with `name: null` count as "missing in the export".
 3. **Own entries**, in one transaction after the originals (so strength edits find their
    activities):
-   - settings: keys `timezone`, `step_goal`, `intensity_goal_min`, `home_cards` only, each
+   - settings: keys `timezone`, `step_goal`, `intensity_goal_min`, `sleep_need_min`, `home_cards` only, each
      validated the way `PATCH /api/settings` validates it; invalid → skipped and counted. They
      replace the current values (a restore puts back what the export had).
    - workouts: added unless the user has one with the same name, sport and definition. Added ones

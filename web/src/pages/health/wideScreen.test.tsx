@@ -96,7 +96,9 @@ const NIGHT: SleepNightResponse = {
     breathing_brpm: 13.4,
     spo2_avg_percent: 95,
     spo2_low_percent: 91,
+    sleep_need_min: 480, restless_moments: null, avg_hr_bpm: null, energy_change: null, breathing_low_brpm: null, hrv_status: null,
   },
+  overlays: [],
   last_nights: [],
   average_duration_s: 25200,
 };
@@ -116,16 +118,17 @@ describe('Sleep on a wide screen', () => {
     expect(within(tabs).getAllByRole('button').map((b) => b.textContent)).toEqual(['1 Day', '7 Days', '4 Weeks', '1 Year']);
     expect(await screen.findByRole('heading', { name: 'Sleep Score' })).toBeInTheDocument();
     const factors = within(await screen.findByRole('list', { name: 'Sleep score factors' }));
-    const row = (name: string) => factors.getByText(name).closest('.factor-row') as HTMLElement;
+    const row = (name: string) => factors.getByText(name).closest('li') as HTMLElement;
+    // The watch's own sub-scores rate these rows.
     expect(within(row('Duration')).getByText('Excellent')).toBeInTheDocument();
-    expect(within(row('Deep')).getByText('Good')).toBeInTheDocument();
-    expect(within(row('Light')).getByText('Fair')).toBeInTheDocument();
-    expect(within(row('REM')).getByText('Poor')).toBeInTheDocument();
-    // No recovery score in this night: the row shows what was measured and no made-up rating.
-    expect(within(row('Recovery')).queryByText(/^(Excellent|Good|Fair|Poor)$/)).not.toBeInTheDocument();
-    expect(within(row('Recovery')).getByText('21 avg stress')).toBeInTheDocument();
+    expect(within(row('Deep sleep')).getByText('Good')).toBeInTheDocument();
+    expect(within(row('Light sleep')).getByText('Fair')).toBeInTheDocument();
+    expect(within(row('REM sleep')).getByText('Poor')).toBeInTheDocument();
+    // No recovery score from the watch: our model rates the stress row (average 21 is Fair).
+    expect(within(row('Stress')).getByText('Fair')).toBeInTheDocument();
+    expect(within(row('Stress')).getByText('21 average')).toBeInTheDocument();
     expect(document.querySelector('.stats-cols')).not.toBeNull();
-    expect(document.querySelector('.stat-strip')).not.toBeNull();
+    expect(screen.getByRole('list', { name: 'Overnight measurements' })).toBeInTheDocument();
   });
 
   it('steps a night back with the arrow and goes to the latest night with 1 Day', async () => {
