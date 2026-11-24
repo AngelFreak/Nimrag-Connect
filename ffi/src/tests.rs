@@ -474,6 +474,83 @@ fn local_server_starts_ingests_and_stops() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// One HTTP request to the local server as its web view makes it; returns the status.
+#[cfg(feature = "local-server")]
+fn local_request(port: u16, secret: &str, method: &str, path: &str, body: &str) -> u16 {
+    use std::io::{Read, Write};
+    let mut s = std::net::TcpStream::connect(("127.0.0.1", port)).unwrap();
+    write!(
+        s,
+        "{method} {path} HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nCookie: nimrag_local={secret}\r\n\
+         X-Nimrag: 1\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\
+         Connection: close\r\n\r\n{body}",
+        body.len()
+    )
+    .unwrap();
+    let mut out = String::new();
+    s.read_to_string(&mut out).unwrap();
+    out.split(' ').nth(1).unwrap().parse().unwrap()
+}
+
+#[cfg(feature = "local-server")]
+#[test]
+fn local_server_offline_edits_go_out_through_the_outbox() {
+    let dir = std::env::temp_dir().join(format!("nimrag-ffi-edits-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    let secret = "0123456789abcdef0123456789abcdef";
+    let server = LocalServer::start(dir.display().to_string(), 0, secret.into()).unwrap();
+    let p = server.port();
+    assert_eq!(server.pending_edits().unwrap(), 0);
+    assert!(server.next_edit().unwrap().is_none());
+
+    assert_eq!(
+        local_request(p, secret, "PATCH", "/api/settings", r#"{"step_goal":9000}"#),
+        200
+    );
+    // Not an offline change: refused, nothing queued.
+    assert_eq!(local_request(p, secret, "POST", "/api/login", "{}"), 403);
+    assert_eq!(server.pending_edits().unwrap(), 1);
+
+    let edit = server.next_edit().unwrap().unwrap();
+    assert_eq!(
+        (edit.method.as_str(), edit.path.as_str(), edit.body.as_str()),
+        ("PATCH", "/api/settings", r#"{"step_goal":9000}"#)
+    );
+    assert!(edit.made_at > 1_700_000_000 && !edit.op_id.is_empty());
+    // The server is away: it stays.
+    assert_eq!(
+        server
+            .edit_done(edit.op_id.clone(), 0, String::new())
+            .unwrap(),
+        EditVerdict::Kept
+    );
+    assert_eq!(server.pending_edits().unwrap(), 1);
+    // The server refused it for good: it goes, and is reported once.
+    let answer = r#"{"error":"step_goal must be 1 to 200000"}"#.to_string();
+    assert_eq!(
+        server.edit_done(edit.op_id, 400, answer).unwrap(),
+        EditVerdict::Dropped
+    );
+    assert_eq!(server.pending_edits().unwrap(), 0);
+    let dropped = server.take_dropped_edits().unwrap();
+    assert_eq!(dropped.len(), 1);
+    assert_eq!(dropped[0].path, "/api/settings");
+    assert!(dropped[0].reason.contains("step_goal"));
+    assert!(server.take_dropped_edits().unwrap().is_empty());
+
+    // The outbox is empty: the server's state may be applied.
+    let state =
+        r#"{"version":1,"settings":{"step_goal":"15000"},"workouts":[],"body":[],"strength":[]}"#;
+    assert!(server.apply_state(state.into()).unwrap());
+    assert!(server.apply_state("not json".into()).is_err());
+    server.stop();
+    assert!(matches!(
+        server.pending_edits(),
+        Err(LocalServerError::Stopped)
+    ));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 fn note() -> PhoneNotification {
     PhoneNotification {
         id: 9,

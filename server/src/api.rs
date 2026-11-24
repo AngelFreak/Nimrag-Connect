@@ -59,6 +59,12 @@ pub struct AppState {
     pub weather: Arc<crate::weather::Weather>,
     /// GPS assist: the satellite-data endpoint for the phone (`--no-gps-assist` switches it off).
     pub(crate) gps_assist: Arc<crate::gps_assist::GpsAssist>,
+    /// Serialises `POST /api/device/edits`, so two copies of one op never both run.
+    pub(crate) edits_lock: Arc<tokio::sync::Mutex<()>>,
+    /// "Send to watch" only queues the workout, without writing its FIT file to check it (the
+    /// phone's copy: the server writes the file when the phone asks for it, and this build may
+    /// have no profile to write it with).
+    pub(crate) defer_watch_send: bool,
     clock: Arc<dyn Fn() -> i64 + Send + Sync>,
 }
 
@@ -86,12 +92,20 @@ impl AppState {
             )),
             weather: Default::default(),
             gps_assist: Arc::new(crate::gps_assist::GpsAssist::new(Default::default())),
+            edits_lock: Default::default(),
+            defer_watch_send: false,
             clock: Arc::new(system_now),
         }
     }
 
     pub fn with_insecure_cookies(mut self, insecure: bool) -> Self {
         self.insecure_cookies = insecure;
+        self
+    }
+
+    /// Let "Send to watch" queue a workout without writing its FIT file (the phone's copy).
+    pub fn with_deferred_watch_send(mut self, defer: bool) -> Self {
+        self.defer_watch_send = defer;
         self
     }
 
@@ -174,6 +188,7 @@ pub fn router(state: AppState) -> Router {
         )
         .merge(crate::web_api::router())
         .merge(crate::weather::routes())
+        .merge(crate::edits::routes())
         .fallback(crate::web::handler) // the web app (SPA); /api/* misses stay 404
         .layer(DefaultBodyLimit::max(MAX_JSON_BYTES))
         .layer(axum::middleware::from_fn(crate::auth::csrf_guard))

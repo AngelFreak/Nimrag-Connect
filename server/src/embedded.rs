@@ -15,19 +15,23 @@
 //!   Every file put in with [`Embedded::ingest_bytes`] is owned by that user, and files a
 //!   spike-era data dir holds without an owner are claimed by it at start.
 //! * No Forward worker: nothing leaves the phone from here.
-//! * Read-only over HTTP: every method but GET and HEAD gets 403 (edits would never reach the
-//!   real server).
+//! * Edits over HTTP: GET and HEAD are served; of the other methods only the changes of
+//!   `edits::Edit` (settings, body entries, strength sets, workouts) are run, and each one that
+//!   succeeds is written to the outbox (`outbox.rs`) for [`Embedded::next_edit`] to hand to the
+//!   app, which sends it to the real server when it can. Every other change gets 403.
 //! * Files are put in with [`Embedded::ingest_bytes`] (in process, same path as the HTTP
 //!   upload: store, sidecar, ledger, derive).
 //!
 //! The handle owns its own small tokio runtime, so callers need no async.
 
 use crate::api::{self, ApiError, AppState};
+use crate::edits::{self, DeviceState};
 use crate::ledger::Meta;
 use crate::users::{self, Role};
-use crate::{auth, db, derive, ingest, store};
+use crate::{auth, db, derive, ingest, outbox, store};
 use anyhow::{bail, Context, Result};
 use axum::{
+    body::Body,
     extract::{Request, State},
     http::{header, HeaderValue, Method, StatusCode},
     middleware::{self, Next},
@@ -44,6 +48,7 @@ pub const SECRET_COOKIE: &str = "nimrag_local";
 pub const MIN_SECRET_LEN: usize = 16;
 /// Username of the one local account.
 pub const LOCAL_USERNAME: &str = "local";
+pub use crate::outbox::{Dropped as DroppedEdit, Pending as PendingEdit, Verdict as EditVerdict};
 /// The server side session is renewed after this many seconds (sessions last 30 days).
 const SESSION_RENEW_SECS: i64 = 7 * 24 * 3600;
 
@@ -53,6 +58,8 @@ pub struct Embedded {
     rt: Option<tokio::runtime::Runtime>,
     state: AppState,
     user_id: i64,
+    /// Held while a change is made and written to the outbox, and while the state is replaced.
+    edit_lock: Arc<tokio::sync::Mutex<()>>,
     shutdown: Option<tokio::sync::oneshot::Sender<()>>,
     _lock: std::fs::File,
 }
@@ -63,6 +70,7 @@ struct Guard {
     session: tokio::sync::Mutex<(String, i64)>,
     user_id: i64,
     state: AppState,
+    edit_lock: Arc<tokio::sync::Mutex<()>>,
     hosts: [String; 2],
 }
 
@@ -82,10 +90,14 @@ pub fn start(data_dir: &Path, preferred_port: u16, secret: &str) -> Result<Embed
     let (shutdown, stop) = tokio::sync::oneshot::channel::<()>();
     let data_dir = data_dir.to_path_buf();
     let secret = secret.to_owned();
+    let edit_lock = Arc::new(tokio::sync::Mutex::new(()));
     let (state, user_id, port) = rt.block_on(async {
         let pool = db::open(&data_dir).await?;
         store::sweep_incoming(&data_dir)?;
-        let state = AppState::new(pool, data_dir, api::MAX_BODY_BYTES).with_insecure_cookies(true);
+        let state = AppState::new(pool, data_dir, api::MAX_BODY_BYTES)
+            .with_insecure_cookies(true)
+            .with_deferred_watch_send(true);
+        outbox::recover(&state.pool).await?;
         let user_id = ensure_local_user(&state).await?;
         // Sessions of an earlier launch are of no use to anybody: the cookie never leaves here.
         sqlx::query("DELETE FROM sessions")
@@ -110,6 +122,7 @@ pub fn start(data_dir: &Path, preferred_port: u16, secret: &str) -> Result<Embed
             session: tokio::sync::Mutex::new((session, now)),
             user_id,
             state: state.clone(),
+            edit_lock: edit_lock.clone(),
             hosts: [format!("127.0.0.1:{port}"), format!("localhost:{port}")],
         });
         let app = api::router(state.clone()).layer(middleware::from_fn_with_state(guard, guard_fn));
@@ -130,6 +143,7 @@ pub fn start(data_dir: &Path, preferred_port: u16, secret: &str) -> Result<Embed
         rt: Some(rt),
         state,
         user_id,
+        edit_lock,
         shutdown: Some(shutdown),
         _lock: lock,
     })
@@ -159,6 +173,50 @@ impl Embedded {
             meta,
             None,
         ))
+    }
+
+    /// The oldest change made on this copy that the server has not got yet, with its path in
+    /// the server's terms (see `docs/design/offline-edits.md`). `None` when nothing waits.
+    /// Blocking; never call it from inside an async context.
+    pub fn next_edit(&self) -> Result<Option<PendingEdit>> {
+        self.rt()
+            .block_on(outbox::next(&self.state.pool, self.state.now()))
+    }
+
+    /// Report the server's answer to `op_id` (`status` 0: no answer). See [`outbox::done`].
+    /// Blocking; never call it from inside an async context.
+    pub fn edit_done(&self, op_id: &str, status: u16, response_body: &str) -> Result<EditVerdict> {
+        self.rt().block_on(outbox::done(
+            &self.state.pool,
+            self.state.now(),
+            op_id,
+            status,
+            response_body,
+        ))
+    }
+
+    /// How many changes wait to be sent.
+    /// Blocking; never call it from inside an async context.
+    pub fn pending_edits(&self) -> Result<u32> {
+        self.rt().block_on(outbox::count(&self.state.pool))
+    }
+
+    /// The changes the server could not apply, once.
+    /// Blocking; never call it from inside an async context.
+    pub fn take_dropped_edits(&self) -> Result<Vec<DroppedEdit>> {
+        self.rt().block_on(outbox::take_dropped(&self.state.pool))
+    }
+
+    /// Replace the local user's settings, workouts, body entries and strength edits with
+    /// `GET /api/device/state`'s answer (`json`). Returns false, changing nothing, while changes
+    /// wait in the outbox.
+    /// Blocking; never call it from inside an async context.
+    pub fn apply_state(&self, json: &str) -> Result<bool> {
+        let state: DeviceState = serde_json::from_str(json).context("reading the state")?;
+        self.rt().block_on(async {
+            let _no_edit_meanwhile = self.edit_lock.lock().await;
+            outbox::apply_state(&self.state.pool, self.user_id, &state).await
+        })
     }
 
     /// JSON `{"files": n, "derive": {"ok": n, "no_profile": n, ...}}` for diagnostics.
@@ -307,20 +365,102 @@ async fn guard_fn(State(g): State<Arc<Guard>>, mut req: Request, next: Next) -> 
     if !host_ok || !secret_ok {
         return forbidden();
     }
-    // A read-only copy: edits made here would never reach the real server. Writes into this
+    // Only the changes of `edits::Edit` are taken, and each is written to the outbox so it
+    // reaches the real server; anything else would never get there. Other writes into this
     // database happen only through `Embedded::ingest_bytes`.
-    if !matches!(*req.method(), Method::GET | Method::HEAD) {
-        return ApiError::new(
-            StatusCode::FORBIDDEN,
-            "this is the phone's read-only copy; edit when the server is reachable",
-        )
-        .into_response();
-    }
+    let reads = matches!(*req.method(), Method::GET | Method::HEAD);
+    let creates = if reads {
+        None
+    } else {
+        match edits::Edit::parse(req.method(), req.uri().path()) {
+            Some(edit) => Some(edit.creates()),
+            None => return edits::needs_server(),
+        }
+    };
     // Replace the cookie header with only the session (the secret goes no further).
     let value = format!("{}={}", auth::cookie_name(true), session_value(&g).await);
     req.headers_mut().remove(header::COOKIE);
     if let Ok(v) = HeaderValue::from_str(&value) {
         req.headers_mut().insert(header::COOKIE, v);
     }
-    next.run(req).await
+    match creates {
+        None => next.run(req).await,
+        Some(creates) => make_edit(g, req, next, creates).await,
+    }
+}
+
+/// Run a change and write it to the outbox. In a task of its own: a client that hangs up
+/// must not cut the handler off between its change and the outbox row.
+async fn make_edit(
+    g: Arc<Guard>,
+    req: Request,
+    next: Next,
+    creates: Option<&'static str>,
+) -> Response {
+    match tokio::spawn(async move { run_edit(&g, req, next, creates).await }).await {
+        Ok(resp) => resp,
+        Err(_) => {
+            ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, "internal error").into_response()
+        }
+    }
+}
+
+/// The outbox row is written first and confirmed once the handler succeeded (removed if it did
+/// not), because the handlers write straight to the pool, so one transaction cannot span both.
+/// That order keeps "the handler succeeded" implying "the row exists" through a crash.
+async fn run_edit(g: &Guard, req: Request, next: Next, creates: Option<&'static str>) -> Response {
+    // One at a time: the outbox order is the order the changes were made.
+    let _one_at_a_time = g.edit_lock.lock().await;
+    let (parts, body) = req.into_parts();
+    let Ok(bytes) = axum::body::to_bytes(body, api::MAX_JSON_BYTES).await else {
+        return ApiError::new(StatusCode::PAYLOAD_TOO_LARGE, "body too large").into_response();
+    };
+    let Ok(text) = std::str::from_utf8(&bytes) else {
+        return ApiError::bad_request("the body must be UTF-8 JSON").into_response();
+    };
+    let pool = &g.state.pool;
+    let recorded = async {
+        let mut raw = [0u8; 16];
+        getrandom::fill(&mut raw).map_err(|e| anyhow::anyhow!("no randomness: {e}"))?;
+        outbox::record(
+            pool,
+            &crate::hex(&raw),
+            parts.method.as_str(),
+            parts.uri.path(),
+            text,
+            g.state.now(),
+            creates,
+        )
+        .await
+    }
+    .await;
+    let seq = match recorded {
+        Ok(seq) => seq,
+        Err(e) => return ApiError::from(e).into_response(),
+    };
+
+    let resp = next
+        .run(Request::from_parts(parts, Body::from(bytes.clone())))
+        .await;
+    let (rparts, rbody) = resp.into_parts();
+    let answer = axum::body::to_bytes(rbody, usize::MAX).await;
+    let settled = if rparts.status.is_success() {
+        // A create's answer names the new row.
+        let local_id = creates
+            .and(answer.as_ref().ok())
+            .and_then(|b| serde_json::from_slice::<serde_json::Value>(b).ok())
+            .and_then(|v| v.get("id").and_then(|i| i.as_i64()));
+        outbox::confirm(pool, seq, local_id).await
+    } else {
+        outbox::discard(pool, seq).await
+    };
+    if let Err(e) = settled {
+        return ApiError::from(e).into_response();
+    }
+    match answer {
+        Ok(b) => Response::from_parts(rparts, Body::from(b)),
+        Err(_) => {
+            ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, "internal error").into_response()
+        }
+    }
 }
