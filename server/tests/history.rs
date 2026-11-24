@@ -151,7 +151,12 @@ async fn content(e: &Env, token: Option<&str>, sha: &str) -> (StatusCode, Vec<u8
         .map(|v| v.to_str().unwrap().to_owned());
     (
         status,
-        resp.into_body().collect().await.unwrap().to_bytes().to_vec(),
+        resp.into_body()
+            .collect()
+            .await
+            .unwrap()
+            .to_bytes()
+            .to_vec(),
         ctype,
     )
 }
