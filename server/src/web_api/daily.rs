@@ -477,6 +477,18 @@ pub struct SleepNight {
     pub breathing_brpm: Option<f64>,
     pub spo2_avg_percent: Option<f64>,
     pub spo2_low_percent: Option<f64>,
+    /// Sleep need in minutes a night (the owner's setting; 480 by default).
+    pub sleep_need_min: u32,
+    /// Restless moments, from a night imported from Garmin Connect (a watch night has none).
+    pub restless_moments: Option<f64>,
+    /// Mean heart rate during the night.
+    pub avg_hr_bpm: Option<f64>,
+    /// Energy (Body Battery) at the end of the night minus at the start; positive when it charged.
+    pub energy_change: Option<f64>,
+    /// Slowest breathing during the night.
+    pub breathing_low_brpm: Option<f64>,
+    /// poor, low, unbalanced or balanced: the watch's 7-day HRV status for this night.
+    pub hrv_status: Option<String>,
 }
 
 /// A night as one bar of the "last nights" chart.
@@ -506,6 +518,8 @@ pub struct SessionRow {
     pub rem_score: Option<f64>,
     pub awakenings_count: Option<f64>,
     pub avg_stress: Option<f64>,
+    /// Restless moments (imported nights only).
+    pub restless_moments: Option<f64>,
     /// Stage totals a night imported from Garmin Connect carries (a watch night has stage rows
     /// in `sleep_levels` instead).
     pub asleep_s: Option<f64>,
@@ -517,7 +531,7 @@ pub struct SessionRow {
 
 const SESSION_COLS: &str = "start_ts, end_ts, overall_score, quality_score, duration_score,
     recovery_score, deep_score, light_score, rem_score, awakenings_count, avg_stress,
-    asleep_s, deep_s, light_s, rem_s, awake_s";
+    restless_moments, asleep_s, deep_s, light_s, rem_s, awake_s";
 
 /// The local date a night belongs to: the day it ENDS on (Garmin's convention), so the night
 /// from Thursday evening to Friday morning is Friday's sleep, in the account's time zone.
@@ -730,7 +744,56 @@ pub async fn night_detail(ctx: &Ctx, s: &SessionRow) -> Res<SleepNight> {
         &w,
     )
     .await?;
+    let hrv_status = one_f64(
+        ctx,
+        "SELECT CAST(status AS REAL) FROM hrv_summary WHERE user_id = ? AND ts >= ? AND ts <= ? AND status IS NOT NULL
+         ORDER BY ts DESC LIMIT 1",
+        &[
+            s.start_ts.min(ctx.day_bounds(ctx.date(s.end_ts)).0),
+            s.end_ts + 6 * 3600,
+        ],
+    )
+    .await?
+    .and_then(|c| hrv_status_label(c as i64))
+    .map(str::to_owned);
+    // Energy (Body Battery) at the first and the last reading of the night.
+    let battery_first = one_f64(
+        ctx,
+        "SELECT body_battery FROM stress WHERE user_id = ? AND ts >= ? AND ts <= ? AND body_battery IS NOT NULL
+         ORDER BY ts ASC LIMIT 1",
+        &w,
+    )
+    .await?;
+    let battery_last = one_f64(
+        ctx,
+        "SELECT body_battery FROM stress WHERE user_id = ? AND ts >= ? AND ts <= ? AND body_battery IS NOT NULL
+         ORDER BY ts DESC LIMIT 1",
+        &w,
+    )
+    .await?;
+    let energy_change = match (battery_first, battery_last) {
+        (Some(a), Some(b)) => Some(b - a),
+        _ => None,
+    };
     Ok(SleepNight {
+        sleep_need_min: ctx.prefs.sleep_need_min,
+        restless_moments: s.restless_moments,
+        avg_hr_bpm: one_f64(
+            ctx,
+            "SELECT AVG(bpm) FROM mon_hr WHERE user_id = ? AND ts >= ? AND ts <= ?",
+            &w,
+        )
+        .await?
+        .map(round1),
+        energy_change,
+        breathing_low_brpm: one_f64(
+            ctx,
+            "SELECT MIN(brpm) FROM respiration WHERE user_id = ? AND ts >= ? AND ts <= ? AND brpm > 0",
+            &w,
+        )
+        .await?
+        .map(round1),
+        hrv_status,
         date: sum.date,
         start: sum.start,
         end: sum.end,
@@ -782,6 +845,98 @@ pub async fn night_detail(ctx: &Ctx, s: &SessionRow) -> Res<SleepNight> {
         )
         .await?,
     })
+}
+
+/// One reading of an overnight series, as minutes from the start of the night.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct NightPoint {
+    pub minute: f64,
+    pub value: f64,
+}
+
+/// One measurement over the night (5 minute means), for the line drawn over the stage chart.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct NightSeries {
+    /// `heart_rate`, `energy`, `stress`, `breathing`, `spo2` or `hrv`.
+    pub key: String,
+    pub points: Vec<NightPoint>,
+}
+
+/// Means per 5 minutes since `start`; empty when there are fewer than two readings.
+fn bucketed(rows: &[(i64, f64)], start: i64, decimals: bool) -> Vec<NightPoint> {
+    let mut sums: BTreeMap<i64, (f64, u32)> = BTreeMap::new();
+    for (t, v) in rows {
+        let e = sums.entry((t - start).div_euclid(300)).or_default();
+        e.0 += v;
+        e.1 += 1;
+    }
+    let pts: Vec<NightPoint> = sums
+        .into_iter()
+        .map(|(b, (sum, n))| {
+            let mean = sum / f64::from(n);
+            NightPoint {
+                minute: (b * 5) as f64,
+                value: if decimals { round1(mean) } else { mean.round() },
+            }
+        })
+        .collect();
+    if pts.len() < 2 {
+        Vec::new()
+    } else {
+        pts
+    }
+}
+
+/// The overnight series of a night, only those with data.
+pub async fn night_series(ctx: &Ctx, s: &SessionRow) -> Res<Vec<NightSeries>> {
+    let (a, b) = (s.start_ts, s.end_ts);
+    let mut out = Vec::new();
+    let mut add = |key: &str, rows: Vec<(i64, f64)>, decimals: bool| {
+        let points = bucketed(&rows, a, decimals);
+        if !points.is_empty() {
+            out.push(NightSeries {
+                key: key.to_owned(),
+                points,
+            });
+        }
+    };
+    add(
+        "heart_rate",
+        series(
+            ctx,
+            "SELECT ts, bpm FROM mon_hr WHERE user_id = ? AND ts >= ? AND ts <= ? ORDER BY ts",
+            a,
+            b,
+        )
+        .await?,
+        false,
+    );
+    add(
+        "energy",
+        series(ctx, "SELECT ts, body_battery FROM stress WHERE user_id = ? AND ts >= ? AND ts <= ? AND body_battery IS NOT NULL ORDER BY ts", a, b).await?,
+        false,
+    );
+    add(
+        "stress",
+        series(ctx, "SELECT ts, stress FROM stress WHERE user_id = ? AND ts >= ? AND ts <= ? AND stress >= 0 ORDER BY ts", a, b).await?,
+        false,
+    );
+    add(
+        "breathing",
+        series(ctx, "SELECT ts, brpm FROM respiration WHERE user_id = ? AND ts >= ? AND ts <= ? AND brpm > 0 ORDER BY ts", a, b).await?,
+        true,
+    );
+    add(
+        "spo2",
+        series(ctx, "SELECT ts, percent FROM spo2 WHERE user_id = ? AND ts >= ? AND ts <= ? AND percent > 0 ORDER BY ts", a, b).await?,
+        false,
+    );
+    add(
+        "hrv",
+        series(ctx, "SELECT ts, rmssd_ms FROM hrv_values WHERE user_id = ? AND ts >= ? AND ts <= ? ORDER BY ts", a, b).await?,
+        false,
+    );
+    Ok(out)
 }
 
 // ---- HRV -------------------------------------------------------------------------------

@@ -66,7 +66,7 @@ class FakeXhr {
 const settings: SettingsResponse = {
   timezone: 'Europe/Copenhagen',
   step_goal: 8000,
-  intensity_goal_min: 150,
+  intensity_goal_min: 150, sleep_need_min: 480,
   home_cards: { shown: [], hidden: [] } as unknown as SettingsResponse['home_cards'],
   sample: false,
 };

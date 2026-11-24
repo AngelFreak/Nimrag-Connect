@@ -4,4 +4,4 @@ import type { HomeCards } from "./HomeCards";
 /**
  * Every field optional: only the ones present change.
  */
-export type SettingsPatch = { timezone?: string, step_goal?: number, intensity_goal_min?: number, home_cards?: HomeCards, };
+export type SettingsPatch = { timezone?: string, step_goal?: number, intensity_goal_min?: number, sleep_need_min?: number, home_cards?: HomeCards, };

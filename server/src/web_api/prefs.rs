@@ -18,6 +18,8 @@ pub struct SettingsResponse {
     pub timezone: String,
     pub step_goal: u32,
     pub intensity_goal_min: u32,
+    /// Sleep need in minutes a night (360 to 600 in steps of 15); the sleep page rates a night against it.
+    pub sleep_need_min: u32,
     pub home_cards: HomeCards,
     pub sample: bool,
 }
@@ -37,6 +39,9 @@ pub struct SettingsPatch {
     pub intensity_goal_min: Option<u32>,
     #[serde(default)]
     #[ts(optional)]
+    pub sleep_need_min: Option<u32>,
+    #[serde(default)]
+    #[ts(optional)]
     pub home_cards: Option<HomeCards>,
 }
 
@@ -46,6 +51,7 @@ async fn current(state: &AppState, uid: i64) -> Result<SettingsResponse, ApiErro
         timezone: ctx.tz().name().to_owned(),
         step_goal: ctx.prefs.step_goal,
         intensity_goal_min: ctx.prefs.intensity_goal_min,
+        sleep_need_min: ctx.prefs.sleep_need_min,
         home_cards: ctx.prefs.home_cards.clone(),
         sample: ctx.sample(),
     })
@@ -85,6 +91,13 @@ async fn patch(
             "intensity_goal_min must be 1 to 10080",
         ));
     }
+    if p.sleep_need_min
+        .is_some_and(|g| !settings::sleep_need_ok(g))
+    {
+        return Err(ApiError::bad_request(
+            "sleep_need_min must be 360 to 600, in steps of 15",
+        ));
+    }
     let cards = p
         .home_cards
         .map(|c| c.normalised().map_err(ApiError::bad_request))
@@ -98,6 +111,9 @@ async fn patch(
     }
     if let Some(g) = p.intensity_goal_min {
         settings::set_user(pool, user.id, "intensity_goal_min", &g.to_string()).await?;
+    }
+    if let Some(g) = p.sleep_need_min {
+        settings::set_user(pool, user.id, "sleep_need_min", &g.to_string()).await?;
     }
     if let Some(c) = cards {
         settings::set_user(

@@ -141,6 +141,7 @@ fn sleep(data: &Value, tz: Tz, p: &mut Parsed) -> R {
             light_s: light,
             rem_s: rem,
             awake_s: num(n, "awake_seconds"),
+            restless: num(n, "restless_moments_count"),
         });
         p.rows += 1;
         p.seen(end);

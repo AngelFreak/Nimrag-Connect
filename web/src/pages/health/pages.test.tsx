@@ -73,8 +73,10 @@ const nightResponse = (over: Partial<NonNullable<SleepNightResponse['night']>> |
           breathing_brpm: 13.4,
           spo2_avg_percent: null,
           spo2_low_percent: null,
+          sleep_need_min: 480, restless_moments: null, avg_hr_bpm: null, energy_change: null, breathing_low_brpm: null, hrv_status: null,
           ...over,
         },
+  overlays: [],
   last_nights: NIGHTS,
   average_duration_s: 25200,
 });
@@ -221,9 +223,10 @@ describe('SleepPage', () => {
     mockApi({ '/api/sleep/2026-11-18': nightResponse(), '/api/sleep?nights=7': nightsResponse(7) });
     renderAt('/sleep/2026-11-18');
     expect(await screen.findByText('7h 12m')).toBeInTheDocument();
-    expect(screen.getByText('23:18 to 06:42')).toBeInTheDocument();
-    expect(screen.getByText('81')).toBeInTheDocument();
-    expect(screen.getByText('Good')).toBeInTheDocument();
+    expect(screen.getAllByText('23:18').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('06:42').length).toBeGreaterThan(0);
+    expect(screen.getByRole('img', { name: 'Sleep score 81 out of 100' })).toBeInTheDocument();
+    expect(screen.getAllByText('Good').length).toBeGreaterThan(0);
     // /sleep/2026-11-18 is the night that ended on the morning of the 18th.
     expect(screen.getByText('Night of Tue 17 Nov')).toBeInTheDocument();
     // legend: deep 1h 24m, light 3h 58m, REM 1h 50m, awake 12m
@@ -245,8 +248,8 @@ describe('SleepPage', () => {
   it('shows the blood oxygen tile only when the watch recorded it', async () => {
     mockApi({ '/api/sleep/2026-11-18': nightResponse({ spo2_avg_percent: 95.4, spo2_low_percent: 91 }), '/api/sleep?nights=7': nightsResponse(7) });
     renderAt('/sleep/2026-11-18');
-    expect(await screen.findByText('95%')).toBeInTheDocument();
-    expect(screen.getByText('Low 91%')).toBeInTheDocument();
+    expect(await screen.findByText('95.4 %')).toBeInTheDocument();
+    expect(screen.getByText('Lowest 91 %')).toBeInTheDocument();
   });
 
   it('shows "unavailable" for missing vitals, scores and stages, never 0', async () => {
@@ -269,7 +272,10 @@ describe('SleepPage', () => {
     });
     renderAt('/sleep/2026-11-18');
     await screen.findByText('7h 12m');
-    expect(screen.getAllByText('unavailable').length).toBeGreaterThanOrEqual(8);
+    expect(screen.getByRole('img', { name: 'Sleep score unavailable' })).toBeInTheDocument();
+    // tiles without data are left out, not shown as zero or "unavailable"
+    expect(screen.queryByText('Overnight HRV')).not.toBeInTheDocument();
+    expect(screen.queryByText('Lowest heart rate')).not.toBeInTheDocument();
     expect(screen.getByText('Stages were not recorded for this night.')).toBeInTheDocument();
     expect(screen.queryByText(/^0 ?(ms|bpm|\/min)$/)).not.toBeInTheDocument();
   });

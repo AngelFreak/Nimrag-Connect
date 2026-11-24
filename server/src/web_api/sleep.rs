@@ -7,8 +7,8 @@
 //! Today and Sleep all pick nights through `daily::nights` / `session_for_night`.
 
 use super::daily::{
-    dates, night_detail, nights, session_for_night, session_last_night, week_start, NightSummary,
-    SleepNight,
+    dates, night_detail, night_series, nights, session_for_night, session_last_night, week_start,
+    NightSeries, NightSummary, SleepNight,
 };
 use super::{mean, round1, Ctx, RangeParams};
 use crate::api::{ApiError, AppState};
@@ -39,6 +39,9 @@ pub struct SleepNightResponse {
     pub date: String,
     /// `null` when the watch recorded no sleep that night.
     pub night: Option<SleepNight>,
+    /// Heart rate, energy, stress, breathing, SpO2 and HRV over the night (5 minute means), the
+    /// ones with data; empty when there is no night.
+    pub overlays: Vec<NightSeries>,
     /// The 7 nights up to and including `date` (nights without data are left out).
     pub last_nights: Vec<NightSummary>,
     pub average_duration_s: Option<f64>,
@@ -59,15 +62,19 @@ async fn night(
 ) -> Res<Json<SleepNightResponse>> {
     let ctx = Ctx::new(&state, user.id).await?;
     let d = Ctx::parse_date(&date)?;
-    let night = match session_for_night(&ctx, d).await? {
-        Some(s) => Some(night_detail(&ctx, &s).await?),
-        None => None,
+    let (night, overlays) = match session_for_night(&ctx, d).await? {
+        Some(s) => (
+            Some(night_detail(&ctx, &s).await?),
+            night_series(&ctx, &s).await?,
+        ),
+        None => (None, Vec::new()),
     };
     let last = nights(&ctx, d - Duration::days(6), d).await?;
     Ok(Json(SleepNightResponse {
         sample: ctx.sample(),
         date: date_string(d),
         night,
+        overlays,
         average_duration_s: mean(last.iter().map(|n| n.duration_s)).map(f64::round),
         last_nights: last,
     }))

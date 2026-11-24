@@ -44,6 +44,7 @@ export function makeToday(overrides: Partial<Today> = {}): Today {
       breathing_brpm: 13.4,
       spo2_avg_percent: 95.8,
       spo2_low_percent: 93,
+      sleep_need_min: 480, restless_moments: null, avg_hr_bpm: null, energy_change: null, breathing_low_brpm: null, hrv_status: null,
     },
     hrv: {
       last_night_ms: 62,
@@ -134,7 +135,7 @@ export function makeSettings(overrides: Partial<SettingsResponse> = {}): Setting
   return {
     timezone: 'Etc/UTC',
     step_goal: 8000,
-    intensity_goal_min: 150,
+    intensity_goal_min: 150, sleep_need_min: 480,
     home_cards: { order: [...DEFAULT_HOME_CARDS.order], hidden: [...DEFAULT_HOME_CARDS.hidden] },
     sample: true,
     ...overrides,

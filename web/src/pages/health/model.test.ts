@@ -51,6 +51,7 @@ const night = (over: Partial<SleepNight> = {}): SleepNight => ({
   breathing_brpm: null,
   spo2_avg_percent: null,
   spo2_low_percent: null,
+  sleep_need_min: 480, restless_moments: null, avg_hr_bpm: null, energy_change: null, breathing_low_brpm: null, hrv_status: null,
   ...over,
 });
 

@@ -1,7 +1,7 @@
 //! Settings and time-zone helpers.
 //!
 //! Server-wide flags (`sample_data`) live in `settings`; each user's preferences (`timezone`,
-//! `step_goal`, `intensity_goal_min`, `home_cards`) in `user_settings`, keyed by user id (0 =
+//! `step_goal`, `intensity_goal_min`, `sleep_need_min`, `home_cards`) in `user_settings`, keyed by user id (0 =
 //! the pre-multi-user values, until the admin adopts them for a user).
 //!
 //! Days are local days in the user's time zone (`timezone`, IANA name; default
@@ -17,6 +17,7 @@ use ts_rs::TS;
 
 pub const DEFAULT_STEP_GOAL: u32 = 8000;
 pub const DEFAULT_INTENSITY_GOAL_MIN: u32 = 150;
+pub const DEFAULT_SLEEP_NEED_MIN: u32 = 480;
 
 /// Cards of the Today page's "At a glance" grid. The only definition of the id
 /// set: the web app imports the generated type.
@@ -109,9 +110,17 @@ impl HomeCards {
 pub const STEP_GOAL_RANGE: std::ops::RangeInclusive<u32> = 1..=200_000;
 /// Accepted range of `intensity_goal_min` (minutes a week).
 pub const INTENSITY_GOAL_RANGE: std::ops::RangeInclusive<u32> = 1..=10_080;
+/// Accepted range of `sleep_need_min` (minutes a night), in steps of [`SLEEP_NEED_STEP_MIN`].
+pub const SLEEP_NEED_RANGE: std::ops::RangeInclusive<u32> = 360..=600;
+pub const SLEEP_NEED_STEP_MIN: u32 = 15;
+
+/// Is this a sleep need the setting accepts (6 to 10 hours in 15 minute steps)?
+pub fn sleep_need_ok(minutes: u32) -> bool {
+    SLEEP_NEED_RANGE.contains(&minutes) && minutes % SLEEP_NEED_STEP_MIN == 0
+}
 
 /// A stored user setting checked the way `PATCH /api/settings` checks it, in the form it is
-/// stored in. `None` for a key that is not one of the four, or a value that would be refused.
+/// stored in. `None` for a key that is not one of the five, or a value that would be refused.
 pub fn checked_user_setting(key: &str, value: &str) -> Option<String> {
     match key {
         "timezone" => value.parse::<Tz>().ok().map(|tz| tz.name().to_owned()),
@@ -124,6 +133,11 @@ pub fn checked_user_setting(key: &str, value: &str) -> Option<String> {
             .parse::<u32>()
             .ok()
             .filter(|g| INTENSITY_GOAL_RANGE.contains(g))
+            .map(|g| g.to_string()),
+        "sleep_need_min" => value
+            .parse::<u32>()
+            .ok()
+            .filter(|g| sleep_need_ok(*g))
             .map(|g| g.to_string()),
         "home_cards" => serde_json::from_str::<HomeCards>(value)
             .ok()
@@ -182,6 +196,7 @@ pub struct Prefs {
     pub tz: Tz,
     pub step_goal: u32,
     pub intensity_goal_min: u32,
+    pub sleep_need_min: u32,
     pub home_cards: HomeCards,
     /// True when the database was filled by `dev-seed`.
     pub sample: bool,
@@ -213,6 +228,10 @@ pub async fn load(pool: &SqlitePool, uid: i64) -> Result<Prefs> {
         intensity_goal_min: find("intensity_goal_min")
             .and_then(|v| v.parse().ok())
             .unwrap_or(DEFAULT_INTENSITY_GOAL_MIN),
+        sleep_need_min: find("sleep_need_min")
+            .and_then(|v| v.parse().ok())
+            .filter(|g| sleep_need_ok(*g))
+            .unwrap_or(DEFAULT_SLEEP_NEED_MIN),
         home_cards: find("home_cards")
             .and_then(|v| serde_json::from_str::<HomeCards>(v).ok())
             .and_then(|c| c.normalised().ok())
@@ -286,6 +305,19 @@ pub fn date_string(d: NaiveDate) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn sleep_need_is_six_to_ten_hours_in_quarter_hours() {
+        assert!([360, 375, 480, 585, 600].into_iter().all(sleep_need_ok));
+        assert!(![0, 345, 361, 481, 605, 615].into_iter().any(sleep_need_ok));
+        assert_eq!(
+            checked_user_setting("sleep_need_min", "450").as_deref(),
+            Some("450")
+        );
+        assert_eq!(checked_user_setting("sleep_need_min", "451"), None);
+        assert_eq!(checked_user_setting("sleep_need_min", "eight"), None);
+        assert_eq!(DEFAULT_SLEEP_NEED_MIN, 480);
+    }
 
     #[test]
     fn default_cards_hold_every_card_once() {

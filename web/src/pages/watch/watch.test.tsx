@@ -12,7 +12,7 @@ import { parseItems } from './WatchDetailsPage';
 
 const NOW = Date.parse('2026-11-19T08:00:00+01:00');
 
-const settings = { timezone: 'Europe/Copenhagen', step_goal: 8000, intensity_goal_min: 150, home_cards: { shown: [], hidden: [] }, sample: false } as unknown as SettingsResponse;
+const settings = { timezone: 'Europe/Copenhagen', step_goal: 8000, intensity_goal_min: 150, sleep_need_min: 480, home_cards: { shown: [], hidden: [] }, sample: false } as unknown as SettingsResponse;
 const me = { authenticated: true, username: 'demo', role: 'user', timezone: 'Europe/Copenhagen', sample: false };
 
 const devices = (over: Partial<DevicesResponse> = {}): DevicesResponse => ({
