@@ -13,8 +13,8 @@ android {
         applicationId = "dev.nimrag.app"
         minSdk = 31
         targetSdk = 37
-        versionCode = 21
-        versionName = "0.9.0"
+        versionCode = 22
+        versionName = "0.8.2"
         // Only the ABIs the Rust library is built for (this also drops JNA's other ABIs).
         ndk { abiFilters += listOf("arm64-v8a", "x86_64") }
     }
