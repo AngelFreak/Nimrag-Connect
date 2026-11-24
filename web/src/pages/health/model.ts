@@ -281,7 +281,7 @@ const num = (v: number | null, digits = 0): string | null => (digits === 0 ? fmt
 export function hrvAside(t: TrendsResponse['hrv']): string | null {
   const avg = num(t.series.average);
   if (avg === null) return null;
-  const range = t.baseline_low_ms !== null && t.baseline_high_ms !== null ? ` · range ${num(t.baseline_low_ms)} to ${num(t.baseline_high_ms)}` : '';
+  const range = t.baseline_low_ms !== null && t.baseline_high_ms !== null ? ` · range ${num(t.baseline_low_ms)}–${num(t.baseline_high_ms)}` : '';
   return `Avg ${avg} ms${range}`;
 }
 
@@ -289,7 +289,7 @@ export function hrvAside(t: TrendsResponse['hrv']): string | null {
 export function hrvSummary(t: TrendsResponse['hrv']): string {
   const vals = present(t.series.points.map((p) => p.value));
   const avg = num(t.series.average);
-  if (vals.length === 0 || avg === null) return 'No overnight HRV readings in this range.';
+  if (vals.length === 0 || avg === null) return 'Shows after your watch syncs overnight HRV.';
   const { baseline_low_ms: lo, baseline_high_ms: hi } = t;
   if (lo === null || hi === null) {
     return `HRV averaged ${avg} ms over ${vals.length} night${vals.length === 1 ? '' : 's'}; the watch has not set a personal range yet.`;
@@ -301,7 +301,7 @@ export function hrvSummary(t: TrendsResponse['hrv']): string {
 function plainSummary(name: string, s: TrendSeries, unit: string, noun: string, digits = 0): string {
   const n = present(s.points.map((p) => p.value)).length;
   const avg = num(s.average, digits);
-  if (n === 0 || avg === null) return `No ${name.toLowerCase()} readings in this range.`;
+  if (n === 0 || avg === null) return `Shows after your watch syncs ${name.toLowerCase()}.`;
   const u = unit ? ` ${unit}` : '';
   const spread = s.min === null || s.max === null ? '' : `, between ${num(s.min, digits)} and ${num(s.max, digits)}${u}`;
   return `${name} averaged ${avg}${u}${spread}, over ${n} ${noun}${n === 1 ? '' : 's'}.`;
@@ -314,7 +314,7 @@ export const scoreSummary = (s: TrendSeries): string => plainSummary('Sleep scor
 
 export function durationSummary(s: TrendSeries): string {
   const mins = present(s.points.map((p) => secToMin(p.value)));
-  if (mins.length === 0) return 'No sleep duration readings in this range.';
+  if (mins.length === 0) return 'Shows after your watch syncs a night of sleep.';
   return `Sleep averaged ${fmtDurationMin(mean(mins))}, between ${fmtDurationMin(Math.min(...mins))} and ${fmtDurationMin(Math.max(...mins))}, over ${mins.length} night${mins.length === 1 ? '' : 's'}.`;
 }
 
@@ -322,6 +322,6 @@ export function rangeAside(s: TrendSeries, unit: string, digits = 0): string | n
   const avg = num(s.average, digits);
   if (avg === null) return null;
   const u = unit ? ` ${unit}` : '';
-  const spread = s.min !== null && s.max !== null ? ` · ${num(s.min, digits)} to ${num(s.max, digits)}` : '';
+  const spread = s.min !== null && s.max !== null ? ` · ${num(s.min, digits)}–${num(s.max, digits)}` : '';
   return `Avg ${avg}${u}${spread}`;
 }

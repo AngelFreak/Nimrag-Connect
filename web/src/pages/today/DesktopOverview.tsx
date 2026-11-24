@@ -110,7 +110,7 @@ function YesterdayRows({ today, stepGoal }: { today: Today; stepGoal: number }) 
         Yesterday
       </h2>
       {shown.length === 0 ? (
-        <p className="today-note">The watch has no data for this day.</p>
+        <p className="today-note">Shows after your watch syncs a day of data.</p>
       ) : (
         <ul className="hrows">
           {shown.map(({ key, ...r }) => (
@@ -153,7 +153,7 @@ function Last7Rows({ today }: { today: Today }) {
         Last 7 Days
       </h2>
       {shown.length === 0 ? (
-        <p className="today-note">No data for these days.</p>
+        <p className="today-note">Shows after your watch syncs a few days.</p>
       ) : (
         <ul className="hrows hrows--two">
           {shown.map(({ key, ...r }) => (

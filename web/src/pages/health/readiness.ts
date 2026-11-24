@@ -62,14 +62,30 @@ interface FactorMeta {
   to: string;
 }
 
+/** Short names, so a row stays on one line at phone width; the hint under the value says the rest. */
 export const FACTOR_META: Record<ReadinessFactorKey, FactorMeta> = {
-  sleep: { name: 'Last night’s sleep', sub: 'Sleep score of the night', to: '/sleep' },
-  recovery: { name: 'Recovery time left', sub: 'On the watch’s recovery timer', to: '/training' },
-  hrv: { name: 'HRV, 7-day average', sub: 'Against your balanced range', to: '/hrv' },
-  load: { name: '7-day training load', sub: 'Against its target range', to: '/metrics/training_load' },
-  sleep_history: { name: 'Sleep, last 7 nights', sub: 'Average sleep score', to: '/sleep?range=4w' },
-  stress: { name: 'Stress, last 3 days', sub: 'Average all-day stress', to: '/metrics/stress?range=7d' },
+  sleep: { name: 'Sleep', sub: 'Last night', to: '/sleep' },
+  recovery: { name: 'Recovery', sub: 'Time left', to: '/training' },
+  hrv: { name: 'HRV', sub: '7-day average', to: '/hrv' },
+  load: { name: 'Training load', sub: '7-day load', to: '/metrics/training_load' },
+  sleep_history: { name: 'Sleep history', sub: '7-night average', to: '/sleep?range=4w' },
+  stress: { name: 'Stress history', sub: '3-day average', to: '/metrics/stress?range=7d' },
 };
+
+/**
+ * What each factor's rating is called, in that factor's own words (as on the other pages). The five
+ * rungs are the server's, so the colour is always the rung's; a word may cover two rungs.
+ */
+export const FACTOR_WORDS: Record<ReadinessFactorKey, Record<ReadinessRating, string>> = {
+  sleep: { very_poor: 'Poor', poor: 'Poor', moderate: 'Fair', good: 'Good', very_good: 'Excellent' },
+  sleep_history: { very_poor: 'Poor', poor: 'Poor', moderate: 'Fair', good: 'Good', very_good: 'Excellent' },
+  recovery: { very_poor: 'High need', poor: 'High need', moderate: 'Moderate need', good: 'Low need', very_good: 'Recovered' },
+  hrv: { very_poor: 'Low', poor: 'Low', moderate: 'Unbalanced', good: 'Balanced', very_good: 'Balanced' },
+  load: { very_poor: 'Very high', poor: 'High', moderate: 'Optimal', good: 'Optimal', very_good: 'Low' },
+  stress: { very_poor: 'High', poor: 'High', moderate: 'Medium', good: 'Low', very_good: 'Low' },
+};
+
+export const factorWord = (key: ReadinessFactorKey, rating: ReadinessRating): string => FACTOR_WORDS[key][rating];
 
 /** A number as the API has it: whole when whole, else one decimal ("73.9"); never rounded further. */
 export function fmtNum(value: number | null | undefined): string | null {
@@ -89,7 +105,9 @@ export function factorSub(f: ReadinessFactor): string {
   const meta = FACTOR_META[f.key];
   const value = factorValue(f);
   if (value === null) return 'Not available yet';
-  return [value, f.note ?? meta.sub].join(' · ');
+  // "Balanced range 59–74 ms" and "Target range 195–341" without the word "range": the row has to stay short.
+  const hint = f.note ? f.note.replace(/^(Balanced|Target) range /, '$1 ') : meta.sub;
+  return [value, hint].join(' · ');
 }
 
 export type HistoryKey = '7d' | '4w' | '12w';

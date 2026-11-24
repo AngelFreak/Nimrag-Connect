@@ -9,19 +9,36 @@ import { AtAGlance, Last7DaysCard, TimezoneNotice, YesterdayCard } from './Secti
 export function TodayLoading() {
   return (
     <div className="page" aria-busy="true" aria-label="Loading today">
-      <Card padding="lg">
-        <Skeleton height={104} />
-        <Skeleton height={84} />
-      </Card>
-      <div className="glance-grid">
-        {Array.from({ length: 4 }, (_, i) => (
-          <Card key={i} padding="tile">
-            <Skeleton height={14} width="60%" />
-            <Skeleton height={26} width="80%" />
-            <Skeleton height={14} />
-          </Card>
-        ))}
-      </div>
+      {/* The same blocks as the loaded page, at about the same heights, so nothing jumps when the data arrives. */}
+      <section className="focus" aria-hidden="true">
+        <Skeleton height={14} width="64px" />
+        <Card padding="lg">
+          <div className="focus-energy">
+            <Skeleton height={100} width="100px" />
+            <div className="focus-energy__text" style={{ flex: 1 }}>
+              <Skeleton height={14} width="40%" />
+              <Skeleton height={22} width="80%" />
+              <Skeleton height={14} width="60%" />
+            </div>
+          </div>
+          <Skeleton height={142} />
+          <Skeleton height={14} width="70%" />
+        </Card>
+        <div className="focus__dots" style={{ height: 44 }} />
+      </section>
+      <section className="today-section" aria-hidden="true">
+        <Skeleton height={14} width="96px" />
+        <div className="glance-grid">
+          {Array.from({ length: 6 }, (_, i) => (
+            <Card key={i} padding="tile">
+              <Skeleton height={14} width="60%" />
+              <Skeleton height={28} width="70%" />
+              <Skeleton height={14} width="85%" />
+              <Skeleton height={44} />
+            </Card>
+          ))}
+        </div>
+      </section>
     </div>
   );
 }

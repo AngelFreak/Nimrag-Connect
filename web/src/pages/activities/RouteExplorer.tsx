@@ -104,7 +104,7 @@ export function RouteExplorer({ a, height, variant }: RouteExplorerProps) {
         <div className="route__bar">
           <SegmentedControl<RouteChoice>
             label="Colour the route by"
-            options={choices.map((c) => ({ value: c, label: ROUTE_CHOICE_LABELS[c] }))}
+            options={choices.map((c) => ({ value: c, label: ROUTE_CHOICE_LABELS[c], ...(c === 'hr' ? { short: 'HR' } : {}) }))}
             value={choice}
             onChange={setPicked}
           />

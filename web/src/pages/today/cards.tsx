@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import type { HomeCard, HomeCards, Today } from '../../api/generated';
-import { ProgressBar, SeriesChart, StageBar, StatTile, type Tone } from '../../components';
+import { ProgressBar, SeriesChart, StageBar, StatTile, StatusWord } from '../../components';
 import { fmtShortDay } from '../../lib/dates';
 import { HeartRateVisual, IntensityVisual, LoadVisual, RecoveryVisual, StatusStripVisual, StepsWeekVisual, StressVisual, Vo2Visual } from './glanceVisuals';
 import { fmtFixed, fmtInt, isMissing, statusName } from '../../lib/format';
@@ -11,7 +11,6 @@ import {
   hrvStatusLabel,
   signed,
   stressLevelWord,
-  targetLabel,
   unit,
 } from './format';
 
@@ -89,14 +88,19 @@ export function visibleCards(cards: HomeCards): HomeCard[] {
 }
 
 function join(...parts: (string | null | undefined | false)[]): string | null {
-  const present = parts.filter((p): p is string => typeof p === 'string' && p.length > 0);
+  // Spaces inside a part do not break, so a range like "45–74 today" is never split across lines.
+  const present = parts.filter((p): p is string => typeof p === 'string' && p.length > 0).map((p) => p.replace(/ /g, '\u00a0'));
   return present.length > 0 ? present.join(' · ') : null;
 }
 
 interface Built {
-  value: string | null;
-  sub?: string | null;
-  tone?: Tone;
+  value: ReactNode;
+  /** The value is a word ("Productive"), which may shrink to fit the half-width tile. */
+  word?: boolean;
+  /** One short muted line under the value. */
+  sub?: ReactNode;
+  /** The line is a warning: something is out of range. Only then is it drawn in the alert colour. */
+  alert?: boolean;
   extra?: ReactNode;
 }
 
@@ -106,7 +110,6 @@ function build(id: HomeCard, t: Today): Built {
     case 'energy':
       return {
         value: fmtInt(t.energy.now),
-        tone: 'energy',
         sub: join(
           isMissing(t.energy.charged) ? null : `${signed(t.energy.charged)} charged`,
           isMissing(t.energy.drained) ? null : `${signed(-t.energy.drained)} drained`,
@@ -115,17 +118,27 @@ function build(id: HomeCard, t: Today): Built {
     case 'heart_rate': {
       const lo = fmtInt(t.heart_rate.day.low_bpm);
       const hi = fmtInt(t.heart_rate.day.high_bpm);
-      return { value: unit(t.heart_rate.resting_hr_bpm, 'bpm'), tone: 'heart', sub: join('Resting', lo && hi ? `today ${lo} to ${hi}` : null), extra: <HeartRateVisual today={t} /> };
+      return { value: unit(t.heart_rate.resting_hr_bpm, 'bpm'), sub: join('Resting', lo && hi ? `${lo}–${hi} today` : null), extra: <HeartRateVisual today={t} /> };
     }
     case 'stress': {
       const word = stressLevelWord(t.stress.main_level);
-      return { value: fmtInt(t.stress.average), tone: 'warn', sub: join('Average', word ? `mostly ${word}` : null), extra: <StressVisual today={t} /> };
+      const level = t.stress.main_level;
+      return {
+        value: fmtInt(t.stress.average),
+        sub: word ? (
+          <StatusWord type="stress" value={level}>
+            Mostly {word}
+          </StatusWord>
+        ) : (
+          'Average'
+        ),
+        extra: <StressVisual today={t} />,
+      };
     }
     case 'sleep': {
       const s = t.sleep;
       return {
         value: fmtSeconds(s?.duration_s),
-        tone: 'sleep',
         sub: s ? join(isMissing(s.score) ? null : `Score ${fmtInt(s.score)}`, s.score_label) : null,
         extra:
           s?.stages_available === true ? (
@@ -149,8 +162,8 @@ function build(id: HomeCard, t: Today): Built {
         !isMissing(h.baseline_low_ms) && !isMissing(h.baseline_high_ms) ? [h.baseline_low_ms, h.baseline_high_ms] : undefined;
       return {
         value: unit(h.last_night_ms, 'ms'),
-        tone: 'link',
-        sub: join(baselineLabel(h.vs_baseline), hrvStatusLabel(h.status)),
+        sub: h.status && hrvStatusLabel(h.status) ? <StatusWord type="hrv" value={h.status}>{hrvStatusLabel(h.status)}</StatusWord> : baselineLabel(h.vs_baseline),
+        alert: h.vs_baseline === 'below',
         extra:
           values.some((v) => v !== null) ? (
             <SeriesChart
@@ -168,7 +181,13 @@ function build(id: HomeCard, t: Today): Built {
     case 'training_status': {
       const s = t.training_status;
       const since = s.since ? fmtShortDay(s.since.slice(0, 10)) : null;
-      return { value: statusName(s.label), sub: s.label ? join(since ? `Since ${since}${s.since_is_lower_bound ? ' or earlier' : ''}` : null) : null, extra: s.label ? <StatusStripVisual today={t} /> : null };
+      const name = statusName(s.label);
+      return {
+        value: name ? <StatusWord type="training" value={s.kind}>{name}</StatusWord> : null,
+        word: true,
+        sub: s.label ? join(since ? `Since ${since}${s.since_is_lower_bound ? ' or earlier' : ''}` : null) : null,
+        extra: s.label ? <StatusStripVisual today={t} /> : null,
+      };
     }
     case 'training_readiness': {
       const r = t.training_readiness;
@@ -178,20 +197,21 @@ function build(id: HomeCard, t: Today): Built {
       const m = t.intensity_minutes;
       return {
         value: unit(m.total_min, 'min'),
-        sub: `This week, goal ${fmtInt(m.goal_min)}`,
+        sub: `Goal ${fmtInt(m.goal_min)} this week`,
         extra: <IntensityVisual today={t} />,
       };
     }
     case 'training_load': {
       const l = t.training_load;
-      const range = !isMissing(l.target_min) && !isMissing(l.target_max) ? `${fmtInt(l.target_min)} to ${fmtInt(l.target_max)}` : null;
-      return { value: fmtInt(l.seven_day_load), sub: join(targetLabel(l.vs_target), range), extra: <LoadVisual today={t} /> };
+      const range = !isMissing(l.target_min) && !isMissing(l.target_max) ? `${fmtInt(l.target_min)}–${fmtInt(l.target_max)}` : null;
+      const off = l.vs_target === 'above' || l.vs_target === 'below';
+      const where = l.vs_target === 'within' ? 'In range' : l.vs_target === 'above' ? 'Above range' : l.vs_target === 'below' ? 'Below range' : null;
+      return { value: fmtInt(l.seven_day_load), sub: join(where, range), alert: off, extra: <LoadVisual today={t} /> };
     }
     case 'steps': {
       const s = t.steps;
       return {
         value: fmtInt(s.steps),
-        tone: 'steps',
         sub: `Goal ${fmtInt(s.goal)}`,
         extra: (
           <>
@@ -204,24 +224,24 @@ function build(id: HomeCard, t: Today): Built {
     case 'recovery_time': {
       const r = t.recovery_time;
       // Nothing left: "0m, ready around <now>" reads like a countdown that is stuck.
-      if (r.remaining_s === 0) return { value: 'Recovered', sub: null };
+      if (r.remaining_s === 0) return { value: 'Recovered', word: true, sub: 'No recovery time left' };
       const ready = fmtTime(r.ready_at, tz);
       return { value: fmtSeconds(r.remaining_s), sub: ready ? `Ready around ${ready}` : null, extra: <RecoveryVisual today={t} /> };
     }
     case 'vo2_max': {
       const v = t.vo2max;
       const change = signed(v.change_3m, 1);
-      return { value: fmtFixed(v.value, 1), sub: join('ml/kg/min, derived', change ? `${change} in 3 months` : null), extra: <Vo2Visual today={t} /> };
+      return { value: fmtFixed(v.value, 1), sub: join('ml/kg/min', change ? `${change} in 3 mo` : null), extra: <Vo2Visual today={t} /> };
     }
     case 'respiration': {
       const r = t.respiration;
       const asleep = fmtFixed(r.sleep_avg_brpm, 1);
-      return { value: fmtFixed(r.latest_brpm, 1), sub: join('breaths a minute', asleep ? `asleep ${asleep}` : null) };
+      return { value: fmtFixed(r.latest_brpm, 1), sub: join('breaths/min', asleep ? `${asleep} asleep` : null) };
     }
     case 'spo2': {
       const o = t.spo2;
       const low = fmtInt(o.sleep_low_percent);
-      return { value: isMissing(o.latest_percent) ? null : `${fmtFixed(o.latest_percent, 0)}%`, sub: low ? `Lowest asleep ${low}%` : null };
+      return { value: isMissing(o.latest_percent) ? null : `${fmtFixed(o.latest_percent, 0)}%`, sub: low ? `Low ${low}% asleep` : null };
     }
     case 'weight': {
       const w = t.weight;
@@ -235,7 +255,7 @@ function build(id: HomeCard, t: Today): Built {
 export function GlanceCard({ id, today }: { id: HomeCard; today: Today }) {
   const b = build(id, today);
   return (
-    <StatTile href={CARD_LINK[id]} data-card={id} label={CARD_LABEL[id]} value={b.value} {...(b.sub ? { sub: b.sub } : {})} tone={b.tone ?? 'muted'}>
+    <StatTile href={CARD_LINK[id]} data-card={id} label={CARD_LABEL[id]} value={b.value} {...(b.word ? { word: true } : {})} {...(b.sub ? { sub: b.sub } : {})} tone={b.alert ? 'warn' : 'muted'}>
       {b.extra}
     </StatTile>
   );

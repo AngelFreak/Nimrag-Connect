@@ -98,13 +98,13 @@ describe('glance card pictures', () => {
     expect(screen.getByText('6,240')).toBeInTheDocument();
   });
 
-  it('draws 28 blocks of training status, coloured by status', async () => {
+  it('draws the 28 days of training status as one block per run, coloured by status', async () => {
     stubApi();
     renderCard('training_status', { ...base, training_status: { ...base.training_status, label: 'Productive', kind: 'productive' } });
-    await waitFor(() => expect(visual('training_status')?.querySelectorAll('.gv__block')).toHaveLength(28));
-    const kinds = Array.from(visual('training_status')!.querySelectorAll('.gv__block')).map((b) => b.getAttribute('data-kind'));
-    expect(kinds.slice(0, 10)).toEqual(Array(10).fill('none'));
-    expect(kinds.slice(10)).toEqual(Array(18).fill('productive'));
+    await waitFor(() => expect(visual('training_status')?.querySelectorAll('.gv__block')).toHaveLength(2));
+    const blocks = Array.from(visual('training_status')!.querySelectorAll('.gv__block'));
+    expect(blocks.map((b) => b.getAttribute('data-kind'))).toEqual(['none', 'productive']);
+    expect(blocks.map((b) => b.getAttribute('data-days'))).toEqual(['10', '18']);
   });
 
   it('shows no step bars when the week cannot be loaded', async () => {

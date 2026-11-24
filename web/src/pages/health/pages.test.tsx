@@ -276,7 +276,7 @@ describe('SleepPage', () => {
     // tiles without data are left out, not shown as zero or "unavailable"
     expect(screen.queryByText('Overnight HRV')).not.toBeInTheDocument();
     expect(screen.queryByText('Lowest heart rate')).not.toBeInTheDocument();
-    expect(screen.getByText('Stages were not recorded for this night.')).toBeInTheDocument();
+    expect(screen.getByText('Shows after your watch records sleep stages for a night.')).toBeInTheDocument();
     expect(screen.queryByText(/^0 ?(ms|bpm|\/min)$/)).not.toBeInTheDocument();
   });
 
@@ -418,11 +418,11 @@ describe('HealthPage', () => {
   it('shows each trend with its summary line and links to the other pages', async () => {
     mockApi({ '/api/trends?range=4w': trendsResponse() });
     renderAt('/health');
-    expect(await screen.findByText('Avg 60 ms · range 55 to 70')).toBeInTheDocument();
+    expect(await screen.findByText('Avg 60 ms · range 55–70')).toBeInTheDocument();
     expect(screen.getByRole('img', { name: 'Overnight HRV over 4 weeks' })).toBeInTheDocument();
     expect(screen.getByText('HRV averaged 60 ms, within your range on 4 of 5 nights.', { selector: '.sr-only' })).toBeInTheDocument();
-    expect(screen.getByText('Avg 51 bpm · 50 to 52')).toBeInTheDocument();
-    expect(screen.getByText('13.5 /min')).toBeInTheDocument();
+    expect(screen.getByText('Avg 51 bpm · 50–52')).toBeInTheDocument();
+    expect(screen.getByText((_, el) => el?.tagName === 'SPAN' && el.textContent === '13.5/min')).toBeInTheDocument();
     expect(screen.getByText('Asleep · awake 15.2')).toBeInTheDocument();
     expect(screen.getByText('96%')).toBeInTheDocument(); // 95.5 rounds up
     expect(screen.getByText('Overnight avg · low 91%')).toBeInTheDocument();
@@ -448,7 +448,7 @@ describe('HealthPage', () => {
     const fetchMock = mockApi({ '/api/trends?range=4w': trendsResponse('4w'), '/api/trends?range=3m': trendsResponse('3m') });
     const user = userEvent.setup();
     renderAt('/health');
-    await screen.findByText('Avg 60 ms · range 55 to 70');
+    await screen.findByText('Avg 60 ms · range 55–70');
     const cards: [string, string][] = [
       ['Overnight HRV', '/hrv'],
       ['Resting heart rate', '/metrics/heart_rate?range=4w'],
@@ -471,7 +471,7 @@ describe('HealthPage', () => {
     const fetchMock = mockApi({ '/api/trends?range=4w': trendsResponse('4w'), '/api/trends?range=7d': trendsResponse('7d'), '/api/trends?range=1y': trendsResponse('1y') });
     const user = userEvent.setup();
     renderAt('/health');
-    await screen.findByText('Avg 60 ms · range 55 to 70');
+    await screen.findByText('Avg 60 ms · range 55–70');
     expect(screen.getByRole('button', { name: '4 weeks' })).toHaveAttribute('aria-pressed', 'true');
     await user.click(screen.getByRole('button', { name: '7 days' }));
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('/api/trends?range=7d', expect.anything()));
@@ -483,7 +483,7 @@ describe('HealthPage', () => {
     const fetchMock = mockApi({ '/api/trends?range=4w': trendsResponse('4w'), '/api/trends?range=3m': trendsResponse('3m') });
     const user = userEvent.setup();
     renderAt('/health');
-    await screen.findByText('Avg 60 ms · range 55 to 70');
+    await screen.findByText('Avg 60 ms · range 55–70');
     screen.getByRole('button', { name: '3 months' }).focus();
     await user.keyboard('{Enter}');
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('/api/trends?range=3m', expect.anything()));
@@ -492,7 +492,7 @@ describe('HealthPage', () => {
   it('shows "unavailable" for every metric the watch has no readings for', async () => {
     mockApi({ '/api/trends?range=4w': trendsResponse('4w', true) });
     renderAt('/health');
-    expect(await screen.findByText('No overnight HRV readings in this range.')).toBeInTheDocument();
+    expect(await screen.findByText('Shows after your watch syncs overnight HRV.')).toBeInTheDocument();
     expect(screen.getAllByText('unavailable').length).toBeGreaterThanOrEqual(8);
     expect(screen.queryByRole('img', { name: /Overnight HRV/ })).not.toBeInTheDocument();
   });

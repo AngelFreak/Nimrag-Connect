@@ -14,6 +14,8 @@ interface StatTileProps {
   /** Small line under the value, coloured by the metric (energy, sleep, ...). */
   sub?: ReactNode;
   tone?: Tone;
+  /** The value is a word ("Recovered"), not a number: it may shrink to fit a narrow tile. Found from a plain string by default. */
+  word?: boolean;
   size?: TileSize;
   /** Extra content under the sub line (e.g. a ProgressBar). */
   children?: ReactNode;
@@ -28,10 +30,10 @@ interface StatTileProps {
 const PADDING = { sm: 'sm', md: 'tile', lg: 'lg', xl: 'xl' } as const;
 
 /** Label, big value in Space Grotesk, and a sub line in the metric's colour. */
-export function StatTile({ label, value, sub, tone = 'muted', size = 'md', children, href, hideWhenMissing = false, ...rest }: StatTileProps) {
+export function StatTile({ label, value, sub, tone = 'muted', word: wordProp, size = 'md', children, href, hideWhenMissing = false, ...rest }: StatTileProps) {
   if (hideWhenMissing && (isMissing(value) || value === '' || value === false)) return null;
   // A word ("Recovery") rather than a number: it may need to shrink to fit a narrow tile.
-  const word = typeof value === 'string' && !/\d/.test(value);
+  const word = wordProp ?? (typeof value === 'string' && !/\d/.test(value));
   const tile = (
     <Card padding={PADDING[size]} className={`stat stat--${size}`} {...(href ? {} : rest)}>
       <span className="stat__label">{label}</span>

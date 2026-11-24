@@ -34,6 +34,36 @@ export function CardSkeleton({ lines = 3, height = 16 }: { lines?: number; heigh
   );
 }
 
+/** Loading placeholder shaped like a trend card: title and figure on one row, then the chart. */
+export function ChartCardSkeleton({ chart = 90 }: { chart?: number }) {
+  return (
+    <Card>
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16 }}>
+        <Skeleton height={20} width="40%" />
+        <Skeleton height={16} width="30%" />
+      </div>
+      <Skeleton height={chart} />
+      <Skeleton height={14} />
+    </Card>
+  );
+}
+
+/** Loading placeholder shaped like the two small tiles of the Health page. */
+export function TilePairSkeleton() {
+  return (
+    <div className="tile-pair">
+      {[0, 1].map((i) => (
+        <Card key={i} padding="tile">
+          <Skeleton height={14} width="60%" />
+          <Skeleton height={28} width="70%" />
+          <Skeleton height={14} width="85%" />
+          <Skeleton height={36} />
+        </Card>
+      ))}
+    </div>
+  );
+}
+
 /** A card-sized link used for the entry points on the Health hub. */
 export function HubLink({ to, title, sub }: { to: string; title: string; sub: string }) {
   return (

@@ -2,6 +2,7 @@ export * from './icons';
 export * from './Unavailable';
 export * from './Card';
 export * from './StatTile';
+export * from './StatusWord';
 export * from './Ring';
 export * from './ProgressBar';
 export * from './StageBar';

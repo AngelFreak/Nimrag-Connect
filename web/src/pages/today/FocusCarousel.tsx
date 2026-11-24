@@ -1,7 +1,8 @@
 import { useCallback, useRef, useState, type KeyboardEvent } from 'react';
 import { Link } from 'react-router-dom';
 import type { Today } from '../../api/generated';
-import { Card, Legend, Ring, SeriesChart, StageBar, Unavailable } from '../../components';
+import { Card, Legend, Ring, SeriesChart, StageBar, StatusWord, Unavailable } from '../../components';
+import { energyKey } from '../../lib/status';
 import { fmtInt, isMissing } from '../../lib/format';
 import { EnergyDayChart } from './EnergyDayChart';
 import { baselineLabel, energyHeadline, fmtSeconds, fmtTime, hrvStatusLabel, signed, unit } from './format';
@@ -15,10 +16,16 @@ function EnergySlide({ today }: { today: Today }) {
         <Ring value={e.now} label="Energy level" color="var(--energy)" />
         <div className="focus-energy__text">
           <span className="stat__label">Energy</span>
-          <span className="focus-energy__head">{headline ?? <Unavailable />}</span>
+          <span className="focus-energy__head">{headline ? <StatusWord type="energy" value={energyKey(e.now)} size="lg">{headline}</StatusWord> : <Unavailable />}</span>
           <div className="focus-energy__flows">
             <span className="tone-energy">{isMissing(e.charged) ? <>Charged <Unavailable /></> : `${signed(e.charged)} charged`}</span>
             <span className="tone-warn">{isMissing(e.drained) ? <>Drained <Unavailable /></> : `${signed(-e.drained)} drained`}</span>
+            {fmtTime(e.wake_time, today.timezone) ? (
+              <span className="focus-energy__woke">
+                <i className="day-chart__wake" aria-hidden="true" />
+                Woke {fmtTime(e.wake_time, today.timezone)}
+              </span>
+            ) : null}
           </div>
         </div>
       </div>
@@ -49,7 +56,15 @@ function SleepSlide({ today }: { today: Today }) {
       <div className="focus__row">
         <span className="focus__big">{fmtSeconds(s.duration_s) ?? <Unavailable />}</span>
         <div className="stat">
-          <span className="stat__sub tone-sleep">{isMissing(s.score) ? <>Score <Unavailable /></> : `Score ${fmtInt(s.score)}${s.score_label ? `, ${s.score_label}` : ''}`}</span>
+          <span className="stat__sub">
+            {isMissing(s.score) ? (
+              <>Score <Unavailable /></>
+            ) : s.score_label ? (
+              <StatusWord type="sleep" value={s.score_label}>{`Score ${fmtInt(s.score)}, ${s.score_label}`}</StatusWord>
+            ) : (
+              `Score ${fmtInt(s.score)}`
+            )}
+          </span>
           <span className="focus__sub">{bed && wake ? `${bed} to ${wake}` : null}</span>
         </div>
       </div>
@@ -97,7 +112,11 @@ function HrvSlide({ today }: { today: Today }) {
       <div className="focus__row">
         <span className="focus__big">{unit(h.last_night_ms, 'ms') ?? <Unavailable />}</span>
         <div className="stat">
-          <span className="stat__sub tone-link">{baselineLabel(h.vs_baseline) ?? status}</span>
+          <span className="stat__sub">
+            {status ? <StatusWord type="hrv" value={h.status}>{status}</StatusWord> : null}
+            {status && baselineLabel(h.vs_baseline) ? ' · ' : null}
+            {baselineLabel(h.vs_baseline)}
+          </span>
           <span className="focus__sub">{isMissing(h.weekly_avg_ms) ? null : `7-night average ${fmtInt(h.weekly_avg_ms)} ms`}</span>
         </div>
       </div>

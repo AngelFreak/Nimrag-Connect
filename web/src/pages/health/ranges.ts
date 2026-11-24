@@ -9,26 +9,18 @@ import type { HrvRange } from '../../api/generated/HrvRange';
 import type { HrvStatusKind } from '../../api/generated/HrvStatusKind';
 import type { SleepBucket } from '../../api/generated/SleepBucket';
 import type { SleepHistory } from '../../api/generated/SleepHistory';
-import type { StatusKind } from '../../api/generated/StatusKind';
 import type { StatusRun } from '../../api/generated/StatusRun';
 import type { TrainingStatusRange } from '../../api/generated/TrainingStatusRange';
 import { addDays, fmtDay, fmtMonthDay, fmtMonthLetter, fmtMonthShort, fmtPeriod, fmtRunDates } from '../../lib/dates';
 import { fmtFixed, fmtInt, isMissing } from '../../lib/format';
+import { STATUS_COLOR } from '../../lib/status';
 import { fmtSeconds } from './model';
 import { daysBetween } from './time';
 
 // ---- training status ------------------------------------------------------------------------------
 
-/** Colour of a status in the timeline, the legend and the list (see the tokens). */
-export const STATUS_COLOR: Record<StatusKind, string> = {
-  recovery: 'var(--status-recovery)',
-  strained: 'var(--status-strained)',
-  maintaining: 'var(--status-maintaining)',
-  productive: 'var(--status-productive)',
-  detraining: 'var(--status-detraining)',
-  none: 'var(--status-none)',
-  unknown: 'var(--status-none)',
-};
+/** Colour of a status in the timeline, the legend and the list: the shared map of `lib/status`. */
+export { STATUS_COLOR };
 
 /** Where a run of equal status is, in words: "Since Nov 17" for the status now, else the dates. */
 export function runDates(run: Pick<StatusRun, 'from' | 'to' | 'ongoing' | 'starts_before_range'>): string {

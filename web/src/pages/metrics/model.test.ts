@@ -263,7 +263,7 @@ describe('the figures and the words', () => {
   it('says in a sentence what the period holds', () => {
     expect(rangeSummary(METRICS.heart_rate, d)).toBe('Heart rate Nov 13 – Nov 19: 3 of 7 days with a reading; avg resting 54 bpm, avg high 115 bpm.');
     const none = week('heart_rate', (f) => [series('resting', f, Array(7).fill(null))]);
-    expect(rangeSummary(METRICS.heart_rate, none)).toBe('No heart rate readings Nov 13 – Nov 19.');
+    expect(rangeSummary(METRICS.heart_rate, none)).toBe('Shows after your watch syncs heart rate (Nov 13 – Nov 19).');
   });
 });
 
