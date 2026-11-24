@@ -189,6 +189,7 @@ pub fn router(state: AppState) -> Router {
         .merge(crate::web_api::router())
         .merge(crate::weather::routes())
         .merge(crate::edits::routes())
+        .merge(crate::history::routes())
         .fallback(crate::web::handler) // the web app (SPA); /api/* misses stay 404
         .layer(DefaultBodyLimit::max(MAX_JSON_BYTES))
         .layer(axum::middleware::from_fn(crate::auth::csrf_guard))
