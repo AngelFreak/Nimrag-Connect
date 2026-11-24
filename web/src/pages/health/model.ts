@@ -217,6 +217,35 @@ export const RANGES = [
 export type RangeKey = (typeof RANGES)[number]['value'];
 export const rangeLabel = (r: RangeKey): string => RANGES.find((x) => x.value === r)?.label ?? r;
 
+/** The trend cards on Health; each opens the page with that metric's detail. */
+export type TrendCardKey = 'hrv' | 'resting_hr' | 'breathing' | 'spo2' | 'sleep_score' | 'sleep_duration';
+
+const RANGE_DAYS: Record<string, number> = { '1d': 1, '7d': 7, '4w': 28, '3m': 91, '1y': 365 };
+
+/** The longest range a page offers that is not longer than the one chosen on Health (else its shortest). */
+function nearestRange(range: RangeKey, offered: readonly string[]): string {
+  const days = RANGE_DAYS[range] ?? 28;
+  const fit = offered.filter((r) => (RANGE_DAYS[r] ?? Infinity) <= days);
+  return fit.length > 0 ? fit[fit.length - 1]! : offered[0]!;
+}
+
+/** Where a trend card leads, keeping the chosen time range where that page has it. */
+export function trendCardHref(card: TrendCardKey, range: RangeKey): string {
+  switch (card) {
+    case 'hrv':
+      return '/hrv';
+    case 'resting_hr':
+      return `/metrics/heart_rate?range=${nearestRange(range, ['7d', '4w', '1y'])}`;
+    case 'breathing':
+      return `/metrics/respiration?range=${nearestRange(range, ['7d', '4w'])}`;
+    case 'spo2':
+      return `/metrics/spo2?range=${nearestRange(range, ['7d', '4w'])}`;
+    case 'sleep_score':
+    case 'sleep_duration':
+      return `/sleep?range=${nearestRange(range, ['7d', '4w', '1y'])}`;
+  }
+}
+
 export interface TrendXY {
   /** Days since the start of the range, with null anchors at both ends so the axis spans the range. */
   x: number[];

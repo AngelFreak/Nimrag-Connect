@@ -430,12 +430,35 @@ describe('HealthPage', () => {
       ['Body', '/body'],
       ['Calendar', '/calendar'],
     ]) {
-      expect(screen.getByRole('link', { name: new RegExp(`^${name}(?! status)`) })).toHaveAttribute('href', href);
+      expect(screen.getByRole('link', { name: new RegExp(`^${name}(?! status| score| duration)`) })).toHaveAttribute('href', href);
     }
     // The pages of the status views.
     expect(screen.getByRole('link', { name: /^HRV status/ })).toHaveAttribute('href', '/hrv');
     expect(screen.getByRole('link', { name: /^Training status/ })).toHaveAttribute('href', '/training/status');
     expect(screen.getByRole('link', { name: /^Score history/ })).toHaveAttribute('href', '/sleep?range=4w');
+  });
+
+  it('opens the page of each trend from its card, keeping the range where that page has it', async () => {
+    const fetchMock = mockApi({ '/api/trends?range=4w': trendsResponse('4w'), '/api/trends?range=3m': trendsResponse('3m') });
+    const user = userEvent.setup();
+    renderAt('/health');
+    await screen.findByText('Avg 60 ms · range 55 to 70');
+    const cards: [string, string][] = [
+      ['Overnight HRV', '/hrv'],
+      ['Resting heart rate', '/metrics/heart_rate?range=4w'],
+      ['Breathing rate', '/metrics/respiration?range=4w'],
+      ['Blood oxygen', '/metrics/spo2?range=4w'],
+      ['Sleep score', '/sleep?range=4w'],
+      ['Sleep duration', '/sleep?range=4w'],
+    ];
+    for (const [name, href] of cards) expect(screen.getByRole('link', { name })).toHaveAttribute('href', href);
+    // 3 months: the pages without it get the longest range they have that fits.
+    await user.click(screen.getByRole('button', { name: '3 months' }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('/api/trends?range=3m', expect.anything()));
+    expect(await screen.findByRole('link', { name: 'Resting heart rate' })).toHaveAttribute('href', '/metrics/heart_rate?range=4w');
+    expect(screen.getByRole('link', { name: 'Sleep score' })).toHaveAttribute('href', '/sleep?range=4w');
+    await user.click(screen.getByRole('link', { name: 'Blood oxygen' }));
+    expect(screen.getByTestId('where')).toHaveTextContent('/metrics/spo2');
   });
 
   it('requests the chosen range and marks it pressed', async () => {

@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from 'react';
+import { Link } from 'react-router-dom';
 import { Card, CardHeader, PageHeader, SampleDataChip, SegmentedControl, SeriesChart, TopBar, Unavailable } from '../../components';
 import type { TrendSeries } from '../../api/generated/TrendSeries';
 import type { TrendsResponse } from '../../api/generated/TrendsResponse';
@@ -7,6 +8,8 @@ import { useIsDesktop, usePageTitle } from '../../lib/hooks';
 import type { AxisUnit } from '../../lib/ticks';
 import {
   RANGES,
+  trendCardHref,
+  type TrendCardKey,
   breathingSummary,
   durationSummary,
   hrvAside,
@@ -63,8 +66,24 @@ function TrendChart({ trends, series, name, summary, range, color, height, scale
   );
 }
 
+/**
+ * The card's title is a link to the metric's own page, stretched over the whole card (the charts
+ * here take no taps), so a tap anywhere opens it while screen readers still read the card's text.
+ */
+function CardLink({ to, children }: { to: string; children: ReactNode }) {
+  return (
+    <Link to={to} className="card-stretch__link">
+      {children}
+      <span className="card-stretch__chevron" aria-hidden="true">
+        ›
+      </span>
+    </Link>
+  );
+}
+
 function ChartCard({
   title,
+  to,
   aside,
   summary,
   note,
@@ -72,6 +91,7 @@ function ChartCard({
   children,
 }: {
   title: string;
+  to: string;
   aside: ReactNode;
   summary: string;
   note?: string;
@@ -80,8 +100,8 @@ function ChartCard({
 }) {
   const hasData = series.points.some((p) => p.value !== null);
   return (
-    <Card>
-      <CardHeader title={title} aside={aside ?? <Unavailable />} />
+    <Card className="card-stretch">
+      <CardHeader title={<CardLink to={to}>{title}</CardLink>} aside={aside ?? <Unavailable />} />
       {children}
       {/* SeriesChart already gives screen readers the summary; the visible line is hidden from them. */}
       <ChartSummary hidden={hasData}>
@@ -164,9 +184,10 @@ function Trends({ trends: t, range, fetching }: { trends: TrendsResponse; range:
   const spo2 = t.spo2.overnight;
   const durationAvg = secToMin(t.sleep_duration_s.average);
   const durationAside = durationAvg === null ? null : `Avg ${Math.floor(durationAvg / 60)}h ${Math.round(durationAvg % 60)}m`;
+  const to = (card: TrendCardKey) => trendCardHref(card, range);
   return (
     <div className="grid-panels" style={{ opacity: fetching ? 0.7 : 1 }} aria-label={`Trends over ${rangeLabel(range)}`} role="group">
-      <ChartCard title="Overnight HRV" aside={hrvAside(t.hrv)} summary={hrvSummary(t.hrv)} series={t.hrv.series} {...(band ? { note: 'Shaded band is your usual range.' } : {})}>
+      <ChartCard title="Overnight HRV" to={to('hrv')} aside={hrvAside(t.hrv)} summary={hrvSummary(t.hrv)} series={t.hrv.series} {...(band ? { note: 'Shaded band is your usual range.' } : {})}>
         <TrendChart
           trends={t}
           series={t.hrv.series}
@@ -179,21 +200,25 @@ function Trends({ trends: t, range, fetching }: { trends: TrendsResponse; range:
         />
       </ChartCard>
 
-      <ChartCard title="Resting heart rate" aside={rangeAside(t.resting_hr, 'bpm')} summary={rhrSummary(t.resting_hr)} series={t.resting_hr}>
+      <ChartCard title="Resting heart rate" to={to('resting_hr')} aside={rangeAside(t.resting_hr, 'bpm')} summary={rhrSummary(t.resting_hr)} series={t.resting_hr}>
         <TrendChart trends={t} series={t.resting_hr} name="Resting heart rate" summary={rhrSummary(t.resting_hr)} range={range} color="heart" height={desktop ? 150 : 80} />
       </ChartCard>
 
       <div className="tile-pair">
-        <Card padding="tile" className="stat" aria-label="Breathing rate">
-          <h2 className="card__title card__title--muted">Breathing rate</h2>
+        <Card padding="tile" className="stat card-stretch" aria-label="Breathing rate">
+          <h2 className="card__title card__title--muted">
+            <CardLink to={to('breathing')}>Breathing rate</CardLink>
+          </h2>
           <span className="stat__value" style={{ fontSize: 22 }}>
             {withUnit(fmtFixed(breathing.average, 1), '/min') ?? <Unavailable />}
           </span>
           <span className="stat__sub">{t.breathing.awake_avg_brpm === null ? 'Asleep' : `Asleep · awake ${fmtFixed(t.breathing.awake_avg_brpm, 1)}`}</span>
           <TrendChart trends={t} series={breathing} name="Breathing rate" summary={breathingSummary(breathing)} range={range} color="link" height={36} width={2} compact unit="decimal" />
         </Card>
-        <Card padding="tile" className="stat" aria-label="Blood oxygen">
-          <h2 className="card__title card__title--muted">Blood oxygen</h2>
+        <Card padding="tile" className="stat card-stretch" aria-label="Blood oxygen">
+          <h2 className="card__title card__title--muted">
+            <CardLink to={to('spo2')}>Blood oxygen</CardLink>
+          </h2>
           <span className="stat__value" style={{ fontSize: 22 }}>
             {spo2.average === null ? <Unavailable /> : `${fmtInt(spo2.average)}%`}
           </span>
@@ -204,6 +229,7 @@ function Trends({ trends: t, range, fetching }: { trends: TrendsResponse; range:
 
       <ChartCard
         title="Sleep score"
+        to={to('sleep_score')}
         aside={t.sleep_score.average === null ? null : `Avg ${fmtInt(t.sleep_score.average)}`}
         summary={scoreSummary(t.sleep_score)}
         series={t.sleep_score}
@@ -211,7 +237,7 @@ function Trends({ trends: t, range, fetching }: { trends: TrendsResponse; range:
         <TrendChart trends={t} series={t.sleep_score} name="Sleep score" summary={scoreSummary(t.sleep_score)} range={range} color="sleep" height={desktop ? 130 : 70} />
       </ChartCard>
 
-      <ChartCard title="Sleep duration" aside={durationAside} summary={durationSummary(t.sleep_duration_s)} note="Chart in hours." series={t.sleep_duration_s}>
+      <ChartCard title="Sleep duration" to={to('sleep_duration')} aside={durationAside} summary={durationSummary(t.sleep_duration_s)} note="Chart in hours." series={t.sleep_duration_s}>
         <TrendChart
           trends={t}
           series={t.sleep_duration_s}
