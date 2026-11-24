@@ -81,7 +81,7 @@ export const FACTOR_WORDS: Record<ReadinessFactorKey, Record<ReadinessRating, st
   sleep_history: { very_poor: 'Poor', poor: 'Poor', moderate: 'Fair', good: 'Good', very_good: 'Excellent' },
   recovery: { very_poor: 'High need', poor: 'High need', moderate: 'Moderate need', good: 'Low need', very_good: 'Recovered' },
   hrv: { very_poor: 'Low', poor: 'Low', moderate: 'Unbalanced', good: 'Balanced', very_good: 'Balanced' },
-  load: { very_poor: 'Very high', poor: 'High', moderate: 'Optimal', good: 'Optimal', very_good: 'Low' },
+  load: { very_poor: 'Very high', poor: 'High', moderate: 'Upper range', good: 'Optimal', very_good: 'Low' },
   stress: { very_poor: 'High', poor: 'High', moderate: 'Medium', good: 'Low', very_good: 'Low' },
 };
 
