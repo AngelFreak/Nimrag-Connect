@@ -23,7 +23,7 @@ Light tokens (Connect-measured):
 
 | token | value | use |
 |---|---|---|
-| `--page` | `#efefef` | backdrop behind the content sheet |
+| `--page` | `#ffffff` | behind the content (Connect's `#efefef` gutter was dropped on 2026-11-24: it read as a frame) |
 | `--bg` / `--sheet` | `#ffffff` | content sheet, header |
 | `--card` | `#ffffff` | cards |
 | `--line` | `#e4e4e4` | card border (1px), dividers |
@@ -62,7 +62,7 @@ Radii: card 8px, button 4px, segmented track 4px, round icon buttons 50%.
 +------------------+---------------------------------------------------------------+
 | NIMRAG (64 tall) | (<) collapse            header 60px, white, 1px bottom line   (sync)(watch)(avatar) |
 |------------------+---------------------------------------------------------------+
-| sidebar 264px    | backdrop --page, padding 0 30px                               |
+| sidebar 264px    | white, no gutter (Connect has a 30px grey one)                |
 | #1a1a1a          |   sheet: white, padding 56px, max-width 1152px                |
 | groups separated |     page content                                              |
 | by 1px #333      |                                                               |

@@ -246,12 +246,13 @@
     right: 6px;
   }
 
-  /* The page: grey backdrop, a white sheet up to 1152 px wide inside it. */
+  /* The page: one plain surface out to the sidebar, the content up to 1152 px wide in the middle
+     (Connect's grey gutter around a white sheet read as a frame). */
   .shell__body {
     max-width: none;
     margin: 0;
-    padding: 0 30px;
-    background: var(--page);
+    padding: 0;
+    background: var(--sheet);
   }
   .shell__body > main {
     flex: 1;

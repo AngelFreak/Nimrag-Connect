@@ -7,7 +7,7 @@
   color-scheme: light;
 
   /* Surfaces */
-  --page: #efefef; /* backdrop behind the content sheet */
+  --page: #ffffff; /* behind the content (same as the sheet since the grey gutter went) */
   --bg: #ffffff;
   --sheet: #ffffff;
   --card: #ffffff;
