@@ -399,7 +399,9 @@ async fn merge_entries(
     edits: &[StrengthEditJson],
     out: &mut NimragImportResponse,
 ) -> Result<()> {
-    let mut tx = state.pool.begin().await?;
+    // Reads, then writes: take the write lock up front, or a concurrent writer makes SQLite
+    // answer BUSY at the first write (see `outbox::take_dropped`).
+    let mut tx = state.pool.begin_with("BEGIN IMMEDIATE").await?;
 
     for (key, value) in settings_in {
         match settings::checked_user_setting(key, value) {
