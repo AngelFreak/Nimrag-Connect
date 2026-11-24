@@ -128,6 +128,7 @@ function act(over: Partial<ActivityDetail>): ActivityDetail {
     laps: [],
     series: null,
     reps: null,
+    records: [],
     ...over,
   };
 }

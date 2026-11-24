@@ -43,3 +43,9 @@ Check at 360 px with `window.NimragApp = {native: true}` injected (dark), at 412
     legend.
 11. Training status 28-day strip on the Today card: thinner gaps and runs of the same status drawn as
     one block, so it reads as periods rather than noise.
+12. Sleep factors rated by the watch: the expanded line must explain the watch's rating ("Your
+    watch scored this 72 of 100; Good is 80 or more"), followed by the target band for context;
+    don't show Nimrag's own rule text ("within 4 points…") on a watch-rated row. The headline must
+    not contradict the factor list: when Duration is watch-rated Good or better, don't open with
+    "Short night" — fall through to the next rule (and say "a bit shorter than your need" in the
+    sentence instead).
