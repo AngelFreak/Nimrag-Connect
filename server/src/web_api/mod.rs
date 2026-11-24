@@ -24,6 +24,7 @@ pub mod metrics;
 pub mod nimrag_import;
 pub mod prefs;
 pub mod records;
+pub mod race_predictions;
 pub mod readiness;
 pub mod sleep;
 pub mod status_explain;
@@ -65,6 +66,7 @@ pub fn router() -> Router<AppState> {
         .merge(metrics::routes())
         .merge(training::routes())
         .merge(readiness::routes())
+        .merge(race_predictions::routes())
         .merge(status_explain::routes())
         .merge(body::routes())
         .merge(workouts::routes())
@@ -308,6 +310,10 @@ pub fn export_types(dir: &Path) -> anyhow::Result<()> {
         training::TrainingStatusRange,
         readiness::ReadinessResponse,
         readiness::ReadinessHistory,
+        race_predictions::RacePredictionsResponse,
+        race_predictions::RacePrediction,
+        race_predictions::RaceHistoryPoint,
+        race_predictions::RaceBasis,
         status_explain::StatusExplain,
         hrv::HrvRange,
         sleep::SleepHistory,

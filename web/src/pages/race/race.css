@@ -1,0 +1,89 @@
+/* The race predictor page. Colours are tokens; a colour is always next to a word or a sign. */
+
+.race-rows {
+  display: grid;
+  gap: var(--gap);
+  grid-template-columns: minmax(0, 1fr);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+@media (min-width: 1024px) {
+  .race-rows {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.race-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.race-row__name {
+  margin: 0;
+  font-size: var(--fs-md);
+  font-weight: 600;
+  color: var(--text-2);
+}
+.race-row__time {
+  font-family: var(--font-display);
+  font-size: var(--fs-stat-lg);
+  font-weight: var(--display-weight);
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.race-row__meta {
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: 12px;
+  row-gap: 2px;
+  font-size: var(--fs-sm);
+  color: var(--text-2);
+  font-variant-numeric: tabular-nums;
+}
+/* Always one line tall, so a row without a change does not shift the others. */
+.race-row__change {
+  min-height: 1.4em;
+}
+.race-row__change--faster {
+  color: var(--good);
+  font-weight: 600;
+}
+
+.race-chart__controls {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+@media (min-width: 640px) {
+  .race-chart__controls {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
+}
+.race-chart__plot {
+  min-height: 160px;
+}
+
+.race-note {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+}
+.race-note__label {
+  font-weight: 600;
+  color: var(--text);
+}
+
+/* The chips wrap instead of scrolling: four short words fit two lines on a phone. */
+.race-chart__controls .filter-chips {
+  flex-wrap: wrap;
+  margin: 0;
+  padding: 0;
+  overflow: visible;
+}
