@@ -20,12 +20,12 @@ import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.NavigationRail
 import androidx.compose.material3.NavigationRailItem
 import androidx.compose.material3.NavigationRailItemDefaults
+import androidx.compose.material3.ShortNavigationBar
+import androidx.compose.material3.ShortNavigationBarItem
+import androidx.compose.material3.ShortNavigationBarItemDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -374,19 +374,21 @@ private val BarItems = listOf(
     BarItem(MainTab.Watch, R.string.tab_watch, WatchIcon),
 )
 
-/** The canvas's bottom bar: raised background, a line on top, the selected tab in the link colour. */
+/**
+ * The canvas's bottom bar: raised background, a line on top, the selected tab in the link colour.
+ * The short bar (64 dp) rather than the classic 80 dp one: the owner found the old bar too big.
+ */
 @Composable
 private fun ShellBar(selected: MainTab?, watchNeedsAttention: Boolean, onTab: (MainTab) -> Unit) {
     val line = NimragColors.Line
-    NavigationBar(
+    ShortNavigationBar(
         modifier = Modifier.drawBehind { drawLine(line, Offset(0f, 0f), Offset(size.width, 0f), strokeWidth = 1.dp.toPx()) },
         containerColor = NimragColors.Raised,
         contentColor = NimragColors.TextMuted,
-        tonalElevation = 0.dp,
     ) {
         BarItems.forEach { item ->
             val label = stringResource(item.label)
-            NavigationBarItem(
+            ShortNavigationBarItem(
                 selected = item.tab == selected,
                 onClick = { onTab(item.tab) },
                 icon = {
@@ -397,12 +399,12 @@ private fun ShellBar(selected: MainTab?, watchNeedsAttention: Boolean, onTab: (M
                     }
                 },
                 label = { Text(label, style = MaterialTheme.typography.labelMedium) },
-                colors = NavigationBarItemDefaults.colors(
+                colors = ShortNavigationBarItemDefaults.colors(
                     selectedIconColor = NimragColors.Link,
                     selectedTextColor = NimragColors.Link,
                     unselectedIconColor = NimragColors.TextMuted,
                     unselectedTextColor = NimragColors.TextMuted,
-                    indicatorColor = Color.Transparent,
+                    selectedIndicatorColor = Color.Transparent,
                 ),
             )
         }
