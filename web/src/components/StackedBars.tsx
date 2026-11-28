@@ -1,6 +1,6 @@
 import { tickCountFor, zeroBasedScale } from '../lib/ticks';
 import { PlotFrame, plotTicks } from './PlotFrame';
-import { Unavailable } from './Unavailable';
+import { EmptyNote } from './Unavailable';
 
 export interface StackPart {
   key: string;
@@ -10,6 +10,8 @@ export interface StackPart {
 }
 
 interface StackedBarsProps {
+  /** Shown instead of the chart when nothing was recorded. */
+  emptyText?: string;
   /** Bottom part first. */
   parts: StackPart[];
   /** Label under each bar; empty strings when `axisLabels` is used. */
@@ -34,15 +36,13 @@ export function stackTotals(parts: StackPart[], n: number): number[] {
 }
 
 /** Bars made of stacked parts (stress minutes per level per day), on a value axis in hours. */
-export function StackedBars({ parts, labels, axisLabels, label, summary, height = 110 }: StackedBarsProps) {
+export function StackedBars({ parts, labels, axisLabels, label, summary, emptyText, height = 110 }: StackedBarsProps) {
   const n = labels.length;
   const totals = stackTotals(parts, n);
   const top = Math.max(0, ...totals);
   if (top <= 0) {
     return (
-      <p>
-        <Unavailable />
-      </p>
+      <EmptyNote>{emptyText ?? 'Nothing recorded for this period.'}</EmptyNote>
     );
   }
   const scale = zeroBasedScale(top, tickCountFor(height, LABEL_BUDGET_PX), 'minutes');

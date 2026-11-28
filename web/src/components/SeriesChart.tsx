@@ -4,7 +4,7 @@ import 'uplot/dist/uPlot.min.css';
 import { extremeTicks, formatTicks, roundTick, tickCountFor, unitTicks, type AxisUnit } from '../lib/ticks';
 import { useTheme } from '../lib/theme';
 import type { CursorStore } from './chartCursor';
-import { Unavailable } from './Unavailable';
+import { EmptyNote } from './Unavailable';
 
 // uPlot draws on a canvas, so it needs real colour values rather than CSS variables. They are read
 // from the tokens of the current theme when a chart is built (and it is built again when the theme
@@ -130,6 +130,8 @@ interface SeriesChartProps {
   xRange?: [number, number];
   /** Show the summary as a line under the chart too (otherwise only screen readers get it). */
   summaryVisible?: boolean;
+  /** Shown instead of the chart when the series has no reading. */
+  emptyText?: string;
   /**
    * Axes: the value axis (labels on the left, faint grid lines across) is on by default, phone and
    * desktop alike. `true` adds uPlot's own x labels as well; `false` draws neither (no chart uses it).
@@ -256,7 +258,7 @@ function hasData(series: ChartSeries[]): boolean {
 }
 
 /** Line chart on uPlot with an accessible name and a text summary. */
-export function SeriesChart({ label, summary, x, series, height = 90, time = false, band, yRange, xRange, summaryVisible = false, axes = 'y', xLabels, yUnit = 'int', sparkline = false, refLine, yReverse = false, cursor }: SeriesChartProps) {
+export function SeriesChart({ label, summary, x, series, height = 90, time = false, band, yRange, xRange, summaryVisible = false, emptyText, axes = 'y', xLabels, yUnit = 'int', sparkline = false, refLine, yReverse = false, cursor }: SeriesChartProps) {
   const host = useRef<HTMLDivElement>(null);
   const theme = useTheme();
   const available = hasData(series) && x.length > 0;
@@ -432,10 +434,8 @@ export function SeriesChart({ label, summary, x, series, height = 90, time = fal
   if (!available) {
     return (
       <>
-        <p>
-          <Unavailable />
-        </p>
-        {summaryVisible ? <p className="chart-summary">{summary}</p> : null}
+        {/* A visible summary already says what is missing; otherwise one short sentence does. */}
+        {summaryVisible ? <p className="chart-summary">{summary}</p> : <EmptyNote>{emptyText ?? 'Nothing recorded for this period.'}</EmptyNote>}
       </>
     );
   }

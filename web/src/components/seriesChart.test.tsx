@@ -58,10 +58,15 @@ describe('SeriesChart', () => {
     expect(screen.getByText('Peak 148 bpm.')).toHaveClass('chart-summary');
   });
 
-  it('without data it says "unavailable" and still shows a visible summary', () => {
-    render(<SeriesChart label="Heart rate" summary="No heart rate today." summaryVisible x={[]} series={[{ label: 'HR', color: 'heart', data: [] }]} />);
-    expect(screen.getByText('unavailable')).toBeInTheDocument();
+  it('without data it shows the visible summary, or else one short sentence, never "unavailable"', () => {
+    const empty = [{ label: 'HR', color: 'heart' as const, data: [] }];
+    const { rerender } = render(<SeriesChart label="Heart rate" summary="No heart rate today." summaryVisible x={[]} series={empty} />);
     expect(screen.getByText('No heart rate today.')).toBeInTheDocument();
+    expect(screen.queryByText('unavailable')).not.toBeInTheDocument();
+    rerender(<SeriesChart label="Heart rate" summary="No heart rate today." x={[]} series={empty} />);
+    expect(screen.getByText('Nothing recorded for this period.')).toBeInTheDocument();
+    rerender(<SeriesChart label="Heart rate" summary="No heart rate today." emptyText="No heart rate recorded." x={[]} series={empty} />);
+    expect(screen.getByText('No heart rate recorded.')).toBeInTheDocument();
     expect(created).toHaveLength(0);
   });
 

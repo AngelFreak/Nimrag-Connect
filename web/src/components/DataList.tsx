@@ -5,7 +5,7 @@ import type { Tone } from './StatTile';
 
 export interface DataItem {
   label: ReactNode;
-  /** null / undefined renders "unavailable". */
+  /** null / undefined leaves the row out (unless `hideMissing` is false: then it renders "unavailable"). */
   value: ReactNode | null | undefined;
   tone?: Tone;
   strong?: boolean;
@@ -17,14 +17,14 @@ interface DataListProps {
   items: DataItem[];
   /** "wide" puts labels in a narrow first column (Sync and storage on the desktop dashboard). */
   layout?: 'split' | 'wide';
-  /** Leave out the rows that have no value (instead of a row that only says "unavailable"). */
+  /** Leave out the rows that have no value (the default). Pass false to keep a row that says "unavailable". */
   hideMissing?: boolean;
   /** Shown instead of the list when `hideMissing` left no row. */
   empty?: ReactNode;
 }
 
 /** Label and value pairs as a real description list (dt/dd). */
-export function DataList({ items, layout = 'split', hideMissing = false, empty = null }: DataListProps) {
+export function DataList({ items, layout = 'split', hideMissing = true, empty = null }: DataListProps) {
   const hasValue = (it: DataItem) => !isMissing(it.value) && it.value !== '' && it.value !== false;
   const shown = items.filter((it) => hasValue(it) || !(hideMissing || it.optional));
   if (shown.length === 0) return hideMissing && empty !== null ? <p className="data-list-empty">{empty}</p> : null;

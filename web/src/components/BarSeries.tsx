@@ -1,8 +1,10 @@
 import { tickCountFor, zeroBasedScale, type AxisUnit } from '../lib/ticks';
 import { PlotFrame, plotTicks } from './PlotFrame';
-import { Unavailable } from './Unavailable';
+import { EmptyNote } from './Unavailable';
 
 interface BarSeriesProps {
+  /** Shown instead of the chart when no bar has a value. */
+  emptyText?: string;
   /** One value per bar; null draws an empty stub (no data for that day), never a zero bar. */
   values: (number | null)[];
   /** Label under each bar ("Mon", "Tue"); also used in the accessible summary. */
@@ -37,13 +39,11 @@ const W = 320;
 const LABEL_BUDGET_PX = 16;
 
 /** Small bar chart (sleep per night, steps per day) drawn as SVG. */
-export function BarSeries({ values, labels, label, color = 'var(--stage-deep)', belowGoalColor, goal, highlightIndex, highlightColor = 'var(--sleep)', colors, summary, summaryVisible, height = 84, max, axisLabels, yUnit = 'int' }: BarSeriesProps) {
+export function BarSeries({ values, labels, label, color = 'var(--stage-deep)', belowGoalColor, goal, highlightIndex, highlightColor = 'var(--sleep)', colors, summary, summaryVisible, emptyText, height = 84, max, axisLabels, yUnit = 'int' }: BarSeriesProps) {
   const present = values.filter((v): v is number => typeof v === 'number' && Number.isFinite(v));
   if (present.length === 0) {
     return (
-      <p>
-        <Unavailable />
-      </p>
+      <EmptyNote>{emptyText ?? 'Nothing recorded for this period.'}</EmptyNote>
     );
   }
   const rawTop = max ?? Math.max(...present, goal ?? 0);

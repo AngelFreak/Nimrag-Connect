@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { Card, CardHeader, EmptyState, Legend, ListRow, SeriesChart, StressBars, Unavailable, type XLabel } from '../../components';
+import { Card, CardHeader, EmptyState, Legend, ListRow, SeriesChart, StressBars, type XLabel } from '../../components';
 import type { DayResponse } from '../../api/generated/DayResponse';
 import { fmtClock, fmtInt } from '../../lib/format';
 import { LEVEL_COLOR, LEVEL_NAME, LEVEL_RANGE, daySentence, levelSeconds, type MeasuredLevel } from '../../lib/stress';
@@ -38,7 +38,7 @@ export function HeartRateCard({ day }: { day: DayResponse }) {
   const desktop = useIsDesktop();
   const hr = hourSeries(day.date, day.heart_rate.day.series);
   return (
-    <Panel title="Heart rate" aside={hrAside(day.heart_rate) ?? <Unavailable />}>
+    <Panel title="Heart rate" aside={hrAside(day.heart_rate) ?? undefined}>
       <SeriesChart
         label="Heart rate across the day"
         summary={hrSummary(day.heart_rate)}
@@ -69,13 +69,13 @@ export function StressCard({ day, ranges = false }: { day: DayResponse; ranges?:
       </>
     ) : (
       <>
-        {LEVEL_NAME[level]} {fmtSeconds(secs[level]) ?? <Unavailable />}
+        {LEVEL_NAME[level]} {fmtSeconds(secs[level]) ?? 'not recorded'}
       </>
     ),
     color: LEVEL_COLOR[level],
   });
   return (
-    <Panel title="Stress" aside={stressAside(st) ?? <Unavailable />}>
+    <Panel title="Stress" aside={stressAside(st) ?? undefined}>
       <StressBars buckets={buckets} label="Stress level across the day" xLabels={HOURS} />
       <Legend
         items={[
@@ -83,7 +83,7 @@ export function StressCard({ day, ranges = false }: { day: DayResponse; ranges?:
           item('low'),
           item('medium'),
           ...(ranges || st.high_s ? [item('high')] : []),
-          { key: 'activity', label: ranges ? 'Activity' : <>Activity {fmtSeconds(st.activity_s) ?? <Unavailable />}</>, color: LEVEL_COLOR.activity, outlined: true },
+          { key: 'activity', label: ranges ? 'Activity' : <>Activity {fmtSeconds(st.activity_s) ?? 'not recorded'}</>, color: LEVEL_COLOR.activity, outlined: true },
         ]}
       />
       <ChartSummary quiet>{daySentence(st) ?? stressSummary(st)}</ChartSummary>
@@ -96,7 +96,7 @@ export function EnergyCard({ day }: { day: DayResponse }) {
   const energy = hourSeries(day.date, day.energy.series);
   const wake = clock(day.energy.wake_time);
   return (
-    <Panel title="Energy" aside={energyAside(day.energy) ?? <Unavailable />}>
+    <Panel title="Energy" aside={energyAside(day.energy) ?? undefined}>
       <SeriesChart
         label="Energy across the day"
         summary={`${energySummary(day.energy)}${wake ? ` Woke at ${wake}.` : ''}`}
@@ -108,8 +108,8 @@ export function EnergyCard({ day }: { day: DayResponse }) {
         xLabels={HOUR_LABELS}
       />
       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
-        <span className="tone-energy">{day.energy.charged === null ? <Unavailable /> : `+${fmtInt(day.energy.charged)} charged`}</span>
-        <span className="tone-warn">{day.energy.drained === null ? <Unavailable /> : `-${fmtInt(day.energy.drained)} drained`}</span>
+        <span className="tone-energy">{day.energy.charged === null ? null : `+${fmtInt(day.energy.charged)} charged`}</span>
+        <span className="tone-warn">{day.energy.drained === null ? null : `-${fmtInt(day.energy.drained)} drained`}</span>
       </div>
     </Panel>
   );

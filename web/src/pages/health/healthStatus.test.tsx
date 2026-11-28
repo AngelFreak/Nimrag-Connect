@@ -186,7 +186,7 @@ describe('Health status page', () => {
     renderPage();
     const o2 = await waitForCard('spo2');
     expect(within(o2).getByText('No reading')).toBeInTheDocument();
-    expect(within(o2).getByText('unavailable')).toBeInTheDocument();
+    expect(within(o2).queryByText('unavailable')).not.toBeInTheDocument();
     expect(within(o2).getByText('Not measured last night')).toBeInTheDocument();
   });
 

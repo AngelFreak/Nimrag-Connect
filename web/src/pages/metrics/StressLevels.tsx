@@ -1,5 +1,5 @@
 import type { CSSProperties } from 'react';
-import { StageBar, Unavailable } from '../../components';
+import { StageBar, EmptyNote } from '../../components';
 import { fmtSeconds } from '../health/model';
 import { LEVEL_COLOR, LEVEL_NAME, levelShares, type LevelSeconds } from '../../lib/stress';
 import { Panel } from '../health/dayCards';
@@ -11,9 +11,7 @@ export function StressLevelsPanel({ secs }: { secs: LevelSeconds }) {
   return (
     <Panel title="Time in stress levels" muted>
       {shares.length === 0 ? (
-        <p>
-          <Unavailable />
-        </p>
+        <EmptyNote>No stress levels recorded.</EmptyNote>
       ) : (
         <div className="stress-levels" data-testid="stress-levels">
           <StageBar

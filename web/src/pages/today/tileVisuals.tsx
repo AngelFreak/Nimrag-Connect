@@ -585,7 +585,8 @@ export function IntensityVisual({ today }: { today: Today }) {
 
 export function LoadVisual({ today }: { today: Today }) {
   const l = today.training_load;
-  if (isMissing(l.seven_day_load) || isMissing(l.target_min) || isMissing(l.target_max)) return <Hint>No training load yet.</Hint>;
+  if (isMissing(l.seven_day_load)) return <Hint>No training load from the watch this week.</Hint>;
+  if (isMissing(l.target_min) || isMissing(l.target_max)) return <Hint>No target range from the watch yet.</Hint>;
   const max = Math.max(l.target_max, l.seven_day_load, 1) * 1.4;
   return (
     <div className="tv-stack tv-stack--wide tv-load">

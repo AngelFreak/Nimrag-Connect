@@ -265,6 +265,7 @@ function DaySummary({ day }: { day: CalendarDay | undefined }) {
           { label: 'Resting heart rate', value: day && day.resting_hr_bpm !== null ? `${fmtInt(day.resting_hr_bpm)} bpm` : null },
           { label: 'Energy', value: day ? energyText(day) : null },
         ]}
+        empty="No sleep, steps or heart rate recorded for this day."
       />
     </>
   );

@@ -214,10 +214,12 @@ describe('ActivitiesPage', () => {
     expect(await screen.findByRole('heading', { level: 1, name: 'Strength' })).toBeInTheDocument();
   });
 
-  it('shows "unavailable" for missing values, never 0', async () => {
+  it('leaves out missing values and never shows 0', async () => {
     handler = () => ({ body: { sample: false, items: [listItem({ duration_s: null, distance_m: null, avg_pace_s_per_km: null, avg_hr_bpm: null, calories_kcal: null, kind: 'other', sport_name: 'generic' })], next_before: null } });
     renderAt('/activities');
-    expect(await screen.findByText('unavailable')).toBeInTheDocument();
+    await screen.findByRole('heading', { level: 1, name: 'Activities' });
+    await waitFor(() => expect(screen.getAllByRole('link').length).toBeGreaterThan(1));
+    expect(screen.queryByText('unavailable')).not.toBeInTheDocument();
     expect(screen.queryByText(/^0/)).not.toBeInTheDocument();
   });
 
@@ -453,12 +455,13 @@ describe('StrengthPage', () => {
     expect(await screen.findByText('No earlier strength session')).toBeInTheDocument();
   });
 
-  it('shows unavailable when the session has no volume or heart rate', async () => {
+  it('leaves out the volume and heart rate figures the session does not have', async () => {
     handler = () => ({ body: strength({ volume_kg: null, duration_s: null, avg_hr_bpm: null, max_hr_bpm: null, heart_rate: [] }) });
     renderAt(`/activities/${ID_STR}/strength`);
     await screen.findByText('Bench press');
     expect(screen.getByText('No heart rate samples were recorded.')).toBeInTheDocument();
-    expect(screen.getAllByText('unavailable').length).toBeGreaterThanOrEqual(2);
+    expect(screen.queryByText('unavailable')).not.toBeInTheDocument();
+    expect(screen.queryByText('Volume')).not.toBeInTheDocument();
   });
 
   it('shows an error state with retry', async () => {

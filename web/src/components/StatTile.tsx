@@ -9,7 +9,7 @@ export type TileSize = 'sm' | 'md' | 'lg' | 'xl';
 
 interface StatTileProps {
   label: ReactNode;
-  /** Pre-formatted value with its unit ("7h 12m"). null / undefined renders "unavailable". */
+  /** Pre-formatted value with its unit ("7h 12m"). null / undefined leaves the tile out (see `hideWhenMissing`). */
   value: ReactNode | null | undefined;
   /** Small line under the value, coloured by the metric (energy, sleep, ...). */
   sub?: ReactNode;
@@ -19,7 +19,7 @@ interface StatTileProps {
   size?: TileSize;
   /** Extra content under the sub line (e.g. a ProgressBar). */
   children?: ReactNode;
-  /** Render nothing when `value` is missing (a tile that would only say "unavailable" is noise). */
+  /** Render nothing when `value` is missing (the default; a tile that would only say "unavailable" is noise). Pass false to show "unavailable". */
   hideWhenMissing?: boolean;
   /** Makes the whole tile a link to this route ("/sleep"). Keep `children` non-interactive then. */
   href?: string;
@@ -30,7 +30,7 @@ interface StatTileProps {
 const PADDING = { sm: 'sm', md: 'tile', lg: 'lg', xl: 'xl' } as const;
 
 /** Label, big value in Space Grotesk, and a sub line in the metric's colour. */
-export function StatTile({ label, value, sub, tone = 'muted', word: wordProp, size = 'md', children, href, hideWhenMissing = false, ...rest }: StatTileProps) {
+export function StatTile({ label, value, sub, tone = 'muted', word: wordProp, size = 'md', children, href, hideWhenMissing = true, ...rest }: StatTileProps) {
   if (hideWhenMissing && (isMissing(value) || value === '' || value === false)) return null;
   // A word ("Recovery") rather than a number: it may need to shrink to fit a narrow tile.
   const word = wordProp ?? (typeof value === 'string' && !/\d/.test(value));

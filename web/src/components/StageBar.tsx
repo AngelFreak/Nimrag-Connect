@@ -2,7 +2,7 @@ import type { CSSProperties, ReactNode } from 'react';
 import { LEVEL_COLOR as STRESS_COLOR, stressLevelOf } from '../lib/stress';
 import { tickCountFor, unitTicks } from '../lib/ticks';
 import { evenLabels, PlotFrame, PlotXLabels, plotTicks, type PlotTick } from './PlotFrame';
-import { Unavailable } from './Unavailable';
+import { EmptyNote, Unavailable } from './Unavailable';
 
 export interface LegendItem {
   key: string;
@@ -65,9 +65,7 @@ export function StageBar({ segments, label, height = 10, total }: StageBarProps)
   const sum = total ?? present.reduce((a, s) => a + (s.value ?? 0), 0);
   if (present.length === 0 || sum <= 0) {
     return (
-      <p>
-        <Unavailable />
-      </p>
+      <EmptyNote>No time recorded.</EmptyNote>
     );
   }
   return (
@@ -102,9 +100,7 @@ export function StressBars({ buckets, label, xLabels }: StressBarsProps) {
   const anyData = buckets.some((b) => b.level === 'rest' || b.level === 'activity' || b.value !== null);
   if (slots === 0 || !anyData) {
     return (
-      <p>
-        <Unavailable />
-      </p>
+      <EmptyNote>Nothing recorded for this period.</EmptyNote>
     );
   }
   const H = 90;
@@ -182,9 +178,7 @@ function thinned(ticks: string[]): string[] {
 export function StageTimeline({ spans, totalMinutes, label, ticks, line }: StageTimelineProps) {
   if (spans.length === 0 || totalMinutes <= 0) {
     return (
-      <p>
-        <Unavailable />
-      </p>
+      <EmptyNote>No sleep stages recorded for this night.</EmptyNote>
     );
   }
   const x = (m: number) => (m / totalMinutes) * 320;

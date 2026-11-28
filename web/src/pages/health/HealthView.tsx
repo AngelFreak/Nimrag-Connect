@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
-import { Card, CardHeader, PageHeader, SampleDataChip, SegmentedControl, SeriesChart, TopBar, Unavailable } from '../../components';
+import { Card, CardHeader, PageHeader, SampleDataChip, SegmentedControl, SeriesChart, TopBar, EmptyNote } from '../../components';
 import type { TrendSeries } from '../../api/generated/TrendSeries';
 import type { TrendsResponse } from '../../api/generated/TrendsResponse';
 import { fmtFixed, fmtInt } from '../../lib/format';
@@ -101,7 +101,7 @@ function ChartCard({
   const hasData = series.points.some((p) => p.value !== null);
   return (
     <Card className="card-stretch">
-      <CardHeader title={<CardLink to={to}>{title}</CardLink>} aside={aside ?? <Unavailable />} />
+      <CardHeader title={<CardLink to={to}>{title}</CardLink>} {...(aside ? { aside } : {})} />
       {children}
       {/* The header already says the numbers, and SeriesChart gives screen readers the full sentence, so it is
           shown only when there is no chart to read it from (the empty state). */}
@@ -217,21 +217,31 @@ function Trends({ trends: t, range, fetching }: { trends: TrendsResponse; range:
           <h2 className="card__title card__title--muted">
             <CardLink to={to('breathing')}>Breathing rate</CardLink>
           </h2>
-          <span className="stat__value">
-            {fmtFixed(breathing.average, 1) === null ? <Unavailable /> : <>{fmtFixed(breathing.average, 1)}<span className="stat__unit">/min</span></>}
-          </span>
-          <span className="stat__sub">{t.breathing.awake_avg_brpm === null ? 'Asleep' : `Asleep · awake ${fmtFixed(t.breathing.awake_avg_brpm, 1)}`}</span>
-          <TrendChart trends={t} series={breathing} name="Breathing rate" summary={breathingSummary(breathing)} range={range} color="link" height={36} width={2} compact unit="decimal" />
+          {fmtFixed(breathing.average, 1) === null ? (
+            <EmptyNote>No breathing rate recorded in this period.</EmptyNote>
+          ) : (
+            <>
+              <span className="stat__value">
+                {fmtFixed(breathing.average, 1)}<span className="stat__unit">/min</span>
+              </span>
+              <span className="stat__sub">{t.breathing.awake_avg_brpm === null ? 'Asleep' : `Asleep · awake ${fmtFixed(t.breathing.awake_avg_brpm, 1)}`}</span>
+              <TrendChart trends={t} series={breathing} name="Breathing rate" summary={breathingSummary(breathing)} range={range} color="link" height={36} width={2} compact unit="decimal" />
+            </>
+          )}
         </Card>
         <Card padding="tile" className="stat card-stretch" aria-label="Blood oxygen">
           <h2 className="card__title card__title--muted">
             <CardLink to={to('spo2')}>Blood oxygen</CardLink>
           </h2>
-          <span className="stat__value">
-            {spo2.average === null ? <Unavailable /> : `${fmtInt(spo2.average)}%`}
-          </span>
-          <span className="stat__sub">{t.spo2.low_percent === null ? 'Overnight avg' : `Overnight avg · low ${fmtInt(t.spo2.low_percent)}%`}</span>
-          <TrendChart trends={t} series={spo2} name="Overnight blood oxygen" summary={spo2Summary(spo2)} range={range} color="link" height={36} width={2} compact />
+          {spo2.average === null ? (
+            <EmptyNote>Blood oxygen is not measured: turn on Pulse Ox on the watch.</EmptyNote>
+          ) : (
+            <>
+              <span className="stat__value">{`${fmtInt(spo2.average)}%`}</span>
+              <span className="stat__sub">{t.spo2.low_percent === null ? 'Overnight avg' : `Overnight avg · low ${fmtInt(t.spo2.low_percent)}%`}</span>
+              <TrendChart trends={t} series={spo2} name="Overnight blood oxygen" summary={spo2Summary(spo2)} range={range} color="link" height={36} width={2} compact />
+            </>
+          )}
         </Card>
       </div>
 

@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { api } from '../api/client';
 import type { BodyEntry, BodyResponse } from '../api/generated';
-import { Button, Card, EmptyState, PageHeader, SampleDataChip, StatStrip, StatTile, TopBar, ValueOrUnavailable } from '../components';
+import { Button, Card, EmptyState, PageHeader, SampleDataChip, StatStrip, StatTile, TopBar, EmptyNote } from '../components';
 import { browserToday, fmtShortDay } from '../lib/dates';
 import { fmtFixed } from '../lib/format';
 import { useIsDesktop, usePageTitle } from '../lib/hooks';
@@ -106,26 +106,36 @@ export function BodyBody({ data, today }: { data: BodyResponse; today: string })
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 12, flexWrap: 'wrap' }}>
             <div className="stat">
               <h2 className="card__title card__title--muted">Weight{weightDay ? ` · ${fmtShortDay(weightDay)}` : ''}</h2>
-              <span className="stat__value" style={{ fontSize: 34 }}>
-                <ValueOrUnavailable value={data.latest_weight ? `${fmtFixed(data.latest_weight.value, 1)} kg` : null} />
-              </span>
+              {data.latest_weight ? (
+                <span className="stat__value" style={{ fontSize: 34 }}>
+                  {`${fmtFixed(data.latest_weight.value, 1)} kg`}
+                </span>
+              ) : (
+                <EmptyNote>No weight logged yet. Use Add entry below.</EmptyNote>
+              )}
             </div>
-            <span className="stat__sub">30-day change: {change ?? <span className="unavailable">unavailable</span>}</span>
+            {change ? <span className="stat__sub">30-day change: {change}</span> : null}
           </div>
-          <WeightChart weights={data.weights} trend={data.weight_trend} />
+          {data.latest_weight ? <WeightChart weights={data.weights} trend={data.weight_trend} /> : null}
         </Card>
 
         <div className="grid-2">
-          <StatTile
-            label="Body fat"
-            value={data.latest_body_fat ? `${fmtFixed(data.latest_body_fat.value, 1)} %` : null}
-            sub={fatDay ? fmtShortDay(fatDay) : 'Manual or scale entry'}
-          />
-          <StatTile
-            label="Waist"
-            value={data.latest_waist ? `${fmtFixed(data.latest_waist.value, 1)} cm` : null}
-            sub={waistDay ? fmtShortDay(waistDay) : 'Manual entry'}
-          />
+          {data.latest_body_fat ? (
+            <StatTile label="Body fat" value={`${fmtFixed(data.latest_body_fat.value, 1)} %`} sub={fatDay ? fmtShortDay(fatDay) : 'Manual or scale entry'} />
+          ) : (
+            <Card padding="tile" className="stat">
+              <span className="stat__label">Body fat</span>
+              <EmptyNote>No body fat logged yet.</EmptyNote>
+            </Card>
+          )}
+          {data.latest_waist ? (
+            <StatTile label="Waist" value={`${fmtFixed(data.latest_waist.value, 1)} cm`} sub={waistDay ? fmtShortDay(waistDay) : 'Manual entry'} />
+          ) : (
+            <Card padding="tile" className="stat">
+              <span className="stat__label">Waist</span>
+              <EmptyNote>No waist logged yet.</EmptyNote>
+            </Card>
+          )}
         </div>
 
         {saved ? (

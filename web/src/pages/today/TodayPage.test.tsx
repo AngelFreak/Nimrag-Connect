@@ -231,20 +231,21 @@ describe('Today on a phone', () => {
     expect(href('weight')).toBe('/body');
   });
 
-  it('missing metrics never read 0; empty slides say why in one sentence', async () => {
+  it('missing metrics are left out or explained in a sentence, never 0', async () => {
     mockApi({ '/api/today': () => json(makeEmptyToday()), '/api/settings': () => json(makeSettings({ home_cards: { order: makeSettings().home_cards.order, hidden: [] } })) });
     renderPage();
     await screen.findByRole('heading', { name: 'At a glance' });
     await waitFor(() => expect(glanceIds()).toHaveLength(12));
-    // Empty slides and tiles carry a sentence, not a column of "unavailable".
-    expect(screen.getAllByText('unavailable').length).toBeLessThan(10);
+    // Neither the slides nor the grid of tiles show a column of "unavailable".
+    expect(document.querySelector('.glance-grid')?.textContent).not.toMatch(/unavailable/);
+    expect(screen.queryAllByText('unavailable').length).toBeLessThan(5);
     expect(screen.queryByText(/^0$/)).not.toBeInTheDocument();
     expect(screen.getByText('No watch data yet')).toBeInTheDocument();
     // The sleep slide says so instead of showing a zero night.
     expect(screen.getByText('No sleep from last night has reached Nimrag. It shows here once the watch has synced the night.')).toBeInTheDocument();
     expect(screen.getByText('No energy readings from the watch yet today.')).toBeInTheDocument();
     const steps = document.querySelector('.glance-grid [data-card="steps"]') as HTMLElement;
-    expect(within(steps).getByText('unavailable')).toBeInTheDocument();
+    expect(within(steps).queryByText('unavailable')).not.toBeInTheDocument();
     expect(within(steps).getByRole('progressbar', { name: 'unavailable of 8,000 steps' })).toBeInTheDocument();
   });
 

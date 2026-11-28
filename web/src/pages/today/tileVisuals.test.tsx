@@ -249,7 +249,7 @@ describe('tiles', () => {
     expect(screen.getByText('Resting')).toBeInTheDocument();
   });
 
-  it('empty tiles say so in a sentence and read "unavailable", never 0, with the same structure', () => {
+  it('empty tiles say so in a sentence, never read "unavailable" or 0, and keep the same structure', () => {
     stubApi();
     const empty = makeEmptyToday();
     for (const [id, text] of [
@@ -257,7 +257,7 @@ describe('tiles', () => {
       ['stress', 'No stress readings yet today.'],
       ['sleep', 'The watch recorded no sleep for last night.'],
       ['intensity_minutes', 'No intensity minutes this week.'],
-      ['training_load', 'No training load yet.'],
+      ['training_load', 'No training load from the watch this week.'],
       ['recovery_time', 'No recovery time from the watch yet.'],
       ['training_status', 'No training status yet.'],
     ] as [HomeCard, string][]) {
@@ -266,8 +266,25 @@ describe('tiles', () => {
       expect(container.querySelector('.tile__visual')).not.toBeNull();
       expect(container.querySelector('.tile__figure')).not.toBeNull();
       expect(container.textContent).not.toMatch(/(^|\s)0(\s|$)/);
+      expect(container.textContent).not.toMatch(/unavailable/);
       unmount();
     }
+  });
+
+  it('sleep: a night with a time but no score shows only the time asleep', () => {
+    const t = makeToday();
+    renderTile('sleep', makeToday({ sleep: { ...t.sleep!, score: null } }));
+    expect(screen.getByText('7h 12m')).toBeInTheDocument();
+    expect(screen.queryByText('Score')).not.toBeInTheDocument();
+    expect(screen.queryByText('unavailable')).not.toBeInTheDocument();
+  });
+
+  it('training load: no figure and no label when the week has no load, a sentence instead', () => {
+    const t = makeToday();
+    renderTile('training_load', makeToday({ training_load: { ...t.training_load, seven_day_load: null } }));
+    expect(screen.getByText('No training load from the watch this week.')).toBeInTheDocument();
+    expect(screen.queryByText(/7 days/)).not.toBeInTheDocument();
+    expect(screen.queryByText('unavailable')).not.toBeInTheDocument();
   });
 
   it('stress: the level word is written next to its dot', () => {

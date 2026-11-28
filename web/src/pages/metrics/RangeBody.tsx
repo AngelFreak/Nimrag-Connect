@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import type { MetricRange } from '../../api/generated/MetricRange';
-import { BarSeries, Card, CardHeader, EmptyState, Legend, SeriesChart, StackedBars, StatStrip, StatTile, ValueOrUnavailable } from '../../components';
+import { BarSeries, Card, CardHeader, EmptyState, Legend, SeriesChart, StackedBars, StatStrip, StatTile } from '../../components';
 import { fmtDay } from '../../lib/dates';
 import { useIsDesktop } from '../../lib/hooks';
 import { flowChart } from './energyDay';
@@ -146,6 +146,7 @@ function Plot({ spec, label, summary }: { spec: ChartSpec; label: string; summar
 }
 
 function Row({ def, row, today }: { def: MetricDef; row: RangeRow; today: string }) {
+  const main = row.value ?? row.valueSub;
   const inner = (
     <>
       <span className="list-row__main">
@@ -153,10 +154,9 @@ function Row({ def, row, today }: { def: MetricDef; row: RangeRow; today: string
         {row.sub ? <span className="list-row__sub">{row.sub}</span> : null}
       </span>
       <span className="list-row__end">
-        <span className="list-row__value">
-          <ValueOrUnavailable value={row.value} />
-        </span>
-        {row.valueSub ? <span className="list-row__sub">{row.valueSub}</span> : null}
+        {/* Only what the watch recorded: when the main figure is missing, the other one takes its place. */}
+        {main ? <span className="list-row__value">{main}</span> : null}
+        {main && row.value ? (row.valueSub ? <span className="list-row__sub">{row.valueSub}</span> : null) : null}
       </span>
     </>
   );

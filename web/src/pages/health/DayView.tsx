@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { PageHeader, ProgressBar, SampleDataChip, StatStrip, StatTile, TopBar, ListRow } from '../../components';
+import { PageHeader, ProgressBar, SampleDataChip, StatStrip, StatTile, TopBar, ListRow, EmptyNote } from '../../components';
 import type { DayResponse } from '../../api/generated/DayResponse';
 import { addDays, browserToday, fmtMonthDay, fmtShortDay } from '../../lib/dates';
 import { fmtInt, withUnit } from '../../lib/format';
@@ -95,7 +95,7 @@ function DayCards({ day }: { day: DayResponse }) {
           <ListRow
             to={`/sleep/${day.date}`}
             title="Sleep"
-            sub={day.sleep ? `${clock(day.sleep.start)} to ${clock(day.sleep.end)}` : 'Night of this day'}
+            sub={day.sleep ? `${clock(day.sleep.start)} to ${clock(day.sleep.end)}` : 'No night recorded for this day.'}
             value={day.sleep ? fmtSeconds(day.sleep.duration_s) : null}
             valueSub={day.sleep?.score != null ? `Score ${fmtInt(day.sleep.score)}` : undefined}
           />
@@ -115,7 +115,11 @@ function DayDesktop({ day }: { day: DayResponse }) {
       side={
         <>
           <StatsSection title="Steps">
-            <ScoreHero value={fmtInt(day.steps) ?? <span className="unavailable">unavailable</span>} of={day.step_goal ? `of ${fmtInt(day.step_goal)}` : undefined} label={pct === null ? undefined : `${pct}% of the goal`} tone="tone-steps" />
+            {fmtInt(day.steps) === null ? (
+              <EmptyNote>No steps recorded for this day.</EmptyNote>
+            ) : (
+              <ScoreHero value={fmtInt(day.steps)} of={day.step_goal ? `of ${fmtInt(day.step_goal)}` : undefined} label={pct === null ? undefined : `${pct}% of the goal`} tone="tone-steps" />
+            )}
             {pct === null ? null : <ProgressBar value={day.steps} max={day.step_goal} label={`${fmtInt(day.steps)} of ${fmtInt(day.step_goal)} steps`} />}
           </StatsSection>
           <StatStrip items={[{ key: 'intensity', label: 'Intensity minutes', value: withUnit(fmtInt(day.intensity_minutes), 'min') }]} />
@@ -123,7 +127,7 @@ function DayDesktop({ day }: { day: DayResponse }) {
             <FactorRow
               to={`/sleep/${day.date}`}
               name="Sleep"
-              sub={day.sleep ? `${clock(day.sleep.start)} to ${clock(day.sleep.end)}${day.sleep.score != null ? ` · score ${fmtInt(day.sleep.score)}` : ''}` : 'Night of this day'}
+              sub={day.sleep ? `${clock(day.sleep.start)} to ${clock(day.sleep.end)}${day.sleep.score != null ? ` · score ${fmtInt(day.sleep.score)}` : ''}` : 'No night recorded for this day.'}
               rating={day.sleep ? (fmtSeconds(day.sleep.duration_s) ?? undefined) : undefined}
             />
           </FactorList>

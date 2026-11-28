@@ -15,8 +15,7 @@ import {
   StageBar,
   StatStrip,
   TopBar,
-  Unavailable,
-  ValueOrUnavailable,
+  EmptyNote,
 } from '../components';
 import { addDays, browserToday, fmtMonthDay, fmtShortDay, isIsoDay } from '../lib/dates';
 import { fmtInt } from '../lib/format';
@@ -131,7 +130,7 @@ export function MovementBody({ data }: { data: MovementResponse }) {
           side={
             <>
               <StatsSection title="Steps" aside={`Goal ${fmtInt(goal)}`}>
-                <ScoreHero value={stepsText ?? <Unavailable />} of={percent === null ? undefined : `${percent}% of the goal`} tone="tone-steps" />
+                {stepsText === null ? <EmptyNote>No steps recorded today.</EmptyNote> : <ScoreHero value={stepsText} of={percent === null ? undefined : `${percent}% of the goal`} tone="tone-steps" />}
                 <ProgressBar value={data.steps} max={goal} height={8} label={stepsLabel} />
               </StatsSection>
               <StatStrip
@@ -167,9 +166,7 @@ export function MovementBody({ data }: { data: MovementResponse }) {
           </StatsSection>
 
           <StatsSection title="Intensity Minutes" aside={`Weekly goal ${fmtInt(intensityGoal)}`}>
-            <span className="big-value">
-              <ValueOrUnavailable value={total === null ? null : `${fmtInt(total)} min`} />
-            </span>
+            {total === null ? <EmptyNote>No intensity minutes recorded this week.</EmptyNote> : <span className="big-value">{`${fmtInt(total)} min`}</span>}
             {total === null ? null : (
               <>
                 <StageBar
@@ -199,21 +196,25 @@ export function MovementBody({ data }: { data: MovementResponse }) {
       <div className="grid-panels">
         <Card padding="lg">
           <CardHeader title="Steps today" aside={`Goal ${fmtInt(goal)}`} />
-          <span className="stat__value" style={{ fontSize: 34 }}>
-            <ValueOrUnavailable value={stepsText} />
-          </span>
+          {stepsText === null ? (
+            <EmptyNote>No steps recorded today.</EmptyNote>
+          ) : (
+            <span className="stat__value" style={{ fontSize: 34 }}>
+              {stepsText}
+            </span>
+          )}
           <ProgressBar
             value={data.steps}
             max={goal}
             height={8}
             label={stepsText === null ? 'Steps today unavailable' : `${stepsText} of ${fmtInt(goal)} steps${percent === null ? '' : `, ${percent} percent`}`}
           />
-          <span className="stat__sub">{percent === null ? <Unavailable /> : `${percent}% of the goal`}</span>
-          <DataList hideMissing items={[{ label: 'Distance', value: km }]} />
+          {percent === null ? null : <span className="stat__sub">{`${percent}% of the goal`}</span>}
+          <DataList items={[{ label: 'Distance', value: km }]} />
         </Card>
 
         <Card padding="lg">
-          <CardHeader title="Steps this week" aside={avg === null ? <Unavailable /> : `Avg ${avg} a day`} />
+          <CardHeader title="Steps this week" {...(avg === null ? {} : { aside: `Avg ${avg} a day` })} />
           <BarSeries
             values={weekValues}
             labels={week.map((d) => weekdayShort(d.date))}
@@ -229,9 +230,13 @@ export function MovementBody({ data }: { data: MovementResponse }) {
 
         <Card padding="lg">
           <CardHeader title="Intensity minutes" aside={`Weekly goal ${fmtInt(intensityGoal)}`} />
-          <span className="stat__value" style={{ fontSize: 28 }}>
-            <ValueOrUnavailable value={total === null ? null : `${fmtInt(total)} min`} />
-          </span>
+          {total === null ? (
+            <EmptyNote>No intensity minutes recorded this week.</EmptyNote>
+          ) : (
+            <span className="stat__value" style={{ fontSize: 28 }}>
+              {`${fmtInt(total)} min`}
+            </span>
+          )}
           {total === null ? null : (
             <>
               <StageBar

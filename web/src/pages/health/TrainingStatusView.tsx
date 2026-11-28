@@ -1,6 +1,6 @@
 import type { CSSProperties } from 'react';
 import type { TrainingStatusRange } from '../../api/generated/TrainingStatusRange';
-import { Card, CardHeader, DataList, EmptyState, Legend, PageHeader, PeriodToolbar, SampleDataChip, StatStrip, Table, TopBar, Unavailable, rangeLabel, type LegendItem } from '../../components';
+import { Card, CardHeader, DataList, EmptyState, Legend, PageHeader, PeriodToolbar, SampleDataChip, StatStrip, Table, TopBar, EmptyNote, rangeLabel, type LegendItem } from '../../components';
 import { fmtMonthDay } from '../../lib/dates';
 import { fmtFixed, fmtInt, statusName } from '../../lib/format';
 import { useIsDesktop, usePageTitle } from '../../lib/hooks';
@@ -111,10 +111,7 @@ function CurrentCard({ data }: { data: TrainingStatusRange }) {
             </>
           ) : (
             <>
-              <span className="stat__value" style={{ fontSize: 34 }}>
-                <Unavailable />
-              </span>
-              <span className="stat__sub">No training status has been recorded yet.</span>
+              <EmptyNote>No training status has been recorded yet.</EmptyNote>
             </>
           )}
         </div>
@@ -214,7 +211,7 @@ function CurrentDesktop({ data }: { data: TrainingStatusRange }) {
           {...(since ? { label: since } : {})}
         />
       ) : (
-        <ScoreHero value={<Unavailable />} label="No training status has been recorded yet." />
+        <EmptyNote>No training status has been recorded yet.</EmptyNote>
       )}
       <StatStrip
         items={[

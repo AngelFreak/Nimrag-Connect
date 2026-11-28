@@ -273,9 +273,9 @@ export function GalleryPage() {
           <StatTile label="Steps" value="6,240" sub="Goal 8,000">
             <ProgressBar value={6240} max={8000} label="6,240 of 8,000 steps" />
           </StatTile>
-          <StatTile label="Overnight HRV" value={null} sub="No reading last night" />
+          <StatTile label="Overnight HRV" value={null} hideWhenMissing={false} sub="No reading last night" />
           <StatTile size="sm" label="Distance" value="6.4 km" />
-          <StatTile size="sm" label="Pace" value={undefined} />
+          <StatTile size="sm" label="Pace" value={undefined} hideWhenMissing={false} />
           <Card>
             <CardHeader title="Card with header" aside="aside text" />
             <p className="tone-muted">Plain card, 16 px radius.</p>
@@ -283,7 +283,7 @@ export function GalleryPage() {
         </div>
       </Section>
 
-      <Section title="Unavailable" note="Hard rule: a missing metric reads “unavailable”, never 0, a dash or blank.">
+      <Section title="Unavailable" note="A missing metric is never 0. Leave it out, or say in a sentence what is missing; “unavailable” only keeps a table aligned.">
         <Card row>
           <span>Resting heart rate</span>
           <Unavailable />

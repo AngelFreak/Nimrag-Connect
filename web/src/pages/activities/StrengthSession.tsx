@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import type { ExerciseGroup } from '../../api/generated/ExerciseGroup';
 import type { StrengthResponse } from '../../api/generated';
 import type { StrengthSet } from '../../api/generated/StrengthSet';
-import { Button, Card, CardHeader, SeriesChart, StatTile, Unavailable } from '../../components';
+import { Button, Card, CardHeader, SeriesChart, StatTile } from '../../components';
 import { fmtShortDay } from '../../lib/dates';
 import { fmtClock, fmtInt } from '../../lib/format';
 import { useIsDesktop } from '../../lib/hooks';
@@ -54,10 +54,10 @@ function ExerciseList({ groups }: { groups: readonly ExerciseGroup[] }) {
             <li className="exercise" key={`${g.name ?? 'unnamed'}-${i}`}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                 <span className="exercise__name">
-                  {g.name ?? <Unavailable />} {edited ? <span className="edited-tag">Edited</span> : null}
+                  {g.name ?? 'Unnamed exercise'} {edited ? <span className="edited-tag">Edited</span> : null}
                 </span>
                 <span className="exercise__sub">
-                  {g.sets.length} {g.sets.length === 1 ? 'set' : 'sets'} {'·'} {reps ?? <Unavailable />}
+                  {g.sets.length} {g.sets.length === 1 ? 'set' : 'sets'}{reps ? ` · ${reps}` : ''}
                 </span>
               </div>
               <span style={{ fontSize: 15, color: load === null ? 'var(--text-2)' : undefined }}>{load ?? 'Bodyweight'}</span>
@@ -314,7 +314,10 @@ export function StrengthSession({ data }: { data: StrengthResponse }) {
 
   const hr = timedToMinutes(data.heart_rate);
   const hrSpread = spread(hr.y);
-  const hrAside = data.avg_hr_bpm === null && data.max_hr_bpm === null ? null : `Avg ${fmtInt(data.avg_hr_bpm) ?? 'unavailable'} · Max ${fmtInt(data.max_hr_bpm) ?? 'unavailable'} bpm`;
+  const hrAside =
+    data.avg_hr_bpm === null && data.max_hr_bpm === null
+      ? null
+      : `${[data.avg_hr_bpm === null ? null : `Avg ${fmtInt(data.avg_hr_bpm)}`, data.max_hr_bpm === null ? null : `Max ${fmtInt(data.max_hr_bpm)}`].filter((x) => x !== null).join(' · ')} bpm`;
   const hrSummary = hrSpread
     ? `Heart rate during the session: lowest ${Math.round(hrSpread.min)}, average ${Math.round(hrSpread.avg)}, highest ${Math.round(hrSpread.max)} beats per minute.`
     : 'No heart rate samples were recorded.';
@@ -326,9 +329,6 @@ export function StrengthSession({ data }: { data: StrengthResponse }) {
   ) : data.exercises.length === 0 ? (
     <Card>
       <CardHeader title="Exercises" tone="muted" />
-      <p>
-        <Unavailable />
-      </p>
       <p className="acts-note">The watch did not record any sets for this session.</p>
     </Card>
   ) : (

@@ -4,7 +4,7 @@ import type { HomeCard, Today } from '../../api/generated';
 import type { StatusKind } from '../../api/generated/StatusKind';
 import type { ActivityListItem } from '../../api/generated/ActivityListItem';
 import type { NightSummary } from '../../api/generated/NightSummary';
-import { RangeBar, Ring, Skeleton, StageBar, StatusWord, Unavailable, ValueOrUnavailable } from '../../components';
+import { RangeBar, Ring, Skeleton, StageBar, StatusWord } from '../../components';
 import { addDays, fmtMonthDay, fmtShortDay } from '../../lib/dates';
 import { fmtFixed, fmtInt, isMissing, statusName } from '../../lib/format';
 import { glanceWord, METRIC_SHORT, STATE_WORD } from '../health/healthStatus';
@@ -88,11 +88,9 @@ function Big({ children }: { children: ReactNode }) {
 function Side({ items }: { items: { value: ReactNode; label: string }[] }) {
   return (
     <div className="hside">
-      {items.map((s) => (
+      {items.filter((s) => !isMissing(s.value) && s.value !== '' && s.value !== false).map((s) => (
         <span className="hside__item" key={s.label}>
-          <span className="hside__v">
-            <ValueOrUnavailable value={s.value} />
-          </span>
+          <span className="hside__v">{s.value}</span>
           <span className="hside__l">{s.label}</span>
         </span>
       ))}
@@ -102,10 +100,11 @@ function Side({ items }: { items: { value: ReactNode; label: string }[] }) {
 
 /** Label and value stacked, for the narrow cards. */
 function Stat({ value, label, tone }: { value: ReactNode; label: string; tone?: string }) {
+  if (isMissing(value) || value === '' || value === false) return null;
   return (
     <div className="hstat">
       <span className="hstat__v" style={tone ? { color: tone } : undefined}>
-        <ValueOrUnavailable value={value} />
+        {value}
       </span>
       <span className="hstat__l">{label}</span>
     </div>
@@ -223,9 +222,7 @@ function EnergyCard({ today }: { today: Today }) {
   return (
     <Shell id="energy" size="focus" glyph="energy" tone="var(--energy)" title={CARD_LABEL.energy} to={link}>
       <div className="hrow">
-        <Big>
-          <ValueOrUnavailable value={fmtInt(e.now)} />
-        </Big>
+        {fmtInt(e.now) === null ? null : <Big>{fmtInt(e.now)}</Big>}
         <Side
           items={[
             { value: signed(e.charged), label: 'Charged' },
@@ -288,11 +285,14 @@ function SleepCard({ today, nights }: { today: Today; nights: NightSummary[] | u
     );
   }
   const rating = ratingOfScore(s.score);
+  const noScore = isMissing(s.score);
   const recent = (nights ?? [])
     .slice()
     .sort((a, b) => a.date.localeCompare(b.date))
     .slice(-7);
-  const stagesLine = s.stages_available ? [`Deep ${fmtSeconds(s.deep_s) ?? 'unavailable'}`, `Light ${fmtSeconds(s.light_s) ?? 'unavailable'}`, `REM ${fmtSeconds(s.rem_s) ?? 'unavailable'}`].join(' · ') : null;
+  const stagesLine = s.stages_available
+    ? ([['Deep', s.deep_s], ['Light', s.light_s], ['REM', s.rem_s]] as const).flatMap(([name, secs]) => (fmtSeconds(secs) === null ? [] : [`${name} ${fmtSeconds(secs)}`])).join(' · ')
+    : null;
   const footer = s.stages_available ? (
     <div className="hstages">
       <StageBar
@@ -308,20 +308,21 @@ function SleepCard({ today, nights }: { today: Today; nights: NightSummary[] | u
       <span className="hfoot__label">{stagesLine}</span>
     </div>
   ) : (
-    <span className="hfoot__label">Sleep stages unavailable</span>
+    <span className="hfoot__label">No sleep stages recorded.</span>
   );
   return (
     <Shell id="sleep" size="focus" glyph="sleep" tone="var(--sleep)" title="Sleep Score" to={link} footer={footer}>
       <div className="hrow">
-        <Big>{isMissing(s.score) ? <Unavailable /> : fmtInt(s.score)}</Big>
+        {/* No score for the night: the time asleep takes the big slot. */}
+        {noScore ? (fmtSeconds(s.duration_s) === null ? null : <Big>{fmtSeconds(s.duration_s)}</Big>) : <Big>{fmtInt(s.score)}</Big>}
         <Side
           items={[
-            { value: fmtSeconds(s.duration_s), label: 'Asleep' },
+            { value: noScore ? null : fmtSeconds(s.duration_s), label: 'Asleep' },
             { value: rating ? <StatusWord type="sleep" value={rating}>{RATING_WORD[rating]}</StatusWord> : null, label: 'Quality' },
           ]}
         />
       </div>
-      <p className="hcard__caption">{headlineFor(s).title}</p>
+      <p className="hcard__caption">{noScore ? 'Time asleep. No score for this night.' : headlineFor(s).title}</p>
       {recent.length > 0 ? (
         <MiniBars
           values={recent.map((n) => n.score)}
