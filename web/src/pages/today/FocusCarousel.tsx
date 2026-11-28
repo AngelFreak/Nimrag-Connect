@@ -5,12 +5,12 @@ import type { NightSummary } from '../../api/generated/NightSummary';
 import type { ReadinessFactor } from '../../api/generated/ReadinessFactor';
 import type { ReadinessRating } from '../../api/generated/ReadinessRating';
 import type { ReadinessResponse } from '../../api/generated/ReadinessResponse';
-import { BarSeries, Card, Legend, Ring, SeriesChart, StatusWord, Unavailable } from '../../components';
+import { Card, Legend, Ring, SeriesChart, StatusWord, Unavailable } from '../../components';
 import { energyKey } from '../../lib/status';
-import { addDays, fmtMonthDay, fmtShortDay } from '../../lib/dates';
+import { fmtMonthDay, fmtShortDay } from '../../lib/dates';
 import { fmtFixed, fmtInt, isMissing } from '../../lib/format';
-import { FACTOR_META, LEVEL_COLOR, LEVEL_NAME, RATING_COLOR as FACTOR_COLOR, factorValue, factorWord, fmtNum, historyChart } from '../health/readiness';
-import { useReadiness, useReadinessHistory } from '../health/readinessQueries';
+import { FACTOR_META, LEVEL_COLOR, LEVEL_NAME, RATING_COLOR as FACTOR_COLOR, factorValue, factorWord } from '../health/readiness';
+import { useReadiness } from '../health/readinessQueries';
 import { RATING_COLOR, RATING_WORD, headlineFor, ratingOfScore } from '../health/sleepNight';
 import { DEFAULT_HOME_CARDS } from './cards';
 import { EnergyDayChart } from './EnergyDayChart';
@@ -114,23 +114,6 @@ function FactorBars({ factors }: { factors: ReadinessFactor[] }) {
   );
 }
 
-/** The estimate of the last seven days as small bars in the level colours. */
-function ReadinessWeek({ date }: { date: string }) {
-  const q = useReadinessHistory(addDays(date, -6), date);
-  if (!q.data) return null;
-  const chart = historyChart(q.data.days, q.data.average);
-  if (chart.scored === 0) return null;
-  return (
-    <div className="focus__section">
-      <div className="focus__section-head">
-        <span className="focus__section-title">Last 7 days</span>
-        {isMissing(q.data.average) ? null : <span className="focus__sub">Average {fmtNum(q.data.average)}</span>}
-      </div>
-      <BarSeries values={chart.values} colors={chart.colors} labels={chart.labels} label="Readiness estimate by day" summary={chart.summary} max={100} height={72} />
-    </div>
-  );
-}
-
 /** Today's readiness estimate: the gauge, its level word and headline, the six factors, and a link to the page that explains it. */
 function ReadinessSlide({ data }: { data: ReadinessResponse }) {
   const level = data.level;
@@ -162,7 +145,6 @@ function ReadinessSlide({ data }: { data: ReadinessResponse }) {
         <span className="focus__section-title">Six factors, heaviest first</span>
         <FactorBars factors={data.factors} />
       </div>
-      {data.score !== null ? <ReadinessWeek date={data.date} /> : null}
       {sentence ? <p className="focus__sentence">{sentence}</p> : null}
       <Link to="/training/readiness" className="focus__sub focus__link focus__link--end">
         What it is made from

@@ -347,7 +347,7 @@ describe('In focus carousel', () => {
     expect(within(slide).getByRole('link', { name: 'Open last night' })).toHaveAttribute('href', '/sleep');
   });
 
-  it('shows the six factors on the Readiness slide, a missing one as No data, and the last 7 days', async () => {
+  it('shows the six factors on the Readiness slide, a missing one as No data', async () => {
     const f = (key: string, value: number | null, unit: string, rating: string | null) => ({ key, value, unit, rating, weight: 1, note: null });
     const data = { ...READINESS, factors: [f('sleep', 81, 'score', 'good'), f('recovery', 7.4, 'h', 'moderate'), f('hrv', 62, 'ms', 'good'), f('load', 306, 'load', 'good'), f('sleep_history', 74, 'score', 'moderate'), f('stress', null, 'stress', null)] };
     const days = [66, 80, null, 91, 58, 72, 78].map((score, i) => ({ date: `2026-11-${13 + i}`, score, level: score === null ? null : score >= 75 ? 'high' : 'moderate' }));
@@ -366,8 +366,8 @@ describe('In focus carousel', () => {
     expect(within(list).getByText('7.4 h')).toBeInTheDocument();
     expect(within(list).getByText(/Moderate need/)).toBeInTheDocument();
     expect(within(list).getByText('Stress history').closest('li')).toHaveTextContent('No data');
-    expect(await within(slide).findByText('Last 7 days')).toBeInTheDocument();
-    expect(within(slide).getByText('Average 74.2')).toBeInTheDocument();
+    // The week chart lives on the Readiness page; the slide stays as tall as the others.
+    expect(within(slide).queryByText('Last 7 days')).not.toBeInTheDocument();
     expect(slide.textContent).not.toMatch(/unavailable/);
   });
 
