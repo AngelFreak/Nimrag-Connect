@@ -22,7 +22,7 @@ const settings: SettingsResponse = {
 };
 
 const me = { authenticated: true, username: 'demo', role: 'user', timezone: 'Europe/Copenhagen', sample: false };
-const garmin = (over: Partial<GarminStatus> = {}): GarminStatus => ({ state: 'off', send_all: false, pending: 0, done: 0, failed: 0, last_error: null, next_attempt_at: null, ...over });
+const garmin = (over: Partial<GarminStatus> = {}): GarminStatus => ({ state: 'off', send_all: false, fill_nights: false, last_filled_night: null, pending: 0, done: 0, failed: 0, last_error: null, next_attempt_at: null, ...over });
 
 const phone = (over: Record<string, unknown> = {}) => ({
   id: 1,
@@ -711,6 +711,38 @@ describe('Profile: send to Garmin', () => {
     expect(calls.some((c) => c.url === '/api/garmin/backfill')).toBe(false);
     expect(await screen.findByRole('button', { name: 'Also send what Garmin Connect is missing' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Send older activities' })).not.toBeInTheDocument();
+  });
+
+  it('connected: the missed-nights switch writes only its own choice and shows the last night filled', async () => {
+    let status = garmin({ state: 'connected', fill_nights: true, last_filled_night: '2026-11-28' });
+    const { calls } = mockApi(
+      routes({
+        '/api/garmin': () => json(status),
+        'POST /api/garmin/settings': () => {
+          status = { ...status, fill_nights: false };
+          return json(status);
+        },
+      }),
+    );
+    const u = userEvent.setup();
+    renderApp('/profile/garmin');
+    const toggle = await screen.findByRole('switch', { name: /Fill missed nights from Garmin/ });
+    expect(toggle).toBeChecked();
+    expect(screen.getByText(/Your watch.s own files always win/)).toBeInTheDocument();
+    expect(screen.getByText(/Last night filled: Saturday 28 November/)).toBeInTheDocument();
+
+    await u.click(toggle);
+    await waitFor(() => expect(screen.getByRole('switch', { name: /Fill missed nights from Garmin/ })).not.toBeChecked());
+    const post = calls.find((c) => c.url === '/api/garmin/settings')!;
+    expect(JSON.parse(String(post.init?.body))).toEqual({ fill_nights: false });
+    expect(screen.queryByText(/Last night filled/)).not.toBeInTheDocument();
+  });
+
+  it('connected: the missed-nights line is left out until a night was filled', async () => {
+    mockApi(routes({ '/api/garmin': garmin({ state: 'connected', fill_nights: true }) }));
+    renderApp('/profile/garmin');
+    expect(await screen.findByRole('switch', { name: /Fill missed nights from Garmin/ })).toBeChecked();
+    expect(screen.queryByText(/Last night filled/)).not.toBeInTheDocument();
   });
 
   it('Everything: the offer starts 7 days back and sends the whole watch from that date', async () => {

@@ -1,9 +1,9 @@
 import { useId, useRef, useState, type ChangeEvent, type FormEvent } from 'react';
 import type { GarminImportTokens, GarminStatus } from '../../api/generated';
 import type { GarminState } from '../../api/generated/GarminState';
-import { Button, Card, ConfirmDialog, DataList, ErrorState, Notice, SegmentedControl, SendIcon, SettingsGroup, SettingsRow, Skeleton, StatusBanner, TextField } from '../../components';
+import { Button, Card, ConfirmDialog, DataList, DownloadIcon, ErrorState, Notice, SegmentedControl, SendIcon, SettingsGroup, SettingsRow, Skeleton, StatusBanner, TextField } from '../../components';
 import { fmtInt } from '../../lib/format';
-import { fmtDateTime } from '../today/format';
+import { fmtDateTime, fmtLongDay } from '../today/format';
 import { useSettings } from '../today/queries';
 import { errorMessage } from '../system/errors';
 import { useGarmin, useGarminActions } from '../system/queries';
@@ -218,6 +218,31 @@ function WhatToSend({ status }: { status: GarminStatus }) {
   );
 }
 
+/** The switch for fetching the nights the watch never delivered (the Garmin Connect app synced first). */
+function FillNights({ status }: { status: GarminStatus }) {
+  const { chooseWhatToSend } = useGarminActions();
+  return (
+    <div className="form__group">
+      <SettingsGroup title="Missed nights">
+        <SettingsRow
+          icon={<DownloadIcon />}
+          tone="sleep"
+          title="Fill missed nights from Garmin"
+          checked={status.fill_nights}
+          disabled={chooseWhatToSend.isPending}
+          onCheckedChange={(next) => chooseWhatToSend.mutate({ fill_nights: next })}
+        />
+      </SettingsGroup>
+      <p className="card__intro">
+        When the Garmin Connect app syncs your watch first, Nimrag misses that night&apos;s sleep stages and HRV. Nimrag then fetches the night from your Garmin
+        account each morning. Your watch&apos;s own files always win.
+      </p>
+      {status.fill_nights && status.last_filled_night ? <p className="card__intro">Last night filled: {fmtLongDay(status.last_filled_night)}</p> : null}
+      {chooseWhatToSend.isError ? <Failure error={chooseWhatToSend.error} /> : null}
+    </div>
+  );
+}
+
 /** Everything mode: send the files Garmin Connect has not got yet, from a start date (oldest first). */
 function SendMissing({ timezone }: { timezone: string }) {
   const { backfill } = useGarminActions();
@@ -316,6 +341,7 @@ function ConnectedTools({ status, timezone }: { status: GarminStatus; timezone: 
   return (
     <>
       <WhatToSend status={status} />
+      <FillNights status={status} />
       <Counts s={status} timezone={timezone} />
       <div className="form__group" style={{ gap: 6 }}>
         <Button disabled={retry.isPending || status.failed === 0} onClick={() => retry.mutate()} aria-busy={retry.isPending}>

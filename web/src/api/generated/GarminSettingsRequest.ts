@@ -2,6 +2,10 @@
 
 export type GarminSettingsRequest = { 
 /**
- * True: send every file the watch produces. False: activities only.
+ * True: send every file the watch produces. False: activities only. Absent: unchanged.
  */
-send_all: boolean, };
+send_all?: boolean, 
+/**
+ * True: fetch nights the watch never delivered from Garmin. Absent: unchanged.
+ */
+fill_nights?: boolean, };

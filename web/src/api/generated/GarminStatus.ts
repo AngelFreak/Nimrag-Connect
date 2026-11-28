@@ -8,6 +8,15 @@ export type GarminStatus = { state: GarminState,
  */
 send_all: boolean, 
 /**
+ * The owner's choice: fetch a night from Garmin when the watch never delivered it. False
+ * while Forward is off.
+ */
+fill_nights: boolean, 
+/**
+ * The newest night fetched that way (`YYYY-MM-DD`, the day it ends), or null.
+ */
+last_filled_night: string | null, 
+/**
  * Files waiting for a try (including those waiting out a back-off).
  */
 pending: number, 
