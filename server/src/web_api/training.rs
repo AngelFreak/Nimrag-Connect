@@ -307,7 +307,8 @@ pub fn vo2_from_met(met: f64) -> f64 {
 }
 
 /// `(ts, maximal_met)` readings with `ts <= to`, oldest first: the watch-level readings plus the
-/// maximal MET stored with each activity file.
+/// maximal MET stored with each activity file. A maximal MET of 0 means "no estimate" (some
+/// activity files carry it) and is left out, or it would draw as a VO2 max of 0.
 pub async fn vo2_readings(ctx: &Ctx, to: i64) -> Res<Vec<(i64, f64)>> {
     Ok(sqlx::query_as(
         "SELECT ts, maximal_met FROM (
@@ -316,7 +317,7 @@ pub async fn vo2_readings(ctx: &Ctx, to: i64) -> Res<Vec<(i64, f64)>> {
              SELECT a.start_ts, m.maximal_met FROM activity_metrics m
                JOIN activities_current a ON a.sha256 = m.sha256
                WHERE a.user_id = ? AND m.maximal_met IS NOT NULL AND a.start_ts IS NOT NULL)
-         WHERE ts <= ? ORDER BY ts",
+         WHERE ts <= ? AND maximal_met > 0 ORDER BY ts",
     )
     .bind(ctx.uid)
     .bind(ctx.uid)

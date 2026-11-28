@@ -672,6 +672,8 @@ async fn vo2_max_only_where_a_reading_exists() {
     for (ts, met) in [
         (cph(2026, 6, 10, 9, 0), 13.0),
         (at(14, 9, 0), 14.0),
+        // A maximal MET of 0 is "no estimate", not a VO2 max of 0.
+        (at(16, 9, 0), 0.0),
         (at(18, 9, 0), 14.2),
         (at(18, 17, 0), 14.4),
     ] {
