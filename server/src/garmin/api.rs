@@ -50,6 +50,11 @@ pub struct GarminStatus {
     /// The owner's choice: false sends activities only, true sends every file the watch
     /// produces (health, sleep and all-day data too). False while Forward is off.
     pub send_all: bool,
+    /// The owner's choice: fetch a night from Garmin when the watch never delivered it. False
+    /// while Forward is off.
+    pub fill_nights: bool,
+    /// The newest night fetched that way (`YYYY-MM-DD`, the day it ends), or null.
+    pub last_filled_night: Option<String>,
     /// Files waiting for a try (including those waiting out a back-off).
     #[ts(type = "number")]
     pub pending: i64,
@@ -135,8 +140,14 @@ pub struct GarminBackfillResponse {
 
 #[derive(Debug, Serialize, Deserialize, TS)]
 pub struct GarminSettingsRequest {
-    /// True: send every file the watch produces. False: activities only.
-    pub send_all: bool,
+    /// True: send every file the watch produces. False: activities only. Absent: unchanged.
+    #[serde(default)]
+    #[ts(optional)]
+    pub send_all: Option<bool>,
+    /// True: fetch nights the watch never delivered from Garmin. Absent: unchanged.
+    #[serde(default)]
+    #[ts(optional)]
+    pub fill_nights: Option<bool>,
 }
 
 /// The token file python-garminconnect 0.3.20 writes (`garmin_tokens.json`).
@@ -177,6 +188,8 @@ async fn build_status(state: &AppState, uid: i64) -> Result<GarminStatus, ApiErr
         }
     };
     let send_all = account.as_ref().is_some_and(|a| a.send_all);
+    let fill_nights = account.as_ref().is_some_and(|a| a.fill_nights);
+    let last_filled_night = super::nights::last_filled_night(&state.pool, uid).await?;
     let last_error = match account.and_then(|a| a.last_error) {
         Some(e) => Some(e),
         None => queue::last_item_error(&state.pool, uid).await?,
@@ -189,6 +202,8 @@ async fn build_status(state: &AppState, uid: i64) -> Result<GarminStatus, ApiErr
     Ok(GarminStatus {
         state: st,
         send_all,
+        fill_nights,
+        last_filled_night,
         pending: counts.pending,
         done: counts.done,
         failed: counts.failed,
@@ -408,12 +423,21 @@ async fn settings_update(
     State(state): State<AppState>,
     ApiJson(body): ApiJson<GarminSettingsRequest>,
 ) -> Result<Json<GarminStatus>, ApiError> {
-    if !queue::set_send_all(&state.pool, user.id, body.send_all, state.now()).await? {
+    let now = state.now();
+    let mut set = false;
+    if let Some(send_all) = body.send_all {
+        set |= queue::set_send_all(&state.pool, user.id, send_all, now).await?;
+    }
+    if let Some(fill) = body.fill_nights {
+        set |= queue::set_fill_nights(&state.pool, user.id, fill, now).await?;
+    }
+    if !set && queue::load_account(&state.pool, user.id).await?.is_none() {
         return Err(ApiError::new(StatusCode::CONFLICT, "Garmin is not set up"));
     }
     tracing::info!(
         user_id = user.id,
         send_all = body.send_all,
+        fill_nights = body.fill_nights,
         "garmin forward choice changed"
     );
     Ok(Json(build_status(&state, user.id).await?))

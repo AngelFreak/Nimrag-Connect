@@ -22,9 +22,9 @@ use sqlx::{Row, SqlitePool};
 use std::time::Duration;
 
 pub const MAX_TRIES: i64 = 10;
-const BACKOFF_FIRST_S: i64 = 60;
+pub(crate) const BACKOFF_FIRST_S: i64 = 60;
 const BACKOFF_MAX_S: i64 = 6 * 3600;
-const RETRY_AFTER_MAX_S: i64 = 24 * 3600;
+pub(crate) const RETRY_AFTER_MAX_S: i64 = 24 * 3600;
 
 /// Delay before try number `attempts + 1`, after `attempts` failures (1 min, doubling, 6 h cap).
 pub fn backoff_s(attempts: i64) -> i64 {
@@ -66,11 +66,13 @@ pub struct Account {
     pub last_error: Option<String>,
     /// False: new activities only. True: every FIT file the watch produces.
     pub send_all: bool,
+    /// Fetch nights the watch never delivered from Garmin (see [`super::nights`]).
+    pub fill_nights: bool,
 }
 
 pub async fn load_account(pool: &SqlitePool, uid: i64) -> Result<Option<Account>> {
     let row = sqlx::query(
-        "SELECT di_token, di_refresh_token, di_client_id, status, last_error, send_all
+        "SELECT di_token, di_refresh_token, di_client_id, status, last_error, send_all, fill_nights
          FROM garmin_account WHERE user_id = ?",
     )
     .bind(uid)
@@ -87,6 +89,7 @@ pub async fn load_account(pool: &SqlitePool, uid: i64) -> Result<Option<Account>
             status: AccountStatus::parse(&r.get::<String, _>(3)),
             last_error: r.get(4),
             send_all: r.get::<i64, _>(5) != 0,
+            fill_nights: r.get::<i64, _>(6) != 0,
         }
     }))
 }
@@ -100,6 +103,19 @@ pub async fn set_send_all(pool: &SqlitePool, uid: i64, send_all: bool, now: i64)
         .bind(uid)
         .execute(pool)
         .await?;
+    Ok(r.rows_affected() > 0)
+}
+
+/// The owner's choice: fetch missed nights from Garmin or not. False when the user has no
+/// account row.
+pub async fn set_fill_nights(pool: &SqlitePool, uid: i64, on: bool, now: i64) -> Result<bool> {
+    let r =
+        sqlx::query("UPDATE garmin_account SET fill_nights = ?, updated_at = ? WHERE user_id = ?")
+            .bind(on as i64)
+            .bind(now)
+            .bind(uid)
+            .execute(pool)
+            .await?;
     Ok(r.rows_affected() > 0)
 }
 
@@ -182,6 +198,10 @@ pub async fn delete_account(pool: &SqlitePool, uid: i64) -> Result<()> {
         .execute(&mut *tx)
         .await?;
     sqlx::query("DELETE FROM garmin_uploads WHERE status != 'done' AND user_id = ?")
+        .bind(uid)
+        .execute(&mut *tx)
+        .await?;
+    sqlx::query("DELETE FROM garmin_night_checks WHERE user_id = ?")
         .bind(uid)
         .execute(&mut *tx)
         .await?;
@@ -480,7 +500,7 @@ enum Flow {
     Stop,
 }
 
-enum Refreshed {
+pub(crate) enum Refreshed {
     Fresh(Tokens),
     /// Refresh token refused: needs_login is stored.
     LoginExpired,
@@ -489,7 +509,11 @@ enum Refreshed {
 }
 
 /// Refresh under the token lock and store the (possibly rotated) result.
-async fn refresh_tokens(state: &AppState, uid: i64, current: &Tokens) -> Result<Refreshed> {
+pub(crate) async fn refresh_tokens(
+    state: &AppState,
+    uid: i64,
+    current: &Tokens,
+) -> Result<Refreshed> {
     let g = &state.garmin;
     let _lock = g.token_lock.lock().await;
     // Someone may have refreshed while we waited for the lock.

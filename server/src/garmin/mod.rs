@@ -5,6 +5,7 @@
 //!
 //! * [`auth`]: unofficial mobile SSO login (+ MFA), DI OAuth2 tokens, refresh.
 //! * [`upload`]: POST one FIT file (activity or not), classify the answer.
+//! * [`nights`]: the morning job that fetches nights the watch never delivered.
 //! * [`queue`]: the `garmin_account` row, the `garmin_uploads` queue, the worker.
 //! * [`api`]: the signed-in user's endpoints under `/api/garmin`.
 //! * [`http`]: the `GarminHttp` seam (plain reqwest today).
@@ -17,6 +18,7 @@
 pub mod api;
 pub mod auth;
 pub mod http;
+pub mod nights;
 pub mod queue;
 pub mod upload;
 
@@ -82,6 +84,9 @@ pub struct GarminConfig {
     /// Pause between two uploads of one user's queue, in ms, so a backfill of hundreds of small
     /// files does not hammer Garmin. `0` skips it.
     pub upload_pause_ms: u64,
+    /// Pause between two night requests of one user's pass, in ms (Garmin is asked gently). `0`
+    /// skips it.
+    pub nights_pause_ms: u64,
 }
 
 impl Default for GarminConfig {
@@ -91,6 +96,7 @@ impl Default for GarminConfig {
             http: ReqwestHttp::factory(true),
             login_delay_ms: (2000, 5000),
             upload_pause_ms: 1000,
+            nights_pause_ms: 2000,
         }
     }
 }
@@ -103,6 +109,7 @@ impl GarminConfig {
             http: ReqwestHttp::factory(false),
             login_delay_ms: (0, 0),
             upload_pause_ms: 0,
+            nights_pause_ms: 0,
         }
     }
 }
@@ -123,6 +130,9 @@ pub struct Garmin {
     pub(crate) login_lock: tokio::sync::Mutex<()>,
     /// Serialises refresh and token writes so a rotated refresh token is never lost.
     pub(crate) token_lock: tokio::sync::Mutex<()>,
+    /// The night job's memory, never stored: Garmin's profile name per user and "not before"
+    /// instants set by a 429.
+    pub(crate) nights: Mutex<nights::Memory>,
 }
 
 impl Garmin {
@@ -134,6 +144,7 @@ impl Garmin {
             pending: Mutex::new(HashMap::new()),
             login_lock: Default::default(),
             token_lock: Default::default(),
+            nights: Mutex::new(nights::Memory::default()),
         }
     }
 

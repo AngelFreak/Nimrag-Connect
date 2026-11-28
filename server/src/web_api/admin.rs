@@ -345,6 +345,7 @@ async fn delete_user(
         "DELETE FROM strength_set_overrides WHERE user_id = ?",
         "DELETE FROM workouts WHERE user_id = ?",
         "DELETE FROM garmin_uploads WHERE user_id = ?",
+        "DELETE FROM garmin_night_checks WHERE user_id = ?",
         "DELETE FROM garmin_account WHERE user_id = ?",
         "DELETE FROM users WHERE id = ?",
     ] {

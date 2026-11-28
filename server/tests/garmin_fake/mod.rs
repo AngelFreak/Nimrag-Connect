@@ -35,6 +35,14 @@ pub enum Up {
     OtherConflict,
 }
 
+/// What the fake answers to the next night request instead of the night it has.
+#[derive(Clone, Debug)]
+pub enum NightAns {
+    Status(u16),
+    /// 429 with `Retry-After` seconds.
+    Retry(u64),
+}
+
 pub struct FakeState {
     pub clock: Arc<AtomicI64>,
     pub mfa: bool,
@@ -62,6 +70,14 @@ pub struct FakeState {
     pub profile_calls: u32,
     /// Cookies that arrived on the credential POST.
     pub cookies_seen_on_login: Vec<String>,
+    /// The nights Garmin has, by `YYYY-MM-DD` (the full sleep response).
+    pub nights: std::collections::HashMap<String, Value>,
+    /// Answers to the next night requests (before the nights above are consulted).
+    pub night_script: VecDeque<NightAns>,
+    /// The `date` of every night request that got as far as the handler, in order.
+    pub night_requests: Vec<String>,
+    /// The path segment (profile name) of the last night request.
+    pub night_name: Option<String>,
 }
 
 #[derive(Clone)]
@@ -120,6 +136,10 @@ impl FakeGarmin {
             refresh_calls: 0,
             profile_calls: 0,
             cookies_seen_on_login: vec![],
+            nights: Default::default(),
+            night_script: VecDeque::new(),
+            night_requests: vec![],
+            night_name: None,
         }));
         let app = Router::new().fallback(handler).with_state(st.clone());
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -345,7 +365,7 @@ async fn handler(
         ("GET", "/userprofile-service/socialProfile") => {
             s.profile_calls += 1;
             if bearer_ok(&s, &headers) {
-                json_resp(200, json!({"displayName": "fake"}))
+                json_resp(200, json!({"displayName": "fake-profile-name"}))
             } else {
                 json_resp(401, json!({"error": "invalid_token"}))
             }
@@ -405,6 +425,38 @@ async fn handler(
                     );
                     r
                 }
+            }
+        }
+        ("GET", p) if p.starts_with("/wellness-service/wellness/dailySleepData/") => {
+            if !bearer_ok(&s, &headers) {
+                return json_resp(401, json!({"error": "invalid_token"}));
+            }
+            let date = uri
+                .query()
+                .and_then(|q| q.split('&').find_map(|kv| kv.strip_prefix("date=")))
+                .unwrap_or("")
+                .to_owned();
+            s.night_name = p.rsplit('/').next().map(str::to_owned);
+            s.night_requests.push(date.clone());
+            match s.night_script.pop_front() {
+                Some(NightAns::Status(c)) => return json_resp(c, json!({"message": "scripted"})),
+                Some(NightAns::Retry(secs)) => {
+                    let mut r = json_resp(429, json!({"message": "slow down"}));
+                    r.headers_mut().insert(
+                        "retry-after",
+                        HeaderValue::from_str(&secs.to_string()).unwrap(),
+                    );
+                    return r;
+                }
+                None => {}
+            }
+            match s.nights.get(&date) {
+                Some(v) => json_resp(200, v.clone()),
+                // What Garmin sends for a night it has nothing for.
+                None => json_resp(
+                    200,
+                    json!({"dailySleepDTO": {"calendarDate": date, "sleepStartTimestampGMT": null}}),
+                ),
             }
         }
         _ => json_resp(404, json!({})),

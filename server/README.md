@@ -464,16 +464,30 @@ All calls need the session cookie, and the writes the header `X-Nimrag: 1`:
 
 | Endpoint | |
 | --- | --- |
-| `GET /api/garmin` | `{state: off\|needs_login\|needs_mfa\|connected\|paused, send_all, pending, done, failed, last_error, next_attempt_at}` |
+| `GET /api/garmin` | `{state: off\|needs_login\|needs_mfa\|connected\|paused, send_all, fill_nights, last_filled_night, pending, done, failed, last_error, next_attempt_at}` |
 | `POST /api/garmin/login {email, password}` | `{mfa_required}`; then `POST /api/garmin/mfa {code}` |
 | `POST /api/garmin/import-tokens {di_token, di_refresh_token, di_client_id?}` | log in with a python-garminconnect token file |
-| `POST /api/garmin/settings {send_all}` | choose activities only (`false`) or everything (`true`); returns the status; `409` when not set up. Queues nothing |
+| `POST /api/garmin/settings {send_all?, fill_nights?}` | choose activities only (`false`) or everything (`true`), and whether missed nights are fetched (see below); a field left out is unchanged; returns the status; `409` when not set up. Queues nothing |
 | `POST /api/garmin/backfill {days \| since, mode?}` | queue older files, `{queued}`. `days` 1 to 3650 or `since` `YYYY-MM-DD` (the user's timezone), exactly one. `mode`: `activities` (default; activities that started in the window) or `all` (every watch/USB FIT file received in the window, oldest first). Files already queued or sent are skipped. `409` when not set up |
 | `POST /api/garmin/retry` | failed files get fresh tries; a paused queue resumes |
 | `POST /api/garmin/logout` | tokens and unsent files are forgotten (the choice goes with the account) |
 
-Tests: `tests/garmin_upload.rs`, `tests/garmin_auth.rs` against a fake Garmin (`tests/garmin_fake/`);
-no test reaches Garmin.
+**Fill missed nights** (`fill_nights` on the account, on by default; `src/garmin/nights.rs`). The
+watch gives each file to whichever phone app connects first, once; when the Garmin Connect app wins,
+Nimrag never gets that night's stages and HRV. Every 30 minutes (first pass 2 minutes after start),
+for each connected account with the choice on, the server looks at the last 7 local dates (today from
+09:00 local time) and, for each date whose night has no FIT-source `sleep_levels` row (about 18:00
+the evening before to 14:00), asks Garmin once (`GET connectapi/wellness-service/wellness/dailySleepData/{displayName}?date=YYYY-MM-DD&nonSleepBufferMinutes=60`,
+at most 7 requests per user and pass, 2 s apart; the profile name comes from `socialProfile` and is
+kept in memory only). A usable answer is stored as a `sleep_detail` Connect file exactly as
+`import-connect` stores it (origin `garmin-fetch/sleep_detail/YYYY-MM-DD.json`, source `connect`, so
+it is never sent back and the watch's own rows win). `garmin_night_checks` remembers each date's last
+outcome (`filled`: never asked again; `no_night`, `error`: not before 3 hours later). 401/403 gets one
+token refresh and a retry (the same refresh as the upload worker); a refused refresh asks for a new
+login; 429 stops that user's pass and honours `Retry-After`. The log has counts only.
+
+Tests: `tests/garmin_upload.rs`, `tests/garmin_auth.rs`, `tests/garmin_nights.rs` against a fake
+Garmin (`tests/garmin_fake/`); no test reaches Garmin.
 
 ## Building (sqlx offline)
 

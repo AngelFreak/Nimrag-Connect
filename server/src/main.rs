@@ -565,6 +565,8 @@ async fn serve(o: Opts) -> Result<()> {
     );
     // Forward mode: uploads queued activity files to Garmin Connect (idle until a user logs in to Garmin).
     nimrag_server::garmin::queue::spawn_worker(state.clone());
+    // Fills nights the watch never delivered from the user's Garmin account (idle without one).
+    nimrag_server::garmin::nights::spawn(state.clone());
     let app = api::router(state);
     if o.insecure_cookies {
         tracing::warn!(
