@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../api/client';
 import type { TrainingResponse } from '../api/generated';
-import { BarList, Card, CardHeader, DataList, PageHeader, RangeBar, Ring, SampleDataChip, SeriesChart, StatStrip, TopBar, Unavailable, ValueOrUnavailable } from '../components';
+import { BarList, Card, CardHeader, DataList, PageHeader, RangeBar, Ring, SampleDataChip, SeriesChart, StatStrip, TopBar, EmptyNote } from '../components';
 import { Link } from 'react-router-dom';
 import { fmtShortDay } from '../lib/dates';
 import { fmtFixed, fmtInt } from '../lib/format';
@@ -93,24 +93,30 @@ function RecoveryCard({ recovery }: { recovery: TrainingResponse['recovery'] }) 
     <Card padding="lg" row>
       <div className="stat" style={{ gap: 4 }}>
         <h2 className="card__title card__title--muted">Recovery time left</h2>
-        <span className="stat__value" style={{ fontSize: 34 }}>
-          <ValueOrUnavailable value={done ? 'Recovered' : left} />
-        </span>
+        {done || left ? (
+          <span className="stat__value" style={{ fontSize: 34 }}>
+            {done ? 'Recovered' : left}
+          </span>
+        ) : (
+          <EmptyNote>No recovery time from the watch yet.</EmptyNote>
+        )}
         {done ? (
           <span className="stat__sub tone-link">Ready for a hard session</span>
         ) : readyAt ? (
           <span className="stat__sub tone-link">Fully recovered {readyAt}</span>
         ) : null}
       </div>
-      <Ring
-        value={pct}
-        max={100}
-        label="Recovery complete, percent"
-        color="var(--accent)"
-        size={72}
-        strokeWidth={8}
-        showValue={false}
-      />
+      {pct === null ? null : (
+        <Ring
+          value={pct}
+          max={100}
+          label="Recovery complete, percent"
+          color="var(--accent)"
+          size={72}
+          strokeWidth={8}
+          showValue={false}
+        />
+      )}
     </Card>
   );
 }
@@ -122,12 +128,18 @@ function LoadCard({ load }: { load: TrainingResponse['load'] }) {
   const hasTarget = load.target_min !== null && load.target_max !== null;
   const axisMax = Math.max(load.target_max ?? 0, value ?? 0, 1) * 1.4;
   const valueText = fmtInt(value);
+  const hasSeries = load.series_4w.some((v) => v !== null);
   return (
     <Card padding="lg">
-      <CardHeader title="7-day load" aside={range ? `Target range ${range}` : <>Target range <Unavailable /></>} />
-      <span className="stat__value" style={{ fontSize: 28 }}>
-        <ValueOrUnavailable value={valueText} />
-      </span>
+      <CardHeader title="7-day load" {...(range ? { aside: `Target range ${range}` } : {})} />
+      {valueText === null && !hasSeries ? (
+        <EmptyNote>No training load from the watch in the last 4 weeks.</EmptyNote>
+      ) : null}
+      {valueText !== null ? (
+        <span className="stat__value" style={{ fontSize: 28 }}>
+          {valueText}
+        </span>
+      ) : null}
       {hasTarget && value !== null ? (
         <RangeBar
           value={value}
@@ -138,13 +150,15 @@ function LoadCard({ load }: { load: TrainingResponse['load'] }) {
         />
       ) : null}
       {where ? <span className="stat__sub">{where}</span> : null}
-      <SeriesChart
-        label="Seven-day load over the last 4 weeks"
-        summary={seriesSummary('Seven-day load', 'over the last 4 weeks', load.series_4w)}
-        x={load.series_4w.map((_, i) => i)}
-        series={[{ label: 'Load', color: 'link', data: seriesValues(load.series_4w) }]}
-        height={88}
-      />
+      {hasSeries ? (
+        <SeriesChart
+          label="Seven-day load over the last 4 weeks"
+          summary={seriesSummary('Seven-day load', 'over the last 4 weeks', load.series_4w)}
+          x={load.series_4w.map((_, i) => i)}
+          series={[{ label: 'Load', color: 'link', data: seriesValues(load.series_4w) }]}
+          height={88}
+        />
+      ) : null}
       <DataList
         items={[
           { label: 'Acute load', value: fmtInt(load.acute) },
@@ -161,9 +175,7 @@ function BalanceCard({ balance }: { balance: TrainingResponse['balance'] }) {
     return (
       <Card padding="lg">
         <CardHeader title="Load by intensity" />
-        <p>
-          <Unavailable />
-        </p>
+        <EmptyNote>No load by intensity from the watch yet.</EmptyNote>
       </Card>
     );
   }
@@ -198,9 +210,13 @@ function StatusCard({ status }: { status: TrainingResponse['status'] }) {
   return (
     <Card padding="lg">
       <CardHeader title="Training status" aside={<Link to="/training/status">History</Link>} />
-      <span className="stat__value" style={{ fontSize: 28 }}>
-        <ValueOrUnavailable value={view.headline} />
-      </span>
+      {view.headline ? (
+        <span className="stat__value" style={{ fontSize: 28 }}>
+          {view.headline}
+        </span>
+      ) : (
+        <EmptyNote>No training status from the watch yet.</EmptyNote>
+      )}
       {view.note ? <span className="stat__sub">{view.note}</span> : null}
       {since ? <span className="stat__sub">{since}</span> : null}
       <StatusExplanation brief />
@@ -213,10 +229,14 @@ function Vo2Card({ vo2 }: { vo2: TrainingResponse['vo2max'] }) {
   const change = vo2.change_3m === null ? null : `${vo2.change_3m > 0 ? '+' : ''}${fmtFixed(vo2.change_3m, 1)} in 3 months`;
   return (
     <Card padding="lg">
-      <CardHeader title="VO2 max (derived)" aside={change ? <span className="tone-link">{change}</span> : <Unavailable />} />
-      <span className="stat__value" style={{ fontSize: 28 }}>
-        <ValueOrUnavailable value={value} />
-      </span>
+      <CardHeader title="VO2 max (derived)" {...(change ? { aside: <span className="tone-link">{change}</span> } : {})} />
+      {value ? (
+        <span className="stat__value" style={{ fontSize: 28 }}>
+          {value}
+        </span>
+      ) : (
+        <EmptyNote>No VO2 max estimate yet.</EmptyNote>
+      )}
       <span className="stat__sub">derived (max MET × 3.5), ml/kg/min. This is not the watch's own VO2 max figure.</span>
       <SeriesChart
         label="VO2 max over the last 3 months"
@@ -263,13 +283,17 @@ function TrainingDesktop({ data }: { data: TrainingResponse }) {
             <ReadinessCard flat />
           </StatsSection>
           <StatsSection title="Recovery Time">
-            <ScoreHero text value={<ValueOrUnavailable value={done ? 'Recovered' : left} />} label={done ? 'Ready for a hard session' : readyAt ? `Fully recovered ${readyAt}` : 'Recovery time left'} />
+            {done || left ? (
+              <ScoreHero text value={done ? 'Recovered' : left} label={done ? 'Ready for a hard session' : readyAt ? `Fully recovered ${readyAt}` : 'Recovery time left'} />
+            ) : (
+              <EmptyNote>No recovery time from the watch yet.</EmptyNote>
+            )}
             <div style={{ display: 'flex', justifyContent: 'center' }}>
-              <Ring value={recovery.percent_complete} max={100} label="Recovery complete, percent" color="var(--accent)" size={96} strokeWidth={10} showValue={false} />
+              {recovery.percent_complete === null ? null : <Ring value={recovery.percent_complete} max={100} label="Recovery complete, percent" color="var(--accent)" size={96} strokeWidth={10} showValue={false} />}
             </div>
           </StatsSection>
           <StatsSection title="Training Status" aside={<Link to="/training/status">History</Link>}>
-            <ScoreHero text value={<ValueOrUnavailable value={view.headline} />} {...(view.note || since ? { label: view.note ?? since } : {})} />
+            {view.headline ? <ScoreHero text value={view.headline} {...(view.note || since ? { label: view.note ?? since } : {})} /> : <EmptyNote>No training status from the watch yet.</EmptyNote>}
             {view.note && since ? <p className="stats-note">{since}</p> : null}
             <StatusExplanation brief />
           </StatsSection>
@@ -277,16 +301,15 @@ function TrainingDesktop({ data }: { data: TrainingResponse }) {
             <RaceCard flat />
           </StatsSection>
           <StatsSection title="VO2 Max (derived)">
-            <ScoreHero value={<ValueOrUnavailable value={vo2Value} />} {...(vo2Change ? { label: vo2Change } : {})} />
+            {vo2Value ? <ScoreHero value={vo2Value} {...(vo2Change ? { label: vo2Change } : {})} /> : <EmptyNote>No VO2 max estimate yet.</EmptyNote>}
             <p className="stats-note">Derived (max MET x 3.5), ml/kg/min. This is not the watch's own VO2 max figure.</p>
           </StatsSection>
         </>
       }
     >
       <StatsSection title="7-day Load" aside={range ? `Target range ${range}` : undefined}>
-        <span className="big-value">
-          <ValueOrUnavailable value={loadText} />
-        </span>
+        {loadText === null && !load.series_4w.some((v) => v !== null) ? <EmptyNote>No training load from the watch in the last 4 weeks.</EmptyNote> : null}
+        {loadText !== null ? <span className="big-value">{loadText}</span> : null}
         {hasTarget && load.seven_day_load !== null ? (
           <RangeBar
             value={load.seven_day_load}
@@ -297,13 +320,15 @@ function TrainingDesktop({ data }: { data: TrainingResponse }) {
           />
         ) : null}
         {where ? <p className="stats-note">{where}</p> : null}
-        <SeriesChart
-          label="Seven-day load over the last 4 weeks"
-          summary={seriesSummary('Seven-day load', 'over the last 4 weeks', load.series_4w)}
-          x={load.series_4w.map((_, i) => i)}
-          series={[{ label: 'Load', color: 'link', data: seriesValues(load.series_4w) }]}
-          height={200}
-        />
+        {load.series_4w.some((v) => v !== null) ? (
+          <SeriesChart
+            label="Seven-day load over the last 4 weeks"
+            summary={seriesSummary('Seven-day load', 'over the last 4 weeks', load.series_4w)}
+            x={load.series_4w.map((_, i) => i)}
+            series={[{ label: 'Load', color: 'link', data: seriesValues(load.series_4w) }]}
+            height={200}
+          />
+        ) : null}
         <StatStrip
           items={[
             { key: 'acute', label: 'Acute load', value: fmtInt(load.acute) },
@@ -315,9 +340,7 @@ function TrainingDesktop({ data }: { data: TrainingResponse }) {
 
       <StatsSection title="Load by Intensity">
         {balance === null ? (
-          <p>
-            <Unavailable />
-          </p>
+          <EmptyNote>No load by intensity from the watch yet.</EmptyNote>
         ) : (
           <>
             <BarList label="Load by intensity" max={top} labelWidth={104} items={rows.map((r) => ({ key: r.key, label: r.label, value: r.value, color: r.color, text: fmtInt(r.value) ?? undefined }))} />

@@ -45,6 +45,7 @@ import {
   WatchLink,
   ZoneBars,
   DataList,
+  EmptyNote,
   KeyIcon,
 } from './index';
 
@@ -63,11 +64,19 @@ describe('Unavailable (hard rule: missing metrics are never 0)', () => {
     expect(screen.getByText('unavailable')).toBeInTheDocument();
   });
 
-  it('StatTile shows "unavailable" for null and undefined, and never 0', () => {
-    render(
+  it('StatTile leaves out a missing value by default, says "unavailable" when asked, and never shows 0', () => {
+    const { rerender } = render(
       <>
         <StatTile label="HRV" value={null} />
         <StatTile label="Pace" value={undefined} />
+      </>,
+    );
+    expect(screen.queryByText('HRV')).not.toBeInTheDocument();
+    expect(screen.queryByText('Pace')).not.toBeInTheDocument();
+    rerender(
+      <>
+        <StatTile label="HRV" value={null} hideWhenMissing={false} />
+        <StatTile label="Pace" value={undefined} hideWhenMissing={false} />
       </>,
     );
     expect(screen.getAllByText('unavailable')).toHaveLength(2);
@@ -80,10 +89,10 @@ describe('Unavailable (hard rule: missing metrics are never 0)', () => {
     expect(screen.queryByText('unavailable')).not.toBeInTheDocument();
   });
 
-  it('DataList, Table and ZoneBars show "unavailable" for missing values', () => {
+  it('DataList (when asked), Table and ZoneBars show "unavailable" for missing values', () => {
     render(
       <>
-        <DataList items={[{ label: 'Firmware', value: null }]} />
+        <DataList hideMissing={false} items={[{ label: 'Firmware', value: null }]} />
         <Table caption="Laps" rows={[{ id: 1, hr: null as string | null }]} rowKey={(r) => String(r.id)} columns={[{ key: 'hr', header: 'HR', cell: (r) => r.hr }]} />
         <ZoneBars zones={[{ zone: 1, minutes: null }]} />
       </>,
@@ -437,9 +446,12 @@ describe('BarSeries', () => {
     expect(bars.map((b) => b.style.fill)).toEqual(['var(--stage-deep)', 'rgb(1, 2, 3)', 'var(--stage-deep)']);
   });
 
-  it('shows "unavailable" when no bar has a value', () => {
-    render(<BarSeries values={[null, null]} labels={['a', 'b']} label="None" />);
-    expect(screen.getByText('unavailable')).toBeInTheDocument();
+  it('says so in a sentence when no bar has a value', () => {
+    const { rerender } = render(<BarSeries values={[null, null]} labels={['a', 'b']} label="None" />);
+    expect(screen.getByText('Nothing recorded for this period.')).toBeInTheDocument();
+    expect(screen.queryByText('unavailable')).not.toBeInTheDocument();
+    rerender(<BarSeries values={[null, null]} labels={['a', 'b']} label="None" emptyText="No steps this week." />);
+    expect(screen.getByText('No steps this week.')).toBeInTheDocument();
   });
 });
 
@@ -646,7 +658,7 @@ describe('PageHeader, PeriodToolbar and StatStrip', () => {
     expect(screen.getByText('Nov 24')).toBeInTheDocument();
   });
 
-  it('the stat strip pairs every label with its value and says "unavailable" for a missing one', () => {
+  it('the stat strip pairs every label with its value and leaves out a missing one', () => {
     wrap(
       <StatStrip
         items={[
@@ -656,7 +668,8 @@ describe('PageHeader, PeriodToolbar and StatStrip', () => {
       />,
     );
     expect(screen.getByText('Avg resting').nextElementSibling).toHaveTextContent('54 bpm');
-    expect(screen.getByText('Lowest').nextElementSibling).toHaveTextContent('unavailable');
+    expect(screen.queryByText('Lowest')).not.toBeInTheDocument();
+    expect(screen.queryByText('unavailable')).not.toBeInTheDocument();
   });
 
   it('labels the periods the pages use in words', () => {
@@ -720,25 +733,25 @@ describe('StatTile and DataList hide what has no value', () => {
     expect(screen.getByText('Climb')).toBeInTheDocument();
   });
 
-  it('DataList: optional rows and hideMissing leave out empty rows, other rows still say "unavailable"', () => {
-    render(
-      <DataList
-        items={[
-          { label: 'Model', value: null, optional: true },
-          { label: 'Firmware', value: '21.3', optional: true },
-          { label: 'Battery', value: null },
-        ]}
-      />,
-    );
+  it('DataList leaves out empty rows by default; hideMissing={false} keeps the ones that are not optional', () => {
+    const items = [
+      { label: 'Model', value: null, optional: true },
+      { label: 'Firmware', value: '21.3', optional: true },
+      { label: 'Battery', value: null },
+    ];
+    const { rerender } = render(<DataList items={items} />);
     expect(screen.queryByText('Model')).not.toBeInTheDocument();
+    expect(screen.queryByText('Battery')).not.toBeInTheDocument();
     expect(screen.getByText('21.3')).toBeInTheDocument();
+    rerender(<DataList hideMissing={false} items={items} />);
+    expect(screen.queryByText('Model')).not.toBeInTheDocument();
     expect(screen.getByText('Battery').nextElementSibling).toHaveTextContent('unavailable');
   });
 
   it('DataList hideMissing shows the empty text when nothing is left, and nothing without it', () => {
     const { container, rerender } = render(<DataList hideMissing empty="No data." items={[{ label: 'Steps', value: null }]} />);
     expect(screen.getByText('No data.')).toBeInTheDocument();
-    rerender(<DataList hideMissing items={[{ label: 'Steps', value: null }]} />);
+    rerender(<DataList items={[{ label: 'Steps', value: null }]} />);
     expect(container).toBeEmptyDOMElement();
   });
 });
@@ -982,5 +995,12 @@ describe('ConfirmDialog', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Open' }));
     expect(screen.getByRole('alert')).toHaveTextContent('Could not reach the server.');
     expect(screen.getByRole('dialog')).toBeInTheDocument();
+  });
+});
+
+describe('EmptyNote', () => {
+  it('is one short sentence in a paragraph', () => {
+    render(<EmptyNote>No weight logged yet.</EmptyNote>);
+    expect(screen.getByText('No weight logged yet.')).toHaveClass('empty-note');
   });
 });

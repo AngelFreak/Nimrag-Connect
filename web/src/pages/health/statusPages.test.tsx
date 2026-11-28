@@ -305,6 +305,16 @@ describe('HrvPage', () => {
     expect(screen.getByRole('button', { name: 'Previous day' })).toBeInTheDocument();
   });
 
+  it('without a reading last night, the 7-night average takes its place and says what is missing', async () => {
+    mockApi({
+      '/api/hrv': hrv({ from: TODAY, to: TODAY, days: [hrvDay(TODAY, { status: 'low', status_code: 2, status_label: 'Low', weekly_avg_ms: 31, last_night_ms: null })], nights: 0 }),
+    });
+    renderAt('/hrv?range=1d');
+    expect(await screen.findByText('31 ms')).toBeInTheDocument();
+    expect(screen.getByText('7-night average. No reading last night.')).toBeInTheDocument();
+    expect(screen.queryByText('unavailable')).not.toBeInTheDocument();
+  });
+
   it('says so when a night has nothing', async () => {
     mockApi({ '/api/hrv': hrv({ from: TODAY, to: TODAY, days: [hrvDay(TODAY)] }) });
     renderAt('/hrv?range=1d');

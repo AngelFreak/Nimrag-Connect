@@ -1653,6 +1653,12 @@
   font-style: italic;
 }
 
+.empty-note {
+  margin: 0;
+  color: var(--text-2);
+  font-size: var(--fs-base);
+}
+
 .state {
   display: flex;
   flex-direction: column;

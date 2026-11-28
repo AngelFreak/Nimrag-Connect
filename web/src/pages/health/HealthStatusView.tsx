@@ -1,7 +1,7 @@
 import type { HealthMetricHistory } from '../../api/generated/HealthMetricHistory';
 import type { HealthMetricStatus } from '../../api/generated/HealthMetricStatus';
 import type { HealthStatusResponse } from '../../api/generated/HealthStatusResponse';
-import { Card, CardHeader, EmptyState, PageHeader, ProgressBar, SampleDataChip, SeriesChart, StatusWord, TopBar, Unavailable } from '../../components';
+import { Card, CardHeader, EmptyState, PageHeader, ProgressBar, SampleDataChip, SeriesChart, StatusWord, TopBar } from '../../components';
 import { fmtShortDay } from '../../lib/dates';
 import { useIsDesktop, usePageTitle } from '../../lib/hooks';
 import { CardSkeleton, LoadError } from './parts';
@@ -121,7 +121,7 @@ function MetricCard({ m, history, historyFailed }: { m: HealthMetricStatus; hist
     <Card padding="lg" aria-label={name} data-metric={m.key}>
       <CardHeader title={name} tone="muted" aside={<StatusWord type="health" value={m.state}>{STATE_WORD[m.state]}</StatusWord>} />
       <div className="hstatus-row">
-        <span className="hstatus-value">{value ?? <Unavailable />}</span>
+        {value ? <span className="hstatus-value">{value}</span> : null}
         <span className="hstatus-range">{range ? `Usual ${range}` : m.state === 'no_reading' ? 'Not measured last night' : null}</span>
       </div>
       {m.state === 'calibrating' ? (

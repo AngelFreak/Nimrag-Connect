@@ -1,12 +1,12 @@
 import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
-import { ValueOrUnavailable } from './Unavailable';
+import { isMissing } from '../lib/format';
 
 interface ListRowProps {
   to: string;
   title: ReactNode;
   sub: ReactNode;
-  /** Right-hand value ("42 min"); null renders "unavailable". */
+  /** Right-hand value ("42 min"); null leaves it out. */
   value: ReactNode | null | undefined;
   valueSub?: ReactNode;
 }
@@ -20,9 +20,7 @@ export function ListRow({ to, title, sub, value, valueSub }: ListRowProps) {
         <span className="list-row__sub">{sub}</span>
       </span>
       <span className="list-row__end">
-        <span className="list-row__value">
-          <ValueOrUnavailable value={value} />
-        </span>
+        {isMissing(value) || value === '' || value === false ? null : <span className="list-row__value">{value}</span>}
         {valueSub ? <span className="list-row__sub">{valueSub}</span> : null}
       </span>
     </Link>

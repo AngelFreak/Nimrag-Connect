@@ -52,7 +52,7 @@ export function YesterdayCard({ today }: { today: Today }) {
   const flows =
     isMissing(y.energy_charged) && isMissing(y.energy_drained)
       ? null
-      : `${isMissing(y.energy_charged) ? 'unavailable' : signed(y.energy_charged)} / ${isMissing(y.energy_drained) ? 'unavailable' : signed(-y.energy_drained)}`;
+      : [isMissing(y.energy_charged) ? null : signed(y.energy_charged), isMissing(y.energy_drained) ? null : signed(-y.energy_drained)].filter((x) => x !== null).join(' / ');
   const hr = join(isMissing(y.resting_hr_bpm) ? null : `rest ${fmtInt(y.resting_hr_bpm)}`, isMissing(y.hr_high_bpm) ? null : `high ${fmtInt(y.hr_high_bpm)}`);
   return (
     <Card as="section" aria-labelledby="yesterday-title">

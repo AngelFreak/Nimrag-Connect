@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import type { DayResponse } from '../../api/generated/DayResponse';
 import type { MovementResponse } from '../../api/generated/MovementResponse';
-import { BarSeries, Legend, Ring, SampleDataChip, SeriesChart, StatStrip, StatTile, Unavailable, ValueOrUnavailable } from '../../components';
+import { BarSeries, Legend, Ring, SampleDataChip, SeriesChart, StatStrip, StatTile, EmptyNote } from '../../components';
 import { fmtDay, fmtMonthDay } from '../../lib/dates';
 import { fmtFixed, fmtInt, withUnit } from '../../lib/format';
 import { useIsDesktop } from '../../lib/hooks';
@@ -36,14 +36,16 @@ interface TileSpec {
 const tile = (label: string, value: string | null, tone: Tone = 'muted', sub?: string): TileSpec => ({ label, value, tone, ...(sub ? { sub } : {}) });
 
 /** The chart, and the day's figures: tiles beside it on a phone, a strip in the 320 px column on a wide screen. */
-function Layout({ chart, tiles, children }: { chart: ReactNode; tiles: TileSpec[]; children?: ReactNode }) {
+function Layout({ chart, tiles, children, emptyText = 'Nothing recorded for this day.' }: { chart: ReactNode; tiles: TileSpec[]; children?: ReactNode; emptyText?: string }) {
   const desktop = useIsDesktop();
+  // A figure the watch did not record is left out; when none was, one sentence says so.
+  const shown = tiles.filter((t) => t.value !== null);
   if (desktop) {
     return (
       <StatsColumns
         side={
           <StatsSection title="Summary">
-            <StatStrip items={tiles.map((t) => ({ key: t.label, label: t.sub ? `${t.label}, ${t.sub}` : t.label, value: t.value }))} />
+            {shown.length === 0 ? <EmptyNote>{emptyText}</EmptyNote> : <StatStrip items={shown.map((t) => ({ key: t.label, label: t.sub ? `${t.label}, ${t.sub}` : t.label, value: t.value }))} />}
           </StatsSection>
         }
       >
@@ -57,7 +59,8 @@ function Layout({ chart, tiles, children }: { chart: ReactNode; tiles: TileSpec[
       <div className="metric-top">
         {chart}
         <div className="metric-tiles">
-          {tiles.map((t) => (
+          {shown.length === 0 ? <EmptyNote>{emptyText}</EmptyNote> : null}
+          {shown.map((t) => (
             <StatTile key={t.label} size="sm" label={t.label} value={t.value} tone={t.tone} {...(t.sub ? { sub: t.sub } : {})} />
           ))}
         </div>
@@ -176,7 +179,7 @@ function EnergyDay({ day, today }: { day: DayResponse; today: string }) {
   return (
     <Layout
       chart={
-        <Panel title="Energy" aside={energyAside(e) ?? <Unavailable />}>
+        <Panel title="Energy" aside={energyAside(e) ?? undefined}>
           <EnergyDayChart energy={e} stress={day.stress} timezone={timezone} sleep={sleep} activities={activities} tall={desktop} />
           {sentence ? <p className="day-sentence">{sentence}</p> : null}
         </Panel>
@@ -208,7 +211,7 @@ function StepsDay({ day }: { day: DayResponse }) {
           <div className="metric-ring">
             <Ring value={day.steps} max={day.step_goal} label="Steps against the daily goal" color="var(--steps)" size={112} strokeWidth={12} showValue={false} />
             <div className="stat">
-              <span className="stat__value"><ValueOrUnavailable value={fmtInt(day.steps)} /></span>
+              {fmtInt(day.steps) === null ? <EmptyNote>No steps recorded for this day.</EmptyNote> : <span className="stat__value">{fmtInt(day.steps)}</span>}
               <span className="stat__sub tone-steps">{pct === null ? `Goal ${fmtInt(day.step_goal)}` : `${pct}% of ${fmtInt(day.step_goal)}`}</span>
             </div>
           </div>
@@ -271,7 +274,11 @@ function IntensityDay({ day, today }: { day: DayResponse; today: string }) {
           <div className="metric-ring">
             <Ring value={week?.total_min ?? null} max={week?.goal_min ?? 150} label="Intensity minutes against the weekly goal" color="var(--energy)" size={112} strokeWidth={12} showValue={false} />
             <div className="stat">
-              <span className="stat__value"><ValueOrUnavailable value={withUnit(fmtInt(week?.total_min), 'min')} /></span>
+              {withUnit(fmtInt(week?.total_min), 'min') === null ? (
+                <EmptyNote>No intensity minutes recorded this week.</EmptyNote>
+              ) : (
+                <span className="stat__value">{withUnit(fmtInt(week?.total_min), 'min')}</span>
+              )}
               <span className="stat__sub tone-energy">{pct === null ? '' : `${pct}% of ${fmtInt(week?.goal_min)}`}</span>
             </div>
           </div>
@@ -297,6 +304,7 @@ function IntensityDay({ day, today }: { day: DayResponse; today: string }) {
         tile('Vigorous', withUnit(fmtInt(dayFigures?.vigorous_min), 'min'), 'energy', 'counts double'),
         tile('Credited', withUnit(fmtInt(dayFigures?.total_min ?? day.intensity_minutes), 'min')),
       ]}
+      emptyText="No intensity minutes recorded for this day."
     />
   );
 }
@@ -313,6 +321,13 @@ function BreathingDay({ day }: { day: DayResponse }) {
     b.lowest === null || b.highest === null
       ? 'No breathing readings for this day.'
       : `Breathing rate by the hour, from ${fmtFixed(b.lowest, 1)} to ${fmtFixed(b.highest, 1)} breaths a minute.`;
+  if (hours === null && [b.lowest, b.highest, b.avg_awake, b.avg_asleep].every((v) => v === null)) {
+    return (
+      <Panel title="Breathing by the hour">
+        <EmptyNote>No breathing readings for this day.</EmptyNote>
+      </Panel>
+    );
+  }
   return (
     <Layout
       chart={
@@ -347,6 +362,13 @@ function Spo2Day({ day }: { day: DayResponse }) {
       ? 'No blood oxygen readings for this day.'
       : `Blood oxygen by the hour: average ${fmtInt(o.average)}%, lowest ${fmtInt(o.lowest)}%.`;
   const at = clock(o.latest_at);
+  if (!low.length && [o.average, o.lowest, o.latest, o.avg_asleep].every((v) => v === null)) {
+    return (
+      <Panel title="Blood oxygen by the hour">
+        <EmptyNote>No blood oxygen readings for this day. Turn on Pulse Ox on the watch to record them.</EmptyNote>
+      </Panel>
+    );
+  }
   return (
     <Layout
       chart={

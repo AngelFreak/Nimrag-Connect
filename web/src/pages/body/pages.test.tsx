@@ -49,7 +49,7 @@ describe('MovementPage (3i)', () => {
     expect(screen.queryByText('Floors climbed')).not.toBeInTheDocument();
   });
 
-  it('missing metrics show "unavailable" and no zero', async () => {
+  it('missing metrics leave out their figures, say so in a sentence, and show no zero', async () => {
     mockApi({
       '/api/today': TODAY,
       '/api/movement/': movement({
@@ -64,7 +64,9 @@ describe('MovementPage (3i)', () => {
     });
     renderAt(<MovementPage />, '/movement', '/movement/:date?');
     await screen.findByText('Steps today');
-    await waitFor(() => expect(screen.getAllByText('unavailable').length).toBeGreaterThanOrEqual(8));
+    await waitFor(() => expect(screen.getByText('No steps recorded today.')).toBeInTheDocument());
+    expect(screen.getAllByText('No intensity minutes recorded this week.').length).toBeGreaterThanOrEqual(1);
+    expect(screen.queryByText('unavailable')).not.toBeInTheDocument();
     expect(screen.queryByText('0')).not.toBeInTheDocument();
     expect(screen.queryByText(/^0 /)).not.toBeInTheDocument();
     expect(screen.getByRole('progressbar', { name: 'Steps today unavailable' })).toBeInTheDocument();
@@ -148,7 +150,7 @@ describe('TrainingPage (3j)', () => {
     expect(document.body.textContent).not.toMatch(/status code/i);
   });
 
-  it('shows "unavailable" for missing recovery, load, balance, status and VO2 max', async () => {
+  it('says what is missing in a sentence for recovery, load, balance, status and VO2 max', async () => {
     mockApi({
       '/api/training': training({
         recovery: { started_at: null, total_s: null, remaining_s: null, percent_complete: null, ready_at: null },
@@ -160,7 +162,12 @@ describe('TrainingPage (3j)', () => {
     });
     renderAt(<TrainingPage />, '/training');
     await screen.findByText('Recovery time left');
-    expect(screen.getAllByText('unavailable').length).toBeGreaterThanOrEqual(12);
+    expect(screen.queryByText('unavailable')).not.toBeInTheDocument();
+    expect(screen.getByText('No recovery time from the watch yet.')).toBeInTheDocument();
+    expect(screen.getByText('No training load from the watch in the last 4 weeks.')).toBeInTheDocument();
+    expect(screen.getByText('No load by intensity from the watch yet.')).toBeInTheDocument();
+    expect(screen.getByText('No training status from the watch yet.')).toBeInTheDocument();
+    expect(screen.getByText('No VO2 max estimate yet.')).toBeInTheDocument();
     expect(screen.queryByText(/Status code/)).not.toBeInTheDocument();
     expect(screen.queryByText(/^0/)).not.toBeInTheDocument();
   });
@@ -188,9 +195,10 @@ describe('BodyPage (3k)', () => {
     expect(screen.getByRole('img', { name: /Weight trend over 90 days/ })).toBeInTheDocument();
     expect(screen.getByText(/3 weigh-ins, from 81.9 kg on Tue 27 Oct to 80.8 kg on Tue 17 Nov/)).toBeInTheDocument();
     expect(screen.getByText('86.0 cm')).toBeInTheDocument();
-    // body fat has no entry: unavailable, not 0
+    // body fat has no entry: a sentence, not 0 and not "unavailable"
     const fat = screen.getByText('Body fat').closest('section') as HTMLElement;
-    expect(within(fat).getByText('unavailable')).toBeInTheDocument();
+    expect(within(fat).getByText('No body fat logged yet.')).toBeInTheDocument();
+    expect(screen.queryByText('unavailable')).not.toBeInTheDocument();
     const list = screen.getByRole('heading', { name: 'Entries' }).closest('section') as HTMLElement;
     expect(within(list).getByText('Tue 17 Nov · 07:10')).toBeInTheDocument();
     expect(within(list).getByText('Weight 81.3 kg · Waist 86.0 cm')).toBeInTheDocument();
@@ -228,7 +236,10 @@ describe('BodyPage (3k)', () => {
     });
     renderAt(<BodyPage />, '/body');
     expect(await screen.findByText('No entries yet')).toBeInTheDocument();
-    expect(screen.getAllByText('unavailable').length).toBeGreaterThanOrEqual(4);
+    expect(screen.getByText('No weight logged yet. Use Add entry below.')).toBeInTheDocument();
+    expect(screen.getByText('No body fat logged yet.')).toBeInTheDocument();
+    expect(screen.getByText('No waist logged yet.')).toBeInTheDocument();
+    expect(screen.queryByText('unavailable')).not.toBeInTheDocument();
     await userEvent.click(within(screen.getByText('No entries yet').closest('section') as HTMLElement).getByRole('button', { name: 'Add entry' }));
     expect(screen.getByLabelText('Weight (kg)')).toHaveFocus();
   });
@@ -432,14 +443,15 @@ describe('CalendarPage (3l)', () => {
     expect(within(card).getByRole('link', { name: 'Open day view' })).toHaveAttribute('href', '/day/2026-11-10');
   });
 
-  it('a day without data says so: no activity, unavailable metrics', async () => {
+  it('a day without data says so: no activity, one sentence for the rest', async () => {
     mockApi({ '/api/today': TODAY, '/api/calendar/2026-11': calendar() });
     renderAt(<CalendarPage />, '/calendar/2026-11', route);
     const day = await screen.findByRole('link', { name: '1 November' });
     fireEvent.focus(day);
     const card = screen.getByRole('heading', { name: 'Sun 1 Nov' }).closest('section') as HTMLElement;
     expect(within(card).getByText('No activity on this day.')).toBeInTheDocument();
-    expect(within(card).getAllByText('unavailable')).toHaveLength(4);
+    expect(within(card).getByText('No sleep, steps or heart rate recorded for this day.')).toBeInTheDocument();
+    expect(within(card).queryByText('unavailable')).not.toBeInTheDocument();
   });
 
   it('shows an error state with a retry', async () => {

@@ -1,4 +1,4 @@
-import { PlotFrame, PlotXLabels, plotTicks, Unavailable } from '../../components';
+import { PlotFrame, PlotXLabels, plotTicks, EmptyNote } from '../../components';
 import { fmtShortDay } from '../../lib/dates';
 import { tickCountFor, unitTicks } from '../../lib/ticks';
 import { toPoints, weightSummary } from './body';
@@ -17,9 +17,7 @@ export function WeightChart({ weights, trend }: { weights: TimedValue[]; trend: 
   const line = toPoints(trend);
   if (dots.length === 0) {
     return (
-      <p>
-        <Unavailable />
-      </p>
+      <EmptyNote>No weight logged yet.</EmptyNote>
     );
   }
   const all = [...dots, ...line];

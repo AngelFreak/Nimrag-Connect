@@ -1,4 +1,4 @@
-import { PlotFrame, plotTicks, Unavailable } from '../../components';
+import { PlotFrame, plotTicks, EmptyNote } from '../../components';
 import type { FlowChart } from './energyDay';
 
 const W = 320;
@@ -18,9 +18,7 @@ export function flowTop(value: number): number {
 export function FlowBars({ chart, height }: { chart: FlowChart; height: number }) {
   if (!chart.hasData) {
     return (
-      <p>
-        <Unavailable />
-      </p>
+      <EmptyNote>No energy readings in this period.</EmptyNote>
     );
   }
   const n = chart.charged.length;

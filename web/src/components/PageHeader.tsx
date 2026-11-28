@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { fmtPeriod } from '../lib/dates';
 import { CalendarIcon, NextIcon, BackIcon } from './icons';
 import { SegmentedControl } from './SegmentedControl';
+import { isMissing } from '../lib/format';
 import { ValueOrUnavailable } from './Unavailable';
 
 // The header of a stats page (pattern A in docs/design/web-layout/SPEC.md): the page title, a toolbar
@@ -87,15 +88,17 @@ export function PeriodToolbar<K extends string>({ from, to, atToday, onStep, uni
 export interface StatStripItem {
   key: string;
   label: ReactNode;
-  /** Pre-formatted value with its unit; null or undefined says "unavailable". */
+  /** Pre-formatted value with its unit; a cell with no value is left out. */
   value: ReactNode | null | undefined;
 }
 
-/** Figures in a row under a chart: value 24/300 on top, label under it, each cell under a rule. */
+/** Figures in a row under a chart: value 24/300 on top, label under it, each cell under a rule. Cells without a value are left out. */
 export function StatStrip({ items }: { items: readonly StatStripItem[] }) {
+  const shown = items.filter((item) => !(isMissing(item.value) || item.value === '' || item.value === false));
+  if (shown.length === 0) return null;
   return (
     <dl className="stat-strip">
-      {items.map((item) => (
+      {shown.map((item) => (
         <div key={item.key} className="stat-strip__cell">
           <dt className="stat-strip__label">{item.label}</dt>
           <dd className="stat-strip__value">

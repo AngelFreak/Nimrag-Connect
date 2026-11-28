@@ -231,18 +231,19 @@ describe('Today on a phone', () => {
     expect(href('weight')).toBe('/body');
   });
 
-  it('missing metrics read "unavailable", never 0', async () => {
+  it('missing metrics are left out or explained in a sentence, never 0', async () => {
     mockApi({ '/api/today': () => json(makeEmptyToday()), '/api/settings': () => json(makeSettings({ home_cards: { order: makeSettings().home_cards.order, hidden: [] } })) });
     renderPage();
     await screen.findByRole('heading', { name: 'At a glance' });
     await waitFor(() => expect(glanceIds()).toHaveLength(12));
-    expect(screen.getAllByText('unavailable').length).toBeGreaterThan(10);
+    // The grid of tiles never says "unavailable" (the In focus row has its own rules).
+    expect(document.querySelector('.glance-grid')?.textContent).not.toMatch(/unavailable/);
     expect(screen.queryByText(/^0$/)).not.toBeInTheDocument();
     expect(screen.getByText('No watch data yet')).toBeInTheDocument();
     // The sleep slide says so instead of showing a zero night.
     expect(screen.getByText('The watch recorded no sleep for last night.')).toBeInTheDocument();
     const steps = document.querySelector('.glance-grid [data-card="steps"]') as HTMLElement;
-    expect(within(steps).getByText('unavailable')).toBeInTheDocument();
+    expect(within(steps).queryByText('unavailable')).not.toBeInTheDocument();
     expect(within(steps).getByRole('progressbar', { name: 'unavailable of 8,000 steps' })).toBeInTheDocument();
   });
 

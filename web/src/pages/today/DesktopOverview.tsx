@@ -69,7 +69,7 @@ function YesterdayRows({ today, stepGoal }: { today: Today; stepGoal: number }) 
   const flows =
     isMissing(y.energy_charged) && isMissing(y.energy_drained)
       ? null
-      : `${isMissing(y.energy_charged) ? 'unavailable' : signed(y.energy_charged)} / ${isMissing(y.energy_drained) ? 'unavailable' : signed(-y.energy_drained)}`;
+      : [isMissing(y.energy_charged) ? null : signed(y.energy_charged), isMissing(y.energy_drained) ? null : signed(-y.energy_drained)].filter((x) => x !== null).join(' / ');
   const pct = !isMissing(y.steps) && stepGoal > 0 ? Math.round((y.steps / stepGoal) * 100) : null;
   const rows: (RowProps & { key: string })[] = [
     { key: 'energy', glyph: 'energy', tone: 'var(--energy)', label: 'Energy', to: '/metrics/energy', value: flows },
@@ -232,10 +232,12 @@ function RecentActivityItem({ a }: { a: ActivityListItem }) {
               <span className="hact__l">{first.label}</span>
             </span>
           ) : null}
-          <span className="hact__stat">
-            <span className="hact__v">{fmtClock(a.duration_s) ?? 'unavailable'}</span>
-            <span className="hact__l">Time</span>
-          </span>
+          {fmtClock(a.duration_s) === null ? null : (
+            <span className="hact__stat">
+              <span className="hact__v">{fmtClock(a.duration_s)}</span>
+              <span className="hact__l">Time</span>
+            </span>
+          )}
         </div>
       </div>
     </li>

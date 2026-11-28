@@ -29,18 +29,24 @@ export function ScoreSummary({ night }: { night: SleepNight }) {
         ) : null}
       </div>
       <dl className="sleep-score__facts">
-        <div>
-          <dt>Time asleep</dt>
-          <dd className="sleep-score__big">{fmtSeconds(night.duration_s) ?? <span className="unavailable">unavailable</span>}</dd>
-        </div>
-        <div>
-          <dt>Bed</dt>
-          <dd>{clock(night.start) ?? 'unavailable'}</dd>
-        </div>
-        <div>
-          <dt>Woke</dt>
-          <dd>{clock(night.end) ?? 'unavailable'}</dd>
-        </div>
+        {fmtSeconds(night.duration_s) === null ? null : (
+          <div>
+            <dt>Time asleep</dt>
+            <dd className="sleep-score__big">{fmtSeconds(night.duration_s)}</dd>
+          </div>
+        )}
+        {clock(night.start) === null ? null : (
+          <div>
+            <dt>Bed</dt>
+            <dd>{clock(night.start)}</dd>
+          </div>
+        )}
+        {clock(night.end) === null ? null : (
+          <div>
+            <dt>Woke</dt>
+            <dd>{clock(night.end)}</dd>
+          </div>
+        )}
       </dl>
     </div>
   );

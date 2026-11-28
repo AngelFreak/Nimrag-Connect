@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import type { HrvDay } from '../../api/generated/HrvDay';
 import type { HrvRange } from '../../api/generated/HrvRange';
 import type { HrvStatusKind } from '../../api/generated/HrvStatusKind';
-import { Card, CardHeader, DataList, EmptyState, Legend, PageHeader, PeriodToolbar, SampleDataChip, SeriesChart, StatStrip, StatTile, TopBar, Toggle, ValueOrUnavailable, rangeLabel, type LegendItem } from '../../components';
+import { Card, CardHeader, DataList, EmptyState, Legend, PageHeader, PeriodToolbar, SampleDataChip, SeriesChart, StatStrip, StatTile, TopBar, Toggle, rangeLabel, type LegendItem } from '../../components';
 import { fmtDayLong, fmtMonthDay } from '../../lib/dates';
 import { fmtInt, statusName, withUnit } from '../../lib/format';
 import { useIsDesktop, usePageTitle } from '../../lib/hooks';
@@ -180,18 +180,18 @@ function DayCard({ day }: { day: HrvDay }) {
         </span>
       </div>
       <dl className="day-card__vals">
-        <div>
-          <dt>7-day avg</dt>
-          <dd>
-            <ValueOrUnavailable value={withUnit(fmtInt(day.weekly_avg_ms), 'ms')} />
-          </dd>
-        </div>
-        <div>
-          <dt>Overnight avg</dt>
-          <dd>
-            <ValueOrUnavailable value={withUnit(fmtInt(day.last_night_ms), 'ms')} />
-          </dd>
-        </div>
+        {withUnit(fmtInt(day.weekly_avg_ms), 'ms') === null ? null : (
+          <div>
+            <dt>7-day avg</dt>
+            <dd>{withUnit(fmtInt(day.weekly_avg_ms), 'ms')}</dd>
+          </div>
+        )}
+        {withUnit(fmtInt(day.last_night_ms), 'ms') === null ? null : (
+          <div>
+            <dt>Overnight avg</dt>
+            <dd>{withUnit(fmtInt(day.last_night_ms), 'ms')}</dd>
+          </div>
+        )}
       </dl>
     </Card>
   );
@@ -205,6 +205,8 @@ function NightBody({ data }: { data: HrvRange }) {
   if (!day || (!hrvHasData(day) && !data.night)) {
     return <EmptyState title="No HRV for this night">The watch records HRV overnight. Try the previous day.</EmptyState>;
   }
+  const overnight = withUnit(fmtInt(hrvValue(day, 'overnight')), 'ms');
+  const average = withUnit(fmtInt(day.weekly_avg_ms), 'ms');
   if (desktop) return <NightDesktop day={day} night={data.night} />;
   return (
     <div className="grid-panels" style={{ alignItems: 'start' }}>
@@ -212,14 +214,21 @@ function NightBody({ data }: { data: HrvRange }) {
         <CardHeader title={`Overnight HRV, ${fmtMonthDay(day.date)}`} tone="muted" />
         <div className="status-hero">
           <StatusMark status={day.status} />
-          <span className="stat__value" style={{ fontSize: 34 }}>
-            {withUnit(fmtInt(hrvValue(day, 'overnight')), 'ms') ?? <span className="unavailable">unavailable</span>}
-          </span>
+          {overnight ? (
+            <span className="stat__value" style={{ fontSize: 34 }}>
+              {overnight}
+            </span>
+          ) : average ? (
+            <span className="stat__value" style={{ fontSize: 34 }}>
+              {average}
+            </span>
+          ) : null}
         </div>
+        {overnight ? null : <span className="stat__sub">{average ? '7-night average. No reading last night.' : 'No reading last night.'}</span>}
         <span className="stat__sub">{statusName(day.status_label) ?? 'No status for this night'}</span>
         <DataList
           items={[
-            { label: '7-day average', value: withUnit(fmtInt(day.weekly_avg_ms), 'ms') },
+            ...(overnight ? [{ label: '7-day average', value: average }] : []),
             { label: 'Highest 5-minute average', value: withUnit(fmtInt(day.last_night_5min_high_ms), 'ms') },
             { label: 'Balanced range', value: baselineText(day.baseline_low_ms, day.baseline_high_ms) },
           ]}
@@ -335,7 +344,10 @@ function RangeDesktop({ data, mode, onMode, withData, weekly, range }: { data: H
 }
 
 function NightDesktop({ day, night }: { day: HrvDay; night: HrvRange['night'] }) {
-  const value = withUnit(fmtInt(hrvValue(day, 'overnight')), 'ms');
+  const overnight = withUnit(fmtInt(hrvValue(day, 'overnight')), 'ms');
+  const average = withUnit(fmtInt(day.weekly_avg_ms), 'ms');
+  // No reading last night: the 7-night average takes the big slot and the label says so.
+  const value = overnight ?? average;
   return (
     <StatsColumns
       side={
@@ -346,10 +358,10 @@ function NightDesktop({ day, night }: { day: HrvDay; night: HrvRange['night'] })
               value={
                 <span className="score-hero__row">
                   <StatusMark status={day.status} />
-                  {value ?? <span className="unavailable">unavailable</span>}
+                  {value}
                 </span>
               }
-              label={statusName(day.status_label) ?? 'No status for this night'}
+              label={overnight === null ? (average ? '7-night average. No reading last night.' : 'No reading last night.') : (statusName(day.status_label) ?? 'No status for this night')}
             />
             <StatStrip
               items={[

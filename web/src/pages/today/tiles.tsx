@@ -1,7 +1,7 @@
 import type { CSSProperties, ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import type { HomeCard, Today } from '../../api/generated';
-import { Card, Skeleton, StatusWord, Unavailable, ValueOrUnavailable } from '../../components';
+import { Card, Skeleton, StatusWord } from '../../components';
 import { fmtShortDay } from '../../lib/dates';
 import { fmtFixed, fmtInt, isMissing, statusName } from '../../lib/format';
 import { LEVEL_NAME as STRESS_NAME } from '../../lib/stress';
@@ -47,7 +47,7 @@ interface TileProps {
   tone: string;
   /** The picture, or the sentence that stands in for it. */
   visual: ReactNode;
-  /** The main figure; null shows "unavailable", left out shows nothing (empty tiles). */
+  /** The main figure; null or left out shows nothing (empty tiles say why in the picture). */
   value?: ReactNode;
   /** The figure is a word ("Productive") that may shrink to fit. */
   word?: boolean;
@@ -76,13 +76,11 @@ function Tile({ id, glyph, tone, visual, value, word = false, label, alert = fal
         <div className="tile__figure">
           {figure ?? (
             <>
-              {/* No value at all (an empty tile): the hint in the picture says it, so no "unavailable" under it. */}
-              {value === undefined ? null : (
-                <span className={word ? 'tile__value tile__value--word' : 'tile__value'}>
-                  <ValueOrUnavailable value={value} />
-                </span>
+              {/* No value at all (an empty tile): the hint in the picture says it, so nothing under it. */}
+              {value === undefined || value === null || value === '' ? null : (
+                <span className={word ? 'tile__value tile__value--word' : 'tile__value'}>{value}</span>
               )}
-              {label ? <span className={alert ? 'tile__label tone-warn' : 'tile__label'}>{label}</span> : null}
+              {label && !(value === null || value === '') ? <span className={alert ? 'tile__label tone-warn' : 'tile__label'}>{label}</span> : null}
             </>
           )}
           {note ? <span className="tile__note">{note}</span> : null}
@@ -169,34 +167,42 @@ function HealthStatusTile() {
 
 function Sleep({ today }: { today: Today }) {
   const s = today.sleep;
+  const score = s ? fmtInt(s.score) : null;
+  const asleep = s ? fmtSeconds(s.duration_s) : null;
   const rating = s ? ratingOfScore(s.score) : null;
+  // A night with neither figure is an empty tile: the picture says so.
+  const known = score !== null || asleep !== null;
   return (
     <Tile
       id="sleep"
       glyph="sleep"
       tone="var(--sleep)"
-      figureFirst={s !== null}
+      figureFirst={known}
       visual={<SleepVisual today={today} />}
       figure={
-        s ? (
+        known ? (
           <div className="tile__pair">
-            <span className="tile__pair-item">
-              <span className="tile__value">{fmtInt(s.score) ?? <Unavailable />}</span>
-              <span className="tile__label">
-                Score
-                {rating ? (
-                  <span className="tile__rating">
-                    <StatusWord type="sleep" value={rating}>
-                      {RATING_WORD[rating]}
-                    </StatusWord>
-                  </span>
-                ) : null}
+            {score !== null ? (
+              <span className="tile__pair-item">
+                <span className="tile__value">{score}</span>
+                <span className="tile__label">
+                  Score
+                  {rating ? (
+                    <span className="tile__rating">
+                      <StatusWord type="sleep" value={rating}>
+                        {RATING_WORD[rating]}
+                      </StatusWord>
+                    </span>
+                  ) : null}
+                </span>
               </span>
-            </span>
-            <span className="tile__pair-item">
-              <span className="tile__value">{fmtSeconds(s.duration_s) ?? <Unavailable />}</span>
-              <span className="tile__label">Asleep</span>
-            </span>
+            ) : null}
+            {asleep !== null ? (
+              <span className="tile__pair-item">
+                <span className="tile__value">{asleep}</span>
+                <span className="tile__label">Asleep</span>
+              </span>
+            ) : null}
           </div>
         ) : null
       }
@@ -275,6 +281,7 @@ function Tiles({ id, today }: { id: HomeCard; today: Today }) {
     case 'training_load': {
       const l = t.training_load;
       const where = l.vs_target === 'within' ? 'In range' : l.vs_target === 'above' ? 'Above range' : l.vs_target === 'below' ? 'Below range' : null;
+      if (isMissing(l.seven_day_load)) return <Tile id={id} glyph="load" tone="var(--zone-1)" visual={<LoadVisual today={t} />} />;
       return <Tile id={id} glyph="load" tone="var(--zone-1)" visual={<LoadVisual today={t} />} value={fmtInt(l.seven_day_load)} label={where ? `${where} · 7 days` : '7 days'} alert={l.vs_target === 'above' || l.vs_target === 'below'} />;
     }
     case 'recovery_time': {
@@ -309,7 +316,7 @@ function Tiles({ id, today }: { id: HomeCard; today: Today }) {
           id={id}
           glyph="breathing"
           tone="var(--zone-1)"
-          visual={isMissing(r.latest_brpm) ? <Hint>No breathing rate yet.</Hint> : <Rows label="Breaths a minute" rows={rows.map((x) => ({ name: x.name, value: x.value ?? <Unavailable /> }))} />}
+          visual={isMissing(r.latest_brpm) ? <Hint>No breathing rate yet.</Hint> : <Rows label="Breaths a minute" rows={rows.flatMap((x) => (x.value === null ? [] : [{ name: x.name, value: x.value }]))} />}
           value={fmtFixed(r.latest_brpm, 1)}
           label="Latest, breaths/min"
         />

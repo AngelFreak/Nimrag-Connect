@@ -21,7 +21,7 @@ vi.mock('../../components/SeriesChart', () => ({
         <p className="sr-only">{summary}</p>
       </div>
     ) : (
-      <p>unavailable</p>
+      <p>no readings</p>
     ),
 }));
 
@@ -386,7 +386,7 @@ describe('DayPage', () => {
     expect(screen.queryByRole('link', { name: 'Next day' })).not.toBeInTheDocument();
   });
 
-  it('shows "unavailable" for missing data and says when there are no activities', async () => {
+  it('leaves out missing figures, says no night was recorded, and says when there are no activities', async () => {
     mockApi({
       '/api/days/2026-11-18': dayResponse({
         heart_rate: { resting_hr_bpm: null, avg_7d_resting_hr_bpm: null, day: { low_bpm: null, high_bpm: null, series: [] } },
@@ -400,7 +400,8 @@ describe('DayPage', () => {
     });
     renderAt('/day/2026-11-18');
     expect(await screen.findByText('No activities this day')).toBeInTheDocument();
-    expect(screen.getAllByText('unavailable').length).toBeGreaterThanOrEqual(10);
+    expect(screen.queryByText('unavailable')).not.toBeInTheDocument();
+    expect(screen.getByText('No night recorded for this day.')).toBeInTheDocument();
     expect(screen.queryByText('0')).not.toBeInTheDocument();
     expect(screen.queryByRole('img', { name: 'Heart rate across the day' })).not.toBeInTheDocument();
   });
@@ -489,11 +490,13 @@ describe('HealthPage', () => {
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('/api/trends?range=3m', expect.anything()));
   });
 
-  it('shows "unavailable" for every metric the watch has no readings for', async () => {
+  it('says in a sentence what the watch has no readings for, never "unavailable"', async () => {
     mockApi({ '/api/trends?range=4w': trendsResponse('4w', true) });
     renderAt('/health');
     expect(await screen.findByText('Shows after your watch syncs overnight HRV.')).toBeInTheDocument();
-    expect(screen.getAllByText('unavailable').length).toBeGreaterThanOrEqual(8);
+    expect(screen.queryByText('unavailable')).not.toBeInTheDocument();
+    expect(screen.getByText('Blood oxygen is not measured: turn on Pulse Ox on the watch.')).toBeInTheDocument();
+    expect(screen.getByText('No breathing rate recorded in this period.')).toBeInTheDocument();
     expect(screen.queryByRole('img', { name: /Overnight HRV/ })).not.toBeInTheDocument();
   });
 
