@@ -1238,7 +1238,7 @@ pub fn week_start(d: NaiveDate) -> NaiveDate {
 /// watch's running totals (see the module note). A day without a counter reading takes Connect's
 /// daily minutes; Connect's minutes also count towards the week's running total, so the first
 /// watch reading after them (the watch's total is the week so far) adds only what came after.
-/// `None` for days with neither.
+/// A day with neither but with heart-rate readings (the watch was worn) is 0; `None` otherwise.
 pub async fn intensity_days(
     ctx: &Ctx,
     from: NaiveDate,
@@ -1262,6 +1262,19 @@ pub async fn intensity_days(
         e.1 = v.or(e.1);
     }
     let connect = connect_days(ctx, start, to).await?;
+    // Days the watch was worn (any heart-rate reading). Such a day without a new running total
+    // added no intensity minutes: it is 0, not unknown. One row per hour is enough to tell.
+    let worn: HashSet<NaiveDate> = sqlx::query_scalar::<_, i64>(
+        "SELECT MIN(ts) FROM mon_hr WHERE user_id = ? AND ts >= ? AND ts < ? GROUP BY ts / 3600",
+    )
+    .bind(ctx.uid)
+    .bind(ctx.day_bounds(from).0)
+    .bind(ctx.day_bounds(to).1)
+    .fetch_all(&ctx.pool)
+    .await?
+    .into_iter()
+    .map(|ts| ctx.date(ts))
+    .collect();
     let (mut prev_m, mut prev_v) = (0.0, 0.0);
     // The running total so far came (in part) from Connect, not from a watch reading.
     let (mut seeded_m, mut seeded_v) = (false, false);
@@ -1301,6 +1314,7 @@ pub async fn intensity_days(
                     (seeded_m, seeded_v) = (true, true);
                     (c.moderate_min, c.vigorous_min)
                 }
+                None if worn.contains(&d) => (Some(0.0), Some(0.0)),
                 None => (None, None),
             },
         };

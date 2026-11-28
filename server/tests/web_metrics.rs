@@ -483,6 +483,28 @@ async fn intensity_rows(e: &Env) {
 }
 
 #[tokio::test]
+async fn a_worn_day_without_new_intensity_minutes_is_zero() {
+    let (e, c) = setup().await;
+    intensity_rows(&e).await;
+    // Wed 18 has no running total, but the watch was worn: nothing was added, so 0, not unknown.
+    e.exec(&format!(
+        "INSERT INTO mon_hr (ts, bpm, src) VALUES ({}, 62, 1)",
+        at(18, 11, 0)
+    ))
+    .await;
+    let m = e.get(&c, "/api/metrics/intensity_minutes?range=7d").await;
+    assert_eq!(
+        values(&m, "moderate"),
+        [n(10.0), n(15.0), n(0.0), n(15.0), NULL, NULL, NULL]
+    );
+    assert_eq!(
+        values(&m, "vigorous"),
+        [n(0.0), n(5.0), n(0.0), n(0.0), NULL, NULL, NULL]
+    );
+    assert_eq!(stat(&m, "total"), n(50.0));
+}
+
+#[tokio::test]
 async fn intensity_minutes_follow_the_calendar_week() {
     let (e, c) = setup().await;
     intensity_rows(&e).await;
