@@ -2,7 +2,7 @@ import { useCallback, useRef, useState, type KeyboardEvent } from 'react';
 import { Link } from 'react-router-dom';
 import type { HomeCard, HomeCards, Today } from '../../api/generated';
 import type { ReadinessResponse } from '../../api/generated/ReadinessResponse';
-import { Card, Legend, Ring, SeriesChart, StageBar, StatusWord, Unavailable } from '../../components';
+import { Card, Legend, Ring, StatusWord, Unavailable } from '../../components';
 import { energyKey } from '../../lib/status';
 import { fmtInt, isMissing } from '../../lib/format';
 import { LEVEL_COLOR, LEVEL_NAME } from '../health/readiness';
@@ -11,7 +11,8 @@ import { RATING_COLOR, RATING_WORD, headlineFor, ratingOfScore } from '../health
 import { DEFAULT_HOME_CARDS } from './cards';
 import { EnergyDayChart } from './EnergyDayChart';
 import { Glyph, type GlyphName } from './glyphs';
-import { baselineLabel, energyHeadline, fmtSeconds, fmtTime, hrvStatusLabel, signed, unit } from './format';
+import { HrvVisual, ReadinessVisual, SleepVisual } from './tileVisuals';
+import { baselineLabel, energyHeadline, fmtSeconds, fmtTime, signed, unit } from './format';
 
 /** A slide without data: its name, one sentence of why, and where to look instead. No "unavailable" lines. */
 function EmptySlide({ glyph, title, children, to, linkText }: { glyph: GlyphName; title: string; children: string; to: string; linkText: string }) {
@@ -70,7 +71,11 @@ function ReadinessSlide({ data }: { data: ReadinessResponse }) {
   return (
     <Card as="div" padding="lg">
       <div className="focus-energy">
-        <Ring value={data.score} label="Readiness estimate" color={color} />
+        {data.score !== null ? (
+          <ReadinessVisual score={data.score} colors={LEVEL_COLOR} label={`Readiness estimate ${fmtInt(data.score)} out of 100${level ? `, level ${LEVEL_NAME[level]}` : ''}.`} />
+        ) : (
+          <Ring value={null} label="Readiness estimate" color={color} />
+        )}
         <div className="focus-energy__text">
           <span className="stat__label">Readiness</span>
           <span className="focus-energy__head">
@@ -130,16 +135,9 @@ function SleepSlide({ today }: { today: Today }) {
       <p className="focus__headline">{headline.title}</p>
       {s.stages_available ? (
         <>
-          <StageBar
-            height={10}
-            label={`Sleep stages: deep ${fmtSeconds(s.deep_s) ?? 'unavailable'}, light ${fmtSeconds(s.light_s) ?? 'unavailable'}, REM ${fmtSeconds(s.rem_s) ?? 'unavailable'}, awake ${fmtSeconds(s.awake_s) ?? 'unavailable'}`}
-            segments={[
-              { key: 'deep', label: 'Deep', value: s.deep_s, color: 'var(--stage-deep)' },
-              { key: 'light', label: 'Light', value: s.light_s, color: 'var(--stage-light)' },
-              { key: 'rem', label: 'REM', value: s.rem_s, color: 'var(--stage-rem)' },
-              { key: 'awake', label: 'Awake', value: s.awake_s, color: 'var(--stage-awake)' },
-            ]}
-          />
+          <div className="focus__visual">
+            <SleepVisual today={today} />
+          </div>
           <Legend
             grid
             items={[
@@ -172,30 +170,25 @@ function HrvSlide({ today }: { today: Today }) {
   }
   const band: [number, number] | undefined =
     !isMissing(h.baseline_low_ms) && !isMissing(h.baseline_high_ms) ? [h.baseline_low_ms, h.baseline_high_ms] : undefined;
-  const status = hrvStatusLabel(h.status);
+  const versus = baselineLabel(h.vs_baseline);
   return (
     <Card as="div" padding="lg">
       <span className="stat__label">Overnight HRV</span>
       <div className="focus__row">
-        <span className="focus__big">{unit(h.last_night_ms, 'ms') ?? <Unavailable />}</span>
+        <span className="focus__big">{unit(isMissing(h.last_night_ms) ? h.weekly_avg_ms : h.last_night_ms, 'ms')}</span>
         <div className="stat">
-          <span className="stat__sub">
-            {status ? <StatusWord type="hrv" value={h.status}>{status}</StatusWord> : null}
-            {status && baselineLabel(h.vs_baseline) ? ' · ' : null}
-            {baselineLabel(h.vs_baseline)}
+          {/* The status word is in the picture below, so it is not repeated here. */}
+          <span className="focus__sub">{isMissing(h.last_night_ms) ? '7-night average' : 'Last night'}</span>
+          <span className="focus__sub">
+            {isMissing(h.last_night_ms) ? 'No reading last night' : isMissing(h.weekly_avg_ms) ? null : `7-night average ${fmtInt(h.weekly_avg_ms)} ms`}
           </span>
-          <span className="focus__sub">{isMissing(h.weekly_avg_ms) ? null : `7-night average ${fmtInt(h.weekly_avg_ms)} ms`}</span>
+          {versus ? <span className="focus__sub">{versus}</span> : null}
         </div>
       </div>
-      <SeriesChart
-        label="Overnight HRV over the last 4 weeks"
-        summary={`Overnight HRV over the last 4 weeks, ${values.filter((v) => v !== null).length} nights${band ? `, usual range ${band[0]} to ${band[1]} milliseconds` : ''}.`}
-        x={values.map((_, i) => i)}
-        series={[{ label: 'HRV', color: 'link', data: values }]}
-        {...(band ? { band } : {})}
-        height={72}
-      />
-      <span className="focus__sub">{band ? `Shaded band is your usual range, ${band[0]} to ${band[1]} ms.` : 'Your usual range is unavailable.'}</span>
+      <div className="focus__visual">
+        <HrvVisual today={today} />
+      </div>
+      {band ? <span className="focus__sub">Your usual range is {band[0]} to {band[1]} ms.</span> : null}
     </Card>
   );
 }

@@ -1243,6 +1243,7 @@
   font-weight: var(--display-weight);
   font-size: 34px;
   line-height: 1.1;
+  white-space: nowrap;
 }
 .focus__row {
   display: flex;
@@ -1300,4 +1301,14 @@
   margin: 0;
   max-width: 30ch;
   color: var(--text-2);
+}
+
+/* A tile picture used at slide size. */
+.focus__visual {
+  display: flex;
+  justify-content: center;
+  margin-top: 4px;
+}
+.focus__visual > * {
+  width: 100%;
 }

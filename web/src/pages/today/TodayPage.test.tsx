@@ -300,7 +300,7 @@ describe('In focus carousel', () => {
     expect(within(region).getByText('Good reserve')).toBeInTheDocument();
     expect(within(region).getByText(/Woke 06:36/)).toBeInTheDocument();
     // The estimate: ring, level word, headline, its own label, and a link to the page.
-    expect(await within(region).findByRole('img', { name: 'Readiness estimate 78 out of 100' })).toBeInTheDocument();
+    expect(await within(region).findByRole('img', { name: /^Readiness estimate 78 out of 100/ })).toBeInTheDocument();
     expect(within(region).getByText('High')).toBeInTheDocument();
     expect(within(region).getByText('Ready for a solid session')).toBeInTheDocument();
     expect(within(region).getByText('Nimrag estimate')).toBeInTheDocument();
