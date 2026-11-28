@@ -36,8 +36,14 @@ async fn taking_the_refused_changes_waits_for_a_write_in_progress() {
     sqlx::query("COMMIT").execute(&mut *writer).await.unwrap();
     drop(writer);
 
-    let taken = taker.await.unwrap().expect("waits for the writer instead of failing");
+    let taken = taker
+        .await
+        .unwrap()
+        .expect("waits for the writer instead of failing");
     let paths: Vec<_> = taken.iter().map(|d| d.path.as_str()).collect();
     assert_eq!(paths, ["/api/workouts/1", "/api/workouts/2"]);
-    assert!(outbox::take_dropped(&pool).await.unwrap().is_empty(), "taken once");
+    assert!(
+        outbox::take_dropped(&pool).await.unwrap().is_empty(),
+        "taken once"
+    );
 }
