@@ -1,24 +1,21 @@
 import { useCallback, useLayoutEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import type { HomeCard, HomeCards, Today } from '../../api/generated';
-import type { NightSummary } from '../../api/generated/NightSummary';
 import type { ReadinessFactor } from '../../api/generated/ReadinessFactor';
 import type { ReadinessRating } from '../../api/generated/ReadinessRating';
 import type { ReadinessResponse } from '../../api/generated/ReadinessResponse';
 import { Card, Legend, Ring, SeriesChart, StatusWord, Unavailable } from '../../components';
 import { energyKey } from '../../lib/status';
-import { fmtMonthDay, fmtShortDay } from '../../lib/dates';
+import { fmtMonthDay } from '../../lib/dates';
 import { fmtFixed, fmtInt, isMissing } from '../../lib/format';
 import { FACTOR_META, LEVEL_COLOR, LEVEL_NAME, RATING_COLOR as FACTOR_COLOR, factorValue, factorWord } from '../health/readiness';
 import { useReadiness } from '../health/readinessQueries';
-import { RATING_COLOR, RATING_WORD, headlineFor, ratingOfScore } from '../health/sleepNight';
+import { RATING_COLOR, RATING_WORD, ratingOfScore } from '../health/sleepNight';
 import { DEFAULT_HOME_CARDS } from './cards';
 import { EnergyDayChart } from './EnergyDayChart';
-import { MiniBars } from './homeCharts';
-import { useSleepNights } from './queries';
 import { Glyph, type GlyphName } from './glyphs';
 import { HrvVisual, ReadinessVisual, SleepVisual } from './tileVisuals';
-import { baselineLabel, dayLetter, energyHeadline, fmtSeconds, fmtTime, signed, unit } from './format';
+import { baselineLabel, energyHeadline, fmtSeconds, fmtTime, signed, unit } from './format';
 
 /** A slide without data: its name, one sentence of why, and where to look instead. No "unavailable" lines. */
 function EmptySlide({ glyph, title, children, to, linkText }: { glyph: GlyphName; title: string; children: string; to: string; linkText: string }) {
@@ -93,16 +90,12 @@ function FactorBars({ factors }: { factors: ReadinessFactor[] }) {
         const value = factorValue(f);
         const rating = value === null ? null : f.rating;
         return (
-          <li key={f.key} className="focus-factors__row">
-            <span className="focus-factors__name">{FACTOR_META[f.key].name}</span>
-            <span className={rating ? 'focus-factors__value' : 'focus-factors__value focus-factors__value--none'}>
-              {rating ? (
-                <>
-                  <span className="focus-factors__figure">{value}</span> · {factorWord(f.key, rating)}
-                </>
-              ) : (
-                'No data'
-              )}
+          <li key={f.key} className="focus-factors__row" aria-label={`${FACTOR_META[f.key].name}: ${rating ? `${value}, ${factorWord(f.key, rating)}` : 'no data'}`}>
+            <span className="focus-factors__name" aria-hidden="true">
+              {FACTOR_META[f.key].name}
+            </span>
+            <span className={rating ? 'focus-factors__value' : 'focus-factors__value focus-factors__value--none'} aria-hidden="true">
+              {rating ? <span className="focus-factors__figure">{value}</span> : '–'}
             </span>
             <span className="focus-factors__track" aria-hidden="true">
               {rating ? <i style={{ width: `${(RUNG[rating] / 5) * 100}%`, background: FACTOR_COLOR[rating] }} /> : null}
@@ -117,7 +110,6 @@ function FactorBars({ factors }: { factors: ReadinessFactor[] }) {
 /** Today's readiness estimate: the gauge, its level word and headline, the six factors, and a link to the page that explains it. */
 function ReadinessSlide({ data }: { data: ReadinessResponse }) {
   const level = data.level;
-  const sentence = data.sentence ?? data.unavailable;
   return (
     <Card as="div" padding="lg">
       <div className="focus-energy">
@@ -141,14 +133,8 @@ function ReadinessSlide({ data }: { data: ReadinessResponse }) {
           <span className="focus__sub">Nimrag estimate</span>
         </div>
       </div>
-      <div className="focus__section">
-        <span className="focus__section-title">Six factors, heaviest first</span>
-        <FactorBars factors={data.factors} />
-      </div>
-      {sentence ? <p className="focus__sentence">{sentence}</p> : null}
-      <Link to="/training/readiness" className="focus__sub focus__link focus__link--end">
-        What it is made from
-      </Link>
+      {data.score === null && data.unavailable ? <p className="focus__sentence">{data.unavailable}</p> : null}
+      <FactorBars factors={data.factors} />
     </Card>
   );
 }
@@ -166,37 +152,9 @@ function Fact({ label, value, unitText }: { label: string; value: string; unitTe
   );
 }
 
-/** The sleep score of the last seven nights as small bars, last night highlighted, and their average. */
-function SleepWeek({ nights, average, lastDate }: { nights: NightSummary[]; average: number | null; lastDate: string }) {
-  const recent = nights
-    .slice()
-    .sort((a, b) => a.date.localeCompare(b.date))
-    .slice(-7);
-  if (recent.length === 0) return null;
-  const highlight = recent.findIndex((n) => n.date === lastDate);
-  return (
-    <div className="focus__section">
-      <div className="focus__section-head">
-        <span className="focus__section-title">Last 7 nights</span>
-        {isMissing(average) ? null : <span className="focus__sub">Average {fmtInt(average)}</span>}
-      </div>
-      <MiniBars
-        values={recent.map((n) => n.score)}
-        letters={recent.map((n) => dayLetter(n.date))}
-        color="var(--sleep)"
-        max={100}
-        highlight={highlight >= 0 ? highlight : recent.length - 1}
-        height={64}
-        label={`Sleep score of the last ${recent.length} nights: ${recent.map((n) => `${fmtShortDay(n.date)} ${isMissing(n.score) ? 'no score' : n.score}`).join(', ')}.`}
-      />
-    </div>
-  );
-}
-
 function SleepSlide({ today }: { today: Today }) {
   const s = today.sleep;
   const tz = today.timezone;
-  const nightsQuery = useSleepNights(7, s !== null);
   if (!s) {
     return (
       <EmptySlide glyph="sleep" title="Sleep last night" to="/sleep" linkText="See your latest nights">
@@ -207,7 +165,6 @@ function SleepSlide({ today }: { today: Today }) {
   const bed = fmtTime(s.start, tz);
   const wake = fmtTime(s.end, tz);
   const rating = ratingOfScore(s.score);
-  const headline = headlineFor(s);
   const asleep = fmtSeconds(s.duration_s);
   const lowHr = s.lowest_hr_bpm ?? today.heart_rate.resting_hr_bpm;
   const hrv = s.hrv_ms ?? today.hrv.last_night_ms;
@@ -243,26 +200,23 @@ function SleepSlide({ today }: { today: Today }) {
           {bed && wake ? <span className="focus__sub">{`${bed} to ${wake}`}</span> : null}
         </div>
       </div>
-      <p className="focus__headline">{headline.title}</p>
       {s.stages_available ? (
-        <div className="focus__section">
-          <div className="focus__visual">
-            <SleepVisual today={today} height={110} />
+        <div className="focus__body">
+          <div className="focus__visual focus__fill">
+            <SleepVisual today={today} height={96} />
           </div>
-          <Legend grid items={stages} />
+          <Legend items={stages} />
         </div>
       ) : (
-        <p className="focus__sub">No sleep stages for this night.</p>
-      )}
-      {facts.length > 0 ? (
-        <div className="focus-facts" style={{ '--cols': facts.length === 4 ? 2 : facts.length } as CSSProperties}>
-          {facts}
+        <div className="focus__body">
+          <p className="focus__sub">No sleep stages for this night.</p>
+          {facts.length > 0 ? (
+            <div className="focus-facts" style={{ '--cols': Math.min(3, facts.length) } as CSSProperties}>
+              {facts.slice(0, 3)}
+            </div>
+          ) : null}
         </div>
-      ) : null}
-      {nightsQuery.data ? <SleepWeek nights={nightsQuery.data.nights} average={nightsQuery.data.average_score} lastDate={s.date} /> : null}
-      <Link to="/sleep" className="focus__sub focus__link focus__link--end">
-        Open last night
-      </Link>
+      )}
     </Card>
   );
 }
@@ -288,28 +242,19 @@ function HrvSlide({ today }: { today: Today }) {
   const xLabels = days.length >= 4 ? [labelAt(0), labelAt(Math.round(last / 3)), labelAt(Math.round((last * 2) / 3)), labelAt(last)] : [];
   return (
     <Card as="div" padding="lg">
-      <span className="stat__label">Overnight HRV</span>
       <div className="focus__row">
         {big ? <span className="focus__big">{big}</span> : null}
         <div className="stat">
-          <span className="focus__sub">{isMissing(h.last_night_ms) ? '7-night average' : 'Last night'}</span>
-          <span className="focus__sub">
-            {isMissing(h.last_night_ms) ? 'No reading last night' : isMissing(h.weekly_avg_ms) ? null : `7-night average ${fmtInt(h.weekly_avg_ms)} ms`}
-          </span>
-          {versus ? <span className="focus__sub">{versus}</span> : null}
+          <span className="stat__label">Overnight HRV</span>
+          <span className="focus__sub">{isMissing(h.last_night_ms) ? 'No reading last night' : isMissing(h.weekly_avg_ms) ? 'Last night' : `Last night · 7-night average ${fmtInt(h.weekly_avg_ms)} ms`}</span>
+          {band ? <span className="focus__sub">{versus ? `${versus} (${band[0]}–${band[1]} ms)` : `Usual range ${band[0]}–${band[1]} ms`}</span> : versus ? <span className="focus__sub">{versus}</span> : null}
         </div>
       </div>
-      <div className="focus__visual">
-        <HrvVisual today={today} />
-      </div>
-      {known.length > 0 ? (
-        <div className="focus__section">
-          <span className="focus__section-title">Night by night</span>
-          <div className="focus-facts focus-facts--flush" style={{ '--cols': 3 } as CSSProperties}>
-            <Fact label="Lowest" value={fmtInt(Math.min(...known)) ?? ''} unitText="ms" />
-            <Fact label="Average" value={fmtInt(known.reduce((a, v) => a + v, 0) / known.length) ?? ''} unitText="ms" />
-            <Fact label="Highest" value={fmtInt(Math.max(...known)) ?? ''} unitText="ms" />
-          </div>
+      <div className="focus__body">
+        <div className="focus__visual">
+          <HrvVisual today={today} />
+        </div>
+        {known.length > 0 ? (
           <SeriesChart
             label="Overnight HRV over the last 4 weeks"
             summary={`Overnight HRV over the last 4 weeks, ${known.length} nights, between ${fmtInt(Math.min(...known))} and ${fmtInt(Math.max(...known))} milliseconds${band ? `, usual range ${band[0]} to ${band[1]} milliseconds` : ''}.`}
@@ -318,14 +263,10 @@ function HrvSlide({ today }: { today: Today }) {
             {...(band ? { band } : {})}
             xRange={[0, Math.max(1, last)]}
             {...(xLabels.length ? { xLabels } : {})}
-            height={130}
+            height={80}
           />
-        </div>
-      ) : null}
-      {band ? <span className="focus__sub">Your usual range is {band[0]} to {band[1]} ms.</span> : null}
-      <Link to="/hrv" className="focus__sub focus__link focus__link--end">
-        See HRV status
-      </Link>
+        ) : null}
+      </div>
     </Card>
   );
 }
@@ -357,9 +298,6 @@ function prefersReducedMotion(): boolean {
  * "In focus": a swipeable row of large cards (scroll-snap) with page dots.
  * The track takes focus and answers the left and right arrow keys; the dots are buttons.
  */
-/** The track's top plus bottom padding (today.css `.focus__track`). */
-const TRACK_PAD_Y = 4;
-
 export function FocusCarousel({ today, cards = DEFAULT_HOME_CARDS }: { today: Today; cards?: HomeCards }) {
   const track = useRef<HTMLDivElement>(null);
   const [active, setActive] = useState(0);
@@ -415,19 +353,29 @@ export function FocusCarousel({ today, cards = DEFAULT_HOME_CARDS }: { today: To
   };
 
   const current = Math.min(active, Math.max(0, count - 1));
-  // Each slide keeps its own height; the track takes the height of the slide on screen, so a
-  // short slide (Energy) is not stretched to the tallest one (a night with stages).
+  // Every slide is exactly as tall as the Energy slide (the first slide when Energy is hidden):
+  // that slide keeps its natural height and the others are set to it.
+  // Without energy readings the Energy slide is a short note: then every slide stretches to the
+  // tallest instead, so nothing is cut off.
+  const energyEmpty = isMissing(today.energy.now) && today.energy.series.length === 0;
+  const ref = energyEmpty ? -1 : Math.max(0, slides.indexOf('energy'));
   const [height, setHeight] = useState<number | undefined>(undefined);
   useLayoutEffect(() => {
-    const slide = track.current?.children[current] as HTMLElement | undefined;
-    if (!slide) return;
-    const measure = () => setHeight(slide.offsetHeight);
+    const slide = ref < 0 ? undefined : (track.current?.children[ref] as HTMLElement | undefined);
+    if (!slide) {
+      setHeight(undefined);
+      return;
+    }
+    const measure = () => {
+      const h = slide.offsetHeight;
+      if (h > 0) setHeight(h);
+    };
     measure();
     if (typeof ResizeObserver === 'undefined') return;
     const ro = new ResizeObserver(measure);
     ro.observe(slide);
     return () => ro.disconnect();
-  }, [current, count]);
+  }, [ref, count]);
 
   if (count === 0) return null;
   return (
@@ -435,9 +383,9 @@ export function FocusCarousel({ today, cards = DEFAULT_HOME_CARDS }: { today: To
       <h2 className="section-label">In focus</h2>
       {/* The track scrolls sideways, so it must be reachable by keyboard (arrow keys move between slides). */}
       {/* eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex, jsx-a11y/no-noninteractive-element-interactions */}
-      <div ref={track} className="focus__track" data-scroll="x" style={height === undefined ? undefined : { height: height + TRACK_PAD_Y }} tabIndex={0} aria-label="In focus cards, use the left and right arrow keys" role="group" onScroll={onScroll} onKeyDown={onKeyDown}>
+      <div ref={track} className={ref < 0 ? 'focus__track focus__track--stretch' : 'focus__track'} data-scroll="x" style={height === undefined ? undefined : ({ '--focus-h': `${height}px` } as CSSProperties)} tabIndex={0} aria-label="In focus cards, use the left and right arrow keys" role="group" onScroll={onScroll} onKeyDown={onKeyDown}>
         {slides.map((id, i) => (
-          <div key={id} className="focus__slide" role="group" aria-roledescription="slide" aria-label={`${i + 1} of ${count}: ${SLIDE_NAME[id].title}`}>
+          <div key={id} className={i === ref ? 'focus__slide focus__slide--ref' : 'focus__slide'} role="group" aria-roledescription="slide" aria-label={`${i + 1} of ${count}: ${SLIDE_NAME[id].title}`}>
             {id === 'energy' ? <EnergySlide today={today} /> : id === 'readiness' && estimate ? <ReadinessSlide data={estimate} /> : id === 'sleep' ? <SleepSlide today={today} /> : <HrvSlide today={today} />}
           </div>
         ))}

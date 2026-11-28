@@ -300,17 +300,15 @@ describe('In focus carousel', () => {
     expect(within(region).getByRole('img', { name: 'Energy level 68 out of 100' })).toBeInTheDocument();
     expect(within(region).getByText('Good reserve')).toBeInTheDocument();
     expect(within(region).getByText(/Woke 06:36/)).toBeInTheDocument();
-    // The estimate: ring, level word, headline, its own label, and a link to the page.
+    // The estimate: ring, level word, headline and its own label.
     expect(await within(region).findByRole('img', { name: /^Readiness estimate 78 out of 100/ })).toBeInTheDocument();
     expect(within(region).getByText('High')).toBeInTheDocument();
     expect(within(region).getByText('Ready for a solid session')).toBeInTheDocument();
     expect(within(region).getByText('Nimrag estimate')).toBeInTheDocument();
-    expect(within(region).getByRole('link', { name: 'What it is made from' })).toHaveAttribute('href', '/training/readiness');
-    // Sleep: score ring with its level word, time asleep, the sleep page's headline, link to the night.
+    // Sleep: score ring with its level word, time asleep and the stage chart.
     expect(within(region).getByRole('img', { name: 'Sleep score 81 out of 100' })).toBeInTheDocument();
     expect(within(region).getByText('Good')).toBeInTheDocument();
     expect(within(region).getByText('7h 12m asleep')).toBeInTheDocument();
-    expect(within(region).getByRole('link', { name: 'Open last night' })).toHaveAttribute('href', '/sleep');
     expect(within(region).getByRole('img', { name: /^Sleep stages: deep 1h 40m/ })).toBeInTheDocument();
     expect(within(region).getByText('62 ms')).toBeInTheDocument();
     expect(within(region).getByText(/Within your range/)).toBeInTheDocument();
@@ -328,23 +326,16 @@ describe('In focus carousel', () => {
     expect(document.querySelector('.glance-grid [data-card="training_readiness"]')).toBeNull();
   });
 
-  it('fills the Sleep slide: stage chart, overnight facts, the last 7 nights and the link', async () => {
-    const nights = [70, 80, null, 77, 88, 70, 81].map((score, i) => ({ date: `2026-11-${13 + i}`, start: '', end: '', duration_s: 24000, score, deep_s: null, light_s: null, rem_s: null, awake_s: null }));
-    mockApi({ '/api/today': () => json(makeToday()), '/api/settings': () => json(makeSettings()), '/api/sleep?nights=7': () => json({ sample: true, nights, average_duration_s: 24000, average_score: 77 }) });
+  it('fits the Sleep slide to the Energy card: stage chart and stage times, no extra sections', async () => {
+    mockApi({ '/api/today': () => json(makeToday()), '/api/settings': () => json(makeSettings()) });
     renderPage();
     const region = await screen.findByRole('region', { name: 'In focus' });
     const slide = within(region).getByRole('group', { name: /Sleep last night/ });
-    expect(within(slide).getByText('Lowest heart rate')).toBeInTheDocument();
-    expect(within(slide).getByText('46')).toBeInTheDocument();
-    expect(within(slide).getByText('Overnight HRV')).toBeInTheDocument();
-    expect(within(slide).getByText('Breathing')).toBeInTheDocument();
-    expect(within(slide).getByText('13.4')).toBeInTheDocument();
-    // Energy overnight is not in the payload of this night, so its figure is left out.
-    expect(within(slide).queryByText('Energy overnight')).not.toBeInTheDocument();
-    expect(await within(slide).findByText('Last 7 nights')).toBeInTheDocument();
-    expect(within(slide).getByText('Average 77')).toBeInTheDocument();
-    expect(within(slide).getByRole('img', { name: /^Sleep score of the last 7 nights: .*Sun 15 Nov no score/ })).toBeInTheDocument();
-    expect(within(slide).getByRole('link', { name: 'Open last night' })).toHaveAttribute('href', '/sleep');
+    expect(within(slide).getByRole('img', { name: /^Sleep stages: deep 1h 40m/ })).toBeInTheDocument();
+    expect(within(slide).getByText('Deep')).toBeInTheDocument();
+    // The facts, the 7-night bars and the link live on the Sleep page.
+    expect(within(slide).queryByText('Last 7 nights')).not.toBeInTheDocument();
+    expect(within(slide).queryByRole('link')).not.toBeInTheDocument();
   });
 
   it('shows the six factors on the Readiness slide, a missing one as No data', async () => {
@@ -362,11 +353,8 @@ describe('In focus carousel', () => {
     const slide = await within(region).findByRole('group', { name: /Readiness/ });
     const list = within(slide).getByRole('list', { name: 'What the estimate is made from' });
     expect(within(list).getAllByRole('listitem')).toHaveLength(6);
-    expect(within(list).getByText('Recovery')).toBeInTheDocument();
-    expect(within(list).getByText('7.4 h')).toBeInTheDocument();
-    expect(within(list).getByText(/Moderate need/)).toBeInTheDocument();
-    expect(within(list).getByText('Stress history').closest('li')).toHaveTextContent('No data');
-    // The week chart lives on the Readiness page; the slide stays as tall as the others.
+    expect(within(list).getByRole('listitem', { name: /^Recovery: 7\.4 h, Moderate need/ })).toBeInTheDocument();
+    expect(within(list).getByRole('listitem', { name: 'Stress history: no data' })).toHaveTextContent('–');
     expect(within(slide).queryByText('Last 7 days')).not.toBeInTheDocument();
     expect(slide.textContent).not.toMatch(/unavailable/);
   });
@@ -379,21 +367,19 @@ describe('In focus carousel', () => {
     const slide = await within(region).findByRole('group', { name: /Readiness/ });
     expect(within(slide).getByText('No estimate yet')).toBeInTheDocument();
     expect(within(slide).getByText('Readiness needs at least 3 days of data.')).toBeInTheDocument();
-    expect(within(slide).getByText('HRV').closest('li')).toHaveTextContent('No data');
+    expect(within(slide).getByRole('listitem', { name: 'HRV: no data' })).toBeInTheDocument();
     expect(within(slide).getByRole('img', { name: 'Readiness estimate: none yet' })).toBeInTheDocument();
     expect(slide.textContent).not.toMatch(/unavailable/);
   });
 
-  it('draws the HRV slide with the range bar, the 4-week line, its figures and the link', async () => {
+  it('draws the HRV slide with the range words and the 4-week line', async () => {
     mockApi({ '/api/today': () => json(makeToday()), '/api/settings': () => json(makeSettings()) });
     renderPage();
     const region = await screen.findByRole('region', { name: 'In focus' });
     const slide = within(region).getByRole('group', { name: /Overnight HRV/ });
     expect(within(slide).getByRole('img', { name: 'Overnight HRV over the last 4 weeks' })).toBeInTheDocument();
-    expect(within(slide).getByText('Lowest').nextSibling).toHaveTextContent('60 ms');
-    expect(within(slide).getByText('Highest').nextSibling).toHaveTextContent('63 ms');
-    expect(within(slide).getByText('Your usual range is 55 to 70 ms.')).toBeInTheDocument();
-    expect(within(slide).getByRole('link', { name: 'See HRV status' })).toHaveAttribute('href', '/hrv');
+    expect(within(slide).getByText('Within your range (55–70 ms)')).toBeInTheDocument();
+    expect(within(slide).queryByRole('link')).not.toBeInTheDocument();
   });
 
   it('says one short line instead of "unavailable" when a night has no stages, no score and no facts', async () => {

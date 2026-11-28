@@ -1178,10 +1178,9 @@
 }
 .focus__track {
   display: flex;
-  /* Slides keep their own height; the component sets the track to the shown slide's height. */
+  /* The reference slide (Energy) keeps its natural height; the component sets --focus-h to it. */
   align-items: flex-start;
   overflow-y: hidden;
-  transition: height 0.2s ease;
   /* At least the gutter: the next slide starts beyond the screen edge instead of showing a sliver. */
   gap: var(--gutter);
   overflow-x: auto;
@@ -1201,6 +1200,37 @@
   min-width: 0;
   scroll-snap-align: start;
   scroll-snap-stop: always;
+}
+.focus__slide:not(.focus__slide--ref) > .card {
+  height: var(--focus-h, auto);
+  overflow: hidden;
+  gap: 14px;
+}
+/* No energy readings yet: every slide stretches to the tallest (after the rule above, same weight). */
+.focus__track--stretch {
+  align-items: stretch;
+}
+.focus__track--stretch > .focus__slide > .card {
+  height: 100%;
+}
+/* What sits under a slide's top block: fills the rest of the card. */
+.focus__body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-around;
+  gap: 10px;
+}
+.focus__slide .focus-factors {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-content: space-around;
+  gap: 12px 20px;
+}
+.focus__slide .focus-factors__row {
+  gap: 5px 8px;
 }
 .focus__dots {
   display: flex;
@@ -1405,9 +1435,4 @@
 }
 .focus__visual > * {
   width: 100%;
-}
-@media (prefers-reduced-motion: reduce) {
-  .focus__track {
-    transition: none;
-  }
 }
