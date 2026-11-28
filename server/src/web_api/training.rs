@@ -254,8 +254,8 @@ pub async fn status_and_load(ctx: &Ctx) -> Res<(TrainingStatusCard, TrainingLoad
     // watch writes a row for today with only a status, and Garmin Connect's row of the day
     // before carries the load. The watch's status rows never carry a load, but its
     // `training_load` rows carry the acute load, which is the same figure; their target range
-    // is the chronic load times 0.8 to 1.5 (the factors Connect's rows show). The newer of the
-    // two wins. Rows older than a week are no longer "the 7-day load".
+    // is the chronic load times 0.8 to 1.5 (the factors Connect's rows show). A status row's load
+    // wins unless the acute load is from a later day. Rows older than a week are no longer "the 7-day load".
     let fresh = ctx.now - LOAD_MAX_AGE_S;
     let from_status = rows
         .iter()
@@ -272,7 +272,7 @@ pub async fn status_and_load(ctx: &Ctx) -> Res<(TrainingStatusCard, TrainingLoad
         )
     });
     let (load, tmin, tmax) = match (from_status, from_acute) {
-        (Some(s), Some(a)) if a.0 > s.0 => a.1,
+        (Some(s), Some(a)) if ctx.date(a.0) > ctx.date(s.0) => a.1,
         (Some(s), _) => s.1,
         (None, Some(a)) => a.1,
         (None, None) => (None, None, None),
