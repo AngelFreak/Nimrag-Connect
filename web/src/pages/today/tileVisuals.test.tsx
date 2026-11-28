@@ -294,7 +294,7 @@ describe('tiles', () => {
   it('intensity minutes: the minutes in the ring against the goal', () => {
     renderTile('intensity_minutes', makeToday());
     expect(screen.getByRole('img', { name: 'Intensity minutes this week: 70 of the 150 minute goal' })).toBeInTheDocument();
-    expect(screen.getByText('150 min')).toBeInTheDocument();
+    expect(screen.getByText('80 min')).toBeInTheDocument();
   });
 
   it('training load: the 7-day load and its target range', () => {

@@ -47,7 +47,7 @@ interface TileProps {
   tone: string;
   /** The picture, or the sentence that stands in for it. */
   visual: ReactNode;
-  /** The main figure; null shows "unavailable". */
+  /** The main figure; null shows "unavailable", left out shows nothing (empty tiles). */
   value?: ReactNode;
   /** The figure is a word ("Productive") that may shrink to fit. */
   word?: boolean;
@@ -76,9 +76,12 @@ function Tile({ id, glyph, tone, visual, value, word = false, label, alert = fal
         <div className="tile__figure">
           {figure ?? (
             <>
-              <span className={word ? 'tile__value tile__value--word' : 'tile__value'}>
-                <ValueOrUnavailable value={value} />
-              </span>
+              {/* No value at all (an empty tile): the hint in the picture says it, so no "unavailable" under it. */}
+              {value === undefined ? null : (
+                <span className={word ? 'tile__value tile__value--word' : 'tile__value'}>
+                  <ValueOrUnavailable value={value} />
+                </span>
+              )}
               {label ? <span className={alert ? 'tile__label tone-warn' : 'tile__label'}>{label}</span> : null}
             </>
           )}
@@ -195,11 +198,7 @@ function Sleep({ today }: { today: Today }) {
               <span className="tile__label">Asleep</span>
             </span>
           </div>
-        ) : (
-          <span className="tile__value">
-            <Unavailable />
-          </span>
-        )
+        ) : null
       }
     />
   );
@@ -209,9 +208,12 @@ function Tiles({ id, today }: { id: HomeCard; today: Today }) {
   const t = today;
   switch (id) {
     case 'heart_rate':
+      // Nothing at all yet: the picture's sentence says so, no "unavailable" under it.
+      if (isMissing(t.heart_rate.resting_hr_bpm) && t.heart_rate.day.series.length === 0) return <Tile id={id} glyph="heart" tone="var(--heart)" visual={<HeartRateVisual today={t} />} />;
       return <Tile id={id} glyph="heart" tone="var(--heart)" visual={<HeartRateVisual today={t} />} value={unit(t.heart_rate.resting_hr_bpm, 'bpm')} label="Resting" />;
     case 'stress': {
       const level = t.stress.main_level;
+      if (isMissing(t.stress.average) && !level) return <Tile id={id} glyph="stress" tone="var(--stress)" visual={<StressVisual today={t} />} />;
       return (
         <Tile
           id={id}
@@ -265,7 +267,10 @@ function Tiles({ id, today }: { id: HomeCard; today: Today }) {
       return <Tile id={id} glyph="steps" tone="var(--steps)" visual={<StepsVisual today={t} />} value={fmtInt(t.steps.steps)} label={`Goal ${fmtInt(t.steps.goal)}`} />;
     case 'intensity_minutes': {
       const m = t.intensity_minutes;
-      return <Tile id={id} glyph="intensity" tone="var(--warn)" visual={<IntensityVisual today={t} />} value={m.goal_min > 0 && !isMissing(m.total_min) ? `${fmtInt(m.goal_min)} min` : null} label="Goal this week" />;
+      // The ring holds this week's minutes; the figure says how far the goal still is.
+      if (m.goal_min <= 0 || isMissing(m.total_min)) return <Tile id={id} glyph="intensity" tone="var(--warn)" visual={<IntensityVisual today={t} />} />;
+      const left = m.goal_min - m.total_min;
+      return <Tile id={id} glyph="intensity" tone="var(--warn)" visual={<IntensityVisual today={t} />} value={left > 0 ? `${fmtInt(left)} min` : 'Goal reached'} word={left <= 0} label={left > 0 ? `to go · goal ${fmtInt(m.goal_min)} this week` : `Goal ${fmtInt(m.goal_min)} this week`} />;
     }
     case 'training_load': {
       const l = t.training_load;
