@@ -147,6 +147,18 @@ export function historyChart(h: HealthMetricHistory, name: string): HistoryChart
   return { x: days.map((_, i) => i), values, band, markers, xLabels, summary, measured, hasBand: days.some((d) => d.low !== null) };
 }
 
+/** The calm line of the Today card (and the page) when every value was left out. */
+export const NO_READINGS_YET = 'No overnight readings yet.';
+
+/**
+ * Leave out a value that has never been measured: no reading last night and none in any earlier
+ * night of the window (`nights` is 0). One that has history but no value tonight stays, as
+ * "No reading".
+ */
+export function withoutNeverMeasured<T extends Pick<HealthStatusResponse, 'metrics'>>(r: T): T {
+  return { ...r, metrics: r.metrics.filter((m) => !(m.state === 'no_reading' && m.nights === 0)) };
+}
+
 /** The short word of the Today card and the state it is coloured by. */
 export function glanceWord(r: Pick<HealthStatusResponse, 'has_night' | 'outside' | 'compared' | 'metrics'>): { text: string; state: HealthState } {
   if (!r.has_night) return { text: 'No night yet', state: 'no_reading' };

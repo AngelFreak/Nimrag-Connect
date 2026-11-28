@@ -436,6 +436,36 @@ describe('In focus carousel', () => {
     expect(card).toHaveTextContent('4 of 4 values compared');
     expect(within(card).getByText('Above')).toBeInTheDocument();
   });
+
+  it('leaves a never-measured value out of the Health status card, and keeps one with history', async () => {
+    const never = { ...metricStatus('spo2', '%', null, 'no_reading'), nights: 0, nights_needed: 14 };
+    const earlier = { ...metricStatus('breathing', 'brpm', null, 'no_reading'), nights: 6, nights_needed: 8 };
+    const status = { ...HEALTH_STATUS, metrics: [metricStatus('hrv', 'ms', 62, 'in_range'), earlier, never], outside: 0, compared: 1 };
+    mockApi({ '/api/today': () => json(makeToday()), '/api/settings': () => json(makeSettings()), '/api/health-status': () => json(status) });
+    renderPage();
+    const card = await waitFor(() => {
+      const el = document.querySelector('.glance-grid [data-card="health_status"]');
+      if (!el || !el.textContent?.includes('In range')) throw new Error('not ready');
+      return el as HTMLElement;
+    });
+    expect(card).toHaveTextContent('Breathing');
+    expect(card).toHaveTextContent('No reading');
+    expect(card).not.toHaveTextContent('Blood oxygen');
+    expect(card).toHaveTextContent('1 of 2 values compared');
+  });
+
+  it('says so in one calm line when no value of the Health status card was ever measured', async () => {
+    const never = (key: string, unit: string) => ({ ...metricStatus(key, unit, null, 'no_reading'), nights: 0, nights_needed: 14 });
+    const status = { ...HEALTH_STATUS, metrics: [never('hrv', 'ms'), never('resting_hr', 'bpm'), never('breathing', 'brpm'), never('spo2', '%')], outside: 0, compared: 0 };
+    mockApi({ '/api/today': () => json(makeToday()), '/api/settings': () => json(makeSettings()), '/api/health-status': () => json(status) });
+    renderPage();
+    const card = await waitFor(() => {
+      const el = document.querySelector('.glance-grid [data-card="health_status"]');
+      if (!el || !el.textContent?.includes('No overnight readings yet.')) throw new Error('not ready');
+      return el as HTMLElement;
+    });
+    expect(card).not.toHaveTextContent('No reading');
+  });
 });
 
 describe('Edit home', () => {
