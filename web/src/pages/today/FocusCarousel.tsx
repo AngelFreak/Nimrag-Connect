@@ -10,10 +10,34 @@ import { useReadiness } from '../health/readinessQueries';
 import { RATING_COLOR, RATING_WORD, headlineFor, ratingOfScore } from '../health/sleepNight';
 import { DEFAULT_HOME_CARDS } from './cards';
 import { EnergyDayChart } from './EnergyDayChart';
+import { Glyph, type GlyphName } from './glyphs';
 import { baselineLabel, energyHeadline, fmtSeconds, fmtTime, hrvStatusLabel, signed, unit } from './format';
+
+/** A slide without data: its name, one sentence of why, and where to look instead. No "unavailable" lines. */
+function EmptySlide({ glyph, title, children, to, linkText }: { glyph: GlyphName; title: string; children: string; to: string; linkText: string }) {
+  return (
+    <Card as="div" padding="lg" className="focus-empty">
+      <span className="focus-empty__glyph" aria-hidden="true">
+        <Glyph name={glyph} size={28} />
+      </span>
+      <span className="focus-empty__title">{title}</span>
+      <p className="focus-empty__text">{children}</p>
+      <Link to={to} className="focus__sub focus__link">
+        {linkText}
+      </Link>
+    </Card>
+  );
+}
 
 function EnergySlide({ today }: { today: Today }) {
   const e = today.energy;
+  if (isMissing(e.now) && e.series.length === 0) {
+    return (
+      <EmptySlide glyph="energy" title="Energy" to="/metrics/energy" linkText="See earlier days">
+        No energy readings from the watch yet today.
+      </EmptySlide>
+    );
+  }
   const headline = energyHeadline(e.now);
   return (
     <Card as="div" padding="lg">
@@ -75,13 +99,9 @@ function SleepSlide({ today }: { today: Today }) {
   const tz = today.timezone;
   if (!s) {
     return (
-      <Card as="div" padding="lg">
-        <span className="stat__label">Sleep last night</span>
-        <p>
-          <Unavailable />
-        </p>
-        <span className="focus__sub">The watch recorded no sleep for last night.</span>
-      </Card>
+      <EmptySlide glyph="sleep" title="Sleep last night" to="/sleep" linkText="See your latest nights">
+        No sleep from last night has reached Nimrag. It shows here once the watch has synced the night.
+      </EmptySlide>
     );
   }
   const bed = fmtTime(s.start, tz);
@@ -143,6 +163,13 @@ function SleepSlide({ today }: { today: Today }) {
 function HrvSlide({ today }: { today: Today }) {
   const h = today.hrv;
   const values = h.values_4w.map((d) => d.value);
+  if (isMissing(h.last_night_ms) && values.every((v) => v === null)) {
+    return (
+      <EmptySlide glyph="hrv" title="Overnight HRV" to="/hrv" linkText="See HRV status">
+        No overnight HRV yet. Wear the watch while you sleep and it shows here in the morning.
+      </EmptySlide>
+    );
+  }
   const band: [number, number] | undefined =
     !isMissing(h.baseline_low_ms) && !isMissing(h.baseline_high_ms) ? [h.baseline_low_ms, h.baseline_high_ms] : undefined;
   const status = hrvStatusLabel(h.status);

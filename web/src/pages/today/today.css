@@ -1277,3 +1277,27 @@
   min-height: 44px;
 }
 
+
+/* An In focus slide without data: centred, calm, one sentence and a way on. */
+.focus-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  text-align: center;
+}
+.focus-empty__glyph {
+  display: inline-flex;
+  color: var(--text-2);
+}
+.focus-empty__title {
+  font-size: var(--fs-md);
+  font-weight: 600;
+  color: var(--text);
+}
+.focus-empty__text {
+  margin: 0;
+  max-width: 30ch;
+  color: var(--text-2);
+}
