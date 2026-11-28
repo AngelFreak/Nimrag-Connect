@@ -4,7 +4,7 @@ import { Card, CardHeader, DataList } from '../../components';
 import { fmtShortDay } from '../../lib/dates';
 import { fmtFixed, fmtInt, isMissing } from '../../lib/format';
 import { isUtcZone, suggestedZone } from '../../lib/timezone';
-import { DEFAULT_HOME_CARDS, visibleCards } from './cards';
+import { DEFAULT_HOME_CARDS, IN_FOCUS_CARDS, visibleCards } from './cards';
 import { fmtSeconds, kindLabel, signed, unit } from './format';
 import { GlanceTile } from './tiles';
 
@@ -26,9 +26,9 @@ export function TimezoneNotice({ timezone }: { timezone: string }) {
   );
 }
 
-/** "At a glance": a grid of equal tiles in the owner's order, hidden ones left out. Energy has its own wide card above. */
+/** "At a glance": a grid of equal tiles in the owner's order, hidden ones left out. The "In focus" cards are in the swipeable row above. */
 export function AtAGlance({ today, settings }: { today: Today; settings: SettingsResponse | undefined }) {
-  const ids = visibleCards(settings?.home_cards ?? DEFAULT_HOME_CARDS).filter((id) => id !== 'energy');
+  const ids = visibleCards(settings?.home_cards ?? DEFAULT_HOME_CARDS).filter((id) => !IN_FOCUS_CARDS.includes(id));
   return (
     <section className="today-section" aria-labelledby="glance-title">
       <h2 className="section-label" id="glance-title">

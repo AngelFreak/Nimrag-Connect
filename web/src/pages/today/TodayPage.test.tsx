@@ -121,13 +121,12 @@ afterEach(() => {
 });
 
 describe('Today on a phone', () => {
-  it('renders the structure from the API: Energy, At a glance, Yesterday, Last 7 days, Edit home', async () => {
+  it('renders the structure from the API: In focus, At a glance, Yesterday, Last 7 days, Edit home', async () => {
     mockApi({ '/api/today': () => json(makeToday()), '/api/settings': () => json(makeSettings()) });
     renderPage();
 
     expect(await screen.findByRole('heading', { level: 1, name: 'Today' })).toBeInTheDocument();
-    expect(await screen.findByRole('region', { name: 'Energy' })).toBeInTheDocument();
-    expect(screen.queryByRole('heading', { name: 'In focus' })).not.toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'In focus' })).toBeInTheDocument();
     expect(screen.getByText('Thursday 19 November')).toBeInTheDocument();
     expect(screen.getByText('Sample data')).toBeInTheDocument();
     expect(screen.getByText('Watch synced 07:42')).toBeInTheDocument();
@@ -142,20 +141,14 @@ describe('Today on a phone', () => {
     expect(document.body.textContent).not.toMatch(/body battery/i);
   });
 
-  it('shows Energy as one wide card and every other visible card as a tile, with no metric twice', async () => {
+  it('shows no metric twice: Energy, Sleep and HRV are in In focus and left out of At a glance', async () => {
     mockApi({ '/api/today': () => json(makeToday()), '/api/settings': () => json(makeSettings({ home_cards: { order: makeSettings().home_cards.order, hidden: [] } })) });
     renderPage();
     await screen.findByRole('heading', { name: 'At a glance' });
     await waitFor(() => expect(glanceIds().length).toBeGreaterThan(0));
-    expect(glanceIds()).not.toContain('energy');
-    // Readiness, Sleep and HRV are tiles now, in the owner's order.
-    expect(glanceIds().slice(0, 4)).toEqual(['training_readiness', 'sleep', 'heart_rate', 'stress']);
-    expect(glanceIds()).toContain('hrv');
-    // The one Energy figure is the wide card's.
+    for (const id of ['energy', 'sleep', 'hrv']) expect(glanceIds()).not.toContain(id);
+    // The one Energy figure is the focus slide's.
     expect(screen.getAllByText('Energy')).toHaveLength(1);
-    // No carousel is left.
-    expect(screen.queryByRole('button', { name: /Show Energy/ })).not.toBeInTheDocument();
-    expect(document.querySelector('.focus__track')).toBeNull();
   });
 
   it('writes the training status date like the rest of the app, not as an ISO date', async () => {
@@ -176,7 +169,7 @@ describe('Today on a phone', () => {
     const recovery_time = { ...base.recovery_time, remaining_s: 0, percent_complete: 100, ready_at: '2026-11-21T08:54:00+00:00' };
     mockApi({ '/api/today': () => json(makeToday({ recovery_time })), '/api/settings': () => json(makeSettings({ home_cards: { order: makeSettings().home_cards.order, hidden: [] } })) });
     renderPage();
-    const card = (await screen.findByText('Recovery time')).closest('a') as HTMLElement;
+    const card = (await screen.findByText('Recovery time')).closest('a, .stat') as HTMLElement;
     expect(within(card).getByText('Recovered')).toBeInTheDocument();
     expect(within(card).queryByText(/Ready around/)).toBeNull();
   });
@@ -204,7 +197,7 @@ describe('Today on a phone', () => {
     vi.spyOn(Intl.DateTimeFormat.prototype, 'resolvedOptions').mockReturnValue({ timeZone: 'UTC' } as Intl.ResolvedDateTimeFormatOptions);
     mockApi({ '/api/today': () => json(makeToday({ timezone: 'Etc/UTC' })), '/api/settings': () => json(makeSettings()) });
     renderPage();
-    await screen.findByRole('heading', { name: 'At a glance' });
+    await screen.findByRole('heading', { name: 'In focus' });
     expect(screen.queryByText(/follow UTC time/)).not.toBeInTheDocument();
   });
 
@@ -226,7 +219,7 @@ describe('Today on a phone', () => {
     mockApi({ '/api/today': () => json(makeToday()), '/api/settings': () => json(makeSettings({ home_cards: all })) });
     renderPage();
     await screen.findByRole('heading', { name: 'At a glance' });
-    await waitFor(() => expect(glanceIds()).toHaveLength(15));
+    await waitFor(() => expect(glanceIds()).toHaveLength(12));
     const href = (id: string) => document.querySelector(`.glance-grid [data-card="${id}"]`)?.getAttribute('href');
     expect(href('heart_rate')).toBe('/metrics/heart_rate');
     expect(href('stress')).toBe('/metrics/stress');
@@ -236,20 +229,17 @@ describe('Today on a phone', () => {
     expect(href('vo2_max')).toBe('/metrics/vo2_max');
     expect(href('recovery_time')).toBe('/training');
     expect(href('weight')).toBe('/body');
-    expect(href('training_readiness')).toBe('/training/readiness');
-    expect(href('sleep')).toBe('/sleep');
-    expect(href('hrv')).toBe('/hrv');
   });
 
   it('missing metrics read "unavailable", never 0', async () => {
     mockApi({ '/api/today': () => json(makeEmptyToday()), '/api/settings': () => json(makeSettings({ home_cards: { order: makeSettings().home_cards.order, hidden: [] } })) });
     renderPage();
     await screen.findByRole('heading', { name: 'At a glance' });
-    await waitFor(() => expect(glanceIds()).toHaveLength(15));
+    await waitFor(() => expect(glanceIds()).toHaveLength(12));
     expect(screen.getAllByText('unavailable').length).toBeGreaterThan(10);
     expect(screen.queryByText(/^0$/)).not.toBeInTheDocument();
     expect(screen.getByText('No watch data yet')).toBeInTheDocument();
-    // The sleep tile says so instead of showing a zero night.
+    // The sleep slide says so instead of showing a zero night.
     expect(screen.getByText('The watch recorded no sleep for last night.')).toBeInTheDocument();
     const steps = document.querySelector('.glance-grid [data-card="steps"]') as HTMLElement;
     expect(within(steps).getByText('unavailable')).toBeInTheDocument();
@@ -271,72 +261,79 @@ describe('Today on a phone', () => {
     mockApi({ '/api/today': () => json(makeToday()), '/api/settings': () => json({ error: 'nope' }, 500) });
     renderPage();
     await screen.findByText(/saved card layout could not be loaded/);
-    expect(glanceIds().slice(0, 3)).toEqual(['training_readiness', 'sleep', 'heart_rate']);
+    expect(glanceIds()[0]).toBe('heart_rate');
     expect(glanceIds()).not.toContain('weight');
     expect(screen.getByRole('button', { name: 'Edit home' })).toBeDisabled();
   });
 });
 
-describe('Energy card and the readiness, sleep and HRV tiles', () => {
-  it('puts Energy in a plain card at the top, not in a carousel', async () => {
+describe('In focus carousel', () => {
+  it('has labelled dots as buttons and moves with the arrow keys', async () => {
+    mockApi({ '/api/today': () => json(makeToday()), '/api/settings': () => json(makeSettings()) });
+    renderPage();
+    const region = await screen.findByRole('region', { name: 'In focus' });
+    const dots = within(region).getAllByRole('button');
+    // Without a readiness estimate there are three slides.
+    expect(dots.map((d) => d.getAttribute('aria-label'))).toEqual(['Show Energy, card 1 of 3', 'Show Sleep, card 2 of 3', 'Show HRV, card 3 of 3']);
+    expect(dots[0]).toHaveAttribute('aria-current', 'true');
+
+    const track = within(region).getByRole('group', { name: /In focus cards/ });
+    expect(track).toHaveAttribute('tabindex', '0');
+    track.focus();
+    await userEvent.keyboard('{ArrowRight}');
+    expect(dots[1]).toHaveAttribute('aria-current', 'true');
+    await userEvent.keyboard('{ArrowRight}{ArrowRight}');
+    expect(dots[2]).toHaveAttribute('aria-current', 'true');
+    await userEvent.keyboard('{ArrowLeft}');
+    expect(dots[1]).toHaveAttribute('aria-current', 'true');
+    await userEvent.click(dots[0]!);
+    expect(dots[0]).toHaveAttribute('aria-current', 'true');
+  });
+
+  it('puts Energy, Readiness, Sleep last night and HRV in the slides', async () => {
     mockApi({ '/api/today': () => json(makeToday()), '/api/settings': () => json(makeSettings()), '/api/readiness': () => json(READINESS) });
     renderPage();
-    const region = await screen.findByRole('region', { name: 'Energy' });
+    const region = await screen.findByRole('region', { name: 'In focus' });
     expect(within(region).getByRole('img', { name: 'Energy level 68 out of 100' })).toBeInTheDocument();
     expect(within(region).getByText('Good reserve')).toBeInTheDocument();
     expect(within(region).getByText(/Woke 06:36/)).toBeInTheDocument();
-    expect(within(region).queryAllByRole('button')).toHaveLength(0);
-    expect(region.compareDocumentPosition(screen.getByRole('heading', { name: 'At a glance' })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // The estimate: ring, level word, headline, its own label, and a link to the page.
+    expect(await within(region).findByRole('img', { name: 'Readiness estimate 78 out of 100' })).toBeInTheDocument();
+    expect(within(region).getByText('High')).toBeInTheDocument();
+    expect(within(region).getByText('Ready for a solid session')).toBeInTheDocument();
+    expect(within(region).getByText('Nimrag estimate')).toBeInTheDocument();
+    expect(within(region).getByRole('link', { name: 'What it is made from' })).toHaveAttribute('href', '/training/readiness');
+    // Sleep: score ring with its level word, time asleep, the sleep page's headline, link to the night.
+    expect(within(region).getByRole('img', { name: 'Sleep score 81 out of 100' })).toBeInTheDocument();
+    expect(within(region).getByText('Good')).toBeInTheDocument();
+    expect(within(region).getByText('7h 12m asleep')).toBeInTheDocument();
+    expect(within(region).getByRole('link', { name: 'Open last night' })).toHaveAttribute('href', '/sleep');
+    expect(within(region).getByRole('img', { name: /^Sleep stages: deep 1h 40m/ })).toBeInTheDocument();
+    expect(within(region).getByText('62 ms')).toBeInTheDocument();
+    expect(within(region).getByText(/Within your range/)).toBeInTheDocument();
+    const dots = within(region).getAllByRole('button');
+    expect(dots.map((d) => d.getAttribute('aria-label'))).toEqual(['Show Energy, card 1 of 4', 'Show Readiness, card 2 of 4', 'Show Sleep, card 3 of 4', 'Show HRV, card 4 of 4']);
   });
 
-  it('shows Readiness, Sleep and HRV as tiles of the grid', async () => {
-    mockApi({ '/api/today': () => json(makeToday()), '/api/settings': () => json(makeSettings()), '/api/readiness': () => json(READINESS), '/api/hrv?from=2026-10-23&to=2026-11-19': () => json({ sample: true, from: '2026-10-23', to: '2026-11-19', today: '2026-11-19', days: [], nights: 0, overnight_avg_ms: null, baseline_low_ms: null, baseline_high_ms: null, night: null }) });
-    renderPage();
-    const readiness = await waitFor(() => {
-      const el = document.querySelector<HTMLElement>('.glance-grid [data-card="training_readiness"]');
-      if (!el || !el.textContent?.includes('Nimrag estimate')) throw new Error('not ready');
-      return el;
-    });
-    expect(within(readiness).getByRole('img', { name: 'Readiness estimate 78 out of 100, level High.' })).toBeInTheDocument();
-    expect(within(readiness).getByText('Ready for a solid session')).toBeInTheDocument();
-    expect(readiness).toHaveAttribute('href', '/training/readiness');
-    const sleep = document.querySelector<HTMLElement>('.glance-grid [data-card="sleep"]')!;
-    expect(within(sleep).getByText('7h 12m')).toBeInTheDocument();
-    const hrv = document.querySelector<HTMLElement>('.glance-grid [data-card="hrv"]')!;
-    expect(within(hrv).getByText('64 ms')).toBeInTheDocument();
-  });
-
-  it('keeps an empty Readiness tile, with the reason, when there is no estimate', async () => {
+  it('keeps the readiness slide, with the reason, when there is no estimate yet', async () => {
     mockApi({ '/api/today': () => json(makeToday()), '/api/settings': () => json(makeSettings()), '/api/readiness': () => json(NO_READINESS) });
     renderPage();
-    const tile = await waitFor(() => {
-      const el = document.querySelector<HTMLElement>('.glance-grid [data-card="training_readiness"]');
-      if (!el || !el.textContent?.includes('needs at least 3 days')) throw new Error('not ready');
-      return el;
-    });
-    expect(tile).toHaveTextContent('Readiness needs at least 3 days of data.');
+    const region = await screen.findByRole('region', { name: 'In focus' });
+    await waitFor(() => expect(within(region).getAllByRole('button')).toHaveLength(4));
+    expect(within(region).getByText('Readiness needs at least 3 days of data.')).toBeInTheDocument();
+    // Readiness is a slide, so it is not a tile of the grid too.
+    expect(document.querySelector('.glance-grid [data-card="training_readiness"]')).toBeNull();
   });
 
-  it('follows Edit home: a hidden Energy card is gone and the order of the cards is the order of the tiles', async () => {
+  it('follows Edit home: a hidden card has no slide and the order of the cards is the order of the slides', async () => {
     const order = makeSettings().home_cards.order.filter((c) => c !== 'sleep');
     const settings = makeSettings({ home_cards: { order: ['sleep', ...order], hidden: ['energy'] } });
     mockApi({ '/api/today': () => json(makeToday()), '/api/settings': () => json(settings), '/api/readiness': () => json(READINESS) });
     renderPage();
-    await screen.findByRole('heading', { name: 'At a glance' });
-    await waitFor(() => expect(glanceIds().slice(0, 2)).toEqual(['sleep', 'training_readiness']));
-    expect(screen.queryByRole('region', { name: 'Energy' })).not.toBeInTheDocument();
-  });
-
-  it('gives every tile in a row the same height through the grid, and a picture box of its own', async () => {
-    mockApi({ '/api/today': () => json(makeToday()), '/api/settings': () => json(makeSettings()), '/api/readiness': () => json(READINESS) });
-    renderPage();
-    await screen.findByRole('heading', { name: 'At a glance' });
-    await waitFor(() => expect(glanceIds().length).toBeGreaterThan(8));
-    for (const tile of Array.from(document.querySelectorAll('.glance-grid [data-card]'))) {
-      expect(tile.querySelector('.tile__head')).not.toBeNull();
-      expect(tile.querySelector('.tile__visual')).not.toBeNull();
-      expect(tile.querySelector('.tile__figure')).not.toBeNull();
-    }
+    const region = await screen.findByRole('region', { name: 'In focus' });
+    await waitFor(() => expect(within(region).getAllByRole('button')).toHaveLength(3));
+    expect(within(region).getAllByRole('button').map((d) => d.getAttribute('aria-label'))).toEqual(['Show Sleep, card 1 of 3', 'Show Readiness, card 2 of 3', 'Show HRV, card 3 of 3']);
+    expect(within(region).queryByRole('img', { name: /Energy level/ })).not.toBeInTheDocument();
   });
 
   it('shows Health status in At a glance, linking to its page', async () => {
@@ -443,7 +440,7 @@ describe('Edit home', () => {
 
     // The dialog is gone and the grid already follows the new layout while the request is pending.
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-    await waitFor(() => expect(glanceIds().slice(2, 4)).toEqual(['stress', 'heart_rate']));
+    await waitFor(() => expect(glanceIds().slice(0, 2)).toEqual(['stress', 'heart_rate']));
     expect(glanceIds()).not.toContain('steps');
 
     const patch = calls.find((c) => c.init?.method === 'PATCH');
@@ -593,18 +590,6 @@ describe('Home on a desktop', () => {
     expect(screen.getByText('No activities in the last 7 days.')).toBeInTheDocument();
     expect(screen.getByText('Shows after your watch syncs a day of data.')).toBeInTheDocument();
     expect(await screen.findByText(/No activities yet/)).toBeInTheDocument();
-  });
-
-  it('keeps the Readiness card, with the reason, when there is no estimate', async () => {
-    desktopApi({ '/api/readiness': () => json(NO_READINESS) });
-    renderPage();
-    await screen.findByRole('heading', { name: 'At a Glance' });
-    const card = await waitFor(() => {
-      const el = document.querySelector<HTMLElement>('.hgrid--glance [data-card="training_readiness"]');
-      if (!el || !el.textContent?.includes('needs at least 3 days')) throw new Error('not ready');
-      return el;
-    });
-    expect(card).toHaveTextContent('Readiness needs at least 3 days of data.');
   });
 
   it('opens Edit Home with the desktop hint and saves a new layout', async () => {

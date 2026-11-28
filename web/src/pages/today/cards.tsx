@@ -64,6 +64,9 @@ export const DEFAULT_HOME_CARDS: HomeCards = {
   hidden: ['respiration', 'spo2', 'weight'],
 };
 
+/** The phone's "In focus" row: these cards are swipeable slides, not tiles. */
+export const IN_FOCUS_CARDS: readonly HomeCard[] = ['energy', 'training_readiness', 'sleep', 'hrv'];
+
 /** The cards to show, in the owner's order, without the hidden ones. */
 export function visibleCards(cards: HomeCards): HomeCard[] {
   const hidden = new Set(cards.hidden);

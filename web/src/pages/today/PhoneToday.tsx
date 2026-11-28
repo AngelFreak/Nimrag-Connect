@@ -2,8 +2,7 @@ import type { UseQueryResult } from '@tanstack/react-query';
 import type { SettingsResponse, Today } from '../../api/generated';
 import { Button, Card, ErrorState, SampleDataChip, Skeleton, TopBar } from '../../components';
 import { EditHome } from './EditHome';
-import { EnergyCard } from './EnergyCard';
-import { DEFAULT_HOME_CARDS, visibleCards } from './cards';
+import { FocusCarousel } from './FocusCarousel';
 import { fmtLongDay, syncLine } from './format';
 import { AtAGlance, Last7DaysCard, TimezoneNotice, YesterdayCard } from './Sections';
 
@@ -67,7 +66,7 @@ interface Props {
   settings: UseQueryResult<SettingsResponse>;
 }
 
-/** Today on a phone (Main.dc.html plus the owner's structure): Energy, At a glance, Yesterday, Last 7 days, Edit home. */
+/** Today on a phone (Main.dc.html plus the owner's structure): In focus (swipeable Energy, Readiness, Sleep, HRV), At a glance tiles, Yesterday, Last 7 days, Edit home. */
 export function PhoneToday({ today, settings }: Props) {
   const t = today.data;
   return (
@@ -90,7 +89,7 @@ export function PhoneToday({ today, settings }: Props) {
       ) : t ? (
         <div className="page">
           <TimezoneNotice timezone={t.timezone} />
-          {visibleCards(settings.data?.home_cards ?? DEFAULT_HOME_CARDS).includes('energy') ? <EnergyCard today={t} /> : null}
+          <FocusCarousel today={t} {...(settings.data ? { cards: settings.data.home_cards } : {})} />
           <AtAGlance today={t} settings={settings.data} />
           {settings.isError ? <p className="today-note">Your saved card layout could not be loaded, so the default one is shown.</p> : null}
           <YesterdayCard today={t} />
