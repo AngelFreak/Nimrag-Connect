@@ -2,16 +2,19 @@ import type { UseQueryResult } from '@tanstack/react-query';
 import type { SettingsResponse, Today } from '../../api/generated';
 import { Button, Card, ErrorState, SampleDataChip, Skeleton, TopBar } from '../../components';
 import { EditHome } from './EditHome';
-import { FocusCarousel } from './FocusCarousel';
+import { EnergyCard } from './EnergyCard';
+import { DEFAULT_HOME_CARDS, visibleCards } from './cards';
 import { fmtLongDay, syncLine } from './format';
 import { AtAGlance, Last7DaysCard, TimezoneNotice, YesterdayCard } from './Sections';
+
+/** Height of the picture of a tile, as in today.css. */
+const TILE_VISUAL_HEIGHT = 120;
 
 export function TodayLoading() {
   return (
     <div className="page" aria-busy="true" aria-label="Loading today">
       {/* The same blocks as the loaded page, at about the same heights, so nothing jumps when the data arrives. */}
-      <section className="focus" aria-hidden="true">
-        <Skeleton height={14} width="64px" />
+      <section className="today-section" aria-hidden="true">
         <Card padding="lg">
           <div className="focus-energy">
             <Skeleton height={100} width="100px" />
@@ -24,17 +27,16 @@ export function TodayLoading() {
           <Skeleton height={142} />
           <Skeleton height={14} width="70%" />
         </Card>
-        <div className="focus__dots" style={{ height: 44 }} />
       </section>
       <section className="today-section" aria-hidden="true">
         <Skeleton height={14} width="96px" />
         <div className="glance-grid">
           {Array.from({ length: 6 }, (_, i) => (
-            <Card key={i} padding="tile">
-              <Skeleton height={14} width="60%" />
+            <Card key={i} padding="sm" className="tile">
+              <Skeleton height={18} width="60%" />
+              <Skeleton height={TILE_VISUAL_HEIGHT} />
               <Skeleton height={28} width="70%" />
               <Skeleton height={14} width="85%" />
-              <Skeleton height={44} />
             </Card>
           ))}
         </div>
@@ -65,7 +67,7 @@ interface Props {
   settings: UseQueryResult<SettingsResponse>;
 }
 
-/** Today on a phone (Main.dc.html plus the owner's structure): In focus, At a glance, Yesterday, Last 7 days, Edit home. */
+/** Today on a phone (Main.dc.html plus the owner's structure): Energy, At a glance, Yesterday, Last 7 days, Edit home. */
 export function PhoneToday({ today, settings }: Props) {
   const t = today.data;
   return (
@@ -88,7 +90,7 @@ export function PhoneToday({ today, settings }: Props) {
       ) : t ? (
         <div className="page">
           <TimezoneNotice timezone={t.timezone} />
-          <FocusCarousel today={t} {...(settings.data ? { cards: settings.data.home_cards } : {})} />
+          {visibleCards(settings.data?.home_cards ?? DEFAULT_HOME_CARDS).includes('energy') ? <EnergyCard today={t} /> : null}
           <AtAGlance today={t} settings={settings.data} />
           {settings.isError ? <p className="today-note">Your saved card layout could not be loaded, so the default one is shown.</p> : null}
           <YesterdayCard today={t} />

@@ -1,68 +1,6 @@
 /* Page-local styles for the Today page (stage 3c). Uses the tokens in styles/tokens.css. */
 
-/* ---------------------------------------------------------------- In focus carousel */
-.focus {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.focus__track {
-  display: flex;
-  /* At least the gutter: the next slide starts beyond the screen edge instead of showing a sliver. */
-  gap: var(--gutter);
-  overflow-x: auto;
-  scroll-snap-type: x mandatory;
-  scrollbar-width: none;
-  overscroll-behavior-x: contain;
-  margin: 0 calc(var(--gutter) * -1);
-  padding: 2px var(--gutter);
-  scroll-padding: 0 var(--gutter);
-  border-radius: var(--radius-card);
-}
-.focus__track::-webkit-scrollbar {
-  display: none;
-}
-.focus__slide {
-  flex: 0 0 100%;
-  min-width: 0;
-  scroll-snap-align: start;
-  scroll-snap-stop: always;
-}
-.focus__slide > .card {
-  height: 100%;
-}
-.focus__dots {
-  display: flex;
-  justify-content: center;
-  gap: 0;
-}
-.focus__dot {
-  width: var(--touch);
-  height: var(--touch);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: none;
-  border: 0;
-  padding: 0;
-  border-radius: var(--radius-pill);
-}
-.focus__dot::before {
-  content: '';
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--text-2);
-  opacity: 0.55;
-  transition: width 0.15s ease;
-}
-.focus__dot[aria-current='true']::before {
-  width: 22px;
-  border-radius: 4px;
-  background: var(--link);
-  opacity: 1;
-}
-
+/* ---------------------------------------------------------------- Energy card (phone) */
 .focus-energy {
   display: flex;
   align-items: center;
@@ -84,45 +22,6 @@
   gap: 4px 14px;
   font-size: var(--fs-sm);
 }
-.focus__big {
-  font-family: var(--font-display);
-  font-weight: var(--display-weight);
-  font-size: 34px;
-  line-height: 1.1;
-}
-.focus__row {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-}
-.focus__sub {
-  font-size: var(--fs-sm);
-  color: var(--text-2);
-}
-.focus__headline {
-  margin: 0;
-  font-size: var(--fs-md);
-  font-weight: 600;
-  line-height: 1.3;
-}
-.focus__sentence {
-  margin: 0;
-  font-size: var(--fs-sm);
-  line-height: 1.45;
-  color: var(--text-2);
-}
-.focus__asleep {
-  font-family: var(--font-display);
-  font-size: var(--fs-stat-sm);
-  font-weight: var(--display-weight);
-  line-height: 1.15;
-}
-.focus__link {
-  display: inline-flex;
-  align-items: center;
-  min-height: 44px;
-}
-
 .day-chart {
   display: flex;
   flex-direction: column;
@@ -201,33 +100,6 @@
   grid-template-columns: 1fr 1fr;
   gap: var(--gap);
 }
-/* A word value ("Recovery") shrinks to fit its half-width tile instead of breaking mid-word.
-   The cap is low because Android's text zoom multiplies the result again. */
-.glance-grid .stat {
-  container-type: inline-size;
-}
-.glance-grid .stat__value--word {
-  font-size: min(var(--fs-stat), 15cqi);
-  hyphens: auto;
-}
-/* A status word has its dot in front of it: a little smaller, and never broken. */
-.glance-grid .stat__value--word:has(.status-word) {
-  font-size: min(var(--fs-stat), 12.5cqi);
-  hyphens: none;
-}
-.glance-grid .stat__value--word .status-word__text {
-  white-space: nowrap;
-}
-/* One short muted line under the value; a long one wraps balanced rather than to three ragged lines. */
-.glance-grid .stat__sub {
-  font-size: var(--fs-xs);
-  line-height: 1.35;
-  text-wrap: balance;
-}
-/* An odd last card spans the row instead of standing alone next to an empty cell. */
-.glance-grid > :last-child:nth-child(odd) {
-  grid-column: 1 / -1;
-}
 .glance__note {
   font-size: var(--fs-xs);
   color: var(--text-2);
@@ -273,9 +145,6 @@
   .glance-grid {
     grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
     gap: 16px;
-  }
-  .glance-grid > :last-child:nth-child(odd) {
-    grid-column: auto;
   }
   .today-actions {
     flex-direction: row;
@@ -951,55 +820,356 @@
   overflow-wrap: anywhere;
 }
 
-/* ---------------------------------------------------------------- Pictures on the phone's glance cards */
-.gv {
-  height: 44px;
-  margin-top: 6px;
-  display: flex;
-  align-items: center;
+.hcard__range {
+  margin-top: 4px;
+}
+
+/* ---------------------------------------------------------------- Tiles of "At a glance" (phone) */
+/* Every tile has the same width; a row is as tall as its tallest tile, so a row never looks ragged. */
+.glance-grid {
+  align-items: stretch;
+}
+.tile-link {
+  display: block;
   min-width: 0;
+  color: inherit;
+  text-decoration: none;
+  border-radius: var(--radius-card);
 }
-.gv .hchart {
-  width: 100%;
+.tile-link:hover {
+  color: inherit;
 }
-.gv__center {
-  width: 100%;
-}
-.gv__bars {
-  display: flex;
-  align-items: flex-end;
-  gap: 3px;
-  width: 100%;
+.tile-link > .card {
   height: 100%;
 }
-.gv__slot {
+.tile-link:hover > .card {
+  background: var(--hover);
+}
+.tile {
+  gap: 8px;
+  padding: 12px;
+  container-type: inline-size;
+}
+.tile__head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  color: var(--text-2);
+  font-size: var(--fs-sm);
+}
+.tile__glyph {
+  flex: none;
+  display: inline-flex;
+  color: var(--tone, var(--text-2));
+}
+.tile__name {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+/* The picture: a fixed height (it only grows with a large text size), centred in the tile. */
+.tile__visual {
+  flex: none;
+  min-height: 120px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+}
+.tile__hint {
+  margin: 0;
+  max-width: 24ch;
+  text-align: center;
+  font-size: var(--fs-sm);
+  line-height: 1.4;
+  color: var(--text-2);
+  text-wrap: balance;
+}
+.tile__figure {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  margin-top: auto;
+}
+.tile--figure-first .tile__head {
+  order: -2;
+}
+.tile--figure-first .tile__figure {
+  order: -1;
+  margin-top: 0;
+}
+.tile__value {
+  font-family: var(--font-display);
+  font-weight: var(--display-weight);
+  font-size: var(--fs-stat);
+  line-height: 1.15;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.tile__value .unavailable {
+  font-size: 0.6em;
+}
+/* A word ("Productive") with its dot: shrinks to fit the tile and is never broken. */
+.tile__value--word {
+  font-size: min(var(--fs-stat), 14cqi);
+  hyphens: none;
+}
+.tile__value--word .status-word__text {
+  white-space: nowrap;
+}
+.tile__label {
+  font-size: var(--fs-xs);
+  line-height: 1.35;
+  color: var(--text-2);
+  text-wrap: balance;
+}
+.tile__note {
+  margin-top: 2px;
+  font-size: var(--fs-xs);
+  color: var(--text-2);
+}
+.tile__pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.tile__pair-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.tile__pair .tile__value {
+  font-size: min(var(--fs-stat-sm), 14cqi);
+  white-space: nowrap;
+}
+.tile__rating {
+  display: block;
+}
+.tile__rating .status-word {
+  gap: 5px;
+}
+
+/* ---- pictures */
+.tv-dial {
+  display: block;
+  flex: none;
+  max-width: 100%;
+}
+.tv-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  min-width: 0;
+}
+.tv-stack--wide {
+  align-items: stretch;
+}
+.tv-strip {
+  width: 100%;
+}
+.tv-strip svg {
+  display: block;
+  border-radius: 3px;
+  background: var(--track);
+}
+.tv-strip__hours,
+.tv-ends {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  line-height: 1.3;
+  color: var(--text-2);
+  font-variant-numeric: tabular-nums;
+}
+.tv-strip__hours {
+  margin-top: 2px;
+}
+.tv-ends {
+  margin-top: 0;
+}
+.tv-hrv {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  min-width: 0;
+}
+.tv-hrv__status {
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  min-height: 18px;
+}
+.tv-hrv__none {
+  font-size: var(--fs-xs);
+  color: var(--text-2);
+}
+.tv-hrv__foot {
+  font-size: 11px;
+  color: var(--text-2);
+}
+.tv-zones {
+  position: relative;
+  height: 14px;
+  display: flex;
+  align-items: center;
+}
+.tv-zones__bar {
+  position: relative;
+  width: 100%;
+  height: 8px;
+  border-radius: 4px;
+  overflow: hidden;
+  background: var(--track);
+}
+.tv-zones__bar > span {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  /* A hair of card colour between the zones. */
+  box-shadow: inset -1.5px 0 0 var(--card);
+}
+.tv-zones__marker {
+  position: absolute;
+  top: 50%;
+  width: 14px;
+  height: 14px;
+  margin: -7px 0 0 -7px;
+  border-radius: 50%;
+  background: var(--text);
+  border: 3px solid var(--card);
+  box-sizing: border-box;
+}
+.tv-dots {
+  display: grid;
+  grid-template-columns: repeat(14, 1fr);
+  gap: 4px 0;
+  justify-items: center;
+}
+.tv-dots__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+.tv-dots__dot--none {
+  box-sizing: border-box;
+  border: 1.5px solid var(--line-strong);
+}
+.tv-disc {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  /* The glyph is cut out of the disc in the colour of the card. */
+  color: var(--card);
+}
+.tv-steps {
+  gap: 10px;
+}
+.tv-bars__plot {
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  height: 64px;
+}
+.tv-bars__slot {
   flex: 1 1 0;
   min-width: 0;
   height: 100%;
   display: flex;
   align-items: flex-end;
 }
-.gv__bar {
+.tv-bars__bar {
   display: block;
   width: 100%;
   border-radius: 3px;
 }
-.gv__bar--empty {
+.tv-bars__bar--empty {
   height: 3px;
   background: var(--track);
 }
-.gv__strip {
+.tv-bars__letters {
   display: flex;
-  gap: 1px;
-  width: 100%;
-  height: 20px;
+  gap: 4px;
+  margin-top: 3px;
+  font-size: 11px;
+  line-height: 1.2;
+  color: var(--text-2);
 }
-.gv__block {
+.tv-bars__letters span {
   flex: 1 1 0;
-  min-width: 2px;
-  border-radius: 3px;
+  text-align: center;
 }
-
-.hcard__range {
-  margin-top: 4px;
+.tv-load {
+  gap: 14px;
+}
+.tv-load__target {
+  text-align: center;
+  font-size: var(--fs-xs);
+  color: var(--text-2);
+  font-variant-numeric: tabular-nums;
+}
+.tv-spark {
+  width: 100%;
+}
+.tv-spark .hchart {
+  width: 100%;
+  display: block;
+}
+.tv-rows {
+  width: 100%;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.tv-rows > div {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  font-size: var(--fs-sm);
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--line);
+}
+.tv-rows > div:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+.tv-rows dt {
+  color: var(--text-2);
+}
+.tv-rows dd {
+  margin: 0;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.tv-change {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  color: var(--text-2);
+}
+.tv-change__value {
+  font-family: var(--font-display);
+  font-weight: var(--display-weight);
+  font-size: var(--fs-stat);
+  color: var(--text);
+}
+.tv-change__label {
+  font-size: var(--fs-xs);
+}
+.hs-list--tile {
+  width: 100%;
+  gap: 10px;
+}
+.tile .progress__range {
+  background: color-mix(in srgb, var(--zone-1) 38%, transparent);
 }

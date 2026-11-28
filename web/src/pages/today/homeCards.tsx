@@ -600,7 +600,7 @@ export function HomeGlanceCard({ id, today }: { id: HomeCard; today: Today }) {
   }
 }
 
-/** Readiness: the estimate's ring, its level word and headline. Nothing is shown without an estimate. */
+/** Readiness: the estimate's ring, its level word and headline. Without an estimate the card stays and says what is missing. */
 function ReadinessGlance() {
   const q = useReadiness();
   const r = q.data;
@@ -611,7 +611,8 @@ function ReadinessGlance() {
       </Glance>
     );
   }
-  if (!r || r.score === null || !r.level) return null;
+  if (!r) return <GlanceEmpty id="training_readiness" glyph="readiness" tone="var(--zone-2)">The estimate could not be loaded.</GlanceEmpty>;
+  if (r.score === null || !r.level) return <GlanceEmpty id="training_readiness" glyph="readiness" tone="var(--zone-2)">{r.unavailable ?? 'Not enough data for an estimate yet.'}</GlanceEmpty>;
   return (
     <Glance id="training_readiness" glyph="readiness" tone={LEVEL_COLOR[r.level]} footer={<span className="hfoot__label">Nimrag estimate</span>}>
       <div className="hcard__center">
