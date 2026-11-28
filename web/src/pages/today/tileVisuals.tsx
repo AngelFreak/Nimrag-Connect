@@ -346,14 +346,16 @@ export function stageBlocks(stages: StageSegment[], start: string, end: string):
 const STAGE_COLOR: Record<StageKey, string> = { awake: 'var(--stage-awake)', rem: 'var(--stage-rem)', light: 'var(--stage-light)', deep: 'var(--stage-deep)' };
 
 /** The night as blocks at four heights (awake on top, deep at the bottom), bed and wake time under the ends. */
-export function SleepVisual({ today }: { today: Today }) {
+export function SleepVisual({ today, height = 78 }: { today: Today; height?: number }) {
   const s = today.sleep;
   if (!s) return <Hint>The watch recorded no sleep for last night.</Hint>;
   if (!s.stages_available) return <Hint>No sleep stages for last night.</Hint>;
   const tz = today.timezone;
   const bed = fmtTime(s.start, tz);
   const wake = fmtTime(s.end, tz);
-  const totals = `deep ${fmtSeconds(s.deep_s) ?? 'unavailable'}, light ${fmtSeconds(s.light_s) ?? 'unavailable'}, REM ${fmtSeconds(s.rem_s) ?? 'unavailable'}, awake ${fmtSeconds(s.awake_s) ?? 'unavailable'}`;
+  const totals = ([['deep', s.deep_s], ['light', s.light_s], ['REM', s.rem_s], ['awake', s.awake_s]] as const)
+    .flatMap(([name, secs]) => (fmtSeconds(secs) === null ? [] : [`${name} ${fmtSeconds(secs)}`]))
+    .join(', ');
   const times = bed && wake ? ` From ${bed} to ${wake}.` : '';
   const blocks = stageBlocks(s.stages, s.start, s.end);
   if (blocks.length === 0) {
@@ -378,7 +380,7 @@ export function SleepVisual({ today }: { today: Today }) {
   const H = ROW * 4 + GAP * 3;
   return (
     <div className="tv-stack tv-stack--wide" role="img" aria-label={`Sleep stages: ${totals}.${times}`}>
-      <svg viewBox={`0 0 100 ${H}`} preserveAspectRatio="none" width="100%" height={78} shapeRendering="crispEdges" aria-hidden="true">
+      <svg viewBox={`0 0 100 ${H}`} preserveAspectRatio="none" width="100%" height={height} shapeRendering="crispEdges" aria-hidden="true">
         {blocks.map((b, i) => (
           <rect key={i} x={b.x * 100} y={STAGE_ROW[b.stage] * (ROW + GAP)} width={Math.max(0.5, b.w * 100)} height={ROW} rx={0.6} style={{ fill: STAGE_COLOR[b.stage] }} />
         ))}
@@ -489,7 +491,7 @@ export function HrvVisual({ today }: { today: Today }) {
   return (
     <div className="tv-hrv" role="img" aria-label={label}>
       <span className="tv-hrv__status">{status ? <StatusWord type="hrv" value={h.status}>{status}</StatusWord> : null}</span>
-      {scale ? <ZoneBar zones={scale.zones} marker={isMissing(avg) ? null : scale.at(avg)} /> : <span className="tv-hrv__none">Your balanced range is unavailable.</span>}
+      {scale ? <ZoneBar zones={scale.zones} marker={isMissing(avg) ? null : scale.at(avg)} /> : null}
       <div className="tv-dots" aria-hidden="true">
         {dots.map((d) => {
           const color = statusColor('hrv', d.status);

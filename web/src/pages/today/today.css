@@ -1004,10 +1004,6 @@
   font-weight: 600;
   min-height: 18px;
 }
-.tv-hrv__none {
-  font-size: var(--fs-xs);
-  color: var(--text-2);
-}
 .tv-hrv__foot {
   font-size: 11px;
   color: var(--text-2);
@@ -1301,6 +1297,103 @@
   margin: 0;
   max-width: 30ch;
   color: var(--text-2);
+}
+
+/* In focus slides that fill their card: sections under the top block. */
+.focus__section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+.focus__section-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+.focus__section-title {
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--text);
+}
+.focus__link--end {
+  margin-top: auto;
+}
+/* Overnight facts: a row of small figures. */
+.focus-facts {
+  display: grid;
+  grid-template-columns: repeat(var(--cols, 3), minmax(0, 1fr));
+  gap: 10px 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+.focus-facts--flush {
+  padding-top: 0;
+  border-top: 0;
+}
+.focus-fact {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.focus-fact__label {
+  font-size: var(--fs-xs);
+  color: var(--text-2);
+}
+.focus-fact__value {
+  font-family: var(--font-display);
+  font-weight: var(--display-weight);
+  font-size: var(--fs-stat-sm);
+  line-height: 1.15;
+}
+.focus-fact__unit {
+  font-family: var(--font-body, inherit);
+  font-size: var(--fs-xs);
+  font-weight: 400;
+  color: var(--text-2);
+}
+/* Readiness factors: name, value and word, a short bar. */
+.focus-factors {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.focus-factors__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 4px 12px;
+  align-items: baseline;
+}
+.focus-factors__name {
+  font-size: var(--fs-sm);
+  font-weight: 600;
+}
+.focus-factors__value {
+  font-size: var(--fs-sm);
+  color: var(--text-2);
+  text-align: right;
+}
+.focus-factors__figure {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.focus-factors__track {
+  grid-column: 1 / -1;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--track);
+  overflow: hidden;
+}
+.focus-factors__track > i {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
 }
 
 /* A tile picture used at slide size. */

@@ -1,18 +1,24 @@
-import { useCallback, useRef, useState, type KeyboardEvent } from 'react';
+import { useCallback, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import type { HomeCard, HomeCards, Today } from '../../api/generated';
+import type { NightSummary } from '../../api/generated/NightSummary';
+import type { ReadinessFactor } from '../../api/generated/ReadinessFactor';
+import type { ReadinessRating } from '../../api/generated/ReadinessRating';
 import type { ReadinessResponse } from '../../api/generated/ReadinessResponse';
-import { Card, Legend, Ring, StatusWord, Unavailable } from '../../components';
+import { BarSeries, Card, Legend, Ring, SeriesChart, StatusWord, Unavailable } from '../../components';
 import { energyKey } from '../../lib/status';
-import { fmtInt, isMissing } from '../../lib/format';
-import { LEVEL_COLOR, LEVEL_NAME } from '../health/readiness';
-import { useReadiness } from '../health/readinessQueries';
+import { addDays, fmtMonthDay, fmtShortDay } from '../../lib/dates';
+import { fmtFixed, fmtInt, isMissing } from '../../lib/format';
+import { FACTOR_META, LEVEL_COLOR, LEVEL_NAME, RATING_COLOR as FACTOR_COLOR, factorValue, factorWord, fmtNum, historyChart } from '../health/readiness';
+import { useReadiness, useReadinessHistory } from '../health/readinessQueries';
 import { RATING_COLOR, RATING_WORD, headlineFor, ratingOfScore } from '../health/sleepNight';
 import { DEFAULT_HOME_CARDS } from './cards';
 import { EnergyDayChart } from './EnergyDayChart';
+import { MiniBars } from './homeCharts';
+import { useSleepNights } from './queries';
 import { Glyph, type GlyphName } from './glyphs';
 import { HrvVisual, ReadinessVisual, SleepVisual } from './tileVisuals';
-import { baselineLabel, energyHeadline, fmtSeconds, fmtTime, signed, unit } from './format';
+import { baselineLabel, dayLetter, energyHeadline, fmtSeconds, fmtTime, signed, unit } from './format';
 
 /** A slide without data: its name, one sentence of why, and where to look instead. No "unavailable" lines. */
 function EmptySlide({ glyph, title, children, to, linkText }: { glyph: GlyphName; title: string; children: string; to: string; linkText: string }) {
@@ -64,17 +70,78 @@ function EnergySlide({ today }: { today: Today }) {
   );
 }
 
-/** Today's readiness estimate: the ring, its level word, the headline, and a link to the page that explains it. */
+/** A ring without a score: just the empty track and a dash, no "unavailable". */
+function EmptyRing({ label }: { label: string }) {
+  return (
+    <svg className="ring" width={104} height={104} viewBox="0 0 104 104" role="img" aria-label={`${label}: none yet`}>
+      <circle cx={52} cy={52} r={45} fill="none" style={{ stroke: 'var(--track)' }} strokeWidth={10} />
+      <text x={52} y={52 + 104 * 0.08} textAnchor="middle" fontFamily="var(--font-display)" fontWeight={600} fontSize={104 * 0.29} style={{ fill: 'var(--text-2)' }}>
+        –
+      </text>
+    </svg>
+  );
+}
+
+/** The fill of a factor's bar: its rating's rung out of five. */
+const RUNG: Record<ReadinessRating, number> = { very_poor: 1, poor: 2, moderate: 3, good: 4, very_good: 5 };
+
+/** The six factors, heaviest first: name, value and word, and a short bar in the rating's colour. */
+function FactorBars({ factors }: { factors: ReadinessFactor[] }) {
+  return (
+    <ul className="focus-factors" aria-label="What the estimate is made from">
+      {factors.map((f) => {
+        const value = factorValue(f);
+        const rating = value === null ? null : f.rating;
+        return (
+          <li key={f.key} className="focus-factors__row">
+            <span className="focus-factors__name">{FACTOR_META[f.key].name}</span>
+            <span className={rating ? 'focus-factors__value' : 'focus-factors__value focus-factors__value--none'}>
+              {rating ? (
+                <>
+                  <span className="focus-factors__figure">{value}</span> · {factorWord(f.key, rating)}
+                </>
+              ) : (
+                'No data'
+              )}
+            </span>
+            <span className="focus-factors__track" aria-hidden="true">
+              {rating ? <i style={{ width: `${(RUNG[rating] / 5) * 100}%`, background: FACTOR_COLOR[rating] }} /> : null}
+            </span>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+/** The estimate of the last seven days as small bars in the level colours. */
+function ReadinessWeek({ date }: { date: string }) {
+  const q = useReadinessHistory(addDays(date, -6), date);
+  if (!q.data) return null;
+  const chart = historyChart(q.data.days, q.data.average);
+  if (chart.scored === 0) return null;
+  return (
+    <div className="focus__section">
+      <div className="focus__section-head">
+        <span className="focus__section-title">Last 7 days</span>
+        {isMissing(q.data.average) ? null : <span className="focus__sub">Average {fmtNum(q.data.average)}</span>}
+      </div>
+      <BarSeries values={chart.values} colors={chart.colors} labels={chart.labels} label="Readiness estimate by day" summary={chart.summary} max={100} height={72} />
+    </div>
+  );
+}
+
+/** Today's readiness estimate: the gauge, its level word and headline, the six factors, and a link to the page that explains it. */
 function ReadinessSlide({ data }: { data: ReadinessResponse }) {
   const level = data.level;
-  const color = level ? LEVEL_COLOR[level] : 'var(--accent)';
+  const sentence = data.sentence ?? data.unavailable;
   return (
     <Card as="div" padding="lg">
       <div className="focus-energy">
         {data.score !== null ? (
           <ReadinessVisual score={data.score} colors={LEVEL_COLOR} label={`Readiness estimate ${fmtInt(data.score)} out of 100${level ? `, level ${LEVEL_NAME[level]}` : ''}.`} />
         ) : (
-          <Ring value={null} label="Readiness estimate" color={color} />
+          <EmptyRing label="Readiness estimate" />
         )}
         <div className="focus-energy__text">
           <span className="stat__label">Readiness</span>
@@ -84,24 +151,70 @@ function ReadinessSlide({ data }: { data: ReadinessResponse }) {
                 {LEVEL_NAME[level]}
               </StatusWord>
             ) : (
-              <Unavailable />
+              <span className="focus__sub">No estimate yet</span>
             )}
           </span>
           {data.headline ? <span className="focus__headline">{data.headline}</span> : null}
           <span className="focus__sub">Nimrag estimate</span>
         </div>
       </div>
-      {data.sentence ?? data.unavailable ? <p className="focus__sentence">{data.sentence ?? data.unavailable}</p> : null}
-      <Link to="/training/readiness" className="focus__sub focus__link">
+      <div className="focus__section">
+        <span className="focus__section-title">Six factors, heaviest first</span>
+        <FactorBars factors={data.factors} />
+      </div>
+      {data.score !== null ? <ReadinessWeek date={data.date} /> : null}
+      {sentence ? <p className="focus__sentence">{sentence}</p> : null}
+      <Link to="/training/readiness" className="focus__sub focus__link focus__link--end">
         What it is made from
       </Link>
     </Card>
   );
 }
 
+/** One small figure of the overnight facts row. */
+function Fact({ label, value, unitText }: { label: string; value: string; unitText: string }) {
+  return (
+    <div className="focus-fact">
+      <span className="focus-fact__label">{label}</span>
+      <span className="focus-fact__value">
+        {value}
+        <span className="focus-fact__unit"> {unitText}</span>
+      </span>
+    </div>
+  );
+}
+
+/** The sleep score of the last seven nights as small bars, last night highlighted, and their average. */
+function SleepWeek({ nights, average, lastDate }: { nights: NightSummary[]; average: number | null; lastDate: string }) {
+  const recent = nights
+    .slice()
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .slice(-7);
+  if (recent.length === 0) return null;
+  const highlight = recent.findIndex((n) => n.date === lastDate);
+  return (
+    <div className="focus__section">
+      <div className="focus__section-head">
+        <span className="focus__section-title">Last 7 nights</span>
+        {isMissing(average) ? null : <span className="focus__sub">Average {fmtInt(average)}</span>}
+      </div>
+      <MiniBars
+        values={recent.map((n) => n.score)}
+        letters={recent.map((n) => dayLetter(n.date))}
+        color="var(--sleep)"
+        max={100}
+        highlight={highlight >= 0 ? highlight : recent.length - 1}
+        height={64}
+        label={`Sleep score of the last ${recent.length} nights: ${recent.map((n) => `${fmtShortDay(n.date)} ${isMissing(n.score) ? 'no score' : n.score}`).join(', ')}.`}
+      />
+    </div>
+  );
+}
+
 function SleepSlide({ today }: { today: Today }) {
   const s = today.sleep;
   const tz = today.timezone;
+  const nightsQuery = useSleepNights(7, s !== null);
   if (!s) {
     return (
       <EmptySlide glyph="sleep" title="Sleep last night" to="/sleep" linkText="See your latest nights">
@@ -113,10 +226,26 @@ function SleepSlide({ today }: { today: Today }) {
   const wake = fmtTime(s.end, tz);
   const rating = ratingOfScore(s.score);
   const headline = headlineFor(s);
+  const asleep = fmtSeconds(s.duration_s);
+  const lowHr = s.lowest_hr_bpm ?? today.heart_rate.resting_hr_bpm;
+  const hrv = s.hrv_ms ?? today.hrv.last_night_ms;
+  const breathing = today.respiration.sleep_avg_brpm ?? s.breathing_brpm;
+  const facts: ReactNode[] = [
+    isMissing(lowHr) ? null : <Fact key="hr" label={isMissing(s.lowest_hr_bpm) ? 'Resting heart rate' : 'Lowest heart rate'} value={fmtInt(lowHr) ?? ''} unitText="bpm" />,
+    isMissing(hrv) ? null : <Fact key="hrv" label="Overnight HRV" value={fmtInt(hrv) ?? ''} unitText="ms" />,
+    isMissing(breathing) ? null : <Fact key="br" label="Breathing" value={fmtFixed(breathing, 1) ?? ''} unitText="per min" />,
+    isMissing(s.energy_change) ? null : <Fact key="en" label="Energy overnight" value={signed(s.energy_change) ?? ''} unitText="points" />,
+  ].filter((x) => x !== null);
+  const stages = [
+    { key: 'deep', label: 'Deep', color: 'var(--stage-deep)', value: fmtSeconds(s.deep_s), hasValue: true },
+    { key: 'light', label: 'Light', color: 'var(--stage-light)', value: fmtSeconds(s.light_s), hasValue: true },
+    { key: 'rem', label: 'REM', color: 'var(--stage-rem)', value: fmtSeconds(s.rem_s), hasValue: true },
+    { key: 'awake', label: 'Awake', color: 'var(--stage-awake)', value: fmtSeconds(s.awake_s), hasValue: true },
+  ].filter((i) => i.value !== null);
   return (
     <Card as="div" padding="lg">
       <div className="focus-energy">
-        <Ring value={s.score} label="Sleep score" color={rating ? RATING_COLOR[rating] : 'var(--sleep)'} />
+        {isMissing(s.score) ? <EmptyRing label="Sleep score" /> : <Ring value={s.score} label="Sleep score" color={rating ? RATING_COLOR[rating] : 'var(--sleep)'} />}
         <div className="focus-energy__text">
           <span className="stat__label">Sleep last night</span>
           <span className="focus-energy__head">
@@ -125,33 +254,31 @@ function SleepSlide({ today }: { today: Today }) {
                 {RATING_WORD[rating]}
               </StatusWord>
             ) : (
-              <Unavailable />
+              <span className="focus__sub">No score for this night</span>
             )}
           </span>
-          <span className="focus__asleep">{fmtSeconds(s.duration_s) ?? <Unavailable />} asleep</span>
-          <span className="focus__sub">{bed && wake ? `${bed} to ${wake}` : null}</span>
+          {asleep ? <span className="focus__asleep">{asleep} asleep</span> : null}
+          {bed && wake ? <span className="focus__sub">{`${bed} to ${wake}`}</span> : null}
         </div>
       </div>
       <p className="focus__headline">{headline.title}</p>
       {s.stages_available ? (
-        <>
+        <div className="focus__section">
           <div className="focus__visual">
-            <SleepVisual today={today} />
+            <SleepVisual today={today} height={110} />
           </div>
-          <Legend
-            grid
-            items={[
-              { key: 'deep', label: 'Deep', color: 'var(--stage-deep)', value: fmtSeconds(s.deep_s), hasValue: true },
-              { key: 'light', label: 'Light', color: 'var(--stage-light)', value: fmtSeconds(s.light_s), hasValue: true },
-              { key: 'rem', label: 'REM', color: 'var(--stage-rem)', value: fmtSeconds(s.rem_s), hasValue: true },
-              { key: 'awake', label: 'Awake', color: 'var(--stage-awake)', value: fmtSeconds(s.awake_s), hasValue: true },
-            ]}
-          />
-        </>
+          <Legend grid items={stages} />
+        </div>
       ) : (
-        <span className="focus__sub">Sleep stages: <Unavailable /></span>
+        <p className="focus__sub">No sleep stages for this night.</p>
       )}
-      <Link to="/sleep" className="focus__sub focus__link">
+      {facts.length > 0 ? (
+        <div className="focus-facts" style={{ '--cols': facts.length === 4 ? 2 : facts.length } as CSSProperties}>
+          {facts}
+        </div>
+      ) : null}
+      {nightsQuery.data ? <SleepWeek nights={nightsQuery.data.nights} average={nightsQuery.data.average_score} lastDate={s.date} /> : null}
+      <Link to="/sleep" className="focus__sub focus__link focus__link--end">
         Open last night
       </Link>
     </Card>
@@ -160,7 +287,8 @@ function SleepSlide({ today }: { today: Today }) {
 
 function HrvSlide({ today }: { today: Today }) {
   const h = today.hrv;
-  const values = h.values_4w.map((d) => d.value);
+  const days = h.values_4w;
+  const values = days.map((d) => d.value);
   if (isMissing(h.last_night_ms) && values.every((v) => v === null)) {
     return (
       <EmptySlide glyph="hrv" title="Overnight HRV" to="/hrv" linkText="See HRV status">
@@ -171,13 +299,17 @@ function HrvSlide({ today }: { today: Today }) {
   const band: [number, number] | undefined =
     !isMissing(h.baseline_low_ms) && !isMissing(h.baseline_high_ms) ? [h.baseline_low_ms, h.baseline_high_ms] : undefined;
   const versus = baselineLabel(h.vs_baseline);
+  const big = unit(isMissing(h.last_night_ms) ? h.weekly_avg_ms : h.last_night_ms, 'ms');
+  const known = values.filter((v): v is number => v !== null);
+  const labelAt = (i: number) => ({ value: i, text: fmtMonthDay(days[i]!.date) });
+  const last = days.length - 1;
+  const xLabels = days.length >= 4 ? [labelAt(0), labelAt(Math.round(last / 3)), labelAt(Math.round((last * 2) / 3)), labelAt(last)] : [];
   return (
     <Card as="div" padding="lg">
       <span className="stat__label">Overnight HRV</span>
       <div className="focus__row">
-        <span className="focus__big">{unit(isMissing(h.last_night_ms) ? h.weekly_avg_ms : h.last_night_ms, 'ms')}</span>
+        {big ? <span className="focus__big">{big}</span> : null}
         <div className="stat">
-          {/* The status word is in the picture below, so it is not repeated here. */}
           <span className="focus__sub">{isMissing(h.last_night_ms) ? '7-night average' : 'Last night'}</span>
           <span className="focus__sub">
             {isMissing(h.last_night_ms) ? 'No reading last night' : isMissing(h.weekly_avg_ms) ? null : `7-night average ${fmtInt(h.weekly_avg_ms)} ms`}
@@ -188,7 +320,30 @@ function HrvSlide({ today }: { today: Today }) {
       <div className="focus__visual">
         <HrvVisual today={today} />
       </div>
+      {known.length > 0 ? (
+        <div className="focus__section">
+          <span className="focus__section-title">Night by night</span>
+          <div className="focus-facts focus-facts--flush" style={{ '--cols': 3 } as CSSProperties}>
+            <Fact label="Lowest" value={fmtInt(Math.min(...known)) ?? ''} unitText="ms" />
+            <Fact label="Average" value={fmtInt(known.reduce((a, v) => a + v, 0) / known.length) ?? ''} unitText="ms" />
+            <Fact label="Highest" value={fmtInt(Math.max(...known)) ?? ''} unitText="ms" />
+          </div>
+          <SeriesChart
+            label="Overnight HRV over the last 4 weeks"
+            summary={`Overnight HRV over the last 4 weeks, ${known.length} nights, between ${fmtInt(Math.min(...known))} and ${fmtInt(Math.max(...known))} milliseconds${band ? `, usual range ${band[0]} to ${band[1]} milliseconds` : ''}.`}
+            x={values.map((_, i) => i)}
+            series={[{ label: 'HRV', color: 'link', data: values, points: known.length <= 6 }]}
+            {...(band ? { band } : {})}
+            xRange={[0, Math.max(1, last)]}
+            {...(xLabels.length ? { xLabels } : {})}
+            height={130}
+          />
+        </div>
+      ) : null}
       {band ? <span className="focus__sub">Your usual range is {band[0]} to {band[1]} ms.</span> : null}
+      <Link to="/hrv" className="focus__sub focus__link focus__link--end">
+        See HRV status
+      </Link>
     </Card>
   );
 }
