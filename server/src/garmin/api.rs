@@ -423,6 +423,12 @@ async fn settings_update(
     State(state): State<AppState>,
     ApiJson(body): ApiJson<GarminSettingsRequest>,
 ) -> Result<Json<GarminStatus>, ApiError> {
+    if body.send_all.is_none() && body.fill_nights.is_none() {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "send_all or fill_nights is required",
+        ));
+    }
     let now = state.now();
     let mut set = false;
     if let Some(send_all) = body.send_all {

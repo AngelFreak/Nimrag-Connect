@@ -467,7 +467,7 @@ All calls need the session cookie, and the writes the header `X-Nimrag: 1`:
 | `GET /api/garmin` | `{state: off\|needs_login\|needs_mfa\|connected\|paused, send_all, fill_nights, last_filled_night, pending, done, failed, last_error, next_attempt_at}` |
 | `POST /api/garmin/login {email, password}` | `{mfa_required}`; then `POST /api/garmin/mfa {code}` |
 | `POST /api/garmin/import-tokens {di_token, di_refresh_token, di_client_id?}` | log in with a python-garminconnect token file |
-| `POST /api/garmin/settings {send_all?, fill_nights?}` | choose activities only (`false`) or everything (`true`), and whether missed nights are fetched (see below); a field left out is unchanged; returns the status; `409` when not set up. Queues nothing |
+| `POST /api/garmin/settings {send_all?, fill_nights?}` | choose activities only (`false`) or everything (`true`), and whether missed nights are fetched (see below); a field left out is unchanged, at least one is required (`400`); returns the status; `409` when not set up. Queues nothing |
 | `POST /api/garmin/backfill {days \| since, mode?}` | queue older files, `{queued}`. `days` 1 to 3650 or `since` `YYYY-MM-DD` (the user's timezone), exactly one. `mode`: `activities` (default; activities that started in the window) or `all` (every watch/USB FIT file received in the window, oldest first). Files already queued or sent are skipped. `409` when not set up |
 | `POST /api/garmin/retry` | failed files get fresh tries; a paused queue resumes |
 | `POST /api/garmin/logout` | tokens and unsent files are forgotten (the choice goes with the account) |
