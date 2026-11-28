@@ -328,6 +328,118 @@ fn blobs_of(
     ))
 }
 
+/// Store the blobs of one input file (`rel` is its origin) and fold the outcome into `report`.
+#[allow(clippy::too_many_arguments)]
+async fn import_raw(
+    state: &AppState,
+    rel: &str,
+    raw: String,
+    owner: i64,
+    tz: Tz,
+    pages: &std::sync::Arc<BTreeMap<i64, Vec<(i64, PathBuf)>>>,
+    report: &mut Report,
+    used: &mut BTreeSet<i64>,
+) -> Result<()> {
+    let built = {
+        let (rel, pages) = (rel.to_owned(), pages.clone());
+        tokio::task::spawn_blocking(move || {
+            let ids = std::cell::RefCell::new(Vec::new());
+            let lookup = |id: i64| {
+                ids.borrow_mut().push(id);
+                pages.get(&id).map_or(Ok(None), |p| read_records(p, id))
+            };
+            let built = blobs_of(&rel, &raw, tz, &lookup);
+            (built, ids.into_inner())
+        })
+        .await
+        .context("blob task")?
+    };
+    let (built, ids) = built;
+    used.extend(ids);
+    let Some((blobs, problems)) = built else {
+        report.unrecognised.push(rel.to_owned());
+        return Ok(());
+    };
+    report.errors.extend(problems);
+    for b in blobs {
+        let meta = Meta {
+            source: "connect".into(),
+            data_type: None,
+            sub_type: None,
+            file_index: None,
+            file_number: None,
+            watch_timestamp: None,
+        };
+        let received = {
+            let (root, bytes) = (state.data_dir.as_ref().clone(), b.bytes);
+            tokio::task::spawn_blocking(move || store::receive_bytes(&root, &bytes))
+                .await
+                .context("store task")?
+        };
+        let received = match received {
+            Ok(r) => r,
+            Err(e) => {
+                report.errors.push(format!("{}: {e:#}", b.origin));
+                continue;
+            }
+        };
+        match ingest::ingest(
+            state,
+            &received,
+            None,
+            Some(owner),
+            meta,
+            Some(b.origin.clone()),
+        )
+        .await
+        {
+            Ok(created) => {
+                report.with_records += u64::from(b.with_records);
+                let e = report.by_kind.entry(b.kind.as_str()).or_default();
+                if created {
+                    e.0 += 1;
+                } else {
+                    e.1 += 1;
+                }
+            }
+            Err(e) => report
+                .errors
+                .push(format!("{}: ingest failed: {e:#}", b.origin)),
+        }
+    }
+    Ok(())
+}
+
+/// Store one Connect JSON text the way [`run`] stores a file of that name: `origin` is the path
+/// the ledger records, `raw` the file's text. A text that is not recognised Connect JSON is
+/// listed in `unrecognised` and not stored. No activity record pages are read.
+pub async fn import_one(
+    state: &AppState,
+    origin: &str,
+    raw: &str,
+    owner: i64,
+    tz: Tz,
+) -> Result<Report> {
+    let mut report = Report {
+        files: 1,
+        ..Report::default()
+    };
+    let pages = std::sync::Arc::new(BTreeMap::new());
+    let mut used = BTreeSet::new();
+    import_raw(
+        state,
+        origin,
+        raw.to_owned(),
+        owner,
+        tz,
+        &pages,
+        &mut report,
+        &mut used,
+    )
+    .await?;
+    Ok(report)
+}
+
 /// Import every recognised JSON below `dir` for user `owner`. Local dates and times are read in
 /// `tz`.
 pub async fn run(state: &AppState, dir: &Path, owner: i64, tz: Tz) -> Result<Report> {
@@ -366,73 +478,7 @@ pub async fn run(state: &AppState, dir: &Path, owner: i64, tz: Tz) -> Result<Rep
                 continue;
             }
         };
-        let built = {
-            let (rel, pages) = (rel.clone(), pages.clone());
-            tokio::task::spawn_blocking(move || {
-                let ids = std::cell::RefCell::new(Vec::new());
-                let lookup = |id: i64| {
-                    ids.borrow_mut().push(id);
-                    pages.get(&id).map_or(Ok(None), |p| read_records(p, id))
-                };
-                let built = blobs_of(&rel, &raw, tz, &lookup);
-                (built, ids.into_inner())
-            })
-            .await
-            .context("blob task")?
-        };
-        let (built, ids) = built;
-        used.extend(ids);
-        let Some((blobs, problems)) = built else {
-            report.unrecognised.push(rel);
-            continue;
-        };
-        report.errors.extend(problems);
-        for b in blobs {
-            let meta = Meta {
-                source: "connect".into(),
-                data_type: None,
-                sub_type: None,
-                file_index: None,
-                file_number: None,
-                watch_timestamp: None,
-            };
-            let received = {
-                let (root, bytes) = (state.data_dir.as_ref().clone(), b.bytes);
-                tokio::task::spawn_blocking(move || store::receive_bytes(&root, &bytes))
-                    .await
-                    .context("store task")?
-            };
-            let received = match received {
-                Ok(r) => r,
-                Err(e) => {
-                    report.errors.push(format!("{}: {e:#}", b.origin));
-                    continue;
-                }
-            };
-            match ingest::ingest(
-                state,
-                &received,
-                None,
-                Some(owner),
-                meta,
-                Some(b.origin.clone()),
-            )
-            .await
-            {
-                Ok(created) => {
-                    report.with_records += u64::from(b.with_records);
-                    let e = report.by_kind.entry(b.kind.as_str()).or_default();
-                    if created {
-                        e.0 += 1;
-                    } else {
-                        e.1 += 1;
-                    }
-                }
-                Err(e) => report
-                    .errors
-                    .push(format!("{}: ingest failed: {e:#}", b.origin)),
-            }
-        }
+        import_raw(state, &rel, raw, owner, tz, &pages, &mut report, &mut used).await?;
     }
     report.records_without_activity = pages
         .keys()
