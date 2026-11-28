@@ -145,7 +145,7 @@ async fn hrv(
 
     let rows: Vec<SummaryRow> = sqlx::query_as(
         "SELECT ts, weekly_avg, last_night_avg, last_night_5min_high, baseline_balanced_lower, baseline_balanced_upper, status
-         FROM hrv_summary WHERE user_id = ? AND ts >= ? AND ts < ? ORDER BY ts",
+         FROM hrv_summary_current WHERE user_id = ? AND ts >= ? AND ts < ? ORDER BY ts",
     )
     .bind(ctx.uid)
     .bind(lo)
@@ -170,7 +170,7 @@ async fn hrv(
 
     // Readings: a day's overnight average when the summary has none, and the night itself.
     let readings: Vec<(i64, f64)> = sqlx::query_as(
-        "SELECT ts, rmssd_ms FROM hrv_values WHERE user_id = ? AND ts >= ? AND ts < ? ORDER BY ts",
+        "SELECT ts, rmssd_ms FROM hrv_values_current WHERE user_id = ? AND ts >= ? AND ts < ? ORDER BY ts",
     )
     .bind(ctx.uid)
     .bind(lo - NIGHT_SHIFT_S)

@@ -795,6 +795,7 @@ it again).
 | `{stressValueDescriptorsDTOList, stressValuesArray, ...}` (a day, `intraday/stress/YYYY-MM-DD.json`) | `intraday_stress` | `stress` (stress level, body battery level), see "Intraday series" below |
 | `{heartRateValueDescriptors, heartRateValues, ...}` (a day, `intraday/heart_rate/YYYY-MM-DD.json`) | `intraday_heart_rate` | `mon_hr` |
 | `{respirationValueDescriptorsDTOList, respirationValuesArray, ...}` (a day, `intraday/respiration/YYYY-MM-DD.json`) | `intraday_respiration` | `respiration` |
+| `{dailySleepDTO, sleepLevels, hrvData, sleepHeartRate, ...}` (a night, `sleep_detail/YYYY-MM-DD.json`) | `sleep_detail` | `sleep_levels`, `hrv_values`, `hrv_summary`, `mon_hr`, `respiration`, `sleep_sessions`, see "Connect nights" below |
 | `{"activities": [...]}` (the list) | `activity_summary` | one blob per entry: `activities`, `activity_sessions` |
 | `{"summary": {...}, "fit": {"messages": [...]}}` | `activity` | `activities`, `activity_sessions`, `activity_laps`, `strength_sets`, `exercise_titles`, `activity_metrics` |
 
@@ -847,6 +848,34 @@ The rows are owned by the import's user and carry the Connect source's rank, whi
 FIT source, so the sample tables' rank-based upsert decides per sample (the primary key is the
 user and the instant): at an instant the watch also has a row for, the watch's row wins as a whole
 (whatever the import order), and Connect's samples fill the rest of the day.
+
+**Connect nights (optional).** `<dir>/sleep_detail/YYYY-MM-DD.json` is Connect's full sleep
+response of one night, found by its shape (a top-level object with `dailySleepDTO` and a
+`sleepLevels` list). It fills what the watch did not deliver (a morning whose stage, HRV or heart
+rate files never arrived). Only `dailySleepDTO.calendarDate` is required, and the night needs a
+window: `sleepStartTimestampGMT` and `sleepEndTimestampGMT` (epoch ms), else the span of the stage
+periods. The account's `userProfilePK` (top level and in `dailySleepDTO`) and `dailySleepDTO.id`
+are removed before the envelope is stored; the rest of the response is kept as it came.
+
+| field | rows |
+| --- | --- |
+| `sleepLevels[]` `{startGMT, endGMT, activityLevel}` (UTC text; 0 deep, 1 light, 2 REM, 3 awake) | `sleep_levels`, one row per period at the period's END (rows end their period), as the watch's level 3 deep, 2 light, 4 REM, 1 awake |
+| `hrvData[]` `{value, startGMT (ms)}` | `hrv_values` (`rmssd_ms`) |
+| `avgOvernightHrv` | one `hrv_summary` row at the night's end, `last_night_avg` only |
+| `sleepHeartRate[]` `{value, startGMT (ms)}` | `mon_hr` (0 is a gap) |
+| `wellnessEpochRespirationDataDTOList[]` `{startTimeGMT (ms), respirationValue}` | `respiration` (0 or less is a gap) |
+| `dailySleepDTO` start, end, stage totals, `sleepScores.overall.value` | a `sleep_sessions` row, as the `sleep` kind writes one (a FIT night at the same time still hides it) |
+
+An entry without a number is skipped. `mon_hr` and `respiration` follow the intraday rule (a watch
+row at the same instant wins). The stage and HRV tables follow a stricter one, because the
+watch's rows of a night sit at other instants than Connect's and would interleave with them: when
+any FIT source has at least one row of `sleep_levels` (resp. `hrv_values`, `hrv_summary`) inside
+the night, none of the night's Connect rows of that table is shown. The rule is applied when the
+rows are read, through the views `sleep_levels_current`, `hrv_values_current` and
+`hrv_summary_current` (a Connect row's night is the `sleep_sessions` row of its own file), so it
+holds in whatever order the files were imported and after `reparse`; the import also leaves such
+rows out of the table when the watch's are already there, which changes nothing a page shows. A
+FIT night that has no stage rows shows the Connect stages beside its own session.
 
 **Mixed days.** A day can have both: the first day of watch data (2026-11-19, watch rows only from
 21:06) has Connect's from the start of the day and the watch's after. The Day, Today, Movement,

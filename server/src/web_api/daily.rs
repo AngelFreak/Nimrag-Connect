@@ -648,7 +648,7 @@ fn stages_of(levels: &[(i64, i64)], start: i64, end: i64) -> Option<Stages> {
 async fn levels(ctx: &Ctx, from: i64, to: i64) -> Res<Vec<(i64, i64)>> {
     Ok(sqlx::query_as(
         // Rows end their period, so a night (from, to] holds the rows after `from` up to `to`.
-        "SELECT ts, level FROM sleep_levels WHERE user_id = ? AND ts > ? AND ts <= ? ORDER BY ts",
+        "SELECT ts, level FROM sleep_levels_current WHERE user_id = ? AND ts > ? AND ts <= ? ORDER BY ts",
     )
     .bind(ctx.uid)
     .bind(from)
@@ -715,7 +715,7 @@ pub async fn night_detail(ctx: &Ctx, s: &SessionRow) -> Res<SleepNight> {
     let sum = summary(ctx, s, &lv);
     let hrv = match one_f64(
         ctx,
-        "SELECT last_night_avg FROM hrv_summary WHERE user_id = ? AND ts >= ? AND ts <= ? AND last_night_avg IS NOT NULL
+        "SELECT last_night_avg FROM hrv_summary_current WHERE user_id = ? AND ts >= ? AND ts <= ? AND last_night_avg IS NOT NULL
          ORDER BY ts DESC LIMIT 1",
         // From the start of the night, or of the day it ends on: a summary imported from Garmin
         // Connect sits at the start of its day.
@@ -727,7 +727,7 @@ pub async fn night_detail(ctx: &Ctx, s: &SessionRow) -> Res<SleepNight> {
     .await?
     {
         Some(v) => Some(v),
-        None => one_f64(ctx, "SELECT AVG(rmssd_ms) FROM hrv_values WHERE user_id = ? AND ts >= ? AND ts <= ?", &[s.start_ts, s.end_ts])
+        None => one_f64(ctx, "SELECT AVG(rmssd_ms) FROM hrv_values_current WHERE user_id = ? AND ts >= ? AND ts <= ?", &[s.start_ts, s.end_ts])
             .await?
             .map(round1),
     };
@@ -746,7 +746,7 @@ pub async fn night_detail(ctx: &Ctx, s: &SessionRow) -> Res<SleepNight> {
     .await?;
     let hrv_status = one_f64(
         ctx,
-        "SELECT CAST(status AS REAL) FROM hrv_summary WHERE user_id = ? AND ts >= ? AND ts <= ? AND status IS NOT NULL
+        "SELECT CAST(status AS REAL) FROM hrv_summary_current WHERE user_id = ? AND ts >= ? AND ts <= ? AND status IS NOT NULL
          ORDER BY ts DESC LIMIT 1",
         &[
             s.start_ts.min(ctx.day_bounds(ctx.date(s.end_ts)).0),
@@ -933,7 +933,7 @@ pub async fn night_series(ctx: &Ctx, s: &SessionRow) -> Res<Vec<NightSeries>> {
     );
     add(
         "hrv",
-        series(ctx, "SELECT ts, rmssd_ms FROM hrv_values WHERE user_id = ? AND ts >= ? AND ts <= ? ORDER BY ts", a, b).await?,
+        series(ctx, "SELECT ts, rmssd_ms FROM hrv_values_current WHERE user_id = ? AND ts >= ? AND ts <= ? ORDER BY ts", a, b).await?,
         false,
     );
     Ok(out)
@@ -995,7 +995,7 @@ pub async fn hrv_by_day(
     let (lo, hi) = (ctx.day_bounds(from).0, ctx.day_bounds(to).1);
     let rows: Vec<SummaryRow> = sqlx::query_as(
         "SELECT ts, last_night_avg, weekly_avg, baseline_balanced_lower, baseline_balanced_upper, status
-         FROM hrv_summary WHERE user_id = ? AND ts >= ? AND ts < ? ORDER BY ts",
+         FROM hrv_summary_current WHERE user_id = ? AND ts >= ? AND ts < ? ORDER BY ts",
     )
     .bind(ctx.uid)
     .bind(lo)
@@ -1011,7 +1011,7 @@ pub async fn hrv_by_day(
     // Days without a summary fall back to the mean of that day's overnight values.
     let vals = series(
         ctx,
-        "SELECT ts, rmssd_ms FROM hrv_values WHERE user_id = ? AND ts >= ? AND ts < ? ORDER BY ts",
+        "SELECT ts, rmssd_ms FROM hrv_values_current WHERE user_id = ? AND ts >= ? AND ts < ? ORDER BY ts",
         lo,
         hi,
     )

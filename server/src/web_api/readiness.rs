@@ -601,7 +601,7 @@ pub async fn gather(ctx: &Ctx, from: NaiveDate, to: NaiveDate) -> Res<Inputs> {
     );
     let hrv: Vec<HrvSql> = sqlx::query_as(
         "SELECT ts, weekly_avg, last_night_avg, baseline_balanced_lower, baseline_balanced_upper, status
-         FROM hrv_summary WHERE user_id = ? AND ts >= ? AND ts < ? ORDER BY ts",
+         FROM hrv_summary_current WHERE user_id = ? AND ts >= ? AND ts < ? ORDER BY ts",
     )
     .bind(ctx.uid)
     .bind(lo)

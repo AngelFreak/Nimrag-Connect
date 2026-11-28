@@ -138,6 +138,10 @@ pub fn classify(v: &Value) -> Option<Kind> {
     if has("respirationValueDescriptorsDTOList") && has("respirationValuesArray") {
         return Some(Kind::IntradayRespiration);
     }
+    // One night of the full sleep response.
+    if obj.get("dailySleepDTO").is_some_and(Value::is_object) && has("sleepLevels") {
+        return Some(Kind::SleepDetail);
+    }
     if obj.contains_key("nights") {
         return Some(Kind::Sleep);
     }
@@ -200,6 +204,20 @@ fn strip_key(v: &mut Value, key: &str) -> bool {
         Value::Array(a) => a.iter_mut().fold(false, |hit, x| strip_key(x, key) | hit),
         _ => false,
     }
+}
+
+/// Remove the account identifiers of a sleep night: the top-level `userProfilePK` and the
+/// `id` and `userProfilePK` of `dailySleepDTO`. True when something was removed.
+fn strip_sleep_ids(v: &mut Value) -> bool {
+    let mut hit = false;
+    if let Some(top) = v.as_object_mut() {
+        hit |= top.remove(PROFILE_KEY).is_some();
+        if let Some(dto) = top.get_mut("dailySleepDTO").and_then(Value::as_object_mut) {
+            hit |= dto.remove("id").is_some();
+            hit |= dto.remove(PROFILE_KEY).is_some();
+        }
+    }
+    hit
 }
 
 /// Every `*.json` below `dir`, in path order, as (path inside `dir`, full path). Symbolic links
@@ -287,7 +305,12 @@ fn blobs_of(
     // An intraday file may carry the account's profile id: never stored. A file without it keeps
     // its text byte for byte; one with it is stored as the JSON it is without that member.
     let stripped;
-    let raw = if kind.is_intraday() && strip_key(&mut value, PROFILE_KEY) {
+    let stripped_ids = if kind == Kind::SleepDetail {
+        strip_sleep_ids(&mut value)
+    } else {
+        kind.is_intraday() && strip_key(&mut value, PROFILE_KEY)
+    };
+    let raw = if stripped_ids {
         stripped = serde_json::to_string(&value).ok()?;
         stripped.as_str()
     } else {
@@ -520,6 +543,37 @@ mod tests {
         assert!(strip_key(&mut v, "userProfilePK"));
         assert_eq!(v, json!({"a": [{"b": 2}]}));
         assert!(!strip_key(&mut v, "userProfilePK"));
+    }
+
+    #[test]
+    fn a_night_of_sleep_detail_is_recognised_and_loses_its_account_ids() {
+        let tz: Tz = "Europe/Copenhagen".parse().unwrap();
+        let raw = r#"{"userProfilePK": 424242, "dailySleepDTO": {"id": 777, "userProfilePK": 424242,
+            "calendarDate": "2026-11-28", "deepSleepSeconds": 60}, "sleepLevels": [], "other": {"id": 5}}"#;
+        assert_eq!(
+            classify(&serde_json::from_str(raw).unwrap()),
+            Some(Kind::SleepDetail)
+        );
+        let (blobs, _) = blobs_of("n.json", raw, tz, &|_| Ok(None)).unwrap();
+        assert_eq!(blobs[0].kind, Kind::SleepDetail);
+        let text = String::from_utf8(blobs[0].bytes.clone()).unwrap();
+        assert!(!text.contains("userProfilePK") && !text.contains("424242"));
+        assert!(!text.contains("777"), "{text}");
+        assert!(text.contains("calendarDate") && text.contains(r#""other":{"id":5}"#));
+        // Without the identifiers the text is kept byte for byte.
+        let plain = r#"{"dailySleepDTO": {"calendarDate": "2026-11-28"},  "sleepLevels": []}"#;
+        let (blobs, _) = blobs_of("n.json", plain, tz, &|_| Ok(None)).unwrap();
+        assert!(String::from_utf8(blobs[0].bytes.clone())
+            .unwrap()
+            .contains(plain));
+        // Not a night: the object is missing, or the levels are not a list.
+        for other in [
+            json!({"dailySleepDTO": 1, "sleepLevels": []}),
+            json!({"dailySleepDTO": {}, "sleepLevels": {}}),
+            json!({"sleepLevels": []}),
+        ] {
+            assert_eq!(classify(&other), None);
+        }
     }
 
     #[test]
