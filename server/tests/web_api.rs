@@ -1568,7 +1568,10 @@ async fn settings_defaults_and_patch() {
         json!(["respiration", "spo2", "weight"])
     );
     // The first three are the ones Today leads with: energy, readiness, sleep.
-    assert_eq!(&DEFAULT_ORDER[..3], ["energy", "training_readiness", "sleep"]);
+    assert_eq!(
+        &DEFAULT_ORDER[..3],
+        ["energy", "training_readiness", "sleep"]
+    );
 
     let (st, s) = e.send(&c, Method::PATCH, "/api/settings", json!({ "step_goal": 10000, "intensity_goal_min": 200, "timezone": "Europe/Copenhagen" })).await;
     assert_eq!(st, StatusCode::OK);
@@ -1698,6 +1701,69 @@ async fn about_names_the_server_version_for_any_signed_in_session_only() {
     // Signed out: not public.
     let (s, _, _) = e.call(Method::GET, "/api/about", None, false, None).await;
     assert_eq!(s, StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
+async fn training_load_tile_falls_back_to_the_watch_acute_load() {
+    let (e, c) = setup().await;
+    // The watch's status rows carry no load; its training_load rows carry the acute load.
+    values(
+        &e,
+        "training_status",
+        "ts, status, weekly_load_sum, load_min, load_max, fitness_trend, load_trend, src",
+        &[format!(
+            "{}, 8, NULL, NULL, NULL, NULL, NULL, 1",
+            at(19, 6, 30)
+        )],
+    )
+    .await;
+    values(
+        &e,
+        "training_load",
+        "ts, acute, chronic, acwr, src",
+        &[
+            format!("{}, 13, 219, 0.1, 1", at(18, 8, 0)),
+            format!("{}, 29, 219, 0.1, 1", at(19, 6, 30)),
+        ],
+    )
+    .await;
+    for uri in ["/api/today", "/api/training"] {
+        let t = e.get(&c, uri).await;
+        let load = if uri == "/api/today" {
+            &t["training_load"]
+        } else {
+            &t["load"]
+        };
+        assert_eq!(
+            (
+                load["seven_day_load"].as_f64(),
+                load["target_min"].as_f64(),
+                load["target_max"].as_f64()
+            ),
+            (Some(29.0), Some(175.2), Some(328.5)),
+            "{uri}"
+        );
+        assert_eq!(load["vs_target"], "below", "{uri}");
+    }
+    let t = e.get(&c, "/api/training").await;
+    let series = t["load"]["series_4w"].as_array().unwrap();
+    let last = series.last().unwrap();
+    assert_eq!(
+        (last["date"].as_str(), last["value"].as_f64()),
+        (Some("2026-11-19"), Some(29.0))
+    );
+
+    // A week-old acute load is not the 7-day load either.
+    e.exec("DELETE FROM training_load").await;
+    values(
+        &e,
+        "training_load",
+        "ts, acute, chronic, acwr, src",
+        &[format!("{}, 29, 219, 0.1, 1", at(10, 6, 30))],
+    )
+    .await;
+    let t = e.get(&c, "/api/today").await;
+    assert!(t["training_load"]["seven_day_load"].is_null());
 }
 
 #[tokio::test]

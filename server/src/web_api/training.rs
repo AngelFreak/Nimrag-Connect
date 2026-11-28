@@ -191,6 +191,8 @@ pub async fn status_rows(ctx: &Ctx, from: i64, to: i64) -> Res<Vec<StatusRow>> {
 
 /// A training status row older than this is not the current 7-day load.
 const LOAD_MAX_AGE_S: i64 = 7 * 86_400;
+/// The target range of an acute load, as factors of the chronic load.
+const LOAD_RANGE: (f64, f64) = (0.8, 1.5);
 
 pub async fn status_and_load(ctx: &Ctx) -> Res<(TrainingStatusCard, TrainingLoadCard)> {
     let today = ctx.today();
@@ -227,15 +229,54 @@ pub async fn status_and_load(ctx: &Ctx) -> Res<(TrainingStatusCard, TrainingLoad
             daily.insert(ctx.date(r.0), v);
         }
     }
+    // The watch's own acute load (its 7-day load), with the chronic load its range comes from.
+    let acute_rows: Vec<(i64, Option<f64>, Option<f64>)> = sqlx::query_as(
+        "SELECT ts, acute, chronic FROM training_load
+         WHERE user_id = ? AND ts >= ? AND ts <= ? AND acute IS NOT NULL ORDER BY ts",
+    )
+    .bind(ctx.uid)
+    .bind(ctx.day_bounds(today - Duration::days(27)).0)
+    .bind(ctx.now)
+    .fetch_all(&ctx.pool)
+    .await?;
+    // A day without a status load shows that day's last acute load.
+    let mut acute_daily: BTreeMap<NaiveDate, f64> = BTreeMap::new();
+    for r in &acute_rows {
+        if let Some(v) = r.1 {
+            acute_daily.insert(ctx.date(r.0), v);
+        }
+    }
+    for (d, v) in acute_daily {
+        daily.entry(d).or_insert(v);
+    }
     let from = today - Duration::days(27);
     // The load tile reads the newest row that HAS a load, with that row's target range: the
     // watch writes a row for today with only a status, and Garmin Connect's row of the day
-    // before carries the load. Rows older than a week are no longer "the 7-day load".
-    let (load, tmin, tmax) = rows
+    // before carries the load. The watch's status rows never carry a load, but its
+    // `training_load` rows carry the acute load, which is the same figure; their target range
+    // is the chronic load times 0.8 to 1.5 (the factors Connect's rows show). The newer of the
+    // two wins. Rows older than a week are no longer "the 7-day load".
+    let fresh = ctx.now - LOAD_MAX_AGE_S;
+    let from_status = rows
         .iter()
         .rev()
-        .find(|r| r.2.is_some() && r.0 >= ctx.now - LOAD_MAX_AGE_S)
-        .map_or((None, None, None), |l| (l.2, l.3, l.4));
+        .find(|r| r.2.is_some() && r.0 >= fresh)
+        .map(|l| (l.0, (l.2, l.3, l.4)));
+    let from_acute = acute_rows.iter().rev().find(|r| r.0 >= fresh).map(|r| {
+        let range =
+            r.2.filter(|c| *c > 0.0)
+                .map(|c| (c * LOAD_RANGE.0, c * LOAD_RANGE.1));
+        (
+            r.0,
+            (r.1, range.map(|x| round1(x.0)), range.map(|x| round1(x.1))),
+        )
+    });
+    let (load, tmin, tmax) = match (from_status, from_acute) {
+        (Some(s), Some(a)) if a.0 > s.0 => a.1,
+        (Some(s), _) => s.1,
+        (None, Some(a)) => a.1,
+        (None, None) => (None, None, None),
+    };
     let vs = match (load, tmin, tmax) {
         (Some(v), Some(lo), _) if v < lo => Some("below"),
         (Some(v), _, Some(hi)) if v > hi => Some("above"),
