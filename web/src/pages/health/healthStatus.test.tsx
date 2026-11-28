@@ -9,7 +9,7 @@ import type { HealthStatusHistory } from '../../api/generated/HealthStatusHistor
 import type { HealthStatusResponse } from '../../api/generated/HealthStatusResponse';
 import { addDays } from '../../lib/dates';
 import { HealthStatusPage } from '../HealthStatusPage';
-import { chartFrom, glanceWord, historyChart, metricSentence, stripLayout, summaryLine, summarySub } from './healthStatus';
+import { chartFrom, glanceWord, historyChart, metricSentence, stripLayout, summaryLine, summarySub, withoutNeverMeasured } from './healthStatus';
 
 // uPlot needs a real canvas, so the chart is replaced by its name and text alternative.
 vi.mock('../../components/SeriesChart', () => ({
@@ -61,6 +61,17 @@ describe('the words of the page', () => {
     expect(summarySub(r)).toBe('4 values need up to 4 more nights before a usual range can be shown.');
     expect(glanceWord(r)).toEqual({ text: 'Calibrating', state: 'calibrating' });
     expect(summaryLine(response({ metrics: ALL_IN.map((m) => ({ ...m, state: 'no_reading' as const, value: null })), compared: 0 }))).toBe('Nothing measured last night');
+  });
+
+  it('leaves out only the values with no reading tonight and none before', () => {
+    const never = metric('spo2', { state: 'no_reading', value: null, low: null, high: null, nights: 0 });
+    const hadBefore = metric('breathing', { state: 'no_reading', value: null, low: null, high: null, nights: 3 });
+    const calibrating = metric('hrv', { state: 'calibrating', low: null, high: null, nights: 0 });
+    const r = withoutNeverMeasured(response({ metrics: [calibrating, hadBefore, never, metric('resting_hr')], compared: 1 }));
+    expect(r.metrics.map((m) => m.key)).toEqual(['hrv', 'breathing', 'resting_hr']);
+    expect(withoutNeverMeasured(response({ metrics: [never] })).metrics).toEqual([]);
+    // The words count what is left.
+    expect(summarySub(withoutNeverMeasured(response({ metrics: [metric('hrv'), never], compared: 1 })))).toBe('1 of 1 values compared with your last 28 nights.');
   });
 
   it('names what was not measured', () => {
@@ -182,12 +193,30 @@ describe('Health status page', () => {
   });
 
   it('says a value was not measured instead of showing a zero', async () => {
-    mockApi(response({ metrics: [...ALL_IN.slice(0, 3), metric('spo2', { state: 'no_reading', value: null, low: null, high: null, nights: 0, nights_needed: 14 })], compared: 3 }));
+    // It has been measured on earlier nights: it stays, as "No reading".
+    mockApi(response({ metrics: [...ALL_IN.slice(0, 3), metric('spo2', { state: 'no_reading', value: null, low: null, high: null, nights: 9, nights_needed: 5 })], compared: 3 }));
     renderPage();
     const o2 = await waitForCard('spo2');
     expect(within(o2).getByText('No reading')).toBeInTheDocument();
     expect(within(o2).queryByText('unavailable')).not.toBeInTheDocument();
     expect(within(o2).getByText('Not measured last night')).toBeInTheDocument();
+  });
+
+  it('leaves out a value that has never been measured', async () => {
+    mockApi(response({ metrics: [...ALL_IN.slice(0, 3), metric('spo2', { state: 'no_reading', value: null, low: null, high: null, nights: 0, nights_needed: 14 })], compared: 3 }));
+    renderPage();
+    // The line under the summary counts what is shown.
+    expect(await screen.findByText(/3 of 3 values compared/)).toBeInTheDocument();
+    expect(document.querySelector('[data-metric="spo2"]')).toBeNull();
+    expect(document.querySelectorAll('[data-metric]')).toHaveLength(3);
+    expect(screen.queryByText('No reading')).not.toBeInTheDocument();
+  });
+
+  it('says so calmly when every value was left out', async () => {
+    mockApi(response({ compared: 0, metrics: ALL_IN.map((m) => ({ ...m, state: 'no_reading' as const, value: null, low: null, high: null, nights: 0, nights_needed: 14 })) }));
+    renderPage();
+    expect(await screen.findByText('No overnight readings yet.')).toBeInTheDocument();
+    expect(document.querySelector('[data-metric]')).toBeNull();
   });
 
   it('has an empty state when no night was recorded', async () => {

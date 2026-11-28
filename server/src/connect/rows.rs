@@ -21,7 +21,7 @@ use nimrag_core::derive::activity::{
 use nimrag_core::derive::{
     HrvSummary, RestingHr, SleepSession, TrainingBalance, TrainingLoad, TrainingStatus, Vo2max,
 };
-use nimrag_core::derive::{MonHr, Respiration, Stress};
+use nimrag_core::derive::{HrvValue, MonHr, Respiration, SleepLevel, Stress};
 use serde_json::Value;
 use std::collections::{BTreeMap, HashMap};
 
@@ -42,6 +42,7 @@ pub fn fill(kind: Kind, data: &Value, tz: Tz, p: &mut Parsed) -> R {
         Kind::IntradayStress => intraday_stress(data, p),
         Kind::IntradayHeartRate => intraday_heart_rate(data, p),
         Kind::IntradayRespiration => intraday_respiration(data, p),
+        Kind::SleepDetail => sleep_detail(data, p),
     }
 }
 
@@ -618,6 +619,171 @@ fn intraday_respiration(data: &Value, p: &mut Parsed) -> R {
         });
         p.rows += 1;
         p.seen(ts);
+    }
+    Ok(())
+}
+
+// ---- one night in full ------------------------------------------------------------------------
+
+/// A UTC string like `"2026-11-27T22:23:00.0"` (a trailing `Z` is accepted).
+fn utc_text(v: &Value, key: &str) -> Option<i64> {
+    utc(text(v, key)?.trim_end_matches('Z'))
+}
+
+/// Epoch milliseconds in `key` as seconds.
+fn ms_secs(v: &Value, key: &str) -> Option<i64> {
+    int(v, key).map(|ms| ms.div_euclid(1000))
+}
+
+/// Connect's `activityLevel` (0 deep, 1 light, 2 REM, 3 awake) as the watch's FIT `sleep_level`
+/// with its label.
+fn connect_level(l: f64) -> Option<(i64, &'static str)> {
+    match l.round() as i64 {
+        0 => Some((3, "deep")),
+        1 => Some((2, "light")),
+        2 => Some((4, "rem")),
+        3 => Some((1, "awake")),
+        _ => None,
+    }
+}
+
+/// One night of Connect's sleep response: `{"dailySleepDTO": {calendarDate, sleepStartTimestampGMT,
+/// sleepEndTimestampGMT (ms), stage totals, sleepScores.overall.value}, "sleepLevels": [{startGMT,
+/// endGMT (UTC text), activityLevel}], "hrvData": [{value, startGMT (ms)}], "avgOvernightHrv",
+/// "sleepHeartRate": [{value, startGMT (ms)}], "wellnessEpochRespirationDataDTOList":
+/// [{startTimeGMT (ms), respirationValue}]}`.
+///
+/// Rows: a night in `sleep_sessions` (what the `sleep` kind writes), one `sleep_levels` row per
+/// stage period at the period's END (rows end their period, like the watch's), `hrv_values`,
+/// one `hrv_summary` row at the night's end with the night's average, `mon_hr` and
+/// `respiration` (a value of 0 or less is a gap). An entry without a number is skipped.
+fn sleep_detail(data: &Value, p: &mut Parsed) -> R {
+    let dto = data
+        .get("dailySleepDTO")
+        .filter(|d| d.is_object())
+        .ok_or("no \"dailySleepDTO\" object")?;
+    date_of(dto, "calendarDate").ok_or("no valid dailySleepDTO.calendarDate")?;
+    let levels = list(data, "sleepLevels")?;
+
+    let mut periods = Vec::new();
+    for l in levels {
+        let (Some(s), Some(e), Some((level, name))) = (
+            utc_text(l, "startGMT"),
+            utc_text(l, "endGMT"),
+            num(l, "activityLevel").and_then(connect_level),
+        ) else {
+            p.skipped += 1;
+            continue;
+        };
+        if e <= s {
+            p.skipped += 1;
+            continue;
+        }
+        periods.push((s, e, level, name));
+    }
+
+    // The night's window: the stated start and end, else the span of its stage periods.
+    let start =
+        ms_secs(dto, "sleepStartTimestampGMT").or_else(|| periods.iter().map(|x| x.0).min());
+    let end = ms_secs(dto, "sleepEndTimestampGMT").or_else(|| periods.iter().map(|x| x.1).max());
+    let Some((start, end)) = start.zip(end).filter(|(s, e)| e > s) else {
+        return Err("no night window (start and end)".into());
+    };
+    p.night = Some((start, end));
+
+    let (deep, light, rem) = (
+        num(dto, "deepSleepSeconds"),
+        num(dto, "lightSleepSeconds"),
+        num(dto, "remSleepSeconds"),
+    );
+    let asleep = match (deep, light, rem) {
+        (Some(d), Some(l), Some(r)) => Some(d + l + r),
+        _ => num(dto, "sleepTimeSeconds"),
+    };
+    p.derived.sleep_sessions.push(SleepSession {
+        start_ts: Some(start),
+        end_ts: Some(end),
+        overall_score: dto
+            .pointer("/sleepScores/overall/value")
+            .and_then(Value::as_f64)
+            .filter(|s| s.is_finite() && *s > 0.0),
+        ..Default::default()
+    });
+    p.sleep_stages.push(SleepStages {
+        asleep_s: asleep,
+        deep_s: deep,
+        light_s: light,
+        rem_s: rem,
+        awake_s: num(dto, "awakeSleepSeconds"),
+        restless: None,
+    });
+    p.rows += 1;
+    p.seen(end);
+
+    for (_, e, level, name) in periods {
+        p.derived.sleep_levels.push(SleepLevel {
+            ts: e,
+            level,
+            level_name: Some(name.to_owned()),
+        });
+        p.rows += 1;
+        p.seen(e);
+    }
+
+    // (instant, number) pairs of an optional list; an entry without both is skipped quietly (a
+    // gap), one with a number and no instant is counted.
+    let pairs = |key: &str, ts_key: &str, val_key: &str, p: &mut Parsed| -> Vec<(i64, f64)> {
+        let Some(items) = data.get(key).and_then(Value::as_array) else {
+            return Vec::new();
+        };
+        let mut out = Vec::new();
+        for it in items {
+            let Some(v) = num(it, val_key) else { continue };
+            let Some(ts) = ms_secs(it, ts_key) else {
+                p.skipped += 1;
+                continue;
+            };
+            out.push((ts, v));
+        }
+        out
+    };
+    for (ts, v) in pairs("hrvData", "startGMT", "value", p) {
+        if v > 0.0 {
+            p.derived.hrv_values.push(HrvValue { ts, rmssd_ms: v });
+            p.rows += 1;
+            p.seen(ts);
+        }
+    }
+    if let Some(avg) = num(data, "avgOvernightHrv").filter(|v| *v > 0.0) {
+        p.derived.hrv_summary.push(HrvSummary {
+            ts: end,
+            last_night_avg: Some(avg),
+            ..Default::default()
+        });
+        p.rows += 1;
+    }
+    for (ts, bpm) in pairs("sleepHeartRate", "startGMT", "value", p) {
+        if bpm > 0.0 {
+            p.derived.mon_hr.push(MonHr { ts, bpm });
+            p.rows += 1;
+            p.seen(ts);
+        }
+    }
+    for (ts, brpm) in pairs(
+        "wellnessEpochRespirationDataDTOList",
+        "startTimeGMT",
+        "respirationValue",
+        p,
+    ) {
+        if brpm > 0.0 {
+            p.derived.respiration.push(Respiration {
+                ts,
+                brpm: Some(brpm),
+                brpm_raw: None,
+            });
+            p.rows += 1;
+            p.seen(ts);
+        }
     }
     Ok(())
 }

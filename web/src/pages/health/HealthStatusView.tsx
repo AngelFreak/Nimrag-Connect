@@ -9,6 +9,7 @@ import {
   METRIC_NAME,
   METRIC_ORDER,
   MIN_NIGHTS,
+  NO_READINGS_YET,
   STATE_WORD,
   chartFrom,
   fmtMetric,
@@ -18,6 +19,7 @@ import {
   stripLayout,
   summaryLine,
   summarySub,
+  withoutNeverMeasured,
   type HistoryChart,
 } from './healthStatus';
 import { useHealthStatus, useHealthStatusHistory } from './healthStatusQueries';
@@ -61,13 +63,17 @@ export function HealthStatusView() {
   );
 }
 
-function Body({ data, history, historyFailed }: { data: HealthStatusResponse; history: HealthMetricHistory[] | null; historyFailed: boolean }) {
+function Body({ data: all, history, historyFailed }: { data: HealthStatusResponse; history: HealthMetricHistory[] | null; historyFailed: boolean }) {
   const desktop = useIsDesktop();
+  // A value that has never been measured is not shown at all (not even as "No reading").
+  const data = withoutNeverMeasured(all);
   const metrics = METRIC_ORDER.map((k) => data.metrics.find((m) => m.key === k)).filter((m): m is HealthMetricStatus => m !== undefined);
   return (
     <div className="page-stack">
       <Summary data={data} />
-      {data.has_night ? (
+      {data.has_night && metrics.length === 0 ? (
+        <EmptyState title={NO_READINGS_YET}>Values appear here once the watch has measured them overnight.</EmptyState>
+      ) : data.has_night ? (
         <div className={desktop ? 'grid-panels' : 'page-stack'}>
           {metrics.map((m) => (
             <MetricCard key={m.key} m={m} history={history?.find((h) => h.key === m.key) ?? null} historyFailed={historyFailed} />

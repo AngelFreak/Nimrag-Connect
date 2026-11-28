@@ -6,7 +6,7 @@ import { fmtShortDay } from '../../lib/dates';
 import { fmtFixed, fmtInt, isMissing, statusName } from '../../lib/format';
 import { LEVEL_NAME as STRESS_NAME } from '../../lib/stress';
 import { statusColor } from '../../lib/status';
-import { glanceWord, METRIC_SHORT, STATE_WORD } from '../health/healthStatus';
+import { glanceWord, METRIC_SHORT, NO_READINGS_YET, STATE_WORD, withoutNeverMeasured } from '../health/healthStatus';
 import { useHealthStatus } from '../health/healthStatusQueries';
 import '../health/healthStatus.css';
 import { LEVEL_COLOR, LEVEL_NAME } from '../health/readiness';
@@ -127,12 +127,14 @@ function ReadinessTile() {
 
 function HealthStatusTile() {
   const q = useHealthStatus();
-  const r = q.data;
+  // A value that has never been measured is left out, not shown as "No reading".
+  const r = q.data ? withoutNeverMeasured(q.data) : undefined;
   const glyph = 'heart';
   const tone = 'var(--heart)';
   if (q.isPending) return <TileLoading id="health_status" glyph={glyph} tone={tone} />;
   if (!r) return <Tile id="health_status" glyph={glyph} tone={tone} visual={<Hint>Could not be loaded.</Hint>} />;
   if (!r.has_night) return <Tile id="health_status" glyph={glyph} tone={tone} visual={<Hint>No night recorded yet.</Hint>} />;
+  if (r.metrics.length === 0) return <Tile id="health_status" glyph={glyph} tone={tone} visual={<Hint>{NO_READINGS_YET}</Hint>} />;
   const word = glanceWord(r);
   return (
     <Tile

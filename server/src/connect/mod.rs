@@ -28,6 +28,11 @@
 //! gets the Day view's charts. Where the watch has a row at the same instant its row wins (the
 //! rank rule below), and the rest of the day is Connect's.
 //!
+//! A night of Garmin's full sleep response (`sleep_detail/YYYY-MM-DD.json`, kind `sleep_detail`)
+//! fills the night's `sleep_levels`, `hrv_values`, `hrv_summary`, `mon_hr` and `respiration`, and
+//! writes a `sleep_sessions` row like the `sleep` kind does. See "Connect nights" at [`write`]
+//! for how it gives way to the watch.
+//!
 //! A Connect source ranks below every FIT source (`sources.origin = 'connect'`, rank key
 //! starting with `-`), so a watch row wins whatever the import order. Rows that Connect gives
 //! only per date sit at the start of that local day, so any reading the watch made later the
@@ -85,6 +90,10 @@ pub enum Kind {
     /// One day of Connect's respiration response (`intraday/respiration/YYYY-MM-DD.json`), every
     /// 2 minutes.
     IntradayRespiration,
+    /// One night of Connect's full sleep response (`sleep_detail/YYYY-MM-DD.json`): the stage
+    /// periods, overnight HRV, heart rate and breathing, which fill a night the watch did not
+    /// deliver (see "Connect nights" at [`write`]).
+    SleepDetail,
 }
 
 impl Kind {
@@ -103,6 +112,7 @@ impl Kind {
             Kind::IntradayStress => "intraday_stress",
             Kind::IntradayHeartRate => "intraday_heart_rate",
             Kind::IntradayRespiration => "intraday_respiration",
+            Kind::SleepDetail => "sleep_detail",
         }
     }
 
@@ -130,6 +140,7 @@ impl Kind {
             Kind::IntradayStress,
             Kind::IntradayHeartRate,
             Kind::IntradayRespiration,
+            Kind::SleepDetail,
         ]
         .into_iter()
         .find(|k| k.as_str() == s)
@@ -141,7 +152,7 @@ impl Kind {
     fn priority(self) -> u8 {
         match self {
             Kind::TrainingStatus => 3,
-            Kind::TrainingLoad | Kind::HrvDaily | Kind::Activity => 2,
+            Kind::TrainingLoad | Kind::HrvDaily | Kind::Activity | Kind::SleepDetail => 2,
             _ => 1,
         }
     }
@@ -245,6 +256,9 @@ pub struct Parsed {
     pub rows: u64,
     /// Entries of the JSON that could not be used.
     pub skipped: u64,
+    /// A `sleep_detail` night's window (start, end) in seconds: what the watch-wins rule of
+    /// [`write`] looks at.
+    pub night: Option<(i64, i64)>,
     /// Set when the envelope or its data is unusable; nothing is derived then.
     pub error: Option<String>,
 }
@@ -298,6 +312,29 @@ pub fn parse(bytes: &[u8]) -> Parsed {
     p
 }
 
+/// Has any FIT source of `uid` a row of `table` in the night: `(start, end]` when `open_start`
+/// (stage rows end their period), else `[start, end]`?
+async fn watch_has_rows(
+    tx: &mut Transaction<'_, Sqlite>,
+    table: &str,
+    uid: i64,
+    start: i64,
+    end: i64,
+    open_start: bool,
+) -> Result<bool> {
+    let lower = if open_start { ">" } else { ">=" };
+    let sql = format!(
+        "SELECT EXISTS (SELECT 1 FROM {table} w JOIN sources s ON s.src_id = w.src
+         WHERE s.origin = 'fit' AND w.user_id = ? AND w.ts {lower} ? AND w.ts <= ?)"
+    );
+    Ok(sqlx::query_scalar::<_, bool>(sqlx::AssertSqlSafe(sql))
+        .bind(uid)
+        .bind(start)
+        .bind(end)
+        .fetch_one(&mut **tx)
+        .await?)
+}
+
 /// Replace the derived rows of one Connect file: its `sources` row (rank below any FIT file),
 /// the wellness and activity rows through the same writers a FIT file uses, the sleep stage
 /// totals and the daily totals.
@@ -326,7 +363,43 @@ pub async fn write(tx: &mut Transaction<'_, Sqlite>, sha256: &str, p: &Parsed) -
     .execute(&mut **tx)
     .await?;
 
-    wellness::write(tx, sha256, src, uid, &p.derived).await?;
+    // Connect nights: a `sleep_detail` night gives way to the watch. The watch's stage and HRV
+    // rows of a night sit at other instants than Connect's, so the rank rule of the sample tables
+    // cannot choose between them and the two would interleave. The rule: when any FIT source
+    // already has a row of `sleep_levels`, `hrv_values` or `hrv_summary` inside the night's
+    // window, the whole set from this blob is left out (heart rate and breathing keep the
+    // per-instant rule of the intraday kinds).
+    //
+    // This check only sees the files imported so far, so it cannot be the rule on its own: a
+    // watch file that arrives (or is reparsed) after this one would leave both sets in the
+    // table. The rule that decides is at read time: the `*_current` views of
+    // `migrations/0020_connect_night_views.sql` hide a Connect night's rows of a table as soon
+    // as a FIT source has a row of it in that night, in whatever order the files came. The check
+    // here only keeps rows out of the table that the views would hide anyway.
+    let mut left_out = None;
+    if let (Kind::SleepDetail, Some((a, b))) = (kind, p.night) {
+        let mut d = p.derived.clone();
+        let mut any_left_out = false;
+        for (table, open) in [
+            ("sleep_levels", true),
+            ("hrv_values", false),
+            ("hrv_summary", false),
+        ] {
+            if watch_has_rows(tx, table, uid, a, b, open).await? {
+                any_left_out = true;
+                match table {
+                    "sleep_levels" => d.sleep_levels.clear(),
+                    "hrv_values" => d.hrv_values.clear(),
+                    _ => d.hrv_summary.clear(),
+                }
+            }
+        }
+        if any_left_out {
+            left_out = Some(d);
+        }
+    }
+    let derived = left_out.as_ref().unwrap_or(&p.derived);
+    wellness::write(tx, sha256, src, uid, derived).await?;
     activity::write(tx, sha256, &p.derived).await?;
     for (idx, st) in p.sleep_stages.iter().enumerate() {
         sqlx::query(
@@ -618,6 +691,61 @@ mod tests {
                 "respirationValuesArray": 3}"#,
         );
         assert!(p.error.is_some());
+    }
+
+    #[test]
+    fn a_sleep_detail_night_maps_levels_ends_their_period_and_skips_gaps() {
+        // 2026-11-27T22:00:00Z is 1795816800.
+        let t0 = 1_795_816_800i64;
+        let p = parsed(
+            Kind::SleepDetail,
+            &format!(
+                r#"{{"dailySleepDTO": {{"calendarDate": "2026-11-28"}},
+                "sleepLevels": [
+                    {{"startGMT": "2026-11-27T22:00:00.0", "endGMT": "2026-11-27T22:30:00.0", "activityLevel": 0.0}},
+                    {{"startGMT": "2026-11-27T22:30:00.0", "endGMT": "2026-11-27T23:00:00.0", "activityLevel": 1.0}},
+                    {{"startGMT": "2026-11-27T23:00:00.0", "endGMT": "2026-11-27T23:30:00.0", "activityLevel": 2.0}},
+                    {{"startGMT": "2026-11-27T23:30:00.0", "endGMT": "2026-11-28T00:00:00.0", "activityLevel": 3.0}},
+                    {{"startGMT": "2026-11-28T00:00:00.0", "endGMT": "2026-11-28T00:10:00.0", "activityLevel": -1.0}},
+                    {{"startGMT": "bad", "endGMT": "2026-11-28T00:10:00.0", "activityLevel": 1.0}}
+                ],
+                "hrvData": [{{"value": 40, "startGMT": {a}}}, {{"startGMT": {a}}}, {{"value": 41}}],
+                "avgOvernightHrv": 0}}"#,
+                a = t0 * 1000
+            ),
+        );
+        assert_eq!(p.error, None);
+        // Without stated start and end the night spans its stage periods.
+        assert_eq!(p.night, Some((t0, t0 + 7200)));
+        let lv: Vec<_> = p
+            .derived
+            .sleep_levels
+            .iter()
+            .map(|l| (l.ts - t0, l.level, l.level_name.clone().unwrap()))
+            .collect();
+        assert_eq!(
+            lv,
+            vec![
+                (1800, 3, "deep".to_owned()),
+                (3600, 2, "light".to_owned()),
+                (5400, 4, "rem".to_owned()),
+                (7200, 1, "awake".to_owned()),
+            ]
+        );
+        // The unknown level, the unreadable instant and the HRV entry without an instant.
+        assert_eq!(p.skipped, 3);
+        assert_eq!(p.derived.hrv_values.len(), 1);
+        assert!(p.derived.hrv_summary.is_empty(), "an average of 0 is none");
+        assert_eq!(p.derived.sleep_sessions.len(), 1);
+        // Not a night: no object, no levels list, no window.
+        for bad in [
+            r#"{"sleepLevels": []}"#,
+            r#"{"dailySleepDTO": {"calendarDate": "2026-11-28"}}"#,
+            r#"{"dailySleepDTO": {"calendarDate": "2026-11-28"}, "sleepLevels": []}"#,
+            r#"{"dailySleepDTO": {"calendarDate": "x"}, "sleepLevels": []}"#,
+        ] {
+            assert!(parsed(Kind::SleepDetail, bad).error.is_some(), "{bad}");
+        }
     }
 
     #[test]
