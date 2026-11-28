@@ -189,6 +189,46 @@ pub async fn status_rows(ctx: &Ctx, from: i64, to: i64) -> Res<Vec<StatusRow>> {
     .await?)
 }
 
+/// 7-day load points with `from <= ts <= to`, oldest first: `(ts, load, target_min, target_max)`.
+/// A status row's load where it has one; on days without one, the watch's acute load (the same
+/// figure) with the target range `LOAD_RANGE` times its chronic load.
+pub async fn load_points(
+    ctx: &Ctx,
+    from: i64,
+    to: i64,
+) -> Res<Vec<(i64, f64, Option<f64>, Option<f64>)>> {
+    let mut out: Vec<(i64, f64, Option<f64>, Option<f64>)> = status_rows(ctx, from, to)
+        .await?
+        .into_iter()
+        .filter_map(|r| Some((r.0, r.2?, r.3, r.4)))
+        .collect();
+    let status_days: std::collections::BTreeSet<NaiveDate> =
+        out.iter().map(|r| ctx.date(r.0)).collect();
+    let acute: Vec<(i64, f64, Option<f64>)> = sqlx::query_as(
+        "SELECT ts, acute, chronic FROM training_load
+         WHERE user_id = ? AND ts >= ? AND ts <= ? AND acute IS NOT NULL ORDER BY ts",
+    )
+    .bind(ctx.uid)
+    .bind(from)
+    .bind(to)
+    .fetch_all(&ctx.pool)
+    .await?;
+    for (ts, v, chronic) in acute {
+        if status_days.contains(&ctx.date(ts)) {
+            continue;
+        }
+        let c = chronic.filter(|c| *c > 0.0);
+        out.push((
+            ts,
+            v,
+            c.map(|c| round1(c * LOAD_RANGE.0)),
+            c.map(|c| round1(c * LOAD_RANGE.1)),
+        ));
+    }
+    out.sort_by_key(|r| r.0);
+    Ok(out)
+}
+
 /// A training status row older than this is not the current 7-day load.
 const LOAD_MAX_AGE_S: i64 = 7 * 86_400;
 /// The target range of an acute load, as factors of the chronic load.

@@ -1030,19 +1030,24 @@ pub async fn hrv_by_day(
 
 pub async fn hrv_block(ctx: &Ctx, date: NaiveDate) -> Res<HrvBlock> {
     let (by_day, rows) = hrv_by_day(ctx, date - Duration::days(27), date).await?;
-    let latest = rows.iter().rev().find(|r| ctx.date(r.0) <= date);
+    // Each figure from the newest row that has it: a Connect night brings a summary row with only
+    // the night's average, and must not hide the watch's weekly average, range and status.
+    let upto = || rows.iter().rev().filter(|r| ctx.date(r.0) <= date);
+    let weekly = upto().find_map(|r| r.2);
+    let (low, high) = upto()
+        .find_map(|r| r.3.zip(r.4))
+        .map_or((None, None), |(l, h)| (Some(l), Some(h)));
+    let status = upto().find_map(|r| r.5);
     let last_night = by_day.get(&date).copied();
-    let (low, high) = latest.map_or((None, None), |r| (r.3, r.4));
     let vs = match (last_night, low, high) {
         (Some(v), Some(l), _) if v < l => Some(BaselinePosition::Below),
         (Some(v), _, Some(h)) if v > h => Some(BaselinePosition::Above),
         (Some(_), Some(_), Some(_)) => Some(BaselinePosition::Within),
         _ => None,
     };
-    let status = latest.and_then(|r| r.5);
     Ok(HrvBlock {
         last_night_ms: last_night,
-        weekly_avg_ms: latest.and_then(|r| r.2),
+        weekly_avg_ms: weekly,
         baseline_low_ms: low,
         baseline_high_ms: high,
         status_code: status.map(|s| s as i32),

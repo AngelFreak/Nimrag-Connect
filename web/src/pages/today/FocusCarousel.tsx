@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from 'react';
+import { useCallback, useLayoutEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import type { HomeCard, HomeCards, Today } from '../../api/generated';
 import type { NightSummary } from '../../api/generated/NightSummary';
@@ -357,6 +357,9 @@ function prefersReducedMotion(): boolean {
  * "In focus": a swipeable row of large cards (scroll-snap) with page dots.
  * The track takes focus and answers the left and right arrow keys; the dots are buttons.
  */
+/** The track's top plus bottom padding (today.css `.focus__track`). */
+const TRACK_PAD_Y = 4;
+
 export function FocusCarousel({ today, cards = DEFAULT_HOME_CARDS }: { today: Today; cards?: HomeCards }) {
   const track = useRef<HTMLDivElement>(null);
   const [active, setActive] = useState(0);
@@ -411,14 +414,28 @@ export function FocusCarousel({ today, cards = DEFAULT_HOME_CARDS }: { today: To
     }
   };
 
+  const current = Math.min(active, Math.max(0, count - 1));
+  // Each slide keeps its own height; the track takes the height of the slide on screen, so a
+  // short slide (Energy) is not stretched to the tallest one (a night with stages).
+  const [height, setHeight] = useState<number | undefined>(undefined);
+  useLayoutEffect(() => {
+    const slide = track.current?.children[current] as HTMLElement | undefined;
+    if (!slide) return;
+    const measure = () => setHeight(slide.offsetHeight);
+    measure();
+    if (typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(measure);
+    ro.observe(slide);
+    return () => ro.disconnect();
+  }, [current, count]);
+
   if (count === 0) return null;
-  const current = Math.min(active, count - 1);
   return (
     <section className="focus" aria-roledescription="carousel" aria-label="In focus">
       <h2 className="section-label">In focus</h2>
       {/* The track scrolls sideways, so it must be reachable by keyboard (arrow keys move between slides). */}
       {/* eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex, jsx-a11y/no-noninteractive-element-interactions */}
-      <div ref={track} className="focus__track" data-scroll="x" tabIndex={0} aria-label="In focus cards, use the left and right arrow keys" role="group" onScroll={onScroll} onKeyDown={onKeyDown}>
+      <div ref={track} className="focus__track" data-scroll="x" style={height === undefined ? undefined : { height: height + TRACK_PAD_Y }} tabIndex={0} aria-label="In focus cards, use the left and right arrow keys" role="group" onScroll={onScroll} onKeyDown={onKeyDown}>
         {slides.map((id, i) => (
           <div key={id} className="focus__slide" role="group" aria-roledescription="slide" aria-label={`${i + 1} of ${count}: ${SLIDE_NAME[id].title}`}>
             {id === 'energy' ? <EnergySlide today={today} /> : id === 'readiness' && estimate ? <ReadinessSlide data={estimate} /> : id === 'sleep' ? <SleepSlide today={today} /> : <HrvSlide today={today} />}

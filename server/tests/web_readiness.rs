@@ -345,3 +345,48 @@ async fn explain_names_why_with_the_figures_behind_it() {
     assert_eq!(focus[2]["state"], "short");
     assert_eq!(focus[0]["state"], "in_range");
 }
+
+/// A Connect night brings an HRV summary with only the night's average, and the watch gives no
+/// 7-day load (only its acute load): HRV and load still have their figures, ranges and ratings.
+#[tokio::test]
+async fn a_night_only_hrv_row_and_an_acute_load_keep_the_hrv_and_load_factors() {
+    let (e, c) = setup().await;
+    full_week(&e).await;
+    e.exec("DELETE FROM hrv_summary").await;
+    e.exec("DELETE FROM training_status").await;
+    e.exec(&format!(
+        "INSERT INTO hrv_summary (ts, weekly_avg, last_night_avg, baseline_balanced_lower, baseline_balanced_upper, status, src)
+         VALUES ({}, 60, 58, 50, 70, 4, 1), ({}, NULL, 55, NULL, NULL, NULL, 2)",
+        at(18, 6, 5),
+        at(19, 6, 30)
+    ))
+    .await;
+    e.exec(&format!(
+        "INSERT INTO training_load (ts, acute, chronic, src) VALUES ({}, 250, 250, 1)",
+        at(19, 6, 30)
+    ))
+    .await;
+
+    let r = e.get(&c, "/api/readiness").await;
+    let hrv = factor(&r, "hrv");
+    assert_eq!(hrv["value"], 60.0, "{r}");
+    assert!(!hrv["rating"].is_null(), "{r}");
+    let load = factor(&r, "load");
+    assert_eq!(load["value"], 250.0, "{r}");
+    assert!(!load["rating"].is_null(), "{r}");
+    assert_eq!(load["note"], "Target range 200–375", "{r}");
+
+    let t = e.get(&c, "/api/today").await;
+    let h = &t["hrv"];
+    assert_eq!(
+        (
+            h["last_night_ms"].as_f64(),
+            h["weekly_avg_ms"].as_f64(),
+            h["baseline_low_ms"].as_f64(),
+            h["baseline_high_ms"].as_f64()
+        ),
+        (Some(55.0), Some(60.0), Some(50.0), Some(70.0)),
+        "{h}"
+    );
+    assert!(!h["status"].is_null(), "{h}");
+}

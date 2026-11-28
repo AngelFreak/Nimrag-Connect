@@ -1178,6 +1178,10 @@
 }
 .focus__track {
   display: flex;
+  /* Slides keep their own height; the component sets the track to the shown slide's height. */
+  align-items: flex-start;
+  overflow-y: hidden;
+  transition: height 0.2s ease;
   /* At least the gutter: the next slide starts beyond the screen edge instead of showing a sliver. */
   gap: var(--gutter);
   overflow-x: auto;
@@ -1197,9 +1201,6 @@
   min-width: 0;
   scroll-snap-align: start;
   scroll-snap-stop: always;
-}
-.focus__slide > .card {
-  height: 100%;
 }
 .focus__dots {
   display: flex;
@@ -1404,4 +1405,9 @@
 }
 .focus__visual > * {
   width: 100%;
+}
+@media (prefers-reduced-motion: reduce) {
+  .focus__track {
+    transition: none;
+  }
 }

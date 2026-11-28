@@ -12,7 +12,7 @@
 //! For a day before today the "now" of the day is 08:00 local: the morning the estimate is for.
 
 use super::daily::{connect_days, dates, nights};
-use super::training::status_rows;
+use super::training::load_points;
 use super::{mean, round1, Ctx, RangeParams};
 use crate::api::{ApiError, AppState};
 use crate::auth::DataUser;
@@ -370,15 +370,19 @@ pub fn compute(inp: &Inputs, date: NaiveDate, asof: i64) -> Estimate {
             round1(left_s / 3600.0)
         });
 
-    // HRV: the latest summary of the last week.
-    let hrv_row = inp
-        .hrv
-        .iter()
-        .rev()
-        .find(|r| r.date <= date && r.date >= date - Duration::days(6));
+    // HRV: the latest watch summary of the last week (one with a weekly average or a status; a
+    // Connect night's summary has only the night's average), and the newest night's average.
+    let week = || {
+        inp.hrv
+            .iter()
+            .rev()
+            .filter(move |r| r.date <= date && r.date >= date - Duration::days(6))
+    };
+    let hrv_row = week().find(|r| r.weekly_avg.is_some() || r.status.is_some());
+    let last_night = week().find_map(|r| r.last_night);
     let band = hrv_row.and_then(|r| r.low.zip(r.high));
     let hrv_rating = hrv_row.and_then(|r| {
-        hrv_state(r.status, r.weekly_avg, band).map(|s| rate_hrv(s, r.last_night, band))
+        hrv_state(r.status, r.weekly_avg, band).map(|s| rate_hrv(s, last_night, band))
     });
 
     // Load: the newest row with a load and a target range, at most a week old.
@@ -621,11 +625,7 @@ pub async fn gather(ctx: &Ctx, from: NaiveDate, to: NaiveDate) -> Res<Inputs> {
         .collect();
 
     // A load row stays valid for a week, so read a week further back.
-    inp.load = status_rows(ctx, lo - 7 * 86_400, hi)
-        .await?
-        .into_iter()
-        .filter_map(|r| Some((r.0, r.2?, r.3, r.4)))
-        .collect();
+    inp.load = load_points(ctx, lo - 7 * 86_400, hi).await?;
 
     inp.recovery = sqlx::query_as(
         "SELECT start_ts, minutes FROM recovery_time WHERE user_id = ? AND start_ts >= ? AND start_ts < ? ORDER BY start_ts",
